@@ -8,51 +8,66 @@ authors = [
     { name = "Jiazheng Sun", email = "jzsun24@m.fudan.edu.cn" }
 ]
 dependencies = [
-    "fastapi",
-    "pydantic",
-    "pydantic-settings",
-    "uvicorn[standard]",
-    "dependency_injector",
-    "litellm",
-    "mem0ai",
-    "openai",
-    "anthropic",
-    "google-genai",
-    "dashscope",
-    "docling",
-    "pymupdf4llm",
-    "markitdown",
-    "trafilatura",
-    "beautifulsoup4",
-    "markdownify",
-    "magika",
-    "langchain_text_splitters",
-    "pandas",
-    "openpyxl",
-    "numpy>=2.4.6",
-    "scipy>=1.17.1",
-    "sympy>=1.14.0",
-    "bm25s>=0.3.9",
-    "thulac",
-    "ddgs>=9.14.4",
-    "dicttoxml",
-    "jsonschema",
-    "tabulate",
-    "markdown-it-py",
-    "mdit-py-plugins",
-    "beanie",
-    "redis",
-    "nacos-sdk-python",
-    "pyyaml",
-    "jieba",
-    "zeroentropy",
-    "wisepen-common",
-    "httpx",
-    "PyGithub",
-    "cryptography",
-    "hishel[async]",
-    "arq>=0.28.0",
-    "async_lru",
+    # --- Web 框架与微服务基础 ---
+    "fastapi",            # 异步 Web API 框架
+    "uvicorn[standard]",  # ASGI 服务运行时
+    "pydantic",           # 数据校验与序列化
+    "pydantic-settings",  # 配置与环境变量加载
+    "dependency_injector",# 依赖注入容器
+    "nacos-sdk-python",   # Nacos 注册与配置客户端
+    "pyyaml",             # YAML 配置解析
+
+    # --- LLM 与智能体能力 ---
+    "litellm",            # OpenAI-compatible LLM 兼容层
+    "openai",             # OpenAI 官方 SDK
+    "anthropic",          # Anthropic 官方 SDK
+    "google-genai",       # Google Gemini SDK
+    "dashscope",          # 阿里 DashScope SDK
+    "mem0ai",             # 长期记忆服务客户端
+
+    # --- 文档、多模态与网页内容解析 ---
+    "docling",            # PDF/Office 等复杂文档解析
+    "pymupdf4llm",        # PDF 转 LLM 友好 Markdown
+    "markitdown",         # 多格式文件转 Markdown
+    "trafilatura",        # 网页正文抽取
+    "beautifulsoup4",     # HTML/XML 解析
+    "markdownify",        # HTML 转 Markdown
+    "magika",             # 文件类型识别
+
+    # --- 文本切分、检索与数学计算 ---
+    "langchain_text_splitters", # 文本分块工具
+    "bm25s>=0.3.9",       # BM25 稀疏检索
+    "jieba",              # 中文分词
+    "thulac",             # 中文分词补充 tokenizer
+    "ddgs>=9.14.4",       # DuckDuckGo 搜索客户端
+    "pandas",             # 表格与结构化数据处理
+    "openpyxl",           # Excel xlsx 读写
+    "numpy>=2.4.6",       # 数值计算
+    "scipy>=1.17.1",      # 科学计算与统计
+    "sympy>=1.14.0",      # 符号数学求解
+
+    # --- 数据存储与运行时缓存 ---
+    "beanie",             # MongoDB ODM
+    "redis",              # Redis 客户端
+    "hishel[async]",      # 异步 HTTP 缓存
+    "async_lru",          # 异步 LRU 缓存
+
+    # --- 格式化、序列化与输出渲染 ---
+    "dicttoxml",          # dict/list 转 XML
+    "jsonschema",         # JSON Schema 校验
+    "tabulate",           # 文本表格渲染
+    "markdown-it-py",     # Markdown 解析
+    "mdit-py-plugins",    # Markdown 扩展插件
+
+    # --- 内部库、网络请求与安全 ---
+    "wisepen-common",     # WisePen 公共基础库
+    "httpx",              # 异步 HTTP 客户端
+    "PyGithub",           # GitHub API SDK
+    "cryptography",       # 密钥加密与凭证保护
+    "zeroentropy",        # ZeroEntropy rerank / SDK 能力
+
+    # --- 后台任务 ---
+    "arq>=0.28.0",        # Redis 异步任务队列
 ]
 
 [dependency-groups]

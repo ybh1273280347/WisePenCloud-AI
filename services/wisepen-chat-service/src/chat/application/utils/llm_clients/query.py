@@ -1,12 +1,26 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Literal
 
-import litellm
+from beanie import PydanticObjectId
 
+from chat.application.llm_provider_resolver import LLMProviderResolver
 from chat.core.config.app_settings import settings
+from chat.core.providers import (
+    AnthropicAdapter,
+    GeminiAdapter,
+    LiteLLMAdapter,
+    OpenAIAdapter,
+    QwenAdapter,
+)
+from chat.domain.entities import ChatMessage, Role
+from chat.domain.entities.model import Model, ModelFamily, ModelProviderMapping
+from chat.domain.entities.provider import Provider, ProviderType
+from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent
+from chat.domain.repositories.model_repo import ModelRequestInfo
 
 ChatRole = Literal["system", "user", "assistant", "tool"]
 Message = dict[str, Any]
@@ -19,8 +33,8 @@ class QueryResult:
     usage_tokens: int = 0
 
 
-class LiteLLMQueryClient:
-    """通用小模型查询 client，prompt 由调用方显式传入。"""
+class AdapterQueryClient:
+    """面向内部小模型任务的统一 LLM adapter 查询客户端。"""
 
     def __init__(
         self,
@@ -28,18 +42,27 @@ class LiteLLMQueryClient:
         *,
         api_base: str | None = None,
         api_key: str | None = None,
+        provider_type: ProviderType = ProviderType.LITELLM_OPENAI_COMPATIBLE,
+        model_family: ModelFamily = ModelFamily.GENERIC,
         temperature: float | None = 0.0,
-        timeout: float | int | None = None,
         max_tokens: int | None = None,
-        **default_kwargs: Any,
+        **default_runtime_options: Any,
     ) -> None:
         self.model = model
         self.api_base = api_base
         self.api_key = api_key
+        self.provider_type = provider_type
+        self.model_family = model_family
         self.temperature = temperature
-        self.timeout = timeout
         self.max_tokens = max_tokens
-        self.default_kwargs = default_kwargs
+        self.default_runtime_options = default_runtime_options
+        self._resolver = LLMProviderResolver(
+            qwen_adapter=QwenAdapter(),
+            openai_adapter=OpenAIAdapter(),
+            anthropic_adapter=AnthropicAdapter(),
+            gemini_adapter=GeminiAdapter(),
+            litellm_adapter=LiteLLMAdapter(),
+        )
 
     async def aquery(
         self,
@@ -50,118 +73,163 @@ class LiteLLMQueryClient:
         model: str | None = None,
         api_base: str | None = None,
         api_key: str | None = None,
+        provider_type: ProviderType | str | None = None,
+        model_family: ModelFamily | str | None = None,
         temperature: float | None = None,
         timeout: float | int | None = None,
         max_tokens: int | None = None,
-        **kwargs: Any,
+        **runtime_options: Any,
     ) -> QueryResult:
-        request_kwargs = self._build_kwargs(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            messages=messages,
+        del timeout  # 统一 adapter 当前不暴露 per-call timeout，保留参数只为兼容旧调用点。
+        request = self._build_model_request(
             model=model,
             api_base=api_base,
             api_key=api_key,
+            provider_type=provider_type,
+            model_family=model_family,
             temperature=temperature,
-            timeout=timeout,
             max_tokens=max_tokens,
-            extra_kwargs=kwargs,
+            runtime_options=runtime_options,
         )
-        response = await litellm.acompletion(**request_kwargs)
-        return self._parse_response(response)
+        stream_events: list[LLMStreamEvent] = []
+        content_parts: list[str] = []
+        usage_tokens = 0
+        provider = self._resolver.resolve(request)
+
+        async for event in provider.stream_chat_completion(
+            messages=self._build_messages(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                messages=messages,
+            ),
+            model_request=request,
+            tools=None,
+        ):
+            stream_events.append(event)
+            if event.type == LLMEventType.TEXT_DELTA and event.delta:
+                content_parts.append(event.delta)
+            elif event.type == LLMEventType.USAGE and event.usage:
+                usage_tokens += event.usage.total_tokens
+
+        return QueryResult(
+            content="".join(content_parts),
+            raw=stream_events,
+            usage_tokens=usage_tokens,
+        )
 
     def query(
         self,
         prompt: str,
-        *,
-        system_prompt: str | None = None,
-        messages: list[Message] | None = None,
-        model: str | None = None,
-        api_base: str | None = None,
-        api_key: str | None = None,
-        temperature: float | None = None,
-        timeout: float | int | None = None,
-        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> QueryResult:
-        request_kwargs = self._build_kwargs(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            messages=messages,
-            model=model,
-            api_base=api_base,
-            api_key=api_key,
-            temperature=temperature,
-            timeout=timeout,
-            max_tokens=max_tokens,
-            extra_kwargs=kwargs,
-        )
-        response = litellm.completion(**request_kwargs)
-        return self._parse_response(response)
+        """同步查询入口，用于少量非 async 调用场景。"""
+        return asyncio.run(self.aquery(prompt, **kwargs))
 
-    def _build_kwargs(
+    def _build_model_request(
         self,
+        *,
+        model: str | None,
+        api_base: str | None,
+        api_key: str | None,
+        provider_type: ProviderType | str | None,
+        model_family: ModelFamily | str | None,
+        temperature: float | None,
+        max_tokens: int | None,
+        runtime_options: dict[str, Any],
+    ) -> ModelRequestInfo:
+        resolved_provider_type = _coerce_provider_type(provider_type) or self.provider_type
+        resolved_model_family = (
+            _coerce_model_family(model_family)
+            or _infer_model_family(resolved_provider_type)
+            or self.model_family
+        )
+        resolved_model_name = model or self.model
+        resolved_runtime_options = dict(self.default_runtime_options)
+        resolved_runtime_options.update(runtime_options)
+        if temperature is not None:
+            resolved_runtime_options["temperature"] = temperature
+        elif self.temperature is not None:
+            resolved_runtime_options.setdefault("temperature", self.temperature)
+
+        output_tokens = max_tokens if max_tokens is not None else self.max_tokens
+        provider = Provider(
+            name="internal-query-provider",
+            base_url=api_base if api_base is not None else self.api_base,
+            api_key=api_key if api_key is not None else (self.api_key or ""),
+            type=resolved_provider_type,
+        )
+        model_entity = Model(
+            display_name=resolved_model_name,
+            model_family=resolved_model_family,
+            support_tools=False,
+            max_output_tokens=output_tokens,
+        )
+        mapping = ModelProviderMapping(
+            model_id=PydanticObjectId(),
+            provider_id=PydanticObjectId(),
+            provider_model_name=resolved_model_name,
+        )
+        return ModelRequestInfo(
+            model=model_entity,
+            mapping=mapping,
+            provider=provider,
+            runtime_options=resolved_runtime_options,
+        )
+
+    @staticmethod
+    def _build_messages(
         *,
         prompt: str,
         system_prompt: str | None,
         messages: list[Message] | None,
-        model: str | None,
-        api_base: str | None,
-        api_key: str | None,
-        temperature: float | None,
-        timeout: float | int | None,
-        max_tokens: int | None,
-        extra_kwargs: dict[str, Any],
-    ) -> dict[str, Any]:
-        request_messages = list(messages or [])
+    ) -> list[ChatMessage]:
+        result: list[ChatMessage] = []
         if system_prompt:
-            request_messages.insert(0, {"role": "system", "content": system_prompt})
-        request_messages.append({"role": "user", "content": prompt})
-
-        request_kwargs: dict[str, Any] = {
-            "model": model or self.model,
-            "messages": request_messages,
-            **self.default_kwargs,
-            **extra_kwargs,
-        }
-
-        optional_values = {
-            "api_base": api_base if api_base is not None else self.api_base,
-            "api_key": api_key if api_key is not None else self.api_key,
-            "temperature": (
-                temperature if temperature is not None else self.temperature
-            ),
-            "timeout": timeout if timeout is not None else self.timeout,
-            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
-        }
-        request_kwargs.update(
-            {key: value for key, value in optional_values.items() if value is not None}
-        )
-        return request_kwargs
-
-    @staticmethod
-    def _parse_response(response: Any) -> QueryResult:
-        choice = _get_value(response, "choices", [])[0]
-        message = _get_value(choice, "message", {}) or {}
-        content = _get_value(message, "content", "") or ""
-
-        usage = _get_value(response, "usage")
-        usage_tokens = 0
-        if usage is not None:
-            usage_tokens = int(_get_value(usage, "total_tokens", 0) or 0)
-
-        return QueryResult(content=content, raw=response, usage_tokens=usage_tokens)
+            result.append(ChatMessage(session_id="", role=Role.SYSTEM, content=system_prompt))
+        for message in messages or []:
+            role = Role(str(message.get("role") or Role.USER.value))
+            result.append(
+                ChatMessage(
+                    session_id="",
+                    role=role,
+                    content=str(message.get("content") or ""),
+                )
+            )
+        result.append(ChatMessage(session_id="", role=Role.USER, content=prompt))
+        return result
 
 
-def _get_value(source: Any, key: str, default: Any = None) -> Any:
-    if isinstance(source, dict):
-        return source.get(key, default)
-    return getattr(source, key, default)
+def _coerce_provider_type(value: ProviderType | str | None) -> ProviderType | None:
+    if value is None:
+        return None
+    if isinstance(value, ProviderType):
+        return value
+    return ProviderType(value)
+
+
+def _coerce_model_family(value: ModelFamily | str | None) -> ModelFamily | None:
+    if value is None:
+        return None
+    if isinstance(value, ModelFamily):
+        return value
+    return ModelFamily(value)
+
+
+def _infer_model_family(provider_type: ProviderType) -> ModelFamily | None:
+    if provider_type == ProviderType.ALIBABA:
+        return ModelFamily.QWEN
+    if provider_type == ProviderType.OPENAI:
+        return ModelFamily.GPT
+    if provider_type == ProviderType.ANTHROPIC:
+        return ModelFamily.CLAUDE
+    if provider_type == ProviderType.GOOGLE:
+        return ModelFamily.GEMINI
+    return None
 
 
 @lru_cache(maxsize=1)
-def build_query_client() -> LiteLLMQueryClient:
-    return LiteLLMQueryClient(
+def build_query_client() -> AdapterQueryClient:
+    return AdapterQueryClient(
         model=settings.QUERY_MODEL,
         api_base=settings.LLM_BASE_URL,
         api_key=settings.LLM_API_KEY,

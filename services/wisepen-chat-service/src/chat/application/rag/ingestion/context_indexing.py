@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from chat.application.utils.llm_clients import LiteLLMQueryClient, build_query_client
+from chat.application.utils.llm_clients import AdapterQueryClient, build_query_client
 from chat.core.config.app_settings import settings
 
 from .models import ContextIndexingInput, ContextIndexingResult
@@ -42,7 +42,7 @@ class ContextIndexingService:
 
     __slots__ = ("_client",)
 
-    def __init__(self, *, client: LiteLLMQueryClient | None = None) -> None:
+    def __init__(self, *, client: AdapterQueryClient | None = None) -> None:
         # 允许注入 client 是为了单测时替换成 fake，生产路径走 build_query_client() 的默认配置。
         self._client = client or build_query_client()
 

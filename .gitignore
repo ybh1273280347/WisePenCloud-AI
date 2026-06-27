@@ -50,6 +50,13 @@ services/wisepen-chat-service/test/
 services/wisepen-chat-service/src/chat/application/tools/common/*.html
 services/wisepen-chat-service/src/chat/application/tools/common/**/*_design.html
 
+# WisePen chat service docs: only stable team/tool docs are committed.
+services/wisepen-chat-service/docs/*
+!services/wisepen-chat-service/docs/team/
+!services/wisepen-chat-service/docs/team/**
+!services/wisepen-chat-service/docs/tools/
+!services/wisepen-chat-service/docs/tools/**
+
 # 操作系统
 .DS_Store
 Thumbs.db
