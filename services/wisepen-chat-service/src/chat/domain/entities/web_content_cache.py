@@ -7,7 +7,7 @@ from beanie import Document
 from pydantic import Field
 from pymongo import ASCENDING, DESCENDING, IndexModel
 
-from chat.application.tools.web_tools.web_content_cache.models import WebContentCacheMode
+from chat.application.tools.common.web_content_cache import WebContentCacheMode
 
 
 class WebContentCacheValueDocument(Document):

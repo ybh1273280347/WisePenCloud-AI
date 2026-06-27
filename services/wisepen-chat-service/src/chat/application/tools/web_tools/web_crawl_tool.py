@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from common.logger import warn
-
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExecutionError,
@@ -19,8 +17,9 @@ from chat.application.tools.core.tool_return import (
     ToolReturn,
 )
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.web_tools.web_fetch import WebCrawlService
+from chat.application.tools.web_tools.web_fetch import WebCrawler
 from chat.application.tools.web_tools.web_fetch.errors import WebFetchError
+from common.logger import warn
 
 # --- 全局常量限制（通过 tool_settings 调参控制）---
 DEFAULT_MAX_PAGES = tool_settings.WEB_CRAWL_DEFAULT_MAX_PAGES
@@ -86,14 +85,14 @@ class WebCrawlTool:
     因为 crawl 的目标是 HTML 页面集合，文件抓取应使用 web_fetch。
     """
 
-    __slots__ = ("_definition", "_service")
+    __slots__ = ("_definition", "_crawler")
 
     def __init__(
             self,
             *,
-            service: WebCrawlService,
+            crawler: WebCrawler,
     ) -> None:
-        self._service = service
+        self._crawler = crawler
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="web_crawl",
@@ -152,7 +151,7 @@ class WebCrawlTool:
 
         # 2. 调度异步批量递归爬虫服务
         try:
-            results = await self._service.crawl(
+            results = await self._crawler.crawl(
                 seed_url,
                 user_id=str(context["user_id"]),
                 session_id=str(context["session_id"]),

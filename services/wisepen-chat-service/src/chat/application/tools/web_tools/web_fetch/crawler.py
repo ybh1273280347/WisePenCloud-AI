@@ -7,18 +7,19 @@ from urllib.parse import urljoin, urlparse
 
 from lxml import html as lxml_html
 
-from common.logger import info, warn
-from chat.application.tools.web_tools.web_content_cache.refresh_queue import (
+from chat.application.tools.common.web_content_cache.refresh_queue import (
     WEB_FETCH_REFRESH_JOB,
     WebContentCacheRefreshTaskPublisher,
 )
-from chat.application.tools.web_tools.web_content_cache.repository import (
-    WebContentCacheRepository,
+from chat.application.tools.common.web_content_cache import (
+    WebContentCacheEntryRepository,
+    WebContentCacheValueRepository,
 )
-from chat.application.tools.web_tools.web_content_cache.service import (
+from chat.application.tools.common.web_content_cache import (
     HtmlCacheWrite,
     WebContentCacheService,
 )
+from common.logger import info, warn
 from .cleaners.base import BaseCleaner
 from .errors import WebFetchError
 from .fetchers.base import BaseFetcher, RawFetchOutput
@@ -34,7 +35,7 @@ class _CrawlPage:
     raw_html: str | None
 
 
-class WebCrawlService:
+class WebCrawler:
     """Web 递归爬取服务。
 
     复用 HttpxFetcher / ScraplingFetcher 的 fallback 链路抓取 HTML 页面，
@@ -64,7 +65,8 @@ class WebCrawlService:
         httpx_fetcher: BaseFetcher,
         scrapling_fetcher: BaseFetcher,
         cleaner: BaseCleaner,
-        content_cache_repository: WebContentCacheRepository | None = None,
+        content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
+        content_cache_value_repository: WebContentCacheValueRepository | None = None,
         refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
         min_text_length: int = 200,
         concurrency: int = 5,
@@ -73,7 +75,8 @@ class WebCrawlService:
         self._scrapling_fetcher = scrapling_fetcher
         self._cleaner = cleaner
         self._content_cache_service = WebContentCacheService(
-            repository=content_cache_repository,
+            entry_repository=content_cache_entry_repository,
+            value_repository=content_cache_value_repository,
             refresh_task_publisher=refresh_task_publisher,
         )
         self._min_text_length = min_text_length
@@ -235,7 +238,6 @@ class WebCrawlService:
             url=url,
             user_id=user_id,
             session_id=session_id,
-            source_scope=source_scope,
             refresh_job_prefix="web_crawl",
             refresh_task_name=WEB_FETCH_REFRESH_JOB,
             refresh_lock_ttl_seconds=_REFRESH_LOCK_TTL_SECONDS,

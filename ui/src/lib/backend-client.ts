@@ -98,19 +98,18 @@ export async function listWebSearchCredentials(settings: RuntimeSettings) {
   return request<WebSearchCredential[]>(settings, "/webSearch/listWebSearchCredentials");
 }
 
-export async function setPlatformMembership(settings: RuntimeSettings, isMember: boolean) {
-  return request<WebSearchCredential>(settings, "/webSearch/setPlatformMembership", {
-    body: { is_member: isMember },
-    method: "POST",
-  });
-}
-
-export async function createWebSearchCredential(settings: RuntimeSettings, provider: string, apiKey: string) {
+export async function createWebSearchCredential(
+  settings: RuntimeSettings,
+  provider: string,
+  apiKey: string,
+  openalexApiKey?: string,
+) {
   return request<WebSearchCredential>(settings, "/webSearch/createWebSearchCredential", {
     body: {
       provider,
       source: "custom",
       api_key: apiKey,
+      openalex_api_key: openalexApiKey || null,
     },
     method: "POST",
   });

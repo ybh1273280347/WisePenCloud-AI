@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from .calculus_solver_tool import CalculusSolverTool
-from .equation_solver_tool import EquationSolverTool
-from .expression_solver_tool import ExpressionSolverTool
-from .linear_algebra_solver_tool import LinearAlgebraSolverTool
-from .stats_solver_tool import StatsSolverTool
+from .calculus_solve_tool import CalculusSolveTool
+from .equation_solve_tool import EquationSolveTool
+from .expression_solve_tool import ExpressionSolveTool
+from .linear_algebra_solve_tool import LinearAlgebraSolveTool
+from .stats_solve_tool import StatsSolveTool
 
 __all__ = [
-    "CalculusSolverTool",
-    "EquationSolverTool",
-    "ExpressionSolverTool",
-    "LinearAlgebraSolverTool",
-    "StatsSolverTool",
+    "CalculusSolveTool",
+    "EquationSolveTool",
+    "ExpressionSolveTool",
+    "LinearAlgebraSolveTool",
+    "StatsSolveTool",
 ]

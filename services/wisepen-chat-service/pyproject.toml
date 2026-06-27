@@ -38,6 +38,7 @@ dependencies = [
     # --- 传统检索、分词增强与联网搜索 ---
     "bm25s>=0.3.9",            # 极速的 BM25 稀疏向量检索算法，用于关键词匹配
     "jieba",                   # 中文分词工具，为中文检索提供分词支持
+    "thulac",                  # 清华 THULAC 中文分词工具，补充第二套中文 tokenizer
     "ddgs>=9.14.4",            # DuckDuckGo 搜索客户端，用于零成本免密钥联网检索
     # --- 数据存储与缓存驱动 ---
     "beanie",                  # 基于 Motor 的 MongoDB 异步 ODM (对象文档映射)
@@ -54,7 +55,14 @@ dependencies = [
     "httpx",                   # 支持异步的高性能 HTTP 客户端，用于内部服务间通信
     "PyGithub",                # GitHub REST API SDK，用于仓库元数据补全
     "cryptography",            # 认证加密，用于可解密 API key 的数据库加密存储
-    "hishel[async]",
-    "arq>=0.28.0",
-    "async_lru",
+    # --- 异步任务调度与缓存 ---
+    "hishel[async]",           # 异步 HTTP 缓存层，支持 RFC 9111 缓存语义
+    "arq>=0.28.0",             # 基于 Redis 的轻量异步任务队列，用于后台刷新等
+    "async_lru",               # 异步安全的 LRU 缓存装饰器
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
 ]

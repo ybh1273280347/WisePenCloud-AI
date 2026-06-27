@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WisePen 私有知识库 RAG 定稿方案</title>
+  <style>
+    :root {
+      --ink: #14191c;
+      --muted: #5c676b;
+      --paper: #f6f8f8;
+      --line: #cfd8d6;
+      --panel: #ffffff;
+      --dense: #007f7b;
+      --elastic: #c7432f;
+      --graph: #6a6f2c;
+      --auth: #235c99;
+      --gold: #d6a11f;
+      --shadow: 0 18px 50px rgba(20, 25, 28, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background:
+        linear-gradient(90deg, rgba(20, 25, 28, 0.05) 1px, transparent 1px),
+        linear-gradient(rgba(20, 25, 28, 0.04) 1px, transparent 1px),
+        var(--paper);
+      background-size: 42px 42px;
+      color: var(--ink);
+      font-family: "Microsoft YaHei UI", "Segoe UI", Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .deck-shell {
+      min-height: 100%;
+      display: grid;
+      grid-template-columns: 94px 1fr;
+    }
+
+    .evidence-rail {
+      border-right: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+      backdrop-filter: blur(14px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 18px 12px;
+      gap: 18px;
+      z-index: 5;
+    }
+
+    .rail-mark {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--ink);
+      border-radius: 6px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-weight: 800;
+      background: var(--panel);
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    .rail-steps {
+      display: grid;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .rail-step {
+      min-height: 64px;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .rail-step.dense {
+      border-color: rgba(0, 127, 123, 0.45);
+    }
+
+    .rail-step.elastic {
+      border-color: rgba(199, 67, 47, 0.45);
+    }
+
+    .rail-step.auth {
+      border-color: rgba(35, 92, 153, 0.45);
+    }
+
+    .rail-step.graph {
+      border-color: rgba(106, 111, 44, 0.45);
+    }
+
+    .rail-counter {
+      margin-top: auto;
+      color: var(--muted);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .stage {
+      position: relative;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .topbar {
+      position: absolute;
+      top: 18px;
+      left: 22px;
+      right: 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 6;
+    }
+
+    .progress-track {
+      height: 6px;
+      flex: 1;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--dense), var(--elastic), var(--auth));
+      transition: width 240ms ease;
+    }
+
+    .nav-toggle,
+    .nav-arrow {
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--ink);
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(20, 25, 28, 0.08);
+    }
+
+    .nav-toggle:hover,
+    .nav-arrow:hover {
+      border-color: var(--ink);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 86px 64px 76px;
+      display: grid;
+      opacity: 0;
+      transform: translateX(28px);
+      transition: opacity 220ms ease, transform 220ms ease;
+      pointer-events: none;
+      overflow: auto;
+    }
+
+    .slide.active {
+      opacity: 1;
+      transform: translateX(0);
+      pointer-events: auto;
+    }
+
+    .slide-inner {
+      width: min(1180px, 100%);
+      margin: auto;
+      display: grid;
+      gap: 24px;
+    }
+
+    .kicker {
+      color: var(--muted);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      max-width: 1040px;
+      font-family: Bahnschrift, "Microsoft YaHei UI", "Segoe UI", sans-serif;
+      font-size: 56px;
+      line-height: 1.04;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      max-width: 900px;
+      font-family: Bahnschrift, "Microsoft YaHei UI", "Segoe UI", sans-serif;
+      font-size: 38px;
+      line-height: 1.12;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      font-size: 18px;
+      line-height: 1.35;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 780px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.72;
+    }
+
+    .headline-grid {
+      display: grid;
+      grid-template-columns: 1.04fr 0.96fr;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .thesis {
+      display: grid;
+      gap: 18px;
+    }
+
+    .stamp {
+      width: fit-content;
+      border: 2px solid var(--ink);
+      border-radius: 6px;
+      padding: 8px 12px;
+      background: var(--gold);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-weight: 800;
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .triple {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .quad {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .tile {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 18px;
+      display: grid;
+      gap: 10px;
+      min-height: 132px;
+    }
+
+    .tile p,
+    .panel p,
+    li {
+      color: var(--muted);
+      line-height: 1.62;
+      font-size: 15px;
+    }
+
+    .tag {
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 12px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .tag.dense {
+      background: var(--dense);
+    }
+
+    .tag.elastic {
+      background: var(--elastic);
+    }
+
+    .tag.graph {
+      background: var(--graph);
+    }
+
+    .tag.auth {
+      background: var(--auth);
+    }
+
+    .tag.gold {
+      background: var(--gold);
+      color: var(--ink);
+    }
+
+    .flow {
+      display: grid;
+      gap: 12px;
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: 1fr 42px 1fr 42px 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .flow-node {
+      border: 2px solid var(--ink);
+      border-radius: 8px;
+      background: #fff;
+      min-height: 82px;
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      text-align: center;
+      font-weight: 800;
+      box-shadow: 5px 5px 0 rgba(20, 25, 28, 0.18);
+    }
+
+    .flow-node.dense {
+      border-color: var(--dense);
+    }
+
+    .flow-node.elastic {
+      border-color: var(--elastic);
+    }
+
+    .flow-node.auth {
+      border-color: var(--auth);
+    }
+
+    .flow-node.graph {
+      border-color: var(--graph);
+    }
+
+    .arrow {
+      text-align: center;
+      color: var(--muted);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-weight: 800;
+    }
+
+    .matrix {
+      display: grid;
+      gap: 10px;
+    }
+
+    .matrix-row {
+      display: grid;
+      grid-template-columns: 160px 1fr 1fr;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .matrix-row > div {
+      padding: 12px 14px;
+      border-right: 1px solid var(--line);
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .matrix-row > div:last-child {
+      border-right: 0;
+    }
+
+    .matrix-row.header > div {
+      background: var(--ink);
+      color: #fff;
+      font-weight: 800;
+    }
+
+    .codebox {
+      background: #111719;
+      color: #d6e2de;
+      border-radius: 8px;
+      padding: 18px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow: auto;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .phase {
+      border-left: 6px solid var(--dense);
+      border-radius: 8px;
+      background: #fff;
+      padding: 18px;
+      min-height: 180px;
+      box-shadow: 0 12px 30px rgba(20, 25, 28, 0.08);
+    }
+
+    .phase:nth-child(2) {
+      border-left-color: var(--elastic);
+    }
+
+    .phase:nth-child(3) {
+      border-left-color: var(--auth);
+    }
+
+    .phase:nth-child(4) {
+      border-left-color: var(--graph);
+    }
+
+    .phase p {
+      margin-top: 10px;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .nav-arrows {
+      position: absolute;
+      left: 22px;
+      right: 22px;
+      bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      z-index: 6;
+      pointer-events: none;
+    }
+
+    .nav-arrow {
+      pointer-events: auto;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .toc {
+      position: absolute;
+      top: 72px;
+      right: 22px;
+      width: min(380px, calc(100vw - 140px));
+      max-height: calc(100vh - 132px);
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: var(--shadow);
+      z-index: 9;
+      display: none;
+    }
+
+    .toc.open {
+      display: grid;
+      gap: 8px;
+    }
+
+    .toc button {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      text-align: left;
+      padding: 10px 12px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .toc button.active {
+      border-color: var(--ink);
+      color: var(--ink);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .decision-line {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .decision-line strong {
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      background: var(--ink);
+      color: #fff;
+      text-align: center;
+    }
+
+    .decision-line span {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .mono {
+      font-family: "Cascadia Mono", Consolas, monospace;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        overflow: hidden;
+      }
+
+      .deck-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .evidence-rail {
+        display: none;
+      }
+
+      .slide {
+        padding: 82px 18px 76px;
+      }
+
+      h1 {
+        font-size: 36px;
+      }
+
+      h2 {
+        font-size: 28px;
+      }
+
+      .headline-grid,
+      .split,
+      .triple,
+      .quad,
+      .timeline {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-row,
+      .matrix-row,
+      .decision-line {
+        grid-template-columns: 1fr;
+      }
+
+      .arrow {
+        transform: rotate(90deg);
+      }
+
+      .matrix-row > div {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .matrix-row > div:last-child {
+        border-bottom: 0;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide,
+      .progress {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck-shell">
+    <aside class="evidence-rail" aria-label="方案主轴">
+      <div class="rail-mark">RAG</div>
+      <div class="rail-steps">
+        <div class="rail-step dense">Dense</div>
+        <div class="rail-step elastic">Elastic</div>
+        <div class="rail-step auth">VIEW</div>
+        <div class="rail-step graph">Graph</div>
+      </div>
+      <div class="rail-counter">
+        <div id="slideNumber">01</div>
+        <div id="slideTotal">/ 11</div>
+      </div>
+    </aside>
+
+    <section class="stage" aria-live="polite">
+      <div class="topbar">
+        <button class="nav-toggle" id="tocButton" type="button" aria-label="打开目录">☰</button>
+        <div class="progress-track" aria-hidden="true"><div class="progress" id="progress"></div></div>
+      </div>
+
+      <nav class="toc" id="toc" aria-label="页面目录"></nav>
+
+      <section class="slide active" data-title="一句话定稿">
+        <div class="slide-inner headline-grid">
+          <div class="thesis">
+            <div class="stamp">WISEPEN RAG / FINAL</div>
+            <h1>Chunk RAG 做主线，图谱做旁路，权限做闸门。</h1>
+            <p class="lead">最终方案不追求炫技，而是把私有知识库问答做成一条可追溯、可授权、可重建、可演进的证据管线。</p>
+          </div>
+          <div class="panel flow">
+            <div class="flow-node dense">Qdrant<br />语义召回</div>
+            <div class="arrow">+</div>
+            <div class="flow-node elastic">Elasticsearch<br />关键词召回</div>
+            <div class="arrow">→</div>
+            <div class="flow-node auth">Context Builder<br />VIEW hard auth</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="最终主链">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">01 / mainline</div>
+            <h2>主检索不是“多问几次”，而是稳定构建证据。</h2>
+          </div>
+          <div class="panel flow">
+            <div class="flow-row">
+              <div class="flow-node">长期 Corpus</div>
+              <div class="arrow">→</div>
+              <div class="flow-node">Parent-child chunking</div>
+              <div class="arrow">→</div>
+              <div class="flow-node">Context Indexing</div>
+            </div>
+            <div class="flow-row">
+              <div class="flow-node dense">Qdrant dense</div>
+              <div class="arrow">+</div>
+              <div class="flow-node elastic">Elastic lexical</div>
+              <div class="arrow">→</div>
+              <div class="flow-node">RRF + rerank</div>
+            </div>
+            <div class="flow-row">
+              <div class="flow-node graph">Bounded graph</div>
+              <div class="arrow">→</div>
+              <div class="flow-node">Evidence repair</div>
+              <div class="arrow">→</div>
+              <div class="flow-node auth">Context Builder</div>
+            </div>
+          </div>
+          <p class="lead">答案只能来自进入 Context Builder 的证据；图谱只扩展 evidence，不直接把裸节点和裸边交给模型。</p>
+        </div>
+      </section>
+
+      <section class="slide" data-title="三条硬边界">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">02 / boundaries</div>
+            <h2>先把边界钉住，系统才不会越长越乱。</h2>
+          </div>
+          <div class="triple">
+            <div class="tile">
+              <span class="tag auth">ID boundary</span>
+              <h3>工具缓存不是知识库 ID</h3>
+              <p><span class="mono">cnt_*</span>、<span class="mono">tfile_*</span>、<span class="mono">web_content_cache</span> 只服务会话和工具链，不进入长期 RAG 身份体系。</p>
+            </div>
+            <div class="tile">
+              <span class="tag dense">utility boundary</span>
+              <h3>共享组件不背业务职责</h3>
+              <p><span class="mono">chunking_engine</span> 与 <span class="mono">ranking_engine</span> 只做基础能力，不承担权限、持久化、抓取或模型输出。</p>
+            </div>
+            <div class="tile">
+              <span class="tag auth">security boundary</span>
+              <h3>检索前过滤，prompt 前硬鉴权</h3>
+              <p>ACL projection 是召回准入；resource-service 的 <span class="mono">VIEW</span> hard auth 是进入 prompt 的最后闸门。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="检索双引擎">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">03 / retrieval</div>
+            <h2>Elastic 不是补丁，是关键词召回的一等通道。</h2>
+          </div>
+          <div class="split">
+            <div class="panel">
+              <span class="tag dense">Qdrant</span>
+              <h3>负责语义相似</h3>
+              <ul>
+                <li>chunk dense vector</li>
+                <li>概念解释、同义表达、模糊描述</li>
+                <li>payload ACL filter 必须先执行</li>
+                <li>只存检索必要字段，不做事实源</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <span class="tag elastic">Elasticsearch</span>
+              <h3>负责词面锚点</h3>
+              <ul>
+                <li>标题、章节、锚点、术语字段 BM25</li>
+                <li>错误码、版本号、函数名、配置项</li>
+                <li>phrase、must terms、field boost</li>
+                <li>同样必须带 ACL filter</li>
+              </ul>
+            </div>
+          </div>
+          <div class="decision-line">
+            <strong>关键判断</strong>
+            <span>BM25 能承担 lexical relevance；“精确检索”必须靠 must terms、quoted phrases、字段命中和 hard filter 一起完成。</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="检索 Profile">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">04 / profiles</div>
+            <h2>让主模型选模式，让服务端执行模板。</h2>
+          </div>
+          <div class="matrix">
+            <div class="matrix-row header">
+              <div>Profile</div>
+              <div>适用问题</div>
+              <div>服务端执行倾向</div>
+            </div>
+            <div class="matrix-row">
+              <div class="mono">balanced</div>
+              <div>默认问答，没有明显锚点</div>
+              <div>Qdrant dense + Elastic lexical 均衡，正常 rerank</div>
+            </div>
+            <div class="matrix-row">
+              <div class="mono">semantic</div>
+              <div>概念解释、同义表达、描述不精确</div>
+              <div>dense 权重更高，lexical 保留兜底</div>
+            </div>
+            <div class="matrix-row">
+              <div class="mono">lexical</div>
+              <div>明确术语、标题、配置项、错误片段</div>
+              <div>Elastic BM25 / field boost 更高，dense 补邻近</div>
+            </div>
+            <div class="matrix-row">
+              <div class="mono">anchored_exact</div>
+              <div>版本号、错误码、函数名、文件名、引号短语</div>
+              <div>must terms、quoted phrases、KeywordScorer 强约束</div>
+            </div>
+          </div>
+          <p class="lead">模型不能传任意底层权重；它只表达意图，<span class="mono">RetrievalPlanBuilder</span> 映射成可测试的服务端计划。</p>
+        </div>
+      </section>
+
+      <section class="slide" data-title="权限模型">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">05 / permission</div>
+            <h2>权限事实源只有一个：Java resource-service。</h2>
+          </div>
+          <div class="flow">
+            <div class="flow-row">
+              <div class="flow-node auth">resource_id<br />权限根</div>
+              <div class="arrow">→</div>
+              <div class="flow-node">document / version</div>
+              <div class="arrow">→</div>
+              <div class="flow-node">parent / child chunks</div>
+            </div>
+            <div class="flow-row">
+              <div class="flow-node">ACL projection</div>
+              <div class="arrow">→</div>
+              <div class="flow-node dense">Qdrant filter</div>
+              <div class="arrow">+</div>
+              <div class="flow-node elastic">Elastic filter</div>
+            </div>
+            <div class="flow-row">
+              <div class="flow-node">候选 evidence</div>
+              <div class="arrow">→</div>
+              <div class="flow-node auth">VIEW hard auth</div>
+              <div class="arrow">→</div>
+              <div class="flow-node">Prompt</div>
+            </div>
+          </div>
+          <div class="triple">
+            <div class="tile"><span class="tag auth">rule</span><h3>VIEW = RAG 查询准入</h3><p>第一版不新增 QUERY。</p></div>
+            <div class="tile"><span class="tag auth">rule</span><h3>chunk 继承 resource 权限</h3><p>不做段落级、父块级、子块级独立 ACL。</p></div>
+            <div class="tile"><span class="tag auth">rule</span><h3>索引不是事实源</h3><p>Qdrant / Elastic / Mongo 投影都不能替代 resource-service。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="数据分工">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">06 / storage</div>
+            <h2>每个存储只做自己擅长的事。</h2>
+          </div>
+          <div class="quad">
+            <div class="tile">
+              <span class="tag gold">Mongo</span>
+              <h3>业务事实</h3>
+              <p>KB、document version、chunk、graph、ACL projection metadata。</p>
+            </div>
+            <div class="tile">
+              <span class="tag dense">Qdrant</span>
+              <h3>语义索引</h3>
+              <p>dense vector、最小 payload、active ACL projection。</p>
+            </div>
+            <div class="tile">
+              <span class="tag elastic">Elastic</span>
+              <h3>词法索引</h3>
+              <p>indexing_text、heading、anchor、important_terms、exact fields。</p>
+            </div>
+            <div class="tile">
+              <span class="tag graph">Graph</span>
+              <h3>关系旁路</h3>
+              <p>concept nodes、mentions、edge evidence、extraction run。</p>
+            </div>
+          </div>
+          <div class="codebox">indexing_text = section path + important terms + child text
+evidence_text = 原始可引用 child 文本
+all indexes = active ACL projection required</div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="查询流程">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">07 / query path</div>
+            <h2>查询时序的核心是：先裁剪，再融合，再注入。</h2>
+          </div>
+          <div class="codebox">knowledge_search(request, kb_scope)
+  -> validate retrieval_profile and anchors
+  -> build ACL filter from acl_projection
+  -> Qdrant dense search with ACL
+  -> Elasticsearch lexical search with ACL
+  -> application-side RRF fusion
+  -> hydrate child / parent from Mongo
+  -> drop stale / deleted / version-mismatch chunks
+  -> RankingEngine rerank / diversify
+  -> batch VIEW hard auth by resource_id
+  -> Context Builder
+  -> citations + optional cacheable_texts</div>
+          <div class="split">
+            <div class="tile"><span class="tag dense">initial</span><h3>TopK</h3><p>Qdrant dense top 80；Elastic lexical top 80；fusion 后候选 100-200。</p></div>
+            <div class="tile"><span class="tag auth">final</span><h3>Context</h3><p>最终 8-20 个 evidence windows，按任务、模型窗口和引用密度动态调整。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="图谱策略">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">08 / graph</div>
+            <h2>图谱是受控扩展层，不是模型的自由游乐场。</h2>
+          </div>
+          <div class="triple">
+            <div class="tile">
+              <span class="tag graph">default</span>
+              <h3>入库期异步抽取</h3>
+              <p>document version -> chunks -> extraction job -> concept graph。每条边必须回源到 evidence chunk。</p>
+            </div>
+            <div class="tile">
+              <span class="tag graph">query</span>
+              <h3>查询期有限扩展</h3>
+              <p>只从已授权 seed chunks 出发，限制 hop、topK、fanout、budget。</p>
+            </div>
+            <div class="tile">
+              <span class="tag graph">agent</span>
+              <h3>Agent 只触发 job</h3>
+              <p>Agent 可以发现“适合建图”，但不能直接写长期 node / edge。</p>
+            </div>
+          </div>
+          <div class="decision-line">
+            <strong>禁止项</strong>
+            <span>不把 raw graph node id、edge list、全图探索能力默认交给模型；图路径最终必须回到授权 evidence chunks。</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="生成边界">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">09 / generation</div>
+            <h2>第一版不做论文式解码优化，只做证据边界。</h2>
+          </div>
+          <div class="split">
+            <div class="panel">
+              <span class="tag auth">required</span>
+              <h3>Context Builder 是唯一入口</h3>
+              <ul>
+                <li>只注入已授权 evidence</li>
+                <li>按 resource_id 做 VIEW hard auth</li>
+                <li>citation 指向原始 evidence_text</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <span class="tag warn">not in v1</span>
+              <h3>不采纳的路线</h3>
+              <ul>
+                <li>不做 Grounded Decoding</li>
+                <li>不做 Predictive Prefetching</li>
+                <li>不把普通 verifier 包装成论文能力</li>
+              </ul>
+            </div>
+          </div>
+          <p class="lead">生成质量靠检索边界、证据选择、引用映射和权限硬鉴权兜住，不让论文方案牵动第一版主链。</p>
+        </div>
+      </section>
+
+      <section class="slide" data-title="落地阶段">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">10 / roadmap</div>
+            <h2>先把主链做稳，再加图谱和事实性增强。</h2>
+          </div>
+          <div class="timeline">
+            <div class="phase">
+              <h3>Phase 1<br />Corpus + 权限投影</h3>
+              <p>KB 文档版本、ACL projection、VIEW hard auth、Qdrant/Elastic filter builder。</p>
+            </div>
+            <div class="phase">
+              <h3>Phase 2<br />双引擎主检索</h3>
+              <p>parent-child chunk、Context Indexing、Qdrant dense、Elastic lexical、profile plan。</p>
+            </div>
+            <div class="phase">
+              <h3>Phase 3<br />Rerank + Tool</h3>
+              <p>Ranking pipeline、parent expansion、citation map、knowledge_search_tool。</p>
+            </div>
+            <div class="phase">
+              <h3>Phase 4<br />Graph + Prefetch</h3>
+              <p>图抽取、受控图扩展、图 evidence 回源和权限过滤；不包含 prefetch 或论文式 grounding。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-title="最终口径">
+        <div class="slide-inner">
+          <div>
+            <div class="kicker">11 / final rules</div>
+            <h2>记住这 8 条，方案就不会走偏。</h2>
+          </div>
+          <div class="split">
+            <div class="panel">
+              <ul>
+                <li>RAG 是长期业务索引，不是工具缓存。</li>
+                <li><span class="mono">resource_id</span> 是权限根。</li>
+                <li><span class="mono">VIEW</span> 是第一版 RAG 查询权限。</li>
+                <li>Qdrant 做 dense，Elastic 做 lexical。</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <ul>
+                <li>所有检索都必须先带 ACL filter。</li>
+                <li>Context Builder 是 prompt 注入唯一入口。</li>
+                <li>Agent 不直接写长期图谱。</li>
+                <li>进入 prompt 的 evidence 必须通过 VIEW hard auth。</li>
+              </ul>
+            </div>
+          </div>
+          <div class="stamp">定稿：主链稳，旁路轻，权限硬。</div>
+        </div>
+      </section>
+
+      <div class="nav-arrows" aria-hidden="false">
+        <button class="nav-arrow" id="prevButton" type="button" aria-label="上一页">‹</button>
+        <button class="nav-arrow" id="nextButton" type="button" aria-label="下一页">›</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const toc = document.getElementById("toc");
+    const progress = document.getElementById("progress");
+    const slideNumber = document.getElementById("slideNumber");
+    const slideTotal = document.getElementById("slideTotal");
+    const tocButton = document.getElementById("tocButton");
+    const prevButton = document.getElementById("prevButton");
+    const nextButton = document.getElementById("nextButton");
+    let current = 0;
+
+    slideTotal.textContent = "/ " + String(slides.length).padStart(2, "0");
+
+    slides.forEach((slide, index) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.textContent = String(index + 1).padStart(2, "0") + "  " + slide.dataset.title;
+      item.addEventListener("click", () => {
+        goTo(index);
+        toc.classList.remove("open");
+      });
+      toc.appendChild(item);
+    });
+
+    const tocItems = Array.from(toc.querySelectorAll("button"));
+
+    function goTo(index) {
+      current = Math.max(0, Math.min(slides.length - 1, index));
+      slides.forEach((slide, slideIndex) => {
+        slide.classList.toggle("active", slideIndex === current);
+      });
+      tocItems.forEach((item, itemIndex) => {
+        item.classList.toggle("active", itemIndex === current);
+      });
+      slideNumber.textContent = String(current + 1).padStart(2, "0");
+      progress.style.width = ((current + 1) / slides.length) * 100 + "%";
+      prevButton.disabled = current === 0;
+      nextButton.disabled = current === slides.length - 1;
+      location.hash = "p" + String(current + 1).padStart(2, "0");
+    }
+
+    tocButton.addEventListener("click", () => toc.classList.toggle("open"));
+    prevButton.addEventListener("click", () => goTo(current - 1));
+    nextButton.addEventListener("click", () => goTo(current + 1));
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight" || event.key === "PageDown") goTo(current + 1);
+      if (event.key === "ArrowLeft" || event.key === "PageUp") goTo(current - 1);
+      if (event.key === "Escape") toc.classList.remove("open");
+    });
+
+    let touchStartX = 0;
+    document.addEventListener("touchstart", (event) => {
+      touchStartX = event.changedTouches[0].clientX;
+    }, { passive: true });
+
+    document.addEventListener("touchend", (event) => {
+      const dx = event.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(dx) < 60) return;
+      goTo(current + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+
+    const hashMatch = location.hash.match(/^#p(\d+)$/);
+    goTo(hashMatch ? Number(hashMatch[1]) - 1 : 0);
+  </script>
+</body>
+</html>

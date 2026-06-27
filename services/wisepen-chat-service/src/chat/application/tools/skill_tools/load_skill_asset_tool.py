@@ -1,7 +1,5 @@
 from typing import Any, Dict
 
-from common.logger import warn
-
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExecutionError,
@@ -19,6 +17,7 @@ from chat.application.tools.tool_settings import tool_settings
 from chat.domain.interfaces.file_loader import FileLoader
 from chat.service_client import AIAssetClient
 from chat.service_client.resource_service_client import ResourceClient
+from common.logger import warn
 
 
 class ValidSkillAssetPathCheck(ToolPreflightHook):

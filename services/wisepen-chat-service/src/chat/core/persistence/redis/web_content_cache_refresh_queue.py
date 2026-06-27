@@ -3,7 +3,7 @@ from __future__ import annotations
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
 
-from chat.application.tools.web_tools.web_content_cache.refresh_queue import (
+from chat.application.tools.common.web_content_cache.refresh_queue import (
     WebContentCacheRefreshJob,
     WebContentCacheRefreshTaskPublisher,
 )

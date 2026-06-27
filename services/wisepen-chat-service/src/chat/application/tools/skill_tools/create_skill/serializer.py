@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import io
-import zipfile
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
@@ -12,9 +11,20 @@ from chat.application.tools.skill_tools.create_skill.models import (
 )
 
 
-# ---------------------------------------------------------------------------
-# SKILL.md 生成
-# ---------------------------------------------------------------------------
+@dataclass(frozen=True, slots=True)
+class SkillAssetFile:
+    """Skill 资源文件数据结构，用于描述单个待上传的文件。
+
+    Attributes:
+        path: 文件所在目录路径（如 "/"、"/references"、"/scripts"、"/assets"）
+        name: 文件名（如 "SKILL.md"、"helper.py"）
+        content: 文件内容文本
+        asset_type: 文件资源类型枚举值（MD / PYTHON_SCRIPT / TEXT / JSON / YAML / TOML）
+    """
+    path: str
+    name: str
+    content: str
+    asset_type: str
 
 
 def serialize_skill_markdown(
@@ -31,7 +41,7 @@ def serialize_skill_markdown(
 ) -> str:
     """生成 SKILL.md 内容（YAML frontmatter + Markdown body）。
 
-    遵循 Agent Skills 开放规范 (https://agentskills.io/specification)：
+    遵循 Agent Skills 开放规范：
     - YAML frontmatter 包含 name / description / metadata
     - 审计字段放在 metadata 中，与正文分离
     - 纯函数：不鉴权、不写存储、不修改索引
@@ -40,6 +50,7 @@ def serialize_skill_markdown(
     lines: list[str] = ["---", f"name: {skill_id}", "description: |-"]
 
     # ---- YAML frontmatter ----
+    # 逐行缩进写入触发描述
     for desc_line in trigger_description.strip().split("\n"):
         lines.append(f"  {desc_line}")
     lines.append("metadata:")
@@ -57,11 +68,6 @@ def serialize_skill_markdown(
     return "\n".join(lines) + "\n"
 
 
-# ---------------------------------------------------------------------------
-# references / assets 中的 .md 文件生成（复用标题树序列化）
-# ---------------------------------------------------------------------------
-
-
 def serialize_skill_file_markdown(
     *,
     title: str,
@@ -77,12 +83,7 @@ def serialize_skill_file_markdown(
     return "\n".join(lines) + "\n"
 
 
-# ---------------------------------------------------------------------------
-# 打包为 zip
-# ---------------------------------------------------------------------------
-
-
-def package_skill(
+def build_skill_assets(
     *,
     skill_id: str,
     trigger_description: str,
@@ -96,57 +97,53 @@ def package_skill(
     session_id: str,
     version: int = 1,
     created_at: datetime | None = None,
-) -> bytes:
-    """将完整 Skill 目录结构打包为 zip 字节。
+) -> list[SkillAssetFile]:
+    """构建完整的 Skill 资源文件列表，替代原有的 zip 打包方式。
+
+    返回的列表包含所有需要上传的文件，每个文件携带路径、名称、内容和资源类型，
+    供后续逐文件上传到 Java ai-asset-service。
 
     目录结构遵循 Agent Skills 规范：
-    {skill_id}/
-    ├── SKILL.md
-    ├── references/
-    │   └── ...
-    ├── scripts/
-    │   └── ...
-    └── assets/
-        └── ...
+    /SKILL.md
+    /references/...
+    /scripts/...
+    /assets/...
     """
     now = created_at or datetime.now(timezone.utc)
-    buf = io.BytesIO()
+    result: list[SkillAssetFile] = []
 
-    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        # SKILL.md
-        skill_md = serialize_skill_markdown(
-            skill_id=skill_id,
-            trigger_description=trigger_description,
-            title=title,
-            body=body,
-            children=children,
-            user_id=user_id,
-            session_id=session_id,
-            version=version,
-            created_at=now,
-        )
-        zf.writestr(f"{skill_id}/SKILL.md", skill_md)
+    # 1. 生成主文件 SKILL.md（放在根目录 /）
+    skill_md = serialize_skill_markdown(
+        skill_id=skill_id,
+        trigger_description=trigger_description,
+        title=title,
+        body=body,
+        children=children,
+        user_id=user_id,
+        session_id=session_id,
+        version=version,
+        created_at=now,
+    )
+    result.append(SkillAssetFile(path="/", name="SKILL.md", content=skill_md, asset_type="MD"))
 
-        # references/
-        for ref in references:
-            content = _render_skill_file(ref)
-            zf.writestr(f"{skill_id}/references/{ref.path}", content)
+    # 2. references 目录下的参考文档
+    for ref in references:
+        content = _render_skill_file(ref)
+        asset_type = _infer_asset_type(ref.path)
+        result.append(SkillAssetFile(path="/references", name=ref.path, content=content, asset_type=asset_type))
 
-        # scripts/
-        for script in scripts:
-            zf.writestr(f"{skill_id}/scripts/{script.path}", script.body)
+    # 3. scripts 目录下的 Python 脚本（仅支持 .py）
+    for script in scripts:
+        asset_type = _infer_asset_type(script.path)
+        result.append(SkillAssetFile(path="/scripts", name=script.path, content=script.body, asset_type=asset_type))
 
-        # assets/
-        for asset in assets:
-            content = _render_skill_file(asset)
-            zf.writestr(f"{skill_id}/assets/{asset.path}", content)
+    # 4. assets 目录下的资源文件
+    for asset in assets:
+        content = _render_skill_file(asset)
+        asset_type = _infer_asset_type(asset.path)
+        result.append(SkillAssetFile(path="/assets", name=asset.path, content=content, asset_type=asset_type))
 
-    return buf.getvalue()
-
-
-# ---------------------------------------------------------------------------
-# 内部辅助
-# ---------------------------------------------------------------------------
+    return result
 
 
 def _append_markdown_body(
@@ -175,7 +172,9 @@ def _serialize_section(
     level: int,
     lines: list[str],
 ) -> None:
+    """递归序列化单个标题节点。"""
     if level <= 6:
+        # 标准 Markdown 标题（H1~H6）
         prefix = "#" * level
         lines.append(f"{prefix} {section.heading}")
     else:
@@ -218,3 +217,22 @@ def _title_from_path(path: str) -> str:
 def _yaml_escape(value: str) -> str:
     """转义 YAML 双引号字符串中的特殊字符。"""
     return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _infer_asset_type(path: str) -> str:
+    """根据文件后缀推断 SkillAssetResourceType 枚举值。
+
+    支持的类型：MD、PYTHON_SCRIPT、TEXT、JSON、YAML、TOML
+    未知类型统一降级为 TEXT。
+    """
+    suffix = PurePosixPath(path).suffix.lower()
+    _type_map = {
+        ".md": "MD",
+        ".py": "PYTHON_SCRIPT",
+        ".txt": "TEXT",
+        ".json": "JSON",
+        ".yaml": "YAML",
+        ".yml": "YAML",
+        ".toml": "TOML",
+    }
+    return _type_map.get(suffix, "TEXT")

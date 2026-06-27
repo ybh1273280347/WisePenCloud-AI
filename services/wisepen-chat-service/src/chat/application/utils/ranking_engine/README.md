@@ -6,6 +6,8 @@ Ranking Engine 是工具层共用的排序小框架。它的目标不是展示�
 
 内置 engine 通过 `registry.py` 显式注册并维护单例，不做懒加载或懒导入。
 
+当前内置两个中文 tokenizer：`JiebaRankingTokenizer` 和 `ThuLacRankingTokenizer`。`registry.py` 里现有 `read.ranked_expand` engine 默认绑定 `ThuLacRankingTokenizer`，不再叠加本地 THUOCL 领域词保护逻辑。
+
 ## 什么时候用
 
 适合用 Ranking Engine 的场景：

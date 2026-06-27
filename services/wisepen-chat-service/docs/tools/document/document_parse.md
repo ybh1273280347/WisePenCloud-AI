@@ -27,6 +27,20 @@
 
 直链解析会先按 URL 读取 parse markdown 缓存；未命中时使用 web fetch 的 HTTP fetcher 下载文件，预创建同一 URL 缓存文档，再把解析出的 Markdown 回填到该 URL 缓存路径。
 
+URL 缓存公共组件位于：
+
+```text
+src/chat/application/tools/common/web_content_cache/
+```
+
+`document_parse` 通过 `DocumentParseCache` 使用同一套 Redis entry + Mongo value 缓存：
+
+- `mode="from_web_fetch"`：按 `tfile_*` metadata 中的 `source_kind/source_scope/source_url/source_cache_doc_id` 精确读取和回写 parsed Markdown。
+- `mode="from_direct_urls"`：先读 URL parsed cache；未命中时下载文件、写非 HTML 占位，再解析并回填。
+- stale parsed cache 命中时先返回旧 Markdown，再通过 Arq 队列触发 `refresh_document_parse_cache` 后台刷新。
+
+document parse 读取缓存时不能在 public/private 域之间回退，避免自定义搜索源或用户私有 URL 结果串域。
+
 ## 输出
 
 返回 `ToolReturn(tag="document_parse_result")`：
@@ -44,3 +58,4 @@
 - 内部最多并发解析 3 个文件；大量输入会按内部批次切分后顺序聚合。
 - 解析计划由 `DocumentParsePlanner` 决定：PDF 走 PDF 策略，DOCX/PPTX/HTML 走 Docling，XLSX 走 Pandas，图片走 OCR，最后使用 MarkItDown 兜底。
 - 工具门面不手写 `cnt_*` receipt；大文本缓存由 `ToolOutputCache` 和 `ToolContentStore` 统一处理。
+- URL cache 的 Mongo `doc_id`、Redis key 和 `source_cache_doc_id` 不暴露给模型；它们只在工具内部 metadata 中流转。

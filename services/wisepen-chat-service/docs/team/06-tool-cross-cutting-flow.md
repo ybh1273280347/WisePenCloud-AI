@@ -35,7 +35,7 @@ ToolScope disclosure
 | 大文本输出缓存 | `ToolOutputCache` | 将 `ToolReturn.cacheable_texts` 内联或转成 `cnt_*`。 | 不得手写 `<content_receipt>` 或自建大文本读取协议。 |
 | 内容存储 | `ToolContentStore` | 会话内短期文本存储、chunk/index、receipt。 | 不得把 `cnt_*` 当永久业务 ID。 |
 | 文件移交 | `ToolRunFileStore` | 工具间短期文件引用 `tfile_*`，按用户和会话隔离。 | 不得传本地路径、OSS key、base64 作为工具间文件协议。 |
-| URL 内容缓存 | `WebContentCacheService` / repository | URL 到 HTML/文件占位/解析 Markdown 的缓存路径。 | web/document 不得维护第二套 URL cache。 |
+| URL 内容缓存 | `WebContentCacheService` + Redis entry repository + Mongo value repository | URL 到 HTML/文件占位/解析 Markdown 的缓存路径。 | web/document 不得维护第二套 URL cache。 |
 | 刷新队列 | `WebContentCacheRefreshTaskPublisher` + Arq worker | stale cache 后台刷新。 | 工具不得阻塞等待 stale refresh 完成。 |
 | Mongo 缓存 GC | `WebContentCacheGcScheduler` | 删除 Mongo 中不再 active 的正文缓存。 | 不得删除 Redis active entry；Redis TTL 是 active 权威索引。 |
 | Suggested actions | `SuggestedAction(s)` | 给模型提示下一步工具链。 | 不得把完整工具参数硬塞进建议动作。 |
@@ -93,6 +93,18 @@ unknown/search file URL -> web_fetch -> tfile_* -> document_parse -> URL cache +
 - **独立 worker**：web content stale refresh 使用 Arq worker，需要单独进程消费队列。
 
 启动脚本 `services/wisepen-chat-service/start-chat-service.ps1` 会同时启动主服务和刷新队列 worker。生产部署也必须保证这两个进程都存在，否则 stale refresh 任务会入队但不执行。
+
+当前 URL cache 组件路径：
+
+```text
+src/chat/application/tools/common/web_content_cache/
+src/chat/core/persistence/redis/web_content_cache_entry_repository.py
+src/chat/core/persistence/mongo/web_content_cache_value_repository.py
+src/chat/core/persistence/redis/web_content_cache_refresh_queue.py
+src/chat/workers/web_content_cache_refresh_worker.py
+```
+
+Redis entry 保存 active URL 索引、soft/hard TTL 和 refresh lock；Mongo value 保存正文；Arq worker 只消费 stale refresh job；GC 只删除不再 active 的 Mongo value。
 
 ## Review 清单
 

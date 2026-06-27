@@ -4,6 +4,7 @@ import re
 
 from chat.application.tools.common.tool_content_store import ToolContentStore
 from chat.application.tools.common.tool_content_store.models import StoredToolContent, ToolContentChunk
+from chat.application.tools.session_tools.tool_content_read.content_window_builder import ToolContentWindowBuilder
 from chat.application.tools.session_tools.tool_content_read.models import (
     ToolContentReadMatch,
     ToolContentReadMode,
@@ -12,7 +13,6 @@ from chat.application.tools.session_tools.tool_content_read.models import (
     ToolContentSelector,
     ToolContentWindow,
 )
-from chat.application.tools.session_tools.utils.content_window_builder import ToolContentWindowBuilder
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.utils.ranking_engine import (
     RankCandidate,
@@ -41,7 +41,7 @@ class ToolContentReadService:
             ranking_engine: RankingEngine | None = None,
     ) -> None:
         self._store = store
-        self._ranking_engine = ranking_engine or get_ranking_engine("services.ranked_expand")
+        self._ranking_engine = ranking_engine or get_ranking_engine("read.ranked_expand")
 
     async def read(
             self,

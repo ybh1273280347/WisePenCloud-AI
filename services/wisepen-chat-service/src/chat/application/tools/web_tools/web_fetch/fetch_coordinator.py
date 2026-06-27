@@ -2,31 +2,24 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from datetime import datetime, timezone
-from hashlib import sha256
 from pathlib import Path
 
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.errors import ToolRunFileStoreError
-from chat.application.tools.web_tools.web_content_cache.models import (
-    WebContentCacheEntry,
-    WebContentCacheMode,
-    WebContentCacheValue,
+from chat.application.tools.common.web_content_cache import (
+    WebContentCacheEntryRepository,
+    WebContentCacheValueRepository,
 )
-from chat.application.tools.web_tools.web_content_cache.repository import (
-    WebContentCacheRepository,
-)
-from chat.application.tools.web_tools.web_content_cache.refresh_queue import (
-    WEB_FETCH_REFRESH_JOB,
-    WebContentCacheRefreshJob,
-    WebContentCacheRefreshTaskPublisher,
-)
-from chat.application.tools.web_tools.web_content_cache.service import (
+from chat.application.tools.common.web_content_cache import (
     HtmlCacheWrite,
+    NonHtmlCacheStubWrite,
     WebContentCacheService,
 )
+from chat.application.tools.common.web_content_cache.refresh_queue import (
+    WEB_FETCH_REFRESH_JOB,
+    WebContentCacheRefreshTaskPublisher,
+)
 from common.logger import info, warn
-from chat.application.tools.web_tools.web_content_cache.cache_ttl import compute_ttl
 from .cleaners.base import BaseCleaner
 from .errors import WebFetchError
 from .fetchers.base import BaseFetcher, RawFetchOutput
@@ -38,14 +31,15 @@ _REFRESH_LOCK_TTL_SECONDS = 300
 
 
 class FetchCoordinator:
-    """单点抓取协调器：编排 httpx → scrapling fallback 链路 + 清洗 + 质量判断 + 文件移交。`WebCrawlService` 用于递归爬取。"""
+    """单点抓取协调器：编排 httpx → scrapling fallback 链路 + 清洗 + 质量判断 + 文件移交。`WebCrawler` 用于递归爬取。"""
 
     __slots__ = (
         "_httpx_fetcher",
         "_scrapling_fetcher",
         "_cleaner",
         "_content_cache_service",
-        "_content_cache_repository",
+        "_content_cache_entry_repository",
+        "_content_cache_value_repository",
         "_refresh_task_publisher",
         "_file_store",
         "_min_text_length",
@@ -59,7 +53,8 @@ class FetchCoordinator:
         scrapling_fetcher: BaseFetcher,
         cleaner: BaseCleaner,
         file_store: ToolRunFileStore,
-        content_cache_repository: WebContentCacheRepository | None = None,
+        content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
+        content_cache_value_repository: WebContentCacheValueRepository | None = None,
         refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
         min_text_length: int = 200,
         batch_concurrency: int = 5,
@@ -68,10 +63,12 @@ class FetchCoordinator:
         self._scrapling_fetcher = scrapling_fetcher
         self._cleaner = cleaner
         self._file_store = file_store
-        self._content_cache_repository = content_cache_repository
+        self._content_cache_entry_repository = content_cache_entry_repository
+        self._content_cache_value_repository = content_cache_value_repository
         self._refresh_task_publisher = refresh_task_publisher
         self._content_cache_service = WebContentCacheService(
-            repository=content_cache_repository,
+            entry_repository=content_cache_entry_repository,
+            value_repository=content_cache_value_repository,
             refresh_task_publisher=refresh_task_publisher,
         )
         self._min_text_length = min_text_length
@@ -311,86 +308,32 @@ class FetchCoordinator:
         session_id: str,
         source_scope: str,
     ) -> WebFetchResult | None:
-        """读取未过期的网页内容缓存快照（优先 PRIVATE，次选 PUBLIC）。"""
-        repository = self._content_cache_repository
-        if repository is None:
+        cached = await self._content_cache_service.read_markdown_page(
+            url=url,
+            user_id=user_id,
+            session_id=session_id,
+            refresh_job_prefix="web_fetch",
+            refresh_task_name=WEB_FETCH_REFRESH_JOB,
+            refresh_lock_ttl_seconds=_REFRESH_LOCK_TTL_SECONDS,
+        )
+        if cached is None:
             return None
 
-        try:
-            now = datetime.now(timezone.utc)
-            # 同一用户优先读自己的 private 缓存；没有可用 private 时再回落 public。
-            for mode in (WebContentCacheMode.PRIVATE, WebContentCacheMode.PUBLIC):
-                entry = await repository.get_entry(
-                    user_id=user_id,
-                    url=url,
-                    cache_mode=mode,
-                )
-                if entry is None:
-                    continue
-
-                value = await repository.get_value(doc_id=entry.mongo_doc_id)
-                # 实体缺失或正文为空则跳过
-                if value is None or not value.markdown:
-                    continue
-
-                soft_expire_at = entry.soft_expire_at
-                if soft_expire_at.tzinfo is None:
-                    soft_expire_at = soft_expire_at.replace(tzinfo=timezone.utc)
-
-                hard_expire_at = entry.hard_expire_at
-                if hard_expire_at.tzinfo is None:
-                    hard_expire_at = hard_expire_at.replace(tzinfo=timezone.utc)
-
-                if now > hard_expire_at:
-                    continue
-
-                title = value.metadata.get("title")
-                cached_result = WebFetchResult(
-                    source_url=url,
-                    final_url=value.final_url,
-                    status_code=value.status_code,
-                    content_type=value.content_type,
-                    title=title if isinstance(title, str) else None,
-                    markdown=value.markdown,
-                    source_scope=source_scope,
-                )
-
-                if now > soft_expire_at:
-                    refresh_source_scope = (
-                        "web_custom"
-                        if entry.cache_mode == WebContentCacheMode.PRIVATE
-                        else "web_public"
-                    )
-                    await self._content_cache_service.schedule_stale_refresh(
-                        url=url,
-                        user_id=user_id,
-                        session_id=session_id,
-                        source_scope=refresh_source_scope,
-                        cache_mode=entry.cache_mode,
-                        refresh_job_prefix="web_fetch",
-                        refresh_task_name=WEB_FETCH_REFRESH_JOB,
-                        refresh_lock_ttl_seconds=_REFRESH_LOCK_TTL_SECONDS,
-                    )
-                    info(
-                        "网页抓取命中 stale 缓存",
-                        url=url,
-                        cache_mode=entry.cache_mode.value,
-                        doc_id=entry.mongo_doc_id,
-                    )
-                    return cached_result
-
-                info(
-                    "网页抓取命中新鲜缓存",
-                    url=url,
-                    cache_mode=entry.cache_mode.value,
-                    doc_id=entry.mongo_doc_id,
-                )
-                return cached_result
-        except Exception as exc:
-            # 容灾：缓存读取异常时降级平滑退化至物理网络抓取
-            warn("网页抓取缓存读取失败，降级为实时抓取", url=url, e=exc)
-
-        return None
+        info(
+            "网页抓取命中缓存",
+            url=url,
+            cache_mode=cached.cache_mode.value,
+            stale=cached.stale,
+        )
+        return WebFetchResult(
+            source_url=cached.source_url,
+            final_url=cached.final_url,
+            status_code=cached.status_code,
+            content_type=cached.content_type,
+            title=cached.title,
+            markdown=cached.markdown,
+            source_scope=source_scope,
+        )
 
     async def refresh_stale_url(
         self,
@@ -482,64 +425,16 @@ class FetchCoordinator:
         source_scope: str,
         raw: RawFetchOutput,
     ) -> str | None:
-        """为后续 document_parse 回写 markdown 预创建同一 URL 缓存文档。"""
-        repository = self._content_cache_repository
-        if repository is None:
-            return None
-
-        try:
-            now = datetime.now(timezone.utc)
-            # 非 HTML 先写占位文档，document_parse 后续按同一访问域回填 markdown。
-            mode = (
-                WebContentCacheMode.PRIVATE
-                if source_scope == "web_custom"
-                else WebContentCacheMode.PUBLIC
-            )
-            # 基于 HTTP 响应头智能计算 TTL
-            ttl = compute_ttl(
-                headers=raw.headers,
-                now=now,
-                is_shared_cache=(mode == WebContentCacheMode.PUBLIC),
-                status_code=raw.status_code or 200,
-            )
-            if ttl.no_store:
-                info("网页抓取非 HTML 缓存被 no-store 指令跳过", url=raw.source_url)
-                return None
-            canonical_url = raw.source_url.strip()
-            value = WebContentCacheValue(
-                id=None,
+        return await self._content_cache_service.write_non_html_stub(
+            NonHtmlCacheStubWrite(
                 user_id=user_id,
-                canonical_url=canonical_url,
+                source_scope=source_scope,
+                source_url=raw.source_url,
                 final_url=raw.final_url,
-                cache_mode=mode,
                 status_code=raw.status_code,
                 content_type=raw.content_type,
-                raw_html=None,
-                markdown=None,
-                fetched_at=now,
-                metadata={
-                    "source_scope": source_scope,
-                    "source_url": raw.source_url,
-                    "fetcher": raw.fetcher,
-                    "file_label": raw.file_label,
-                    "cache_control": raw.headers.get("cache-control"),
-                },
+                headers=raw.headers,
+                fetcher=raw.fetcher,
+                file_label=raw.file_label,
             )
-            doc_id = await repository.save_value(value)
-            await repository.set_entry(
-                WebContentCacheEntry(
-                    user_id=user_id,
-                    url_hash=sha256(canonical_url.encode("utf-8")).hexdigest(),
-                    canonical_url=canonical_url,
-                    mongo_doc_id=doc_id,
-                    cache_mode=mode,
-                    soft_expire_at=ttl.soft_expire_at,
-                    hard_expire_at=ttl.hard_expire_at,
-                    etag=raw.headers.get("etag"),
-                    last_modified=raw.headers.get("last-modified"),
-                )
-            )
-            return doc_id
-        except Exception as exc:
-            warn("网页抓取非 HTML 缓存占位文档写入失败", url=raw.source_url, e=exc)
-            return None
+        )

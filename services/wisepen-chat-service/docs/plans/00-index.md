@@ -6,6 +6,9 @@
 
 ## 当前计划
 
+- [browser_interact 计划](browser/00-index.md)
+- [原生文件编写计划](native-file-writing/00-index.md)
+- [私有知识库 RAG 计划](rag/00-index.md)
 - [动态工具 Schema 披露计划](01-dynamic-tool-schema-disclosure.md)
 - [Tool 并发调度策略计划](02-tool-dispatch-parallel-policy.md)
 

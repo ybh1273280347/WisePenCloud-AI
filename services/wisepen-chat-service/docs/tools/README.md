@@ -14,7 +14,7 @@
 - `math/`：结构化数学计算工具。
 - `session/`：会话历史与 `cnt_*` 内容读取工具。
 - `skill/`：Skill 指令和文本资产懒加载工具。
-- `web/`：搜索、抓取、站点爬取和显式 hydration 工具。
+- `web/`：搜索、学术搜索、抓取和站点爬取工具。
 
 ## 全局机制
 
@@ -74,8 +74,7 @@
 
 ### web
 
+- [academic_search](web/academic_search.md)
 - [web_search](web/web_search.md)
 - [web_fetch](web/web_fetch.md)
 - [web_crawl](web/web_crawl.md)
-- [paper_hydrate](web/paper_hydrate.md)
-- [github_hydrate](web/github_hydrate.md)

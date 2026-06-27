@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, ChevronDown, Crown, Paperclip, Plus, Search, Settings2, Sparkles, Square, SendHorizontal } from "lucide-react";
+import { CheckCircle2, ChevronDown, Paperclip, Plus, Search, Settings2, Sparkles, Square, SendHorizontal } from "lucide-react";
 import { Button } from "./ui/button";
 import { IconButton } from "./ui/icon-button";
 import { Markdown } from "./ui/markdown";
@@ -18,8 +18,7 @@ type InputBoxProps = {
   onChange: (value: string) => void;
   onSelectModel: (option: ModelOption) => void;
   onSelectSearchCredential: (source: "platform" | "custom", provider: string) => Promise<WebSearchCredential>;
-  onCreateCustomSearchCredential: (provider: string, apiKey: string) => Promise<WebSearchCredential>;
-  onSetPlatformMembership: (isMember: boolean) => Promise<WebSearchCredential>;
+  onCreateCustomSearchCredential: (provider: string, apiKey: string, openalexApiKey?: string) => Promise<WebSearchCredential>;
   onSubmit: () => void;
   onStop: () => void;
 };
@@ -39,20 +38,20 @@ export function InputBox({
   onSelectModel,
   onSelectSearchCredential,
   onCreateCustomSearchCredential,
-  onSetPlatformMembership,
   onSubmit,
   onStop,
 }: InputBoxProps) {
   const [settingsExpanded, setSettingsExpanded] = useState(false);
-  const [activeSection, setActiveSection] = useState<"search" | "subscription" | "model" | null>(null);
+  const [activeSection, setActiveSection] = useState<"search" | "model" | null>(null);
   const [savingSearch, setSavingSearch] = useState(false);
   const [selectedCustomProvider, setSelectedCustomProvider] = useState("exa");
   const [customApiKey, setCustomApiKey] = useState("");
+  const [customOpenAlexApiKey, setCustomOpenAlexApiKey] = useState("");
   const selectedModelValue = `${settings.modelId}:${settings.providerId}`;
   const platformCredential = searchCredentials.find((credential) => credential.source === "platform");
   const activeSearchSource = settings.searchSource;
   const selectedModel = modelOptions.find((option) => option.value === selectedModelValue);
-  const customProviders = ["exa", "tavily", "anysearch", "serper"];
+  const customProviders = ["exa", "tavily", "anysearch"];
   const advancedModels = modelOptions.filter((option) => option.billingRatio > 1);
   const basicModels = modelOptions.filter((option) => option.billingRatio <= 1);
   const hasDraft = value.trim().length > 0;
@@ -166,79 +165,48 @@ export function InputBox({
                               </button>
                             ))}
                           </div>
-                          <div className="flex gap-1.5">
+                          <div className="grid gap-1.5">
                             <input
                               aria-label="自定义搜索源 API Key"
-                              className="h-8 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-2.5 font-mono text-xs font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-sky-500/20"
+                              className="h-8 min-w-0 rounded-xl border border-gray-200 bg-white px-2.5 font-mono text-xs font-semibold text-gray-900 outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-sky-500/20"
                               onChange={(event) => setCustomApiKey(event.target.value)}
+                              placeholder="搜索源 API Key"
                               type="password"
                               value={customApiKey}
                             />
-                            <button
-                              aria-label="启用自定义搜索源"
-                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sky-200 bg-sky-500 text-white transition-colors hover:bg-sky-600 disabled:pointer-events-none disabled:opacity-50"
-                              disabled={savingSearch || !customApiKey.trim()}
-                              onClick={() => {
-                                setSavingSearch(true);
-                                void onCreateCustomSearchCredential(selectedCustomProvider, customApiKey).then(() => {
-                                  setCustomApiKey("");
-                                }).finally(() => {
-                                  setSavingSearch(false);
-                                });
-                              }}
-                              type="button"
-                            >
-                              <CheckCircle2 className="h-4 w-4" />
-                            </button>
+                            <div className="flex gap-1.5">
+                              <input
+                                aria-label="OpenAlex API Key"
+                                className="h-8 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-2.5 font-mono text-xs font-semibold text-gray-900 outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-sky-500/20"
+                                onChange={(event) => setCustomOpenAlexApiKey(event.target.value)}
+                                placeholder="OpenAlex Key（可选）"
+                                type="password"
+                                value={customOpenAlexApiKey}
+                              />
+                              <button
+                                aria-label="启用自定义搜索源"
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sky-200 bg-sky-500 text-white transition-colors hover:bg-sky-600 disabled:pointer-events-none disabled:opacity-50"
+                                disabled={savingSearch || !customApiKey.trim()}
+                                onClick={() => {
+                                  setSavingSearch(true);
+                                  void onCreateCustomSearchCredential(
+                                    selectedCustomProvider,
+                                    customApiKey,
+                                    customOpenAlexApiKey,
+                                  ).then(() => {
+                                    setCustomApiKey("");
+                                    setCustomOpenAlexApiKey("");
+                                  }).finally(() => {
+                                    setSavingSearch(false);
+                                  });
+                                }}
+                                type="button"
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-
-                <button
-                  className="flex w-full items-center justify-between rounded-xl bg-white px-2.5 py-2 text-left text-xs font-semibold text-gray-900 shadow-sm"
-                  onClick={() => setActiveSection((current) => current === "subscription" ? null : "subscription")}
-                  type="button"
-                >
-                  <span className="flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-sky-500" />
-                    订阅
-                  </span>
-                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
-                    {platformCredential?.is_member ? "已订阅" : "未订阅"}
-                    <ChevronDown className={cn("h-4 w-4 transition-transform", activeSection === "subscription" && "rotate-180")} />
-                  </span>
-                </button>
-                <AnimatePresence initial={false}>
-                  {activeSection === "subscription" ? (
-                    <motion.div
-                      animate={{ height: "auto", opacity: 1 }}
-                      className="overflow-hidden"
-                      exit={{ height: 0, opacity: 0 }}
-                      initial={{ height: 0, opacity: 0 }}
-                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                    >
-                      <div className="rounded-xl bg-white p-1.5">
-                        <Button
-                          className="h-8 w-full text-xs"
-                          disabled={savingSearch}
-                          onClick={() => {
-                            setSavingSearch(true);
-                            void onSetPlatformMembership(!platformCredential?.is_member).finally(() => {
-                              setSavingSearch(false);
-                            });
-                          }}
-                          type="button"
-                          variant={platformCredential?.is_member ? "secondary" : "primary"}
-                        >
-                          <Crown className="h-4 w-4" />
-                          {platformCredential?.is_member ? "取消订阅" : "开通订阅"}
-                        </Button>
-                        <p className="mt-1.5 px-1 text-[11px] font-medium leading-4 text-gray-500">
-                          当前仅用于启用平台高级搜索能力。
-                        </p>
                       </div>
                     </motion.div>
                   ) : null}

@@ -34,7 +34,7 @@
 input mode
   -> direct urls or search_ref resolution
   -> FetchCoordinator.fetch_many
-  -> per URL: read URL cache
+  -> per URL: WebContentCacheService.read_markdown_page
   -> httpx fetch
   -> optional scrapling fallback
   -> HTML: trafilatura clean + quality check + cache write
@@ -43,6 +43,14 @@ input mode
 ```
 
 抓取链路优先使用 `HttpxFetcher`；网络失败或 HTML 质量不足时降级到 `ScraplingFetcher`。HTML 由 `TrafilaturaCleaner` 清洗为 Markdown，并按 HTTP cache-control 计算 URL 缓存 TTL。
+
+URL 缓存编排已经收敛到工具公共切面：
+
+```text
+src/chat/application/tools/common/web_content_cache/
+```
+
+其中 Redis entry 保存 active URL 索引、soft/hard TTL 和 refresh lock；Mongo value 保存 raw HTML、Markdown 与 metadata。stale 命中时，`web_fetch` 先返回旧 Markdown，再通过 Arq 队列触发 `refresh_web_fetch_cache` 后台刷新，不阻塞本次工具返回。
 
 非 HTML 文件不会被 `web_fetch` 解析。它会：
 
@@ -76,7 +84,9 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 - `ScraplingFetcher`：动态/反爬 fallback，可替换为 Playwright 类 browser fetcher。
 - `TrafilaturaCleaner`：HTML 正文抽取，可替换 cleaner 或 renderer。
 - `judge_quality`：降级判断阈值，可按站点类型或内容长度实验。
-- `WebContentCacheRepository`：URL 缓存实现，可扩展 ETag、Last-Modified、缓存分层。
+- `WebContentCacheService`：统一 URL 缓存门面，可扩展 ETag、Last-Modified、缓存分层。
+- `RedisWebContentCacheEntryRepository` / `MongoWebContentCacheValueRepository`：缓存 active 索引和正文持久化实现。
+- `ArqWebContentCacheRefreshTaskPublisher`：stale 缓存后台刷新任务发布器。
 
 ## 后续优化
 

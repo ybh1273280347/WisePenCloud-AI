@@ -63,6 +63,7 @@ class ChunkingPresetRegistry:
                     SecondaryChunkProcessor(SecondaryChunkConfig(child_chunk_size=600, child_overlap=100)),
                     SecondaryChunkFinalizer(),
                 ),
+                extra_indexer=ChunkExtraIndexer(),
             ),
         }
 

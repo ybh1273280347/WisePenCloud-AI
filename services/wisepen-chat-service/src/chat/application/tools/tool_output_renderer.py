@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# 禁用 dicttoxml 的调试日志
+import logging
 from dataclasses import asdict, dataclass, is_dataclass
 from enum import Enum
 from re import fullmatch
@@ -8,8 +10,6 @@ from xml.sax.saxutils import escape
 
 from dicttoxml import dicttoxml
 
-# 禁用 dicttoxml 的调试日志
-import logging
 logging.getLogger("dicttoxml").setLevel(logging.WARNING)
 from lxml import etree
 from pydantic import BaseModel
@@ -102,6 +102,7 @@ def render_tool_xml(
 ) -> str:
     """底层的核心 XML 构建器，调度 dicttoxml 完成序列化并注入相关子节点。"""
     root_tag = _validate_xml_tag(root_tag)
+    payload = _normalize_mapping(payload)
 
     xml = dicttoxml(
         payload,
@@ -171,10 +172,22 @@ def _normalize(value: Any) -> Any:
         return _normalize(asdict(value))
 
     if isinstance(value, dict):
-        return {str(key): _normalize(item) for key, item in value.items()}
+        normalized: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_item = _normalize(item)
+            if normalized_item is None:
+                continue
+            normalized[str(key)] = normalized_item
+        return normalized
 
     if isinstance(value, list | tuple):
-        return [_normalize(item) for item in value]  # 元组统一降维为标准列表
+        normalized_items: list[Any] = []
+        for item in value:
+            normalized_item = _normalize(item)
+            if normalized_item is None:
+                continue
+            normalized_items.append(normalized_item)
+        return normalized_items  # 元组统一降维为标准列表
 
     if isinstance(value, str | int | float | bool) or value is None:
         return value  # 基础标量直接放行透传
@@ -219,6 +232,7 @@ def _render_contents(contents: tuple[str, ...]) -> str:
 def _render_content_receipts(receipts: tuple[dict[str, Any], ...]) -> str:
     """渲染内容回执单据列表。"""
     payload = receipts[0] if len(receipts) == 1 else {"items": list(receipts)}
+    payload = _normalize_mapping(payload)
 
     return dicttoxml(
         payload,

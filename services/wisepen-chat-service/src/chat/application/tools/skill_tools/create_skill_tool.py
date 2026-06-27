@@ -11,7 +11,7 @@ from chat.application.tools.core import (
     ToolRiskLevel,
 )
 from chat.application.tools.skill_tools.create_skill.models import CreateSkillRequest
-from chat.application.tools.skill_tools.create_skill.serializer import package_skill
+from chat.application.tools.skill_tools.create_skill.serializer import build_skill_assets
 from chat.application.tools.skill_tools.create_skill.skill_publisher import (
     SkillPublisher,
 )
@@ -83,18 +83,23 @@ PARAMETERS_SCHEMA: Dict[str, Any] = {
         },
         "SkillScript": {
             "type": "object",
-            "description": "An executable script file in the skill package.",
+            "description": (
+                "An executable Python script file in the skill package. "
+                "ONLY Python scripts (.py) are supported — do not include "
+                "shell scripts, JavaScript, or any other language."
+            ),
             "properties": {
                 "path": {
                     "type": "string",
                     "description": (
                         "Filename within scripts/ directory (e.g. 'extract.py'). "
+                        "Must end with .py extension. "
                         "Must not contain '..' or start with '/'."
                     ),
                 },
                 "body": {
                     "type": "string",
-                    "description": "Source code of the script.",
+                    "description": "Python source code of the script.",
                 },
             },
             "required": ["path", "body"],
@@ -191,12 +196,12 @@ class CreateSkillTool:
                     "  - The document body is generated from the heading tree; do NOT write headings in body fields.\n"
                     "  - Use the heading/children structure to organize content hierarchically.\n"
                     "  - references/ and assets/ can contain .md files that also use the heading tree.\n"
-                    "  - scripts/ contains executable code files.\n"
+                    "  - scripts/ contains ONLY Python executable files (.py). No other languages are allowed.\n"
                 ),
                 parameters_schema=ToolParametersSchema(PARAMETERS_SCHEMA),
             ),
             policy=ToolPolicy(
-                expose_by_default=False,
+                expose_by_default=True,
                 persist_output=True,
                 risk_level=ToolRiskLevel.HIGH,
                 required_context_keys=("user_id", "session_id"),
@@ -233,8 +238,8 @@ class CreateSkillTool:
                 retryable=False,
             )
 
-        # 3. 打包为 zip（含 SKILL.md + references/ + scripts/ + assets/）
-        package = package_skill(
+        # 3. 构建 Skill 资源文件列表（含 SKILL.md + references/ + scripts/ + assets/）
+        assets = build_skill_assets(
             skill_id=request.skill_id,
             trigger_description=request.trigger_description,
             title=request.title,
@@ -252,9 +257,8 @@ class CreateSkillTool:
             skill_id=request.skill_id,
             title=request.title,
             trigger_description=request.trigger_description,
-            package=package,
-            user_id=user_id,
-            session_id=session_id,
+            description=request.body,
+            assets=assets,
         )
 
         # 5. 返回创建结果

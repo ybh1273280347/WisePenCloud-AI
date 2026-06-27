@@ -32,6 +32,7 @@
 - [Container 与 Settings 边界规范](team/04-container-and-settings.md)
 - [Utils 能力盘点](team/05-utils-inventory.md)
 - [Tool 统一切面与流程规范](team/06-tool-cross-cutting-flow.md)
+- [Web Search 扩展规范](team/07-web-search-extension.md)
 - [重要变更索引](important/00-index.md)
 - [个人开发者快速上手与 Review](developer/quickstart-review.html)
 - [Tool 用法文档](tools/)

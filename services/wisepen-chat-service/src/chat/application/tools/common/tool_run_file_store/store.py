@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Protocol
 
+from chat.application.tools.tool_settings import tool_settings
 from .errors import (
     InvalidToolFileRefError,
     ToolFileNotFoundError,
@@ -24,7 +25,6 @@ from .models import (
     ToolRunFileCleanupResult,
 )
 from .utils import sanitize_tool_file_name
-from chat.application.tools.tool_settings import tool_settings
 
 DEFAULT_TOOL_RUN_FILE_ROOT = Path(tempfile.gettempdir()) / "wisepen-tool-run-files"
 DEFAULT_TOOL_RUN_FILE_REF_TTL_SECONDS = tool_settings.TOOL_RUN_FILE_REF_TTL_SECONDS

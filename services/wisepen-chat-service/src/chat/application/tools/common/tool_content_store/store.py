@@ -4,6 +4,7 @@ import hashlib
 import uuid
 from typing import Protocol
 
+from chat.application.tools.tool_settings import tool_settings
 from chat.application.utils.chunking_engine import (
     Chunk,
     ChunkDocument,
@@ -14,7 +15,6 @@ from chat.application.utils.chunking_engine.registry import (
     PLAIN_TEXT_PIPELINE_NAME,
     get_chunking_pipeline,
 )
-from chat.application.tools.tool_settings import tool_settings
 from .models import (
     Metadata,
     StoredToolContent,

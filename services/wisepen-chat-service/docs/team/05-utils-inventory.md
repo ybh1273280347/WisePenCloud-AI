@@ -163,6 +163,7 @@
 - 需要表格转 Markdown：用 `TableMarkdownRenderer`。
 - 需要 HTML 片段转 Markdown：用 `FragmentMarkdownRenderer`。
 - 需要网页主体抽取成 Markdown：用 `WebPageMarkdownRenderer`。
+- 需要复用外部 URL 抓取、HTML 清洗或文件解析结果：用 `src/chat/application/tools/common/web_content_cache/`，不要混入 `ToolContentStore`。
 
 ## 文档入口
 

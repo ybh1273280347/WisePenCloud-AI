@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from chat.application.tools.common.batching import batched
 from chat.application.tools.common.tool_content_store import ToolContentStore
 from chat.application.tools.core import (
     ToolDefinition,
@@ -20,6 +19,7 @@ from chat.application.tools.session_tools.tool_content_read.models import (
 )
 from chat.application.tools.session_tools.tool_content_read.service import ToolContentReadService
 from chat.application.tools.tool_settings import tool_settings
+from chat.application.tools.utils.batching import batched
 from chat.application.utils.chunking_engine import UnitType
 
 _UNIT_TYPE_ENUM = [unit_type.value for unit_type in UnitType]

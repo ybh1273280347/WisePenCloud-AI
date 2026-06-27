@@ -43,9 +43,11 @@ seed_url
 
 `WebCrawlService` 直接使用底层 fetcher，而不是调用 `FetchCoordinator.fetch_one`，因为 crawl 需要 raw HTML 来提取链接。非 HTML 文件会被跳过，不生成 `tfile_*`，因为 crawl 的目标是 HTML 页面集合。
 
-crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `web_content_cache`；命中时直接返回缓存 Markdown，并使用缓存中的 `raw_html` 继续抽取链接。未命中时执行物理抓取，清洗后的 Markdown 和 raw HTML 通过 `WebContentCacheService` 写回同一 URL 缓存路径。stale 命中会返回旧内容并排队刷新。
+crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `web_content_cache`；命中时直接返回缓存 Markdown，并使用缓存中的 `raw_html` 继续抽取链接。未命中时执行物理抓取，清洗后的 Markdown 和 raw HTML 通过 `WebContentCacheService` 写回同一 URL 缓存路径。stale 命中会返回旧内容，并通过 Redis refresh lock + Arq refresh queue 安排后台刷新。
 
 这与 `web_fetch` 共享缓存服务，是正确行为：两者都是 HTML 页面内容获取工具，差异只在 frontier 策略（单页/批量 URL vs BFS crawl），不应维护两套 URL 缓存协议。
+
+缓存公共组件位于 `src/chat/application/tools/common/web_content_cache/`，持久化实现分别在 Redis entry repository 和 Mongo value repository 中；crawler 不直接操作 Redis/Mongo。
 
 ## 输出
 

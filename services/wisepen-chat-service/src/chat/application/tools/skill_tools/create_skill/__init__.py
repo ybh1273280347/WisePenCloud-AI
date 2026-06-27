@@ -3,6 +3,8 @@ from chat.application.tools.skill_tools.create_skill.models import (
     SkillSection,
 )
 from chat.application.tools.skill_tools.create_skill.serializer import (
+    SkillAssetFile,
+    build_skill_assets,
     serialize_skill_markdown,
 )
 from chat.application.tools.skill_tools.create_skill.skill_publisher import (
@@ -15,9 +17,11 @@ from chat.application.tools.skill_tools.create_skill.validator import (
 
 __all__ = [
     "CreateSkillRequest",
+    "SkillAssetFile",
     "SkillPublishResult",
     "SkillPublisher",
     "SkillSection",
+    "build_skill_assets",
     "serialize_skill_markdown",
     "validate_create_skill",
 ]

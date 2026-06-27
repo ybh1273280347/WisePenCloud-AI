@@ -6,10 +6,9 @@ from fastapi import APIRouter, Depends
 from chat.api.schemas.web_search import (
     CreateWebSearchCredentialRequest,
     SetActiveWebSearchCredentialRequest,
-    SetPlatformMembershipRequest,
     WebSearchCredentialResponse,
 )
-from chat.application.tools.web_tools.web_search.providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
 from chat.container import Container
 from chat.core.persistence.mongo.web_search_credential_repository import (
     MongoWebSearchCredentialRepository,
@@ -34,6 +33,8 @@ def to_response(credential: WebSearchCredential) -> WebSearchCredentialResponse:
         is_member=credential.is_member,
         api_key_masked=credential.api_key_masked,
         api_key_fingerprint=credential.api_key_fingerprint,
+        openalex_api_key_masked=credential.openalex_api_key_masked,
+        support_academic=credential.support_academic,
         is_active=credential.is_active,
         created_at=credential.created_at.isoformat(),
         updated_at=credential.updated_at.isoformat(),
@@ -73,21 +74,7 @@ async def create_web_search_credential(
         user_id=user_id,
         provider=req.provider,
         api_key=req.api_key,
-    )
-    return R.success(data=to_response(credential))
-
-
-@router.post("/setPlatformMembership", response_model=R[WebSearchCredentialResponse], status_code=200)
-@inject
-async def set_platform_membership(
-        req: SetPlatformMembershipRequest,
-        user_id: str = Depends(require_login),
-        credential_repo: MongoWebSearchCredentialRepository = Depends(Provide[Container.web_search_credential_repo]),
-):
-    # 本接口仅用于本地/内测 UI 调试搜索源选择；真实订阅能力应迁移到统一订阅服务管理。
-    credential = await credential_repo.set_platform_membership(
-        user_id=user_id,
-        is_member=req.is_member,
+        openalex_api_key=req.openalex_api_key,
     )
     return R.success(data=to_response(credential))
 

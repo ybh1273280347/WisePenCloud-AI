@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from common.logger import warn
-
-from chat.application.tools.common.batching import batched
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExecutionError,
@@ -20,12 +17,14 @@ from chat.application.tools.core.tool_return import (
     ToolReturn,
 )
 from chat.application.tools.tool_settings import tool_settings
+from chat.application.tools.utils.batching import batched
+from chat.application.tools.web_tools.search_services.candidate_store.repository import (
+    WebSearchCandidateRepository,
+)
 from chat.application.tools.web_tools.web_fetch import FetchCoordinator
 from chat.application.tools.web_tools.web_fetch.errors import WebFetchError
 from chat.application.tools.web_tools.web_fetch.models import WebFetchBatchResult
-from chat.application.tools.web_tools.web_search.candidate_store.repository import (
-    WebSearchCandidateRepository,
-)
+from common.logger import warn
 
 # --- 全局常量定义 ---
 MAX_URLS = 64

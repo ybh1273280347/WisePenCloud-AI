@@ -31,10 +31,8 @@ class ToolSettings(BaseModel):
 
     # ── Web Search (网页搜索策略) ──────────────────────────────────────
     WEB_SEARCH_TIMEOUT_SECONDS: float = 15.0                  # 网页搜索底层 API 超时
-    WEB_SEARCH_MAX_HOPS: int = 5                              # 网页搜索最大跳数 (Hops)
     WEB_SEARCH_DEFAULT_RESULTS: int = 10                      # 网页搜索默认返回结果数
     WEB_SEARCH_MAX_RESULTS: int = 20                          # 网页搜索最大返回结果数
-    WEB_SEARCH_MAX_SUFFICIENCY_TEXT_CHARS: int = 12_000       # 搜索充分性校验最大文本字符数
     WEB_SEARCH_MAX_RECOMMENDED_CANDIDATES: int = 5            # 最大推荐候选结果数
     WEB_SEARCH_FALLBACK_CANDIDATES_COUNT: int = 3             # 降级兜底候选结果数
 

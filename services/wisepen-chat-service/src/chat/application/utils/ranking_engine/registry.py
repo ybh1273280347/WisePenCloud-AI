@@ -1,29 +1,37 @@
 from __future__ import annotations
 
+from .diversifiers import MmrDiversifier, MmrDiversifierConfig
 from .engine import RankingEngine
 from .fusion import WeightedRrfFusion
 from .pipeline import RankingPipeline
 from .rerankers import get_default_zero_entropy_reranker
-from .scorers import BM25Scorer, FieldedBM25Scorer, FieldedBM25ScorerConfig
-from .text import RankingTokenizer
+from .scorers import (
+    BM25Scorer,
+    FieldedBM25Scorer,
+    FieldedBM25ScorerConfig,
+)
+from .text import JiebaRankingTokenizer, ThuLacRankingTokenizer
 
 
 class RankingEngineRegistry:
     """按名称提供已注册的 RankingEngine 单例。"""
 
-    __slots__ = ("_engines",)
+    __slots__ = ("_engines", "_tokenizers")
 
     def __init__(self) -> None:
-        tokenizer = RankingTokenizer()
+        self._tokenizers = {
+            "jieba": JiebaRankingTokenizer(),
+            "thulac": ThuLacRankingTokenizer(),
+        }
         reranker = get_default_zero_entropy_reranker()
         self._engines = {
-            "services.ranked_expand": RankingEngine(
+            "read.ranked_expand": RankingEngine(
                 pipeline=RankingPipeline(
-                    name="services.ranked_expand",
+                    name="read.ranked_expand",
                     scorers=(
-                        BM25Scorer(tokenizer=tokenizer),
+                        BM25Scorer(tokenizer=self._tokenizers["thulac"]),
                         FieldedBM25Scorer(
-                            tokenizer=tokenizer,
+                            tokenizer=self._tokenizers["thulac"],
                             config=FieldedBM25ScorerConfig(
                                 field_weights={"section": 2.0, "anchor": 1.5},
                             ),
@@ -31,6 +39,23 @@ class RankingEngineRegistry:
                     ),
                     fusion=WeightedRrfFusion(),
                     reranker=reranker,
+                )
+            ),
+            "rag.knowledge_search": RankingEngine(
+                pipeline=RankingPipeline(
+                    name="rag.knowledge_search",
+                    # Qdrant / Elasticsearch 的分数和融合由上游 RAG orchestrator 完成。
+                    # 这里从输入顺序起步，只做模型 rerank 和同组多样性控制。
+                    reranker=reranker,
+                    diversifiers=(
+                        MmrDiversifier(
+                            tokenizer=self._tokenizers["thulac"],
+                            config=MmrDiversifierConfig(
+                                lambda_mult=0.78,
+                                same_group_similarity=0.95,
+                            ),
+                        ),
+                    ),
                 )
             ),
         }

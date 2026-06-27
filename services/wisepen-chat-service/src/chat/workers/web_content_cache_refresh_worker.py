@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from arq.connections import RedisSettings
 from beanie import init_beanie
 from pymongo import AsyncMongoClient
-
-from arq.connections import RedisSettings
 
 from chat.container import container
 from chat.core.config.app_settings import settings

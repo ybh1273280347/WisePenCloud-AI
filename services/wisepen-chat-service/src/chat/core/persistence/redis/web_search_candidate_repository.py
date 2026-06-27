@@ -6,10 +6,10 @@ from typing import Any
 
 import redis.asyncio as redis
 
-from chat.application.tools.web_tools.web_search.candidate_store.models import (
+from chat.application.tools.web_tools.search_services.candidate_store.models import (
     WebSearchCandidateMapping,
 )
-from chat.application.tools.web_tools.web_search.candidate_store.repository import (
+from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
 

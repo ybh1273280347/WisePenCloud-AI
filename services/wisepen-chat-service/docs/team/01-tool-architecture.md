@@ -55,11 +55,94 @@ English emphasis: ordinary tools return ordinary Python values. `ToolOutputRende
 
 UPPERCASE EMPHASIS: UNIFIED RENDERING IS THE RETURN BOUNDARY. DO NOT MANUALLY CONVERT RESULTS FOR RENDERING. DO NOT BUILD PRIVATE RESULT PAYLOADS JUST FOR STRUCTURE.
 
+## 工具族复用原则
+
+默认原则是：
+
+- **工具族之间保持解耦**
+- **工具族内部允许强复用**
+- **跨工具族复用只在核心体系边界上作为例外成立，不能视为一般情况**
+
+这里的“工具族”指的是已经围绕同一类外界交互或同一类运行时协议形成稳定边界的一组工具，例如：
+
+- web 工具族
+- document 工具族
+- session 工具族
+- math 工具族
+
+判断时按下面三层理解：
+
+### 1. 工具族之间默认解耦
+
+如果一段实现只服务某个工具族内部语义，就不要因为“别的工具也许也能用”而直接拿出去复用。
+
+例如：
+
+- 不允许把 `web_fetch` 的 HTML 清洗器直接当成一般性的 HTML to Markdown 公共组件，供任意非 web 工具调用。
+
+原因是这类实现通常隐含了该工具族自己的：
+
+- 输入假设
+- 缓存语义
+- 来源约束
+- 输出格式约束
+
+强行跨族复用，通常会把局部最优实现误包装成错误的公共抽象。
+
+### 2. 工具族内部允许强复用
+
+同一工具族内部，只要协议和边界一致，就可以明确复用，而不需要为“看起来更解耦”强行拆散。
+
+例如：
+
+- `academic_search` 是 `web_search` 的垂类拓展
+- `web_crawl` 是 `web_fetch` 的递归增强
+
+这类关系下，允许共享：
+
+- runtime context
+- 缓存协议
+- 候选构建
+- 排序实现
+- fetch / clean / mapping 等内部能力
+
+这里的强耦合是有意设计，不应默认视为技术债。
+
+### 3. 跨工具族复用是例外，不是常态
+
+部分核心体系如果本身就是跨工具族的统一边界，可以允许例外复用。
+
+例如：
+
+- `document_parse` 对文档直链解析复用了 web URL 缓存
+
+这件事之所以合理，本质上有两个原因：
+
+1. `document_parse` 和 web 工具体系同属于模型的核心 IO 工具，客观上提供了可以稳定复用的统一边界。
+2. 这是架构与现实之间的必要妥协。如果不复用这条边界，那么文档直链几乎都要额外经过一层 `web_fetch` 转发，运行链会明显变重，而且效率很差。
+
+所以这里复用的不是某个 web 工具的局部业务细节，而是已经明确承担统一协议职责的核心体系边界。
+
+换句话说，跨工具族复用成立的前提是：
+
+- 复用目标本身已经是稳定的统一切面或核心协议
+
+而不是：
+
+- 某个工具族内部的具体实现碰巧能拿来用
+
+所以 review 时不要把个别成功的跨族复用案例，反推成“以后工具族之间都应该尽量共享实现”。
+
 ## 注册规则
 
 新增工具必须：
 
 - 放在 `src/chat/application/tools/<domain>_tools/` 或已有业务域目录下。
+- 单个工具的编排入口必须挂在该业务域的顶层。
+  - 顶层入口可以是 `xxx_tool.py`，也可以是与该工具同名的顶层目录配合 `xxx_tool.py`。
+  - 工具内部可以有 `service.py`、`result_builder.py`、`hydrators/`、`providers/` 等实现细节目录。
+  - 但不允许把一个工具再嵌进另一个工具目录里，形成“tool inside tool”的编排结构。
+  - 即使两个工具是拓展关系，也仍然应该在同一业务域顶层并列存在。
 - 通过 `container.py` 创建 provider。
 - 加入 `tool_providers` 后由 `_build_registry()` 注册。
 - 使用全局唯一的 `definition.llm_spec.name`。
@@ -67,8 +150,14 @@ UPPERCASE EMPHASIS: UNIFIED RENDERING IS THE RETURN BOUNDARY. DO NOT MANUALLY CO
 不得：
 
 - 把业务工具放进 `tools/core/`。
+- 把一个工具的编排入口挂到另一个工具的实现目录下面。
 - 在工具内部创建第二套 registry、dispatcher 或 executor。
 - 绕过 `ToolRegistry.derive()` 直接把全量工具 schema 交给 LLM。
+
+中文强调：
+
+- `web_search` 和 `academic_search` 可以共享搜索工具族内部实现，但 `academic_search` 的编排入口必须保持在 `web_tools/` 顶层，而不是放进 `web_search/` 目录里。
+- 这条规则是目录边界和编排边界约束，不否定工具族内部的强复用。
 
 ## 可见性规则
 

@@ -13,7 +13,6 @@ import {
   pinSession,
   renameSession,
   setActiveWebSearchCredential,
-  setPlatformMembership,
 } from "./lib/backend-client";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { ChatWindow } from "./components/ChatWindow";
@@ -411,7 +410,7 @@ export default function App() {
     }
   }
 
-  async function handleCreateCustomSearchCredential(provider: string, apiKey: string) {
+  async function handleCreateCustomSearchCredential(provider: string, apiKey: string, openalexApiKey?: string) {
     if (settings.mode === "mock") {
       const now = new Date().toISOString();
       const credential: WebSearchCredential = {
@@ -421,6 +420,7 @@ export default function App() {
         is_member: false,
         api_key_masked: maskApiKey(apiKey),
         api_key_fingerprint: `mock-${provider}-${Date.now()}`,
+        openalex_api_key_masked: openalexApiKey ? maskApiKey(openalexApiKey) : "",
         is_active: true,
         created_at: now,
         updated_at: now,
@@ -447,7 +447,7 @@ export default function App() {
       return credential;
     }
 
-    const credential = await createWebSearchCredential(settings, provider, apiKey);
+    const credential = await createWebSearchCredential(settings, provider, apiKey, openalexApiKey);
     const credentials = await listWebSearchCredentials(settings);
     applySearchCredentials(credentials);
     return credential;
@@ -472,6 +472,7 @@ export default function App() {
           is_member: source === "platform",
           api_key_masked: "",
           api_key_fingerprint: "",
+          openalex_api_key_masked: "",
           is_active: true,
           created_at: now,
           updated_at: now,
@@ -495,40 +496,6 @@ export default function App() {
     }
 
     const credential = await setActiveWebSearchCredential(settings, source, provider);
-    const credentials = await listWebSearchCredentials(settings);
-    applySearchCredentials(credentials);
-    return credential;
-  }
-
-  async function handleSetPlatformMembership(isMember: boolean) {
-    if (settings.mode === "mock") {
-      const now = new Date().toISOString();
-      const credential: WebSearchCredential = {
-        user_id: settings.userId,
-        provider: isMember ? "exa" : "4get_ddg",
-        source: "platform",
-        is_member: isMember,
-        api_key_masked: "",
-        api_key_fingerprint: "",
-        is_active: true,
-        created_at: now,
-        updated_at: now,
-      };
-
-      setMockSearchCredentialState((current) => [
-        credential,
-        ...current.filter((item) => item.source !== "platform"),
-      ]);
-      setSettings((current) => ({
-        ...current,
-        searchProvider: credential.provider,
-        searchSource: credential.source,
-      }));
-
-      return credential;
-    }
-
-    const credential = await setPlatformMembership(settings, isMember);
     const credentials = await listWebSearchCredentials(settings);
     applySearchCredentials(credentials);
     return credential;
@@ -572,7 +539,6 @@ export default function App() {
                     }));
                   }}
                   onSelectSearchCredential={handleSelectSearchCredential}
-                  onSetPlatformMembership={handleSetPlatformMembership}
                   onStop={stop}
                   onSubmit={handleSubmit}
                   searchCredentials={displayedSearchCredentials}
@@ -609,7 +575,6 @@ export default function App() {
           onCreateCustomSearchCredential={handleCreateCustomSearchCredential}
           onOpenChange={setSettingsOpen}
           onSelectSearchCredential={handleSelectSearchCredential}
-          onSetPlatformMembership={handleSetPlatformMembership}
           open={settingsOpen}
           searchCredentials={displayedSearchCredentials}
           searchLoadError={displayedSearchLoadError}

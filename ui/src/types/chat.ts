@@ -73,6 +73,7 @@ export type WebSearchCredential = {
   is_member: boolean;
   api_key_masked: string;
   api_key_fingerprint: string;
+  openalex_api_key_masked: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;

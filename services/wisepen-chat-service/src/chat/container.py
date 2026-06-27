@@ -2,10 +2,9 @@
 
 from typing import List
 
-import httpx
 import hishel.httpx as hishel_httpx
+import httpx
 from dependency_injector import containers, providers
-from github import Auth, Github
 from v2.nacos import NacosNamingService
 
 from chat.application.agents import (
@@ -31,40 +30,54 @@ from chat.application.tools.document_tools.document_parse.parsers.ocr import (
     PaddleCloudConfig,
 )
 from chat.application.tools.document_tools.document_parse_tool import DocumentParseTool
-from chat.application.tools.math_tools.calculus_solver_tool import CalculusSolverTool
-from chat.application.tools.math_tools.equation_solver_tool import EquationSolverTool
-from chat.application.tools.math_tools.expression_solver_tool import ExpressionSolverTool
-from chat.application.tools.math_tools.linear_algebra_solver_tool import LinearAlgebraSolverTool
-from chat.application.tools.math_tools.stats_solver_tool import StatsSolverTool
+from chat.application.tools.math_tools.calculus_solve_tool import CalculusSolveTool
+from chat.application.tools.math_tools.equation_solve_tool import EquationSolveTool
+from chat.application.tools.math_tools.expression_solve_tool import ExpressionSolveTool
+from chat.application.tools.math_tools.linear_algebra_solve_tool import LinearAlgebraSolveTool
+from chat.application.tools.math_tools.stats_solve_tool import StatsSolveTool
 from chat.application.tools.session_tools.get_historical_chat_messages_tool import (
     GetHistoricalChatMessagesTool,
 )
+from chat.application.tools.session_tools.tool_content_read_tool import ToolContentReadTool
 from chat.application.tools.session_tools.tool_content_sequential_read_tool import (
     ToolContentSequentialReadTool,
 )
-from chat.application.tools.session_tools.tool_content_read_tool import ToolContentReadTool
 from chat.application.tools.skill_tools import CreateSkillTool, LoadSkillAssetTool, LoadSkillTool
-from chat.application.tools.skill_tools.create_skill.skill_publisher import SkillPublisher
-from chat.application.tools.core import ToolExecutionError
+from chat.application.tools.skill_tools.create_skill.skill_publisher import AIAssetSkillPublisher
 from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillMatcher
 from chat.application.tools.tool_output_cache import ToolOutputCache
 from chat.application.tools.tool_output_renderer import ToolOutputRenderer
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.markdown_renderer import (
-    FragmentMarkdownRenderer,
     TableMarkdownRenderer,
     WebPageMarkdownRenderer,
 )
-from chat.application.tools.web_tools.github_hydrate_tool import GitHubHydrateTool
-from chat.application.tools.web_tools.hydrators import (
-    GitHubHydrator,
-    PaperHydrator,
+from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
+from chat.application.tools.web_tools.search_services.custom_source_factory import (
+    WebSearchCustomSourceFactory,
 )
-from chat.application.tools.web_tools.paper_hydrate_tool import PaperHydrateTool
+from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.runtime_context import (
+    WebSearchRuntimeContextResolver,
+)
+from chat.application.tools.web_tools.search_services.searchers import (
+    DdgSearcher,
+    ExaSearcher,
+    FouGetDdgSearcher,
+    FourGetSearcher,
+    ProviderSearcher,
+    SearchProviderConfig,
+)
+from chat.application.tools.web_tools.search_services.services.academic_search import AcademicSearchService
+from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import PaperHydrator
+from chat.application.tools.web_tools.search_services.services.web_search.service import WebSearchService
+from chat.application.tools.common.web_content_cache import (
+    WebContentCacheGcScheduler,
+)
 from chat.application.tools.web_tools.web_crawl_tool import WebCrawlTool
 from chat.application.tools.web_tools.web_fetch import (
     FetchCoordinator,
-    WebCrawlService,
+    WebCrawler,
 )
 from chat.application.tools.web_tools.web_fetch.cleaners.trafilatura_cleaner import (
     TrafilaturaCleaner,
@@ -76,26 +89,6 @@ from chat.application.tools.web_tools.web_fetch.fetchers.scrapling_fetcher impor
     ScraplingFetcher,
 )
 from chat.application.tools.web_tools.web_fetch_tool import WebFetchTool
-from chat.application.tools.web_tools.web_content_cache.gc import (
-    WebContentCacheGcScheduler,
-)
-from chat.application.tools.web_tools.web_search.providers.models import SearchProviderName
-from chat.application.tools.web_tools.web_search.runtime_context import (
-    WebSearchRuntimeContextResolver,
-)
-from chat.application.tools.web_tools.web_search.searcher import WebSearchProviderSearcher
-from chat.application.tools.web_tools.web_search.searchers import (
-    DdgSearcher,
-    ExaSearcher,
-    FouGetDdgSearcher,
-    FourGetSearcher,
-    ProviderSearcher,
-    SearchProviderConfig,
-)
-from chat.application.tools.web_tools.web_search.service import (
-    WebSearchCustomSourceFactory,
-    WebSearchService,
-)
 from chat.application.tools.web_tools.web_search_tool import WebSearchTool
 from chat.core.config.app_settings import settings
 from chat.core.config.bootstrap_settings import bootstrap_settings
@@ -110,11 +103,14 @@ from chat.core.persistence.mongo.web_search_credential_repository import (
 from chat.core.persistence.redis.hot_context import RedisHotContext
 from chat.core.persistence.redis.tool_content_repository import RedisToolContentRepository
 from chat.core.persistence.redis.tool_run_file_repository import RedisToolRunFileRepository
-from chat.core.persistence.redis.web_content_cache_repository import (
-    RedisMongoWebContentCacheRepository,
-)
 from chat.core.persistence.redis.web_content_cache_refresh_queue import (
     ArqWebContentCacheRefreshTaskPublisher,
+)
+from chat.core.persistence.redis.web_content_cache_entry_repository import (
+    RedisWebContentCacheEntryRepository,
+)
+from chat.core.persistence.mongo.web_content_cache_value_repository import (
+    MongoWebContentCacheValueRepository,
 )
 from chat.core.persistence.redis.web_search_candidate_repository import (
     RedisWebSearchCandidateRepository,
@@ -163,10 +159,10 @@ def _build_paddle_ocr_client(
     )
 
 
-def _build_platform_web_searcher(
+def _build_platform_web_searchers(
     *,
     http_client: httpx.AsyncClient,
-) -> WebSearchProviderSearcher:
+) -> dict[SearchProviderName, ProviderSearcher]:
     provider_searchers: dict[SearchProviderName, ProviderSearcher] = {
         SearchProviderName.FOUGET_DDG: FouGetDdgSearcher(
             fourget_searcher=FourGetSearcher(
@@ -188,7 +184,7 @@ def _build_platform_web_searcher(
                 source_id="platform:exa",
             ),
         )
-    return WebSearchProviderSearcher(provider_searchers=provider_searchers)
+    return provider_searchers
 
 
 def _build_web_fetch_http_client() -> httpx.AsyncClient:
@@ -200,31 +196,6 @@ def _build_web_fetch_http_client() -> httpx.AsyncClient:
         transport=transport,
         trust_env=False,
     )
-
-
-def _build_github_api_client() -> Github:
-    return Github(auth=Auth.Token(settings.GITHUB_TOKEN))
-
-
-class _PlaceholderSkillPublisher(SkillPublisher):
-    async def publish(
-        self,
-        *,
-        skill_id: str,
-        title: str,
-        trigger_description: str,
-        markdown: str,
-        user_id: str,
-        session_id: str,
-    ):
-        raise ToolExecutionError(
-            reason="skill_publish_not_available",
-            detail_reason=(
-                "Skill publishing is not yet available. "
-                "The create_skill tool is registered but the publish backend is not connected."
-            ),
-            retryable=False,
-        )
 
 
 class Container(containers.DeclarativeContainer):
@@ -366,8 +337,8 @@ class Container(containers.DeclarativeContainer):
         timeout=httpx.Timeout(tool_settings.WEB_SEARCH_TIMEOUT_SECONDS),
         trust_env=False,
     )
-    platform_web_searcher = providers.Singleton(
-        _build_platform_web_searcher,
+    platform_web_searchers = providers.Singleton(
+        _build_platform_web_searchers,
         http_client=web_search_http_client,
     )
     web_search_runtime_context_resolver = providers.Singleton(
@@ -383,7 +354,6 @@ class Container(containers.DeclarativeContainer):
         exa_base_url=settings.WEB_SEARCH_EXA_BASE_URL,
         tavily_base_url=settings.WEB_SEARCH_TAVILY_BASE_URL,
         anysearch_base_url=settings.WEB_SEARCH_ANYSEARCH_BASE_URL,
-        serper_base_url=settings.WEB_SEARCH_SERPER_BASE_URL,
     )
     web_search_candidate_repository = providers.Singleton(
         RedisWebSearchCandidateRepository,
@@ -391,17 +361,20 @@ class Container(containers.DeclarativeContainer):
     )
     web_search_service = providers.Singleton(
         WebSearchService,
-        platform_searcher=platform_web_searcher,
+        platform_searchers=platform_web_searchers,
     )
 
     # --- Web Fetch / Crawl 组件 ---
-    web_content_cache_repository = providers.Singleton(
-        RedisMongoWebContentCacheRepository,
+    web_content_cache_entry_repository = providers.Singleton(
+        RedisWebContentCacheEntryRepository,
         redis_url=settings.REDIS_URL,
+    )
+    web_content_cache_value_repository = providers.Singleton(
+        MongoWebContentCacheValueRepository,
     )
     web_content_cache_gc_scheduler = providers.Singleton(
         WebContentCacheGcScheduler,
-        repository=web_content_cache_repository,
+        entry_repository=web_content_cache_entry_repository,
     )
     web_content_cache_refresh_task_publisher = providers.Singleton(
         ArqWebContentCacheRefreshTaskPublisher,
@@ -425,11 +398,12 @@ class Container(containers.DeclarativeContainer):
         renderer=providers.Singleton(WebPageMarkdownRenderer),
     )
     web_crawl_service = providers.Singleton(
-        WebCrawlService,
+        WebCrawler,
         httpx_fetcher=web_fetch_httpx_fetcher,
         scrapling_fetcher=web_fetch_scrapling_fetcher,
         cleaner=web_fetch_cleaner,
-        content_cache_repository=web_content_cache_repository,
+        content_cache_entry_repository=web_content_cache_entry_repository,
+        content_cache_value_repository=web_content_cache_value_repository,
         refresh_task_publisher=web_content_cache_refresh_task_publisher,
         min_text_length=tool_settings.WEB_FETCH_MIN_TEXT_LENGTH,
         concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
@@ -440,47 +414,49 @@ class Container(containers.DeclarativeContainer):
         scrapling_fetcher=web_fetch_scrapling_fetcher,
         cleaner=web_fetch_cleaner,
         file_store=tool_run_file_store,
-        content_cache_repository=web_content_cache_repository,
+        content_cache_entry_repository=web_content_cache_entry_repository,
+        content_cache_value_repository=web_content_cache_value_repository,
         refresh_task_publisher=web_content_cache_refresh_task_publisher,
         min_text_length=tool_settings.WEB_FETCH_MIN_TEXT_LENGTH,
         batch_concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
     )
 
     # --- Hydrator 组件 ---
-    paper_hydrate_service = providers.Singleton(
+    openalex_paper_hydrator = providers.Singleton(
         PaperHydrator,
         http_client=web_search_http_client,
-        api_key=settings.OPENALEX_API_KEY,
         base_url=settings.OPENALEX_BASE_URL,
     )
-    github_api_client = providers.Singleton(
-        _build_github_api_client,
-    )
-    github_hydrate_service = providers.Singleton(
-        GitHubHydrator,
-        github_client=github_api_client,
+    academic_search_service = providers.Singleton(
+        AcademicSearchService,
+        platform_searchers=platform_web_searchers,
+        paper_hydrator=openalex_paper_hydrator,
     )
 
     # --- Skill 组件 ---
-    _placeholder_skill_publisher = providers.Singleton(_PlaceholderSkillPublisher)
+    skill_publisher = providers.Singleton(
+        AIAssetSkillPublisher,
+        ai_asset_client=ai_asset_client,
+    )
 
     # ==================================================================
     # Tool 本身：最终注册到 ToolRegistry 的工具实例
     # ==================================================================
 
     # --- Math Tools ---
-    calculus_solver_tool = providers.Singleton(CalculusSolverTool)
-    linear_algebra_solver_tool = providers.Singleton(LinearAlgebraSolverTool)
-    equation_solver_tool = providers.Singleton(EquationSolverTool)
-    stats_solver_tool = providers.Singleton(StatsSolverTool)
-    expression_solver_tool = providers.Singleton(ExpressionSolverTool)
+    calculus_solver_tool = providers.Singleton(CalculusSolveTool)
+    linear_algebra_solver_tool = providers.Singleton(LinearAlgebraSolveTool)
+    equation_solver_tool = providers.Singleton(EquationSolveTool)
+    stats_solver_tool = providers.Singleton(StatsSolveTool)
+    expression_solver_tool = providers.Singleton(ExpressionSolveTool)
 
     # --- Document Tools ---
     document_parse_tool = providers.Singleton(
         DocumentParseTool,
         file_store=tool_run_file_store,
         parse_service=document_parse_service,
-        content_cache_repository=web_content_cache_repository,
+        content_cache_entry_repository=web_content_cache_entry_repository,
+        content_cache_value_repository=web_content_cache_value_repository,
         refresh_task_publisher=web_content_cache_refresh_task_publisher,
         direct_fetcher=web_fetch_httpx_fetcher,
     )
@@ -506,24 +482,21 @@ class Container(containers.DeclarativeContainer):
         service=web_search_service,
         custom_source_factory=web_search_custom_source_factory,
         candidate_repository=web_search_candidate_repository,
-        max_hops=3,
+    )
+    academic_search_tool = providers.Singleton(
+        AcademicSearchTool,
+        service=academic_search_service,
+        custom_source_factory=web_search_custom_source_factory,
+        candidate_repository=web_search_candidate_repository,
     )
     web_crawl_tool = providers.Singleton(
         WebCrawlTool,
-        service=web_crawl_service,
+        crawler=web_crawl_service,
     )
     web_fetch_tool = providers.Singleton(
         WebFetchTool,
         service=web_fetch_coordinator,
         candidate_repository=web_search_candidate_repository,
-    )
-    paper_hydrate_tool = providers.Singleton(
-        PaperHydrateTool,
-        service=paper_hydrate_service,
-    )
-    github_hydrate_tool = providers.Singleton(
-        GitHubHydrateTool,
-        service=github_hydrate_service,
     )
 
     # --- Skill Tools ---
@@ -543,7 +516,7 @@ class Container(containers.DeclarativeContainer):
     )
     create_skill_tool = providers.Singleton(
         CreateSkillTool,
-        skill_publisher=_placeholder_skill_publisher,
+        skill_publisher=skill_publisher,
     )
 
     # --- Tool Registry ---
@@ -556,9 +529,8 @@ class Container(containers.DeclarativeContainer):
         expression_solver_tool,
         tool_content_read_tool,
         tool_content_sequential_read_tool,
-        paper_hydrate_tool,
-        github_hydrate_tool,
         web_search_tool,
+        academic_search_tool,
         web_crawl_tool,
         web_fetch_tool,
         search_history_tool,

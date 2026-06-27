@@ -10,10 +10,10 @@ from chat.application.tools.document_tools.document_parse.models import (
 from chat.application.tools.document_tools.document_parse.parsers.docling import DoclingParser
 from chat.application.tools.document_tools.document_parse.parsers.image_ocr import ImageOcrParser
 from chat.application.tools.document_tools.document_parse.parsers.markitdown import MarkItDownParser
-from chat.application.tools.document_tools.document_parse.parsers.pandas_spreadsheet import (
+from chat.application.tools.document_tools.document_parse.parsers.spreadsheet import (
     PandasSpreadsheetParser,
 )
-from chat.application.tools.document_tools.document_parse.parsers.pdf_strategy import PdfParseStrategy
+from chat.application.tools.document_tools.document_parse.parsers.pdf import PdfParseStrategy
 from chat.application.tools.document_tools.document_parse.parsers.protocols import Parser
 from chat.application.tools.utils.file_type_detect import detect_file_type
 from chat.application.tools.utils.markdown_renderer import TableMarkdownRenderer

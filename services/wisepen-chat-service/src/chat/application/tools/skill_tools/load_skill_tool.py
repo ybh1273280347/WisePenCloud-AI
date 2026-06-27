@@ -1,7 +1,5 @@
 from typing import Any, Dict
 
-from common.logger import warn
-
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExecutionError,
@@ -17,6 +15,7 @@ from chat.domain.entities import Skill
 from chat.domain.interfaces import FileLoader
 from chat.service_client import AIAssetClient
 from chat.service_client.resource_service_client import ResourceClient
+from common.logger import warn
 
 
 class LoadSkillTool:

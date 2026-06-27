@@ -17,4 +17,5 @@
 
 ## 当前重要变更
 
+- [2026-06-26 工具输出统一渲染层的 None 过滤](2026-06-26-tool-output-none-filtering.md)
 - [2026-06-19 核心读取工具收敛](2026-06-19-core-reading-tools-consolidation.md)

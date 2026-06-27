@@ -9,10 +9,10 @@ import httpx
 
 from common.cloud.service_discovery import ServiceDiscovery, LoadBalancingStrategy
 from common.core.constants import SecurityConstants, CommonConstants
-from common.core.exceptions import RpcError, ServiceUnavailableError
-from common.gray.context import GrayContextHolder
-from common.logger import error, warn
 from common.security.context import SecurityContextHolder
+from common.gray.context import GrayContextHolder
+from common.core.exceptions import RpcError, ServiceUnavailableError
+from common.logger import error, warn
 
 # Java 端 R<T> 的成功 code；与 ResultCode.SUCCESS 对齐（200）
 _R_SUCCESS_CODE = 200
@@ -24,14 +24,14 @@ class RpcClient:
     """
 
     def __init__(
-            self,
-            discovery: ServiceDiscovery,
-            *,
-            from_source_secret: str,
-            timeout: float = 5.0,
-            retries: int = 2,
-            default_strategy: Optional[LoadBalancingStrategy] = None,
-            limits: Optional[httpx.Limits] = None,
+        self,
+        discovery: ServiceDiscovery,
+        *,
+        from_source_secret: str,
+        timeout: float = 5.0,
+        retries: int = 2,
+        default_strategy: Optional[LoadBalancingStrategy] = None,
+        limits: Optional[httpx.Limits] = None,
     ) -> None:
         self._discovery = discovery
         self._from_source_secret = from_source_secret
@@ -60,15 +60,15 @@ class RpcClient:
     # ---------- 核心请求 ----------
 
     async def request(
-            self,
-            method: str,
-            service_name: str,
-            path: str,
-            *,
-            params: Optional[Mapping[str, Any]] = None,
-            json: Any = None,
-            headers: Optional[Mapping[str, str]] = None,
-            timeout: Optional[float] = None,
+        self,
+        method: str,
+        service_name: str,
+        path: str,
+        *,
+        params: Optional[Mapping[str, Any]] = None,
+        json: Any = None,
+        headers: Optional[Mapping[str, str]] = None,
+        timeout: Optional[float] = None,
     ) -> Any:
         """
         发起到内部服务的 HTTP 调用并解包
@@ -90,8 +90,8 @@ class RpcClient:
         user_id = SecurityContextHolder.get_user_id()
         if user_id:
             merged_headers[SecurityConstants.HEADER_USER_ID] = user_id
-            merged_headers[SecurityConstants.HEADER_IDENTITY_TYPE] = SecurityContextHolder.set_identity_type()
-            [SecurityConstants.HEADER_GROUP_ROLE_MAP] = SecurityContextHolder.set_group_role_map()
+            merged_headers[SecurityConstants.HEADER_IDENTITY_TYPE] = str(SecurityContextHolder.get_identity_type().code)
+            merged_headers[SecurityConstants.HEADER_GROUP_ROLE_MAP] = str(SecurityContextHolder.get_group_role_map())
 
         # 传递 developer 头
         developer = GrayContextHolder.get_developer_tag()
@@ -166,13 +166,13 @@ class RpcClient:
                     path=path,
                     addr=addr,
                     attempt=attempt + 1,
-                    e=e
+                    exc=e
                 )
                 continue
             except Exception as e:
                 last_exc = e
                 last_msg = f"{type(e).__name__}: {e}"
-                error("rpc unexpected error.", service=service_name, path=path, addr=addr, e=e)
+                error("rpc unexpected error.", service=service_name, path=path, addr=addr, exc=e)
                 break
 
         raise RpcError(

@@ -18,6 +18,7 @@ def validate_create_skill(request: CreateSkillRequest) -> list[str]:
     1. node_id 全树唯一
     2. body 中不得包含 Markdown 标题
     3. references / assets / scripts 路径合法性
+    4. scripts 只能是 Python 文件（.py 后缀）
     """
     errors: list[str] = []
     # 1. 检查 node_id 全树唯一性（SKILL.md + 所有 .md 文件）
@@ -49,6 +50,9 @@ def validate_create_skill(request: CreateSkillRequest) -> list[str]:
     _check_file_paths(request.references, "references", errors)
     _check_file_paths(request.assets, "assets", errors)
     _check_script_paths(request.scripts, errors)
+
+    # 4. 检查脚本只能是 Python 文件（仅支持 .py）
+    _check_script_python_only(request.scripts, errors)
 
     return errors
 
@@ -118,3 +122,17 @@ def _check_script_paths(scripts: list[SkillFile], errors: list[str]) -> None:
             errors.append(f"scripts/{s.path}: path must not contain '..'")
         if s.path.startswith("/"):
             errors.append(f"scripts/{s.path}: path must be relative, not absolute")
+
+
+def _check_script_python_only(scripts: list[SkillFile], errors: list[str]) -> None:
+    """检查脚本文件只能是 .py 后缀的 Python 脚本。
+
+    出于安全和沙箱考虑，BY_AGENT 创建的 Skill 仅允许 Python 脚本，
+    禁止 shell 脚本、JavaScript、二进制文件等其他类型。
+    """
+    for s in scripts:
+        if not s.path.lower().endswith(".py"):
+            errors.append(
+                f"scripts/{s.path}: only Python scripts (.py) are allowed. "
+                f"Other script types are not supported."
+            )

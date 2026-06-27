@@ -55,6 +55,8 @@ class AppSettings(BaseModel):
     QDRANT_HOST: str
     QDRANT_PORT: int = 6333
     QDRANT_PASSWORD: str
+    ELASTIC_SEARCH_BASE_URL: str = ""
+    ELASTIC_SEARCH_API_KEY: str = ""
 
     # ── Context Window (模型上下文窗口预算) ────────────────────────────
     CTX_TOKEN_LIMIT: int = 128000                                        # 上下文窗口大小，对齐 gpt-4o 128k
@@ -84,14 +86,12 @@ class AppSettings(BaseModel):
     WEB_SEARCH_EXA_BASE_URL: str = "https://api.exa.ai"
     WEB_SEARCH_TAVILY_BASE_URL: str = "https://api.tavily.com"
     WEB_SEARCH_ANYSEARCH_BASE_URL: str = "https://api.anysearch.com"
-    WEB_SEARCH_SERPER_BASE_URL: str = "https://google.serper.dev"
     WEB_SEARCH_PLATFORM_EXA_ENABLED: bool = False                        # 平台专属 Exa 分流开关
     WEB_SEARCH_PLATFORM_EXA_API_KEY: str | None = "e4734bd6-3a94-458b-a90f-d5091aed436f"
 
     # ── Third-Party Credentials (三方垂直领域鉴权) ─────────────────────
     OPENALEX_BASE_URL: str = "https://api.openalex.org"
     OPENALEX_API_KEY: str = "XgpyHsvgfEbhTmZ9E8rAFO"
-    GITHUB_TOKEN: str
 
     # ── Skill (技能召回) ───────────────────────────────────────────────
     SKILL_MATCH_TOP_K: int = 20                                          # 默认召回数量

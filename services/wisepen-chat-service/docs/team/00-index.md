@@ -10,6 +10,7 @@
 4. [Container 与 Settings 边界规范](04-container-and-settings.md)
 5. [Utils 能力盘点](05-utils-inventory.md)
 6. [Tool 统一切面与流程规范](06-tool-cross-cutting-flow.md)
+7. [Web Search 扩展规范](07-web-search-extension.md)
 
 ## 总原则
 

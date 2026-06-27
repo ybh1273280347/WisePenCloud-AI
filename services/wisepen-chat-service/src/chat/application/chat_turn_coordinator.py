@@ -1,4 +1,4 @@
-﻿from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set
 
 from beanie import PydanticObjectId
 from fastapi import BackgroundTasks
@@ -15,7 +15,7 @@ from chat.application.query_loop_runtime import QueryLoopRuntime
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
 from chat.application.tools.skill_tools.utils.skill_matcher import SkillMatcher
-from chat.application.tools.web_tools.web_search.runtime_context import (
+from chat.application.tools.web_tools.search_services.runtime_context import (
     WebSearchRuntimeContextResolver,
 )
 from chat.core.config.app_settings import settings
@@ -32,6 +32,7 @@ from common.logger import error
 _SKILL_TOOL_NAMES = frozenset({"load_skill", "load_skill_asset"})
 # Session 工具默认不暴露；仅在本轮存在存在不可见的上下文历史时解禁（有summary）
 _SESSION_TOOL_NAMES = frozenset({"get_historical_chat_messages"})
+_ACADEMIC_TOOL_NAMES = frozenset({"academic_search"})
 
 class ChatTurnCoordinator:
     """
@@ -191,7 +192,14 @@ class ChatTurnCoordinator:
             # allowed_skill_ids 表示本轮展示给 LLM 的 Skill 白名单，工具执行前仍会校验
             tool_context["allowed_skill_ids"] = [s.skill_id for s in available_skills]
 
+        if search_config.supports_academic:
+            if expose_tool_name_set is None:
+                expose_tool_name_set = set()
+            expose_tool_name_set.update(_ACADEMIC_TOOL_NAMES)
+
         if session_summary is not None:
+            if expose_tool_name_set is None:
+                expose_tool_name_set = set()
             expose_tool_name_set.update(_SESSION_TOOL_NAMES)
 
         # 构建工具视图

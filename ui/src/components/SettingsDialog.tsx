@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Select from "@radix-ui/react-select";
-import { CheckCircle2, ChevronDown, Crown, DatabaseZap, KeyRound, Search, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, DatabaseZap, KeyRound, Search, X } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useState } from "react";
 import type { ModelOption, RuntimeSettings, WebSearchCredential } from "../types/chat";
@@ -17,16 +17,14 @@ type SettingsDialogProps = {
   onOpenChange: (open: boolean) => void;
   onChange: (settings: RuntimeSettings | ((prev: RuntimeSettings) => RuntimeSettings)) => void;
   onSelectMockMode: () => void;
-  onSetPlatformMembership: (isMember: boolean) => Promise<WebSearchCredential>;
   onSelectSearchCredential: (source: "platform" | "custom", provider: string) => Promise<WebSearchCredential>;
-  onCreateCustomSearchCredential: (provider: string, apiKey: string) => Promise<WebSearchCredential>;
+  onCreateCustomSearchCredential: (provider: string, apiKey: string, openalexApiKey?: string) => Promise<WebSearchCredential>;
 };
 
 const CUSTOM_SEARCH_PROVIDERS = [
   { value: "exa", label: "Exa" },
   { value: "tavily", label: "Tavily" },
   { value: "anysearch", label: "AnySearch" },
-  { value: "serper", label: "Serper" },
 ];
 
 function setField<T extends keyof RuntimeSettings>(
@@ -50,12 +48,12 @@ export function SettingsDialog({
   onOpenChange,
   onChange,
   onSelectMockMode,
-  onSetPlatformMembership,
   onSelectSearchCredential,
   onCreateCustomSearchCredential,
 }: SettingsDialogProps) {
   const [customProvider, setCustomProvider] = useState("exa");
   const [customApiKey, setCustomApiKey] = useState("");
+  const [customOpenAlexApiKey, setCustomOpenAlexApiKey] = useState("");
   const [savingSearch, setSavingSearch] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const selectedModelValue = `${settings.modelId}:${settings.providerId}`;
@@ -68,26 +66,6 @@ export function SettingsDialog({
     return (event: ChangeEvent<HTMLInputElement>) => {
       onChange(setField(settings, key, event.target.value as RuntimeSettings[typeof key]));
     };
-  }
-
-  async function handleMembership() {
-    setSavingSearch(true);
-    setSaveMessage("");
-
-    try {
-      const credential = await onSetPlatformMembership(true);
-      onChange((prev: RuntimeSettings) => ({
-        ...prev,
-        searchProvider: credential.provider,
-        searchSource: credential.source,
-      }));
-      setSaveMessage("会员已开通，平台搜索源已切换到高级源。");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "开通会员失败";
-      setSaveMessage(message);
-    } finally {
-      setSavingSearch(false);
-    }
   }
 
   async function handleSelectSearchCredential(source: "platform" | "custom", provider: string) {
@@ -123,7 +101,7 @@ export function SettingsDialog({
 
     try {
       console.log("Calling onCreateCustomSearchCredential...");
-      const credential = await onCreateCustomSearchCredential(customProvider, customApiKey);
+      const credential = await onCreateCustomSearchCredential(customProvider, customApiKey, customOpenAlexApiKey);
       console.log("Credential created:", credential);
       // 使用函数式更新，避免与 applySearchCredentials 的 setSettings 竞争
       onChange((prev: RuntimeSettings) => ({
@@ -132,6 +110,7 @@ export function SettingsDialog({
         searchSource: credential.source,
       }));
       setCustomApiKey("");
+      setCustomOpenAlexApiKey("");
       setSaveMessage("自定义搜索源已保存。");
     } catch (error) {
       console.error("handleCustomCredential error:", error);
@@ -310,17 +289,7 @@ export function SettingsDialog({
                   >
                     使用平台搜索
                   </Button>
-                  <Button
-                    className="mt-2 w-full"
-                    disabled={savingSearch || platformCredential?.is_member}
-                    onClick={handleMembership}
-                    type="button"
-                    variant={platformCredential?.is_member ? "secondary" : "primary"}
-                  >
-                    <Crown className="h-4 w-4" />
-                    {platformCredential?.is_member ? "会员已开通" : "开通会员"}
-                  </Button>
-                </div>
+                  </div>
 
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <div className="flex items-center gap-2">
@@ -358,6 +327,16 @@ export function SettingsDialog({
                       type="password"
                       value={customApiKey}
                     />
+                    <input
+                      className="h-10 rounded-lg border border-gray-200 bg-white px-3 font-mono text-sm text-gray-900 outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-sky-500/20"
+                      onChange={(event) => setCustomOpenAlexApiKey(event.target.value)}
+                      placeholder="OpenAlex API Key（可选）"
+                      type="password"
+                      value={customOpenAlexApiKey}
+                    />
+                    <p className="px-1 text-[11px] font-medium leading-4 text-gray-500">
+                      可选，用于学术搜索时获取更详细的相关信息。
+                    </p>
                     <Button disabled={savingSearch} onClick={handleCustomCredential} type="button">
                       保存自定义源
                     </Button>
@@ -365,6 +344,9 @@ export function SettingsDialog({
                       <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
                         <p className="font-mono text-[11px] font-semibold text-gray-600">
                           {activeCustomCredential.provider} · {activeCustomCredential.api_key_masked}
+                          {activeCustomCredential.openalex_api_key_masked ? (
+                            <span className="ml-2 text-emerald-600">OpenAlex ✓</span>
+                          ) : null}
                         </p>
                         <Button
                           disabled={savingSearch}
