@@ -1,14 +1,14 @@
 ﻿import asyncio
 from typing import List, Dict, Any, Optional
-
 from mem0 import Memory
 
-from chat.core.config.app_settings import settings
-from chat.domain.entities import ChatMessage
 from chat.domain.error_codes import ChatErrorCode
-from chat.domain.interfaces import MemoryProvider
 from common.core.exceptions import ServiceException
 from common.logger import debug, warn
+
+from chat.domain.entities import ChatMessage, Role
+from chat.domain.interfaces import MemoryProvider
+from chat.core.config.app_settings import settings
 
 
 class Mem0Adapter(MemoryProvider):
@@ -47,13 +47,13 @@ class Mem0Adapter(MemoryProvider):
                 },
             },
         }
-
+        
         try:
             debug("mem0 client initializing.")
             self.client = Memory.from_config(self._config)
             debug("mem0 client initialized.")
         except Exception as e:
-            warn("mem0 client initialize failed.", e=e)
+            warn("mem0 client initialize failed.", exc=e)
             raise e
 
     async def search(
@@ -84,24 +84,27 @@ class Mem0Adapter(MemoryProvider):
         try:
             return await asyncio.to_thread(_sync_search)
         except Exception as e:
-            warn("mem0 search failed.", user_id=user_id, e=e)
+            warn("mem0 search failed.", user_id=user_id, exc=e)
             return []
 
     async def add_interaction(self, user_id: str, messages: List[ChatMessage]):
         """
-        将对话存入长期记忆（Mem0 + Qdrant 向量化）。
+        将对话存入长期记忆（Mem0 + Qdrant 向量化）
         """
         # Mem0 需要的是 [{"role": "user", "content": "..."}, ...] 格式
-        formatted_msgs = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in messages
-        ]
+        formatted_msgs = []
+        for message in messages:
+            # 只有 Role.USER Message 才应存入长期记忆
+            if message.role == Role.USER:
+                formatted_msgs.append({
+                    "role": message.role.value, "content": message.content
+                })
 
         def _sync_add():
             try:
                 self.client.add(formatted_msgs, user_id=user_id)
             except Exception as e:
-                warn("mem0 write failed.", user_id=user_id, e=e)
+                warn("mem0 write failed.", user_id=user_id, exc=e)
 
         await asyncio.to_thread(_sync_add)
 
@@ -125,7 +128,7 @@ class Mem0Adapter(MemoryProvider):
             owner_id = memory.get("user_id")
             if owner_id != user_id:
                 raise ServiceException(ChatErrorCode.MEMORY_NOT_FOUND)
-            self.client.delete_session(memory_id, )
+            self.client.delete(memory_id)
 
         await asyncio.to_thread(_sync_verify_and_delete)
 
@@ -135,3 +138,4 @@ class Mem0Adapter(MemoryProvider):
             self.client.delete_all(user_id=user_id)
 
         await asyncio.to_thread(_sync_delete_all)
+

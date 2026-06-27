@@ -94,6 +94,7 @@ class LoadSkillTool:
             lines.append("")
             lines.append("<assets_manifest>")
             for asset in skill.assets_manifest:
+                if asset.path == "/SKILL.md": continue
                 lines.append(
                     f"-(path={asset.path} kind={asset.kind} size={asset.size_bytes}): {asset.description}"
                 )
@@ -103,7 +104,9 @@ class LoadSkillTool:
         return "\n".join(lines)
 
     async def _load_skill_md(self, skill:Skill) -> str:
-        if not skill.skill_md_object_key:
+        skill_md_asset = next((asset for asset in skill.assets_manifest if asset.path == "/SKILL.md"), None)
+
+        if not skill_md_asset:
             raise ToolExecutionError(
                 reason="Skill.md Not Available",
                 detail_reason=f"Failed to find Skill.md of corrupted skill '{skill.skill_id}'.",
@@ -111,7 +114,7 @@ class LoadSkillTool:
             )
 
         try:
-            raw = await self._file_loader.load_by_object_key(skill.skill_md_object_key)
+            raw = await self._file_loader.load_by_object_key(skill_md_asset.object_key)
         except Exception as e:
             warn(
                 "skill load failed.",
@@ -125,7 +128,7 @@ class LoadSkillTool:
                 reason="Skill.md Load Failed",
                 detail_reason=f"Failed to load asset: {type(e).__name__}",
                 retryable=True,
-                metadata={"skill_id": skill.skill_id, "object_key": skill.skill_md_object_key, "detail": str(e)},
+                metadata={"skill_id": skill.skill_id, "object_key": skill_md_asset.object_key, "detail": str(e)},
             )
 
         try:

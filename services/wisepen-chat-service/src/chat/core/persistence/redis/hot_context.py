@@ -11,14 +11,14 @@ from chat.domain.repositories import HotContextRepository
 class RedisHotContext(HotContextRepository):
     def __init__(self):
         self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
-        self.ttl = 3600 * 24  # 会话上下文保留 24 小时
+        self.ttl = 3600 * 24 * 7  # 会话上下文保留一个周
 
     def _get_key(self, session_id: str) -> str:
         return f"wisepen:chat:hot_context:{session_id}"
 
     def _serialize(self, messages: List[ChatMessage]) -> List[str]:
         return [
-            json.dumps(msg.model_dump(mode="json", exclude={"id"}), ensure_ascii=False)
+            json.dumps(msg.model_dump(mode="json", exclude={"id", "persisted_output_placeholder"}), ensure_ascii=False)
             for msg in messages
         ]
 

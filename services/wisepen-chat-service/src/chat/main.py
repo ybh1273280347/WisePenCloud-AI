@@ -1,4 +1,4 @@
-# 屏蔽 websockets.legacy 第三方弃用提示
+﻿# 屏蔽 websockets.legacy 第三方弃用提示
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"websockets\.legacy",)
 
@@ -29,20 +29,12 @@ from common.observability import instrument_fastapi_app
 from chat.container import container  # noqa: F401 — 触发 dependency_injector wiring，不可删除
 from chat.core.config.app_settings import settings
 from chat.api.router import api_router
+from chat.api.endpoints import attachment as attachment_endpoints
 from chat.api.endpoints import chat as chat_endpoints
 from chat.api.endpoints import session as session_endpoints
 from chat.api.endpoints import memory as memory_endpoints
 from chat.api.endpoints import model as model_endpoints
-from chat.api.endpoints import web_search as web_search_endpoints
-from chat.domain.entities import (
-    ChatMessage,
-    ChatSession,
-    Model,
-    ModelProviderMapping,
-    Provider,
-    WebSearchCredential,
-    WebContentCacheValueDocument,
-)
+from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping
 
 
 # 避免 HTTP 代理拦截内部中间件请求。
@@ -63,15 +55,7 @@ async def lifespan(app: FastAPI):
     mongo_client = AsyncMongoClient(settings.MONGODB_URL)
     await init_beanie(
         database=mongo_client[settings.MONGODB_DB_NAME],
-        document_models=[
-            ChatSession,
-            ChatMessage,
-            Provider,
-            Model,
-            ModelProviderMapping,
-            WebSearchCredential,
-            WebContentCacheValueDocument,
-        ],
+        document_models=[ChatSession, ChatMessage, Provider, Model, ModelProviderMapping],
     )
     info("beanie initialized.", db=settings.MONGODB_DB_NAME)
 
@@ -79,7 +63,7 @@ async def lifespan(app: FastAPI):
     try:
         await nacos_client_manager.register_instance()
     except Exception as e:
-        error("nacos instance register failed.", e=e)
+        error("nacos instance register failed.", exc=e)
     
     # 启动 Kafka Producer
     kafka_producer = container.kafka_producer()
@@ -91,19 +75,7 @@ async def lifespan(app: FastAPI):
         try:
             await oss_file_loader.start()
         except Exception as e:
-            error("file loader start failed.", e=e)
-
-    # 启动 ToolRunFileStore 后台 GC
-    try:
-        await container.tool_run_file_store_gc_scheduler().start()
-    except Exception as e:
-        error("tool run file store gc scheduler start failed.", e=e)
-
-    # 启动 WebContentCache Mongo 后台 GC
-    try:
-        await container.web_content_cache_gc_scheduler().start()
-    except Exception as e:
-        error("web content cache gc scheduler start failed.", e=e)
+            error("file loader start failed.", exc=e)
 
     info("service ready.", service=bootstrap_settings.SERVICE_NAME, port=bootstrap_settings.SERVICE_PORT)
 
@@ -123,58 +95,22 @@ async def lifespan(app: FastAPI):
         try:
             await oss_file_loader.stop()
         except Exception as e:
-            error("file loader stop failed.", e=e)
+            error("file loader stop failed.", exc=e)
     try:
         await container.rpc_client().aclose()
     except Exception as e:
-        error("rpc client close failed.", e=e)
+        error("rpc client close failed.", exc=e)
     try:
         await container.service_discovery().close()
     except Exception as e:
-        error("service discovery close failed.", e=e)
-    try:
-        await container.paddle_ocr_http_client().aclose()
-    except Exception as e:
-        error("paddle ocr http client close failed.", e=e)
-    try:
-        await container.web_search_http_client().aclose()
-    except Exception as e:
-        error("web search http client close failed.", e=e)
-    try:
-        await container.web_fetch_http_client().aclose()
-    except Exception as e:
-        error("web fetch http client close failed.", e=e)
-    try:
-        await container.web_content_cache_refresh_task_publisher().close()
-    except Exception as e:
-        error("web content cache refresh task publisher close failed.", e=e)
-
-    # 停止 WebContentCache Mongo 后台 GC
-    try:
-        await container.web_content_cache_gc_scheduler().stop()
-    except Exception as e:
-        error("web content cache gc scheduler stop failed.", e=e)
-
-    # 停止 ToolRunFileStore 后台 GC
-    try:
-        await container.tool_run_file_store_gc_scheduler().stop()
-    except Exception as e:
-        error("tool run file store gc scheduler stop failed.", e=e)
+        error("service discovery close failed.", exc=e)
 
     try:
         await nacos_client_manager.deregister_instance()
     except Exception as e:
-        error("nacos instance deregister failed.", e=e)
+        error("nacos instance deregister failed.", exc=e)
 
-container.wire(
-    modules=[
-        chat_endpoints,
-        session_endpoints,
-        memory_endpoints,
-        model_endpoints,
-        web_search_endpoints,
-    ]
-)  # 注入依赖到路由模块
+container.wire(modules=[attachment_endpoints, chat_endpoints, session_endpoints, memory_endpoints, model_endpoints])  # 注入依赖到路由模块
 app = FastAPI(title=bootstrap_settings.APP_NAME, lifespan=lifespan, docs_url="/docs")
 instrument_fastapi_app(app)
 

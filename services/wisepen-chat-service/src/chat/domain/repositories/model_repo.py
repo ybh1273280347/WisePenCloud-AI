@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, List, Optional
 
 from beanie import PydanticObjectId
 
 from chat.domain.entities.model import Model, ModelScope, ModelProviderMapping
-from chat.domain.entities.provider import Provider
+from chat.domain.entities.provider import Provider, ProviderType
+
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class ModelRequestInfo:
     model: Model
     mapping: ModelProviderMapping
     provider: Provider
+    runtime_options: dict
 
     @property
     def model_id(self) -> PydanticObjectId:
@@ -37,8 +39,12 @@ class ModelRequestInfo:
         return self.mapping.provider_model_name
 
     @property
-    def api_base_url(self) -> str:
-        return self.provider.api_base_url
+    def base_url(self) -> Optional[str]:
+        return self.provider.base_url
+
+    @property
+    def provider_type(self) -> ProviderType:
+        return self.provider.type
 
     @property
     def api_key(self) -> str:
@@ -53,10 +59,6 @@ class ModelRequestInfo:
         return self.model.owner_user_id
 
     @property
-    def is_byok(self) -> bool:
-        return self.model.scope == ModelScope.USER
-
-    @property
     def billing_ratio(self) -> int:
         return self.model.billing_ratio
 
@@ -65,16 +67,15 @@ class ModelRequestInfo:
         return self.model.support_tools
 
     @property
-    def support_streaming(self) -> bool:
-        return self.model.support_streaming
-
-    @property
     def context_window_tokens(self) -> Optional[int]:
         return self.model.context_window_tokens
 
     @property
     def max_output_tokens(self) -> Optional[int]:
         return self.model.max_output_tokens
+
+    def with_runtime_options(self, runtime_options: dict[str, Any]) -> "ModelRequestInfo":
+        return replace(self, runtime_options=runtime_options)
 
 class ModelRepository(ABC):
 
@@ -130,5 +131,6 @@ class ModelRepository(ABC):
             user_id: Optional[str] = None,
             provider_id: Optional[PydanticObjectId] = None,
             scope = None,
+            runtime_options: Optional[dict[str, Any]] = None,
     ) -> ModelRequestInfo:
         pass

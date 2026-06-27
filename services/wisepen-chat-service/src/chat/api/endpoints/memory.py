@@ -46,7 +46,7 @@ async def delete_memory(
     try:
         await memory.delete_memory(memory_id=memory_id, user_id=user_id)
     except PermissionError:
-        raise ServiceException(ChatErrorCode.MEMORY_OPERATION_FAILED, custom_msg="无权删除该记忆条目")
+        raise ServiceException(ChatErrorCode.MEMORY_OPERATION_FAILED)
     except Exception as e:
         raise ServiceException(ChatErrorCode.MEMORY_OPERATION_FAILED, custom_msg=str(e))
     return R.success()

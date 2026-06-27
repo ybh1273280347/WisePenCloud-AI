@@ -21,6 +21,8 @@ from chat.api.schemas.model import (
     UpdateUserProviderRequest,
 )
 from chat.container import Container
+from chat.application.llm_provider_resolver import LLMProviderResolver
+from chat.domain.entities import ModelScope
 from chat.domain.entities.model import Model, ModelProviderMapping
 from chat.domain.entities.provider import Provider
 from chat.domain.repositories import ModelRepository, ProviderRepository
@@ -35,61 +37,64 @@ def to_provider_response(provider: Provider) -> ProviderResponse:
     return ProviderResponse(
         id=str(provider.id) if provider.id else "",
         name=provider.name,
-        api_base_url=provider.api_base_url,
+        base_url=provider.base_url,
         api_key_fingerprint=provider.api_key_fingerprint,
         scope=provider.scope,
         type=provider.type,
         is_active=provider.is_active,
-        usage_tokens=provider.usage_tokens,
-        billable_usage_tokens=provider.billable_usage_tokens,
+        token_usage=provider.token_usage,
+        billable_token_usage=provider.billable_token_usage,
     )
 
 
 def to_mapping_response(
-        mapping: ModelProviderMapping,
-        providers: Dict[str, Provider] = None,
+    mapping: ModelProviderMapping,
+    provider: Provider | None,
+    llm_provider_resolver: LLMProviderResolver,
 ) -> ModelProviderMappingResponse:
-    providers = providers or {}
-    provider = providers.get(str(mapping.provider_id), None)
+    # 系统提供者不能显示提供者名称
     return ModelProviderMappingResponse(
         model_id=str(mapping.model_id),
         provider_id=str(mapping.provider_id),
-        provider_name=provider.name if provider is not None else None,
+        provider_name=provider.name if provider is not None and provider.scope is not ModelScope.SYSTEM else None,
         provider_model_name=mapping.provider_model_name,
+        support_runtime_options=llm_provider_resolver.runtime_options_manifest(provider.type) if provider else {},
         is_preferred=mapping.is_preferred,
         is_active=mapping.is_active,
         priority=mapping.priority,
     )
 
-
 def to_model_response(
-        model: Model,
+    model: Model,
 ) -> ModelResponse:
     return ModelResponse(
         id=str(model.id) if model.id else "",
         scope=model.scope,
         display_name=model.display_name,
-        vendor=model.vendor,
         type=model.type,
+        model_family=model.model_family,
         billing_ratio=model.billing_ratio,
         support_thinking=model.support_thinking,
         support_vision=model.support_vision,
         support_tools=model.support_tools,
-        support_streaming=model.support_streaming,
         context_window_tokens=model.context_window_tokens,
         max_output_tokens=model.max_output_tokens,
         is_active=model.is_active,
         mappings=None,
     )
 
-
 def to_model_response_with_mapping(
-        model_info: ModelInfo,
-        providers: Dict[str, Provider] = None,
+    model_info: ModelInfo,
+    providers: Dict[str, Provider] | None,
+    llm_provider_resolver: LLMProviderResolver,
 ) -> ModelResponse:
     model_response = to_model_response(model_info.model)
     model_response.mappings = [
-        to_mapping_response(mapping, providers)
+        to_mapping_response(
+            mapping=mapping,
+            provider=providers.get(str(mapping.provider_id), None),
+            llm_provider_resolver=llm_provider_resolver,
+        )
         for mapping in model_info.mappings
     ]
     return model_response
@@ -98,11 +103,18 @@ def to_model_response_with_mapping(
 @router.get("/listAvailableModels", response_model=R[AvailableModelsResponse])
 @inject
 async def list_available_models(
-        user_id: str = Depends(require_login),
-        model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
-        provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
+    user_id: str = Depends(require_login),
+    model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
+    provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
+    llm_provider_resolver: LLMProviderResolver = Depends(Provide[Container.llm_provider_resolver]),
 ):
     system_model_infos = await model_repo.list_models_and_mappings(None)
+    system_providers = await provider_repo.list_providers(None)
+    system_providers = {
+        str(provider.id): provider
+        for provider in system_providers
+        if provider.id is not None
+    }
 
     user_model_infos = await model_repo.list_models_and_mappings(user_id)
     user_providers = await provider_repo.list_providers(user_id)
@@ -114,12 +126,12 @@ async def list_available_models(
 
     return R.success(data=AvailableModelsResponse(
         system_models=[
-            to_model_response_with_mapping(model_info)
+            to_model_response_with_mapping(model_info, system_providers, llm_provider_resolver)
             for model_info in system_model_infos
             if model_info.model.is_active
         ],
         user_models=[
-            to_model_response_with_mapping(model_info, user_providers)
+            to_model_response_with_mapping(model_info, user_providers, llm_provider_resolver)
             for model_info in user_model_infos
             if model_info.model.is_active
         ],
@@ -129,8 +141,8 @@ async def list_available_models(
 @router.get("/listUserProviders", response_model=R[ListUserProvidersResponse])
 @inject
 async def list_user_providers(
-        user_id: str = Depends(require_login),
-        provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
+    user_id: str = Depends(require_login),
+    provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
 ):
     providers = await provider_repo.list_providers(user_id)
     return R.success(data=ListUserProvidersResponse(
@@ -141,27 +153,28 @@ async def list_user_providers(
 @router.post("/createUserProvider", response_model=R, status_code=200)
 @inject
 async def create_user_provider(
-        req: CreateUserProviderRequest,
-        user_id: str = Depends(require_login),
-        provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
+    req: CreateUserProviderRequest,
+    user_id: str = Depends(require_login),
+    provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
 ):
     await provider_repo.create_provider(
         Provider(
             name=req.name,
-            api_base_url=req.api_base_url,
+            base_url=req.base_url,
             api_key=req.api_key,
             type=req.type,
+            is_active=req.is_active,
         )
-        , user_id)
+    , user_id)
     return R.success()
 
 
 @router.post("/updateUserProvider", response_model=R, status_code=200)
 @inject
 async def update_user_provider(
-        req: UpdateUserProviderRequest,
-        user_id: str = Depends(require_login),
-        provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
+    req: UpdateUserProviderRequest,
+    user_id: str = Depends(require_login),
+    provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
 ):
     provider_id = PydanticObjectId(req.provider_id)
     updates = req.model_dump(exclude={"provider_id"}, exclude_unset=True)
@@ -172,9 +185,9 @@ async def update_user_provider(
 @router.post("/deleteUserProvider", response_model=R, status_code=200)
 @inject
 async def delete_user_provider(
-        req: DeleteUserProviderRequest,
-        user_id: str = Depends(require_login),
-        provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
+    req: DeleteUserProviderRequest,
+    user_id: str = Depends(require_login),
+    provider_repo: ProviderRepository = Depends(Provide[Container.provider_repo]),
 ):
     provider_id = PydanticObjectId(req.provider_id)
     await provider_repo.remove_provider(provider_id, user_id)
@@ -184,9 +197,9 @@ async def delete_user_provider(
 @router.get("/listUserModelsByProviderId", response_model=R[ListUserModelsResponse])
 @inject
 async def list_user_models_by_provider_id(
-        provider_id: str = Query(..., description="Provider ID"),
-        user_id: str = Depends(require_login),
-        model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
+    provider_id: str = Query(..., description="Provider ID"),
+    user_id: str = Depends(require_login),
+    model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
 ):
     model_infos = await model_repo.list_models_by_provider_id(
         PydanticObjectId(provider_id),
@@ -194,22 +207,21 @@ async def list_user_models_by_provider_id(
     )
     return R.success(data=ListUserModelsResponse(
         models=[
-            to_model_response(model_info)
+            to_model_response(model_info.model)
             for model_info in model_infos
         ],
     ))
 
-
 @router.get("/listAllUserModels", response_model=R[ListUserModelsResponse])
 @inject
 async def list_all_user_models(
-        user_id: str = Depends(require_login),
-        model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
+    user_id: str = Depends(require_login),
+    model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
 ):
     model_infos = await model_repo.list_models_and_mappings(user_id)
     return R.success(data=ListUserModelsResponse(
         models=[
-            to_model_response(model_info)
+            to_model_response(model_info.model)
             for model_info in model_infos
         ],
     ))
@@ -218,33 +230,32 @@ async def list_all_user_models(
 @router.post("/createUserModel", response_model=R, status_code=200)
 @inject
 async def create_user_model(
-        req: CreateUserModelRequest,
-        user_id: str = Depends(require_login),
-        model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
+    req: CreateUserModelRequest,
+    user_id: str = Depends(require_login),
+    model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
 ):
     await model_repo.create_model(
         Model(
             display_name=req.display_name,
-            vendor=req.vendor,
             type=req.type,
+            model_family=req.model_family,
             billing_ratio=req.billing_ratio,
             support_thinking=req.support_thinking,
             support_vision=req.support_vision,
             support_tools=req.support_tools,
-            support_streaming=req.support_streaming,
             context_window_tokens=req.context_window_tokens,
             max_output_tokens=req.max_output_tokens,
         )
-        , user_id)
+    , user_id)
     return R.success()
 
 
 @router.post("/updateUserModel", response_model=R, status_code=200)
 @inject
 async def update_user_model(
-        req: UpdateUserModelRequest,
-        user_id: str = Depends(require_login),
-        model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
+    req: UpdateUserModelRequest,
+    user_id: str = Depends(require_login),
+    model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
 ):
     model_id = PydanticObjectId(req.model_id)
     updates = req.model_dump(exclude={"model_id"}, exclude_unset=True)
@@ -255,9 +266,9 @@ async def update_user_model(
 @router.post("/deleteUserModel", response_model=R, status_code=200)
 @inject
 async def delete_user_model(
-        req: DeleteUserModelRequest,
-        user_id: str = Depends(require_login),
-        model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
+    req: DeleteUserModelRequest,
+    user_id: str = Depends(require_login),
+    model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
 ):
     model_id = PydanticObjectId(req.model_id)
     await model_repo.delete_model(model_id, user_id)
@@ -267,9 +278,9 @@ async def delete_user_model(
 @router.post("/bindModelProvider", response_model=R, status_code=200)
 @inject
 async def bind_model_provider(
-        req: BindModelProviderRequest,
-        user_id: str = Depends(require_login),
-        model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
+    req: BindModelProviderRequest,
+    user_id: str = Depends(require_login),
+    model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
 ):
     await model_repo.bind_model_to_provider(
         PydanticObjectId(req.model_id),
@@ -285,10 +296,9 @@ async def bind_model_provider(
 @router.post("/unbindModelProvider", response_model=R, status_code=200)
 @inject
 async def unbind_model_provider(
-        req: UnbindModelProviderRequest,
-        user_id: str = Depends(require_login),
-        model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
+    req: UnbindModelProviderRequest,
+    user_id: str = Depends(require_login),
+    model_repo: ModelRepository = Depends(Provide[Container.model_repo]),
 ):
-    await model_repo.unbind_model_from_provider(PydanticObjectId(req.model_id), PydanticObjectId(req.provider_id),
-                                                user_id)
+    await model_repo.unbind_model_from_provider(PydanticObjectId(req.model_id), PydanticObjectId(req.provider_id), user_id)
     return R.success()

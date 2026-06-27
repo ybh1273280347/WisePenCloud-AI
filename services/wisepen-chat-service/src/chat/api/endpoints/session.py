@@ -1,21 +1,33 @@
-from dependency_injector.wiring import inject, Provide
 from fastapi import APIRouter, Depends, Query
+from dependency_injector.wiring import inject, Provide
 
-from chat.api.converters import convert_to_ui_messages
 from chat.api.schemas.session import (
     SessionResponse, CreateSessionRequest, RenameSessionRequest,
     PinSessionRequest, SetSessionAgentRequest, UIMessageResponse,
 )
+from chat.api.converters import convert_to_ui_messages
 from chat.application.agents import AgentResolver
-from chat.container import Container
 from chat.domain.entities import ChatSession
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.repositories import SessionRepository, MessageRepository
+from chat.container import Container
+
+from common.security import require_login
 from common.core.domain import R, PageResult
 from common.core.exceptions import ServiceException
-from common.security import require_login
 
 router = APIRouter()
+
+
+@router.get("/getSession", response_model=R[SessionResponse])
+@inject
+async def get_session(
+        session_id: str,
+        user_id: str = Depends(require_login),
+        session_repo: SessionRepository = Depends(Provide[Container.session_repo]),
+):
+    session = await session_repo.get_session_for_user(session_id, user_id)
+    return R.success(data=SessionResponse.from_entity(session))
 
 
 @router.post("/createSession", response_model=R[SessionResponse], status_code=200)

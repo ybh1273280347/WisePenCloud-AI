@@ -4,29 +4,34 @@ from beanie import PydanticObjectId
 from fastapi import BackgroundTasks
 
 from chat.api.vercel_sse_mapper import to_vercel_sse
-from chat.application.agents import (
-    AgentResolver,
-    DefaultAgentResolver,
-)
+from chat.application.agents import AgentResolver, DefaultAgentResolver
 from chat.application.chat_context_assembler import ChatContextAssembler
 from chat.application.chat_turn_finalizer import ChatTurnFinalizer
-from chat.application.events import StepFinishEvent, ErrorEvent
+from chat.application.events import ErrorEvent, StepFinishEvent
+from chat.application.llm_provider_resolver import LLMProviderResolver
 from chat.application.query_loop_runtime import QueryLoopRuntime
+from chat.application.token_counter import TokenCounter
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
 from chat.application.tools.skill_tools.utils.skill_matcher import SkillMatcher
 from chat.application.tools.web_tools.search_services.runtime_context import (
     WebSearchRuntimeContextResolver,
 )
+from common.logger import error
+
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
-from chat.domain.interfaces.llm import LLMProvider
+from chat.domain.interfaces.llm import TextCompletionProvider
 from chat.domain.interfaces.memory import MemoryProvider
-from chat.domain.repositories import SessionRepository, MessageRepository, HotContextRepository, ModelRepository, \
-    ProviderRepository
+from chat.domain.repositories import (
+    HotContextRepository,
+    MessageRepository,
+    ModelRepository,
+    ProviderRepository,
+    SessionRepository,
+)
 from common.core.exceptions import ServiceException
 from common.kafka.producer import KafkaProducerClient
-from common.logger import error
 
 # Skill 工具默认不暴露；仅在本轮存在可展示 Skill 时整体解禁
 _SKILL_TOOL_NAMES = frozenset({"load_skill", "load_skill_asset"})
@@ -42,7 +47,9 @@ class ChatTurnCoordinator:
 
     def __init__(
             self,
-            llm: LLMProvider,
+            llm_provider_resolver: LLMProviderResolver,
+            text_llm: TextCompletionProvider,
+            token_counter: TokenCounter,
             memory: MemoryProvider,
             model_repo: ModelRepository,
             provider_repo: ProviderRepository,
@@ -64,11 +71,14 @@ class ChatTurnCoordinator:
         )
         self._tool_registry = tool_registry
         self._query_loop_runtime = QueryLoopRuntime(
-            llm=llm,
+            llm_provider_resolver=llm_provider_resolver,
+            token_counter=token_counter,
             tool_dispatcher=tool_dispatcher,
         )
         self._turn_finalizer = ChatTurnFinalizer(
-            llm=llm, memory=memory,
+            text_llm=text_llm,
+            token_counter=token_counter,
+            memory=memory,
             message_repo=message_repo, session_repo=session_repo, hot_context_repo=hot_context_repo,
             provider_repo=provider_repo,
             kafka_producer=kafka_producer
@@ -88,7 +98,9 @@ class ChatTurnCoordinator:
             background_tasks: BackgroundTasks,
             model_id: PydanticObjectId,
             provider_id: Optional[PydanticObjectId] = None,
+            runtime_options: dict = None,
             frontend_states: Optional[List[Dict[str, Any]]] = None,
+            user_defined_attachment_ids: Optional[List[str]] = None,
             user_defined_allow_tool_names: Optional[Set[str]] = None,
             user_defined_deny_tool_names: Optional[Set[str]] = None,
             user_defined_on_demand_skill_ids: Optional[Set[str]] = None,
@@ -103,24 +115,22 @@ class ChatTurnCoordinator:
         tool_and_skill_policy = agent_spec.tool_and_skill_policy
         model_policy = agent_spec.model_policy
 
-        resolved_model_id = model_id
-        resolved_provider_id = provider_id
-
         # 如果禁止覆盖，且指定了模型和供应商
         if not model_policy.allow_request_override:
-            if model_policy.default_model_id: resolved_model_id = PydanticObjectId(model_policy.default_model_id)
-            if model_policy.default_provider_id: resolved_provider_id = PydanticObjectId(model_policy.default_provider_id)
+            if model_policy.default_model_id: model_id = PydanticObjectId(model_policy.default_model_id)
+            if model_policy.default_provider_id: provider_id = PydanticObjectId(model_policy.default_provider_id)
 
         # 解析模型、映射、供应商和 API 凭证
-        resolved_model = await self._model_repo.resolve_model_for_chat(
-            model_id=resolved_model_id,
+        resolved_model_info = await self._model_repo.resolve_model_for_chat(
+            model_id=model_id,
             user_id=user_id,
-            provider_id=resolved_provider_id,
+            provider_id=provider_id,
+            runtime_options=runtime_options or {}
         )
 
         # Token窗口尺寸
-        context_limit = resolved_model.context_window_tokens or settings.CTX_TOKEN_LIMIT
-        output_reserve = resolved_model.max_output_tokens or settings.CTX_DEFAULT_OUTPUT_RESERVE_TOKENS
+        context_limit = resolved_model_info.context_window_tokens or settings.CTX_TOKEN_LIMIT
+        output_reserve = resolved_model_info.max_output_tokens or settings.CTX_DEFAULT_OUTPUT_RESERVE_TOKENS
         prompt_budget_tokens = max(
             context_limit - output_reserve,
             settings.CTX_MIN_PROMPT_BUDGET_TOKENS,
@@ -152,7 +162,8 @@ class ChatTurnCoordinator:
             session_summary = await self._context_assembler.get_session_summary(session_id)
 
             # 窗口化消息以用于压缩
-            # 从后往前累加 Token，超过高水位时将 messages_compress_candidates 压缩为会话的历史摘要（本轮结束时）
+            # 从后往前累加 Token，低水位内保留为 messages_keep，更早的未压缩明细进入 messages_compress_candidates
+            # candidates 当前轮仍会进入 prompt，本轮结束后会被合并进新摘要，并在下一轮不再作为明细注入
             windowed_history_messages = await self._context_assembler.build_windowed_messages(
                 chat_history_record_messages,
                 prompt_budget_tokens=prompt_budget_tokens,
@@ -185,9 +196,8 @@ class ChatTurnCoordinator:
                 skill_match_top_k=tool_and_skill_policy.skill_match_top_k,
             )
 
-        expose_tool_name_set = None
+        expose_tool_name_set = set()
         if available_skills:
-            expose_tool_name_set = set()
             expose_tool_name_set.update(_SKILL_TOOL_NAMES)
             # allowed_skill_ids 表示本轮展示给 LLM 的 Skill 白名单，工具执行前仍会校验
             tool_context["allowed_skill_ids"] = [s.skill_id for s in available_skills]
@@ -222,8 +232,11 @@ class ChatTurnCoordinator:
             deny_tool_name_set=deny_tool_name_set,
         )
 
+        # 对话中的全部附件
+        temp_attachments, resource_attachments = await self._session_repo.get_session_attachments(session_id, user_id)
+
         # 提示词组装
-        # 将系统提示词、Mem0 检索到的事实、会话的历史摘要、前端上下文以及窗口内的明细消息组装成 LLM 所需的格式
+        # 将系统提示词、Mem0 检索到的事实、会话的历史摘要、前端上下文以及窗口内的未压缩明细消息组装成 LLM 所需的格式
         messages_for_llm = self._context_assembler.assemble_prompt(
             session_id=session_id,
             user_query=user_query,
@@ -233,6 +246,9 @@ class ChatTurnCoordinator:
             relevant_facts=relevant_facts, # 长期记忆检索的事实
             frontend_states=frontend_states, # 用户前端状态
             available_skills=available_skills or None, # 可用技能
+            temp_attachments=temp_attachments, # 对话中的全部临时附件
+            resource_attachments=resource_attachments, # 对话中的全部资源附件
+            user_defined_attachment_ids=user_defined_attachment_ids, # 用户指定的附件
         )
 
         # 构造 chat_record_messages
@@ -241,13 +257,16 @@ class ChatTurnCoordinator:
             "relevant_facts": relevant_facts,
             "frontend_states": frontend_states or {},
             "available_skills_id": [skill.skill_id for skill in available_skills] or [],
+            "temp_attachments": temp_attachments or [],
+            "resource_attachments": resource_attachments or [],
+            "user_defined_attachment_ids": user_defined_attachment_ids or []
         }
         chat_record_messages: List[ChatMessage] = [ChatMessage(
             session_id=session_id, role=Role.USER, content=user_query,
             metadata=user_message_metadata,
         )]
 
-        usage_tokens = 0
+        token_usage = 0
         # 流式推理
         try:
             async for event in self._query_loop_runtime.stream_chat_with_tool_calling(
@@ -255,14 +274,11 @@ class ChatTurnCoordinator:
                 tool_scope=tool_scope,
                 session_id=session_id,
                 agent_max_iterations=agent_spec.agent_max_iterations,
-                model_name=resolved_model.model_name,
-                model_id=resolved_model.model_id,
-                api_base=resolved_model.api_base_url,
-                api_key=resolved_model.api_key,
+                model_info=resolved_model_info,
             ):
                 # QueryLoopRuntime 产出的事件如果是 StepFinishEvent 额外处理消息累积
                 if isinstance(event, StepFinishEvent):
-                    usage_tokens += event.usage_tokens # 计费
+                    token_usage += event.token_usage # 计费
                     if not event.is_finished:
                         # 向 chat_record_messages 追加中间消息（Tool Calls）
                         chat_record_messages.extend(event.intermediate_messages)
@@ -271,7 +287,7 @@ class ChatTurnCoordinator:
                         chat_record_messages.append(event.final_assistant_message)
                 yield to_vercel_sse(event)
         except ServiceException as e:
-            error("chat stream generation failed.", session_id=session_id, e=e)
+            error("chat stream generation failed.", session_id=session_id, exc=e)
             yield to_vercel_sse(ErrorEvent(error_text=str(e)))
             return
 
@@ -281,8 +297,8 @@ class ChatTurnCoordinator:
             background_tasks.add_task(
                 self._turn_finalizer.send_token_billing,
                 user_id=user_id,
-                resolved_model=resolved_model,
-                usage_tokens=usage_tokens,
+                model_info=resolved_model_info,
+                token_usage=token_usage,
                 group_id=agent_spec.billing_group_id
             )
             # 将新消息写入 Redis 和 MongoDB，并摄入 Memory 长期记忆

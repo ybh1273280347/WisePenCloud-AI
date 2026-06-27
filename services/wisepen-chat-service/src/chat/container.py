@@ -11,6 +11,8 @@ from chat.application.agents import (
     DefaultAgentResolver,
 )
 from chat.application.chat_turn_coordinator import ChatTurnCoordinator
+from chat.application.llm_provider_resolver import LLMProviderResolver
+from chat.application.token_counter import TokenCounter
 from chat.application.tools.common.tool_content_store.store import (
     DEFAULT_TOOL_CONTENT_TTL_SECONDS,
     ToolContentStore,
@@ -116,9 +118,13 @@ from chat.core.persistence.redis.web_search_candidate_repository import (
     RedisWebSearchCandidateRepository,
 )
 from chat.core.providers import (
+    AnthropicAdapter,
+    GeminiAdapter,
     LiteLLMAdapter,
     Mem0Adapter,
+    OpenAIAdapter,
     OssFileLoader,
+    QwenAdapter,
 )
 from chat.core.security import SecretCipher
 from chat.service_client import FileStorageClient, AIAssetClient, ResourceClient
@@ -200,7 +206,20 @@ def _build_web_fetch_http_client() -> httpx.AsyncClient:
 
 class Container(containers.DeclarativeContainer):
     """依赖注入容器，管理单例对象的生命周期。"""
-    llm_provider = providers.Singleton(LiteLLMAdapter)
+    qwen_adapter = providers.Singleton(QwenAdapter)
+    openai_adapter = providers.Singleton(OpenAIAdapter)
+    anthropic_adapter = providers.Singleton(AnthropicAdapter)
+    gemini_adapter = providers.Singleton(GeminiAdapter)
+    litellm_adapter = providers.Singleton(LiteLLMAdapter)
+    llm_provider_resolver = providers.Singleton(
+        LLMProviderResolver,
+        qwen_adapter=qwen_adapter,
+        openai_adapter=openai_adapter,
+        anthropic_adapter=anthropic_adapter,
+        gemini_adapter=gemini_adapter,
+        litellm_adapter=litellm_adapter,
+    )
+    token_counter = providers.Singleton(TokenCounter)
     memory_provider = providers.Singleton(Mem0Adapter)
 
     session_repo = providers.Singleton(MongoSessionRepository)
@@ -546,7 +565,9 @@ class Container(containers.DeclarativeContainer):
     # Application 层组件
     chat_turn_coordinator = providers.Factory(
         ChatTurnCoordinator,
-        llm=llm_provider,
+        llm_provider_resolver=llm_provider_resolver,
+        text_llm=litellm_adapter,
+        token_counter=token_counter,
         memory=memory_provider,
         model_repo=model_repo,
         provider_repo=provider_repo,

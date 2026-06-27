@@ -1,8 +1,8 @@
-﻿import json
+import json
 import uuid
-from typing import Dict, List, Optional, Iterator, AsyncIterator, Union
+from typing import AsyncIterator, Iterator, List, Optional, Union
 
-from beanie import PydanticObjectId
+from jsonschema import Draft202012Validator, SchemaError, ValidationError
 
 from chat.application.events import (
     ReasoningDeltaEvent,
@@ -18,56 +18,77 @@ from chat.application.events import (
     ToolInputStartEvent,
     ToolOutputAvailableEvent,
 )
+from chat.application.llm_provider_resolver import LLMProviderResolver
+from chat.application.token_counter import TokenCounter
 from chat.application.tools import ToolScope
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
-from chat.application.tools.core.llm.invocation import ToolCallMessageAccumulator, tool_call_parse
+from chat.application.tools.core.llm.invocation import ToolInvocation
+from chat.application.tools.core.llm.renderer import tool_result_renderer
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
+from chat.domain.entities.message import MessageModelInfo, ToolCallMessage
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
+from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent
+from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
 from common.logger import warn
 
 
-class _StepDeltaInterpreter:
+class _StepEventInterpreter:
     """
-    单个 Agent Step 内的 Delta 解释器
-    - 按到达顺序消费 LLM 的 delta 片段
+    单个 Agent Step 内的事件解释器
+    - 按到达顺序消费 LLMProvider 传递的 LLMStreamEvent 事件
     - 维护 reasoning / text 的 start-end 生命周期
-    - 累加 assistant_content / assistant_reasoning，按 index 累积 tool_call 碎片
+    - 收集 tool_call
     - 向外产出 StreamEvent
     """
-    def __init__(self, text_id: str, reasoning_id: str) -> None:
-        self.text_id = text_id
-        self.reasoning_id = reasoning_id
+    def __init__(self) -> None:
+        self.text_id = f"txt_{uuid.uuid4().hex}"
+        self.reasoning_id = f"rsn_{uuid.uuid4().hex}"
+
+        # 内部字段 assistant content，用于积累模型消息，以供 LLMProvider 的原生载荷不适用时降级使用
         self.assistant_content: str = ""
+        # 内部字段 assistant reasoning，用于积累模型思考，以供 LLMProvider 的原生载荷不适用时降级使用
         self.assistant_reasoning: str = ""
-        self.tool_call_message_accumulators: Dict[int, ToolCallMessageAccumulator] = {}
+        # 工具调用列表
+        self.tool_calls: list[ToolCallMessage] = []
+        # LLMProvider 的原生载荷
+        self.provider_payload: dict | None = None
+
         self._text_started: bool = False
         self._reasoning_started: bool = False
 
-    def consume(self, delta) -> Iterator[StreamEvent]:
+    def consume(self, item: LLMStreamEvent) -> Iterator[StreamEvent]:
         """
-        按到达顺序消费 LLM 的 delta 片段，并产出 0..N 个 StreamEvent
-        - reasoning_content 到来时，必要时开启 reasoning_start，并产出 ReasoningDeltaEvent
-        - content 到来时，必要时关闭 reasoning、开启 text_start，并产出 TextDeltaEvent
-        - tool_calls 仅按 index 累积碎片，不立即产出事件
+        按到达顺序消费 LLMProvider 传递的 LLMStreamEvent 事件，并产出 0..N 个 StreamEvent
+        不处理 LLMEventType.USAGE 事件
         """
-        # 若 delta.reasoning_content 有值
-        if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+        # 处理 LLMProvider 的原生载荷
+        if item.type == LLMEventType.STATE:
+            self.provider_payload = item.provider_payload
+            return
+
+        # 处理 LLMProvider 的工具调用列表
+        # 在一整轮模型输出结束后才能进入工具执行阶段
+        if item.type == LLMEventType.TOOL_CALLS:
+            self.tool_calls.extend(item.tool_calls or [])
+            return
+
+        # 若 reasoning_delta 有值
+        if item.type == LLMEventType.REASONING_DELTA and item.delta:
             # 若 reasoning 还没开始，发 ReasoningStartEvent
             if not self._reasoning_started:
                 yield ReasoningStartEvent(reasoning_id=self.reasoning_id)
                 self._reasoning_started = True
             # 把 reasoning 累加到 assistant_reasoning
-            self.assistant_reasoning += delta.reasoning_content
+            self.assistant_reasoning += item.delta
             # 发 ReasoningDeltaEvent
-            yield ReasoningDeltaEvent(
-                reasoning_id=self.reasoning_id,
-                delta=delta.reasoning_content,
-            )
-        # 若 delta.content 有值
-        if delta.content:
+            yield ReasoningDeltaEvent(reasoning_id=self.reasoning_id, delta=item.delta)
+            return
+
+        # 若 text_delta 有值
+        if item.type == LLMEventType.TEXT_DELTA and item.delta:
             # 若文本流还没开始
             if not self._text_started:
                 # 若 reasoning 未结束，发 ReasoningEndEvent
@@ -78,27 +99,9 @@ class _StepDeltaInterpreter:
                 yield TextStartEvent(text_id=self.text_id)
                 self._text_started = True
             # 把文本累加到 assistant_content
-            self.assistant_content += delta.content
+            self.assistant_content += item.delta
             # 发 TextDeltaEvent
-            yield TextDeltaEvent(
-                text_id=self.text_id,
-                delta=delta.content,
-            )
-        # 若 delta.tool_calls 有值
-        if delta.tool_calls:
-            for tool_call_delta in delta.tool_calls:
-                # 按 index 找到对应 accumulator
-                idx = tool_call_delta.index
-                if idx not in self.tool_call_message_accumulators:
-                    self.tool_call_message_accumulators[idx] = ToolCallMessageAccumulator()
-                if tool_call_delta.id: # 累加 id（如果有）
-                    self.tool_call_message_accumulators[idx].tool_call_id = tool_call_delta.id
-                if tool_call_delta.function: # 累加 function（如果有）
-                    if tool_call_delta.function.name: # 累加 name
-                        self.tool_call_message_accumulators[idx].tool_name += tool_call_delta.function.name
-                    if tool_call_delta.function.arguments: # 累加 arguments
-                        self.tool_call_message_accumulators[idx].tool_call_argument_str += tool_call_delta.function.arguments
-        # tool_call 只有在一整轮模型输出结束后，才能确定是不是完整、能不能解析
+            yield TextDeltaEvent(text_id=self.text_id, delta=item.delta)
 
     def close(self) -> Iterator[StreamEvent]:
         """在模型流结束后补齐未闭合的 reasoning/text 生命周期，该方法应在单轮 stream 结束后调用一次"""
@@ -114,6 +117,15 @@ class _StepDeltaInterpreter:
 # QueryLoopRuntime
 # =============================================================================
 
+def _merge_runtime_options(defaults: dict, overrides: dict) -> dict:
+    result = dict(defaults or {})
+    for key, value in (overrides or {}).items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _merge_runtime_options(result[key], value)
+        else:
+            result[key] = value
+    return result
+
 class QueryLoopRuntime:
     """
     负责与 LLM 的全部交互：支持并行 Tool Calling（asyncio.gather）和多轮推理循环（while + MAX_ITERATIONS）
@@ -121,10 +133,12 @@ class QueryLoopRuntime:
 
     def __init__(
         self,
-        llm: LLMProvider,
+        llm_provider_resolver: LLMProviderResolver,
+        token_counter: TokenCounter,
         tool_dispatcher: ToolDispatcher,
     ) -> None:
-        self.llm = llm
+        self._llm_provider_resolver = llm_provider_resolver
+        self._token_counter = token_counter
         self._tool_dispatcher = tool_dispatcher
 
     """
@@ -136,11 +150,22 @@ class QueryLoopRuntime:
         tool_scope: ToolScope,
         session_id: str,
         agent_max_iterations: Optional[int],
-        model_name: str,
-        model_id: Optional[PydanticObjectId] = None,
-        api_base: Optional[str] = None,
-        api_key: Optional[str] = None,
+        model_info: ModelRequestInfo,
     ) -> AsyncIterator[StreamEvent]:
+        # 解析获取当前模型的 LLMProvider
+        llm_provider = self._llm_provider_resolver.resolve(model_info)
+
+        # 检查模型参数是否正确
+        manifest = llm_provider.runtime_options_manifest()
+        # 合并默认参数
+        runtime_options = _merge_runtime_options(manifest.get("defaults") or {}, model_info.runtime_options or {})
+        try:
+            Draft202012Validator.check_schema(manifest["json_schema"])
+            Draft202012Validator(manifest["json_schema"]).validate(runtime_options)
+        except (SchemaError, ValidationError) as e:
+            raise ServiceException(ChatErrorCode.MODEL_RUNTIME_OPTIONS_INVALID, custom_msg=str(e))
+        model_info = model_info.with_runtime_options(runtime_options)
+
         # 进入多轮循环
         for iteration in range(agent_max_iterations or settings.AGENT_MAX_ITERATIONS):
             step_finish_event: Optional[StepFinishEvent] = None
@@ -149,10 +174,8 @@ class QueryLoopRuntime:
             async for item in self._run_single_step(
                 messages=messages,
                 session_id=session_id,
-                model_name=model_name,
-                model_id=model_id,
-                api_base=api_base,
-                api_key=api_key,
+                model_info=model_info,
+                llm_provider=llm_provider,
                 iteration=iteration,
                 tool_scope=tool_scope,
             ):
@@ -179,44 +202,35 @@ class QueryLoopRuntime:
         self,
         messages: List[ChatMessage],
         session_id: str,
-        model_name: str,
-        model_id: Optional[PydanticObjectId],
-        api_base: Optional[str],
-        api_key: Optional[str],
+        model_info: ModelRequestInfo,
+        llm_provider: LLMProvider,
         iteration: int,
         tool_scope: ToolScope,
     ) -> AsyncIterator[Union[StreamEvent, StepFinishEvent]]:
         # 发 step 开始事件
         yield StepStartEvent()
 
-        # 创建本轮推理的 delta 解释器
-        text_id = f"txt_{uuid.uuid4().hex}"
-        reasoning_id = f"rsn_{uuid.uuid4().hex}"
-        delta_interpreter = _StepDeltaInterpreter(text_id=text_id, reasoning_id=reasoning_id)
+        # 创建本轮推理的事件解释器
+        event_interpreter = _StepEventInterpreter()
 
-        finish_reason: str = "stop"
+        # schema 已由 ToolScope 在构造期固化；仅在模型和 LLM Provider 均声明支持工具时传给 LLM
+        tool_schemas = tool_scope.schemas() \
+            if model_info.support_tools and llm_provider.supports_tools() else []
 
-        # schema 已由 ToolScope 在构造期固化，这里直读
-        tool_schemas = tool_scope.schemas()
-
-        usage_tokens = 0
+        token_usage = 0
         try:
-            # 调用模型流式接口
-            async for chunk in self.llm.stream_chat_completion(
+            # 调用模型流式接口，Provider 内部负责原生协议解析并产出 LLMStreamEvent 事件
+            async for llm_provider_event in llm_provider.stream_chat_completion(
                 messages=messages,
-                model_name=model_name,
+                model_request=model_info,
                 tools=tool_schemas or None,
-                api_base=api_base,
-                api_key=api_key,
             ):
-                usage_tokens += chunk.usage_tokens
-                choices = chunk.raw.choices
-                if choices: # usage chunk 的 choices 可能是空数组
-                    finish_reason = choices[0].finish_reason or finish_reason
+                if llm_provider_event.type == LLMEventType.USAGE and llm_provider_event.usage:
+                    token_usage += llm_provider_event.usage.total_tokens
 
-                    # 把 delta 片段交给解释器，产出 StreamEvent
-                    for event in delta_interpreter.consume(choices[0].delta):
-                        yield event
+                # 把 LLMStreamEvent 事件交给解释器，产出 StreamEvent
+                for event in event_interpreter.consume(llm_provider_event):
+                    yield event
         except ServiceException:
             raise  # 已经是业务异常，直接向上传播
         except Exception as e:
@@ -225,59 +239,52 @@ class QueryLoopRuntime:
                 custom_msg=f"流式推理失败 (iter={iteration}): {e}",
             )
 
-        # 关闭本轮推理的 delta 解释器
-        for event in delta_interpreter.close():
+        # 关闭本轮推理的事件解释器
+        for event in event_interpreter.close():
             yield event
 
-        if usage_tokens == 0:
-            # 未能正确计费，需要兜底
-            usage_tokens = await self.llm.count_message_tokens(messages=messages, model_name=model_name, tools=tool_schemas or None)
-            output_text = delta_interpreter.assistant_content + delta_interpreter.assistant_reasoning
-            for idx in delta_interpreter.tool_call_message_accumulators.keys():
-                acc = delta_interpreter.tool_call_message_accumulators[idx]
-                output_text += acc.tool_call_id + acc.tool_name + acc.tool_call_argument_str
-            usage_tokens += await self.llm.count_tokens(text=output_text, model_name=model_name)
-
-        # 如果没有工具调用，则结束这一轮（也结束整个循环）
-        if finish_reason != "tool_calls" or not delta_interpreter.tool_call_message_accumulators:
-            final_message = ChatMessage(
-                session_id=session_id,
-                role=Role.ASSISTANT,
-                model_id=model_id,
-                content=delta_interpreter.assistant_content or "",
-                reasoning_content=delta_interpreter.assistant_reasoning or None,
-            )
-            yield StepFinishEvent(is_finished=True, final_assistant_message=final_message, usage_tokens=usage_tokens)
-            return
-        
-        # 如果有工具调用，则进入工具阶段
-
-        # 解析工具调用
-        invocations = tool_call_parse(
-            delta_interpreter.tool_call_message_accumulators,
-            query_loop_iteration=iteration,
-        )
-
-        # 构造 assistant 的 tool_calls 消息(OpenAI 协议要求)
-        # 放入 new_messages,由 QueryLoopRuntime 外层统一 extend 进 messages
         assistant_msg = ChatMessage(
             session_id=session_id,
             role=Role.ASSISTANT,
-            model_id=model_id,
-            content=delta_interpreter.assistant_content or None,
-            reasoning_content=delta_interpreter.assistant_reasoning or None,
-            tool_calls=[
-                {
-                    "id": invocation.tool_call_id,
-                    "type": "function",
-                    "function": {
-                        "name": invocation.tool_name,
-                        "arguments": json.dumps(invocation.tool_call_arguments),
-                    },
-                }
-                for invocation in invocations
-            ],
+            model_info=MessageModelInfo.from_model_request(model_info),
+            content=event_interpreter.assistant_content or "",
+            reasoning_content=event_interpreter.assistant_reasoning or None,
+            provider_payload=event_interpreter.provider_payload, # 原生载荷
+            tool_calls=event_interpreter.tool_calls
         )
+
+        if token_usage == 0:
+            # 未能正确计费，需要兜底
+            token_usage += await self._token_counter.count_messages(
+                messages=messages,
+                model_name=model_info.model_name,
+                tools=tool_schemas or None,
+            ) # 统计输入 tokens
+            token_usage += await self._token_counter.count_messages(
+                messages=[assistant_msg],
+                model_name=model_info.model_name,
+            ) # 统计输出 tokens
+
+        assistant_msg.token_usage = token_usage
+
+        # 如果没有工具调用，则结束这一轮（也结束整个循环）
+        if not event_interpreter.tool_calls:
+            yield StepFinishEvent(is_finished=True, final_assistant_message=assistant_msg, token_usage=token_usage)
+            return
+
+        # 如果有工具调用，则进入工具阶段
+
+        # 构造工具调用
+        invocations = [
+            ToolInvocation(
+                tool_call_id=tool_call.call_id,
+                tool_name=tool_call.name,
+                tool_call_arguments=tool_call.arguments,
+                query_loop_iteration=iteration,
+            )
+            for tool_call in event_interpreter.tool_calls
+        ]
+
         new_messages: List[ChatMessage] = [assistant_msg]
 
         for invocation in invocations:
@@ -305,14 +312,14 @@ class QueryLoopRuntime:
                     session_id=session_id,
                     role=Role.TOOL,
                     tool_call_id=result.tool_call_id,
-                    name=result.tool_name,
+                    tool_name=result.tool_name,
                     content=result.tool_output,
                     persisted_output_placeholder=result.persisted_output_placeholder,
                 )
             )
 
         # 结束本轮并继续下一轮模型推理（因为调用工具）
-        yield StepFinishEvent(is_finished=False, intermediate_messages=new_messages, usage_tokens=usage_tokens)
+        yield StepFinishEvent(is_finished=False, intermediate_messages=new_messages, token_usage=token_usage)
 
     async def _emit_exhausted_warning(
         self, session_id: str
@@ -330,5 +337,4 @@ class QueryLoopRuntime:
             role=Role.ASSISTANT,
             content=warning_text,
         )
-        yield StepFinishEvent(is_finished=True, final_assistant_message=final_message, usage_tokens=0)
-
+        yield StepFinishEvent(is_finished=True, final_assistant_message=final_message, token_usage=0)

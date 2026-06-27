@@ -95,19 +95,16 @@ def _build_assistant_ui_message(group: List[ChatMessage]) -> Optional[Dict[str, 
 
             if msg.tool_calls:
                 for tc in msg.tool_calls:
-                    tool_name = tc.get("function", {}).get("name")
-                    tool_call_id = tc.get("id", "")
-                    raw_args = tc.get("function", {}).get("arguments")
                     try:
-                        parsed_input = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                        parsed_input = json.loads(tc.arguments) if isinstance(tc.arguments, str) else tc.arguments
                     except (json.JSONDecodeError, TypeError):
                         parsed_input = {}
 
-                    tool_output = tool_results.get(tool_call_id, "")
+                    tool_output = tool_results.get(tc.call_id, "")
 
                     parts.append({
-                        "type": f"tool-{tool_name}",
-                        "toolCallId": tool_call_id,
+                        "type": f"tool-{tc.name}",
+                        "toolCallId": tc.call_id,
                         "state": "output-available",
                         "input": parsed_input,
                         "output": tool_output

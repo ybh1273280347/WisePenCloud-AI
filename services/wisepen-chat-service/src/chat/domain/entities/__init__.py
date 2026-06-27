@@ -1,25 +1,18 @@
 # src/chat/domain/entities/__init__.py
-from .message import ChatMessage, Role
-from .model import ModelType, ModelScope, Model, ModelProviderMapping
+from .message import ChatMessage, MessageModelInfo, Role, ToolCallMessage
+from .session import AttachmentRef, ChatSession, ResourceAttachmentRef, TemporaryAttachmentRef
+from .file_storage import StorageRecord, UploadInitResponse
+from .model import ModelType, ModelFamily, ModelScope, Model, ModelProviderMapping
 from .provider import Provider, ProviderScope, ProviderType
-from .session import ChatSession
+from .resource import ResourceItemInfo, ResourcePermission
 from .skill import Skill, SkillMeta, SkillAssetMeta
-from .web_content_cache import WebContentCacheValueDocument
-from .web_search_credential import (
-    WebSearchCredential,
-    WebSearchCredentialSource,
-)
 
 __all__ = [
-    "ChatMessage", "Role",
-    "ChatSession",
-    "ModelType", "ModelScope", "Model",
+    "ChatMessage", "MessageModelInfo", "Role", "ToolCallMessage",
+    "AttachmentRef", "ChatSession", "ResourceAttachmentRef", "TemporaryAttachmentRef",
+    "StorageRecord", "UploadInitResponse",
+    "ModelType", "ModelFamily", "ModelScope", "Model", "ModelProviderMapping",
     "Provider", "ProviderScope", "ProviderType",
-    "ModelProviderMapping",
-    "Skill", 
-    "SkillMeta", 
-    "SkillAssetMeta",
-    "WebSearchCredential",
-    "WebSearchCredentialSource",
-    "WebContentCacheValueDocument",
+    "ResourceItemInfo", "ResourcePermission",
+    "Skill", "SkillMeta", "SkillAssetMeta",
 ]
