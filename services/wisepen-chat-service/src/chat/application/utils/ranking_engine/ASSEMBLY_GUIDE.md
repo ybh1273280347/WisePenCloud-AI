@@ -11,6 +11,7 @@
 ```python
 RankingPipeline(
     name="...",
+    filters=(...),             # 可多个，先于 scorer 执行
     scorers=(...),             # 可多个
     fusion=WeightedRrfFusion(), # 必填，当前唯一推荐 fusion
     reranker=None,             # 可选，最多一个，异步
@@ -21,12 +22,13 @@ RankingPipeline(
 执行顺序：
 
 ```text
-scorers -> fusion -> candidate_limit -> reranker(rank_async only) -> diversifiers -> top_k
+filters -> scorers -> fusion -> candidate_limit -> reranker(rank_async only) -> diversifiers -> top_k
 ```
 
 重点限制：
 
 - `scorers` 可以多个。
+- `filters` 可以多个，用于硬约束筛选，不产生排序分数。
 - `fusion` 当前使用 `WeightedRrfFusion`。
 - `reranker` 最多一个，并且是 async；pipeline 带 reranker 时必须调用 `rank_async()`。
 - `diversifiers` 可以多个，会按 tuple 声明顺序依次执行。
@@ -42,6 +44,7 @@ from chat.application.utils.ranking_engine import (
     RankingEngine,
     RankingPipeline,
 )
+from chat.application.utils.ranking_engine.filters import KeywordFilter, KeywordFilterConfig
 from chat.application.utils.ranking_engine.fusion import WeightedRrfFusion
 from chat.application.utils.ranking_engine.scorers import BM25Scorer, PriorRankScorer
 from chat.application.utils.ranking_engine.tokenizer import ThuLacRankingTokenizer
@@ -78,7 +81,7 @@ result = engine.rank(
 | --- | --- | --- |
 | `candidate_id` | 候选唯一 ID | 全链路 |
 | `text` | 主文本 | `BM25Scorer`、reranker、部分 diversifier |
-| `fields` | 字段文本 | `FieldedBM25Scorer`、`KeywordScorer` |
+| `fields` | 字段文本 | `FieldedBM25Scorer`、`KeywordFilter` |
 | `prior_rank` | 上游原始排序 | `PriorRankScorer` |
 | `group_key` | 多样性分组 | diversifier |
 | `metadata` | 业务回填信息 | `DenseVectorScorer` 读取 `embedding`，其他多数不解释 |
@@ -89,7 +92,7 @@ result = engine.rank(
 - 不要硬凑字段名。比如章节路径用 `section`，锚点用 `anchor`，不要伪装成 `title/summary`。
 - `candidate_id` 重复会报错。
 
-## Scorer 选型
+## Lexical / Prior Scorer 选型
 
 ### BM25Scorer
 
@@ -143,7 +146,23 @@ PriorRankScorer()
 
 `prior_rank=None` 的候选会跳过该信号。
 
-### KeywordScorer
+### RawScoreSignalScorer
+
+读取上游检索系统已经产出的原始排序信号，不重新计算 BM25 或向量分数。
+
+请求侧：
+
+```python
+RankCandidate(
+    candidate_id="chunk-a",
+    text="...",
+    metadata={"raw_score_signals": (qdrant_dense_signal, qdrant_sparse_signal)},
+)
+```
+
+## Filter 选型
+
+### KeywordFilter
 
 关键词必须由上游显式传入：
 
@@ -159,17 +178,18 @@ RankQuery(
 当前配置字段是：
 
 ```python
-KeywordScorerConfig(
-    signal_name="keyword:match",
-    text_weight=1.0,
-    field_weights=(
-        ("title", 3.0),
-        ("heading", 2.0),
-        ("summary", 1.5),
+KeywordFilterConfig(
+    text_enabled=True,
+    field_names=(
+        "title",
+        "heading",
+        "summary",
+        "section",
+        "anchor",
+        "indexing_text",
     ),
     case_sensitive=False,
     normalize_unicode=True,
-    min_score=0.0,
     require_all_keywords=False,
 )
 ```
@@ -177,20 +197,24 @@ KeywordScorerConfig(
 示例：
 
 ```python
-KeywordScorer(
-    config=KeywordScorerConfig(
-        text_weight=1.0,
-        field_weights=(
-            ("title", 3.0),
-            ("section", 2.0),
-            ("anchor", 1.5),
+RankingPipeline(
+    name="anchored.keyword",
+    filters=(
+        KeywordFilter(
+            config=KeywordFilterConfig(
+                field_names=("title", "section", "anchor", "indexing_text"),
+                require_all_keywords=True,
+            )
         ),
-        require_all_keywords=False,
-    )
+    ),
+    scorers=(BM25Scorer(tokenizer=tokenizer),),
+    fusion=WeightedRrfFusion(),
 )
 ```
 
-注意：这里没有 `KeywordMatchTarget`，也没有 `keyword_metadata_key`。不要照旧示例写。
+注意：关键词精确命中是过滤器，不再作为 scorer 参与 RRF；它只决定候选是否保留，不给候选加分。
+
+## Vector Scorer 选型
 
 ### DenseVectorScorer
 
@@ -250,7 +274,7 @@ contribution = signal.weight / (k + signal.rank)
 
 没有 rank 的 signal 不参与融合。
 
-为什么用 RRF：BM25、关键词、向量、prior 的原始分数不是同一量纲，不能简单相加。
+为什么用 RRF：BM25、向量、prior 的原始分数不是同一量纲，不能简单相加。
 
 ## Reranker
 
@@ -422,7 +446,7 @@ RankingPipeline(
 - 示例代码里的 config 字段是否真实存在。
 - pipeline 是否只配置一个 reranker，多个 diversifier 的顺序是否符合业务意图。
 - 带 reranker 的调用是否用 `rank_async()`。
-- `KeywordScorer` 是否显式传了 `query.metadata["keywords"]`。
+- `KeywordFilter` 是否显式传了 `query.metadata["keywords"]`。
 - `DenseVectorScorer` 是否提前准备了 query/candidate embedding。
 - 是否重复计算同一段正文。
 - 字段名是否表达真实业务语义。

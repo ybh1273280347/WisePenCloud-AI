@@ -1,5 +1,7 @@
-"""RAG 检索编排占位。
+from .models import RagRetrievalProfile, ScoredChunk
 
-后续放 Qdrant dense、Elasticsearch lexical、应用侧融合和 retrieval profile 相关代码。
-"""
-
+# retrieval 只表达从 Qdrant、Elastic、图谱等索引抽取出的证据候选。
+__all__ = [
+    "RagRetrievalProfile",
+    "ScoredChunk",
+]

@@ -49,8 +49,8 @@ class ContextIndexingService:
         )
 
     async def build(
-            self,
-            payload: ContextIndexingInput,
+        self,
+        payload: ContextIndexingInput,
     ) -> ContextIndexingResult:
         try:
             response = await self._client.aquery(
@@ -78,24 +78,33 @@ class ContextIndexingService:
             metadata={"strategy": "llm_contextualizer"},
         )
 
+
 def _build_llm_prompt(payload: ContextIndexingInput) -> str:
+    """把 Context Indexing 输入整理成单次小模型提示词。"""
     section_path = " > ".join(payload.section_path) or "（无章节信息）"
     return "\n".join(
         (
-            f"【文档标题】{payload.document_title.strip()}",
-            f"【章节路径】{section_path}",
+            "<context_indexing_input>",
+            "  <metadata>",
+            f"    <document_title>{payload.document_title.strip()}</document_title>",
+            f"    <section_path>{section_path}</section_path>",
+            "  </metadata>",
             "",
-            "【父块全文 —— 仅用于判断下面 child_text 在文档中的局部语义位置和术语边界，"
-            "不要从这一段提取术语，也不要概括这一段的内容】",
+            "  <parent_text usage=\"只用于判断 child_text 在文档中的局部语义位置和术语边界；"
+            "不要从这一段提取术语，也不要概括这一段的内容\">",
             payload.parent_text.strip(),
+            "  </parent_text>",
             "",
-            "【待索引子块原文 —— context_summary 和 important_terms 必须只围绕这一段生成】",
+            "  <child_text usage=\"context_summary 和 important_terms 必须只围绕这一段生成\">",
             payload.child_text.strip(),
+            "  </child_text>",
+            "</context_indexing_input>",
         )
     )
 
 
 def _parse_llm_payload(content: str) -> tuple[str, tuple[str, ...]]:
+    """解析并校验 Context Indexing 小模型输出。"""
     # LLM 输出是外部边界，即使 prompt 要求 JSON，也必须做结构校验。
     payload: Any = json.loads(content)
     if not isinstance(payload, dict):
@@ -111,10 +120,10 @@ def _parse_llm_payload(content: str) -> tuple[str, tuple[str, ...]]:
 
 
 def _compose_indexing_text(
-        *,
-        payload: ContextIndexingInput,
-        context_summary: str,
-        important_terms: tuple[str, ...],
+    *,
+    payload: ContextIndexingInput,
+    context_summary: str,
+    important_terms: tuple[str, ...],
 ) -> str:
     # indexing_text 服务检索和消歧；最终引用仍使用原始 evidence_text。
     parts = [
@@ -134,6 +143,7 @@ def _compose_indexing_text(
 
 
 def _dedupe_terms(values: tuple[str, ...] | Any) -> tuple[str, ...]:
+    """按首次出现顺序去重术语，减少索引文本噪音。"""
     terms: list[str] = []
     seen: set[str] = set()
     for value in values:

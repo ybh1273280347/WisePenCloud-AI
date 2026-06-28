@@ -9,6 +9,7 @@ from .scorers import (
     BM25Scorer,
     FieldedBM25Scorer,
     FieldedBM25ScorerConfig,
+    RawScoreSignalScorer,
 )
 from .tokenizer import JiebaRankingTokenizer, ThuLacRankingTokenizer
 
@@ -29,8 +30,8 @@ class RankingEngineRegistry:
                 pipeline=RankingPipeline(
                     name="read.ranked_expand",
                     scorers=(
-                        BM25Scorer(tokenizer=self._tokenizers["thulac"]),
-                        FieldedBM25Scorer(
+                        BM25Scorer(tokenizer=self._tokenizers["thulac"]),   # 全文打分
+                        FieldedBM25Scorer(  # section，achor 命中额外加分
                             tokenizer=self._tokenizers["thulac"],
                             config=FieldedBM25ScorerConfig(
                                 field_weights={"section": 2.0, "anchor": 1.5},
@@ -45,6 +46,7 @@ class RankingEngineRegistry:
                 pipeline=RankingPipeline(
                     name="rag.knowledge_search",
                     # Qdrant / Elasticsearch 的分数应转换为 ScoreSignal 后融合
+                    scorers=(RawScoreSignalScorer(),),
                     fusion=WeightedRrfFusion(),
                     reranker=reranker,
                     diversifiers=(

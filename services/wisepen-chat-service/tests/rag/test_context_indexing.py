@@ -27,15 +27,15 @@ class QueryResult:
         self.usage_tokens = usage_tokens
 
 
-class AdapterQueryClient:
+class LiteLLMQueryClient:
     pass
 
 
-def build_query_client():
+def build_query_client(**kwargs):
     raise AssertionError("test should inject a fake query client")
 
 
-llm_clients_module.AdapterQueryClient = AdapterQueryClient
+llm_clients_module.LiteLLMQueryClient = LiteLLMQueryClient
 llm_clients_module.QueryResult = QueryResult
 llm_clients_module.build_query_client = build_query_client
 sys.modules["chat.application.utils.llm_clients"] = llm_clients_module
@@ -81,6 +81,8 @@ async def test_context_indexing_service_uses_llm_json_payload() -> None:
     assert result.context_summary == "说明 Redis 淘汰策略的作用范围"
     assert result.important_terms == ("Redis", "volatile-lru", "maxmemory-policy")
     assert "重要术语: Redis、volatile-lru、maxmemory-policy" in result.indexing_text
+    assert "<context_indexing_input>" in client.calls[0]["prompt"]
+    assert "<document_title>Redis 运维手册</document_title>" in client.calls[0]["prompt"]
     assert "Redis 内存管理章节介绍 maxmemory-policy" in client.calls[0]["prompt"]
 
 

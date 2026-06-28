@@ -10,13 +10,31 @@ from .models import (
 )
 
 
+class Filter(Protocol):
+    """过滤插件协议，负责在打分前做硬约束候选筛选。
+
+    典型实现：
+    - KeywordFilter
+    """
+
+    name: str  # 过滤器名称
+
+    def filter(
+        self,
+        *,
+        query: RankQuery,
+        candidates: tuple[RankCandidate, ...],
+    ) -> tuple[RankCandidate, ...]:
+        """返回满足硬约束的候选集合。"""
+        ...
+
+
 class Scorer(Protocol):
     """打分插件协议，只负责把候选转换成一组 ScoreSignal。
 
     典型实现：
     - BM25Scorer
     - FieldedBM25Scorer
-    - KeywordExactScorer
     - OriginalRankPriorScorer
     - VectorSimilarityScorer
     """

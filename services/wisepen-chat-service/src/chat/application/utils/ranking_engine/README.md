@@ -29,6 +29,7 @@ Ranking Engine 是工具层共用的排序小框架。它的目标不是展示�
 
 ```text
 RankCandidate
+  -> optional Filters 硬过滤候选
   -> Scorer 产出 ScoreSignal
   -> WeightedRrfFusion 融合成 RankedCandidate
   -> optional async Reranker
@@ -41,10 +42,11 @@ RankCandidate
 ## 业务接入最小步骤
 
 1. 把业务对象转成 `RankCandidate`。
-2. 选择需要的 scorers。
-3. 用 `WeightedRrfFusion()` 融合。
-4. 如需模型 rerank，调用 `rank_async()`，不要调用同步 `rank()`。
-5. 把 `RankedCandidate` 映射回业务输出。
+2. 如需硬约束，选择 filters。
+3. 选择需要的 scorers。
+4. 用 `WeightedRrfFusion()` 融合。
+5. 如需模型 rerank，调用 `rank_async()`，不要调用同步 `rank()`。
+6. 把 `RankedCandidate` 映射回业务输出。
 
 示例：
 
@@ -86,7 +88,7 @@ result = RankingEngine(pipeline=pipeline).rank(
 | --- | --- | --- |
 | `candidate_id` | 永远必填 | 同一次请求内必须唯一 |
 | `text` | 全文 BM25、reranker、MMR 需要主文本时 | 不要把字段文本重复拼进去造成二次计算 |
-| `fields` | 字段化 BM25 或关键词字段命中 | key 应该表达真实语义，如 `title`、`snippet`、`section`、`anchor` |
+| `fields` | 字段化 BM25 或关键词硬过滤 | key 应该表达真实语义，如 `title`、`snippet`、`section`、`anchor` |
 | `prior_rank` | 上游已有排序时 | 越小越靠前，`None` 会被 PriorRankScorer 跳过 |
 | `group_key` | 需要多样性控制时 | web 用 domain，文档 chunk 用 document/content id |
 | `metadata` | 回填业务信息 | Ranking Engine 不应该依赖模糊 metadata 做核心排序 |
@@ -106,8 +108,14 @@ result = RankingEngine(pipeline=pipeline).rank(
 | `BM25Scorer` | 对 `candidate.text` 做 BM25 | `text` 非空更有意义 |
 | `FieldedBM25Scorer` | 对配置中的 `fields` 分别做 BM25 | `candidate.fields` 中存在对应 key |
 | `PriorRankScorer` | 把上游原始排名转成信号 | `prior_rank` |
-| `KeywordScorer` | query metadata 中关键词精确命中 | `query.metadata["keywords"]` 必须是 list/tuple |
 | `DenseVectorScorer` | query/candidate embedding 余弦相似度 | `metadata["embedding"]` |
+| `RawScoreSignalScorer` | 读取上游检索系统已经产出的原始排序信号 | `metadata["raw_score_signals"]` |
+
+### Filters
+
+| 组件 | 用途 | 必要输入 |
+| --- | --- | --- |
+| `KeywordFilter` | query metadata 中关键词精确命中硬过滤，先于 scorer 执行 | `query.metadata["keywords"]` 必须是 list/tuple |
 
 ### Fusion
 

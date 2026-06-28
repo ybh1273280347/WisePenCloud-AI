@@ -67,7 +67,7 @@ class ScoreSignal:
 
 @dataclass(frozen=True, slots=True)
 class RankedCandidate:
-    """已经进入排序链路的候选对象。"""
+    """已经排序完成的对象。"""
 
     candidate: RankCandidate  # 原始候选对象
     rank: int  # 当前排名，从 1 开始
