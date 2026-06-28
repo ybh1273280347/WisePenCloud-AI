@@ -44,12 +44,12 @@ from chat.application.utils.ranking_engine import (
 )
 from chat.application.utils.ranking_engine.fusion import WeightedRrfFusion
 from chat.application.utils.ranking_engine.scorers import BM25Scorer, PriorRankScorer
-from chat.application.utils.ranking_engine.text import ThuLacRankingTokenizer
+from chat.application.utils.ranking_engine.tokenizer import ThuLacRankingTokenizer
 
 tokenizer = ThuLacRankingTokenizer()
 
 pipeline = RankingPipeline(
-    name="demo.text",
+    name="demo.tokenizer",
     scorers=(
         BM25Scorer(tokenizer=tokenizer),
         PriorRankScorer(),

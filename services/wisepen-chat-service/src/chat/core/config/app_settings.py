@@ -86,6 +86,7 @@ class AppSettings(BaseModel):
     WEB_SEARCH_EXA_BASE_URL: str = "https://api.exa.ai"
     WEB_SEARCH_TAVILY_BASE_URL: str = "https://api.tavily.com"
     WEB_SEARCH_ANYSEARCH_BASE_URL: str = "https://api.anysearch.com"
+    WEB_SEARCH_BAIDU_QIANFAN_BASE_URL: str = "https://qianfan.baidubce.com"
     WEB_SEARCH_PLATFORM_EXA_ENABLED: bool = False                        # 平台专属 Exa 分流开关
     WEB_SEARCH_PLATFORM_EXA_API_KEY: str | None = "e4734bd6-3a94-458b-a90f-d5091aed436f"
 

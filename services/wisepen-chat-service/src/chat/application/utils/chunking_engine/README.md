@@ -111,7 +111,7 @@ Markdown pipeline 会识别：
 <!-- page 3 -->
 ```
 
-这个标记应由 document_parse 或预处理阶段注入，并独占一行。
+这个标记应由 document_parse 或预处理阶段注入，并独占一行。Markdown pipeline 会把 page marker 当作硬边界：chunk 不应跨页；单页过长时可以在页内拆成多个 chunk。`nested_markdown` 的子 chunk 会继承父 chunk 的页码 metadata。
 
 ## 最小用法
 

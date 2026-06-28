@@ -186,7 +186,7 @@ export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProp
         aria-controls={contentId}
         aria-expanded={expanded}
         className={cn(
-          "flex w-full items-start gap-3 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/25 focus-visible:ring-inset",
+          "flex w-full items-start gap-3 px-4 py-3 tokenizer-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/25 focus-visible:ring-inset",
           status === "error" ? "bg-red-50/70 hover:bg-red-50" : "bg-emerald-50/80 hover:bg-emerald-50",
         )}
         onClick={() => setExpanded((current) => !current)}
@@ -196,10 +196,10 @@ export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProp
           className={cn(
             "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
             status === "error"
-              ? "border-red-200 bg-red-100 text-red-700"
+              ? "border-red-200 bg-red-100 tokenizer-red-700"
               : status === "success"
-                ? "border-emerald-200 bg-emerald-100 text-emerald-700"
-                : "border-sky-200 bg-sky-100 text-sky-700",
+                ? "border-emerald-200 bg-emerald-100 tokenizer-emerald-700"
+                : "border-sky-200 bg-sky-100 tokenizer-sky-700",
           )}
         >
           {status === "error" ? (
@@ -218,10 +218,10 @@ export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProp
             </span>
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                "rounded-full px-2 py-0.5 tokenizer-[11px] font-medium",
                 status === "error"
-                  ? "bg-red-100 text-red-700"
-                  : "bg-emerald-100 text-emerald-700",
+                  ? "bg-red-100 tokenizer-red-700"
+                  : "bg-emerald-100 tokenizer-emerald-700",
               )}
             >
               {statusText(status)}
@@ -264,7 +264,7 @@ export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProp
 
           <span
             className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-transform duration-200",
+              "flex h-8 w-8 items-center justify-center rounded-full tokenizer-slate-400 transition-transform duration-200",
               expanded && "rotate-180",
             )}
           >

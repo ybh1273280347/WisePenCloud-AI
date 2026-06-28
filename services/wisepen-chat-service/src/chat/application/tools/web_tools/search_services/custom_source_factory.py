@@ -12,6 +12,7 @@ from .providers.models import SearchProviderName
 from .runtime_context import WebSearchRuntimeConfig
 from .searchers import (
     AnySearchSearcher,
+    BaiduQianfanSearcher,
     BaseProviderSearcher,
     ExaSearcher,
     SearchProviderConfig,
@@ -28,6 +29,7 @@ class WebSearchCustomSourceFactory:
     exa_base_url: str
     tavily_base_url: str
     anysearch_base_url: str
+    baidu_qianfan_base_url: str
 
     def build(self, config: WebSearchRuntimeConfig) -> WebSearchCustomSource:
         if not config.api_key:
@@ -58,6 +60,8 @@ class WebSearchCustomSourceFactory:
             return TavilySearcher(http_client=self.http_client, config=config)
         if provider == SearchProviderName.ANYSEARCH:
             return AnySearchSearcher(http_client=self.http_client, config=config)
+        if provider == SearchProviderName.BAIDU_QIANFAN:
+            return BaiduQianfanSearcher(http_client=self.http_client, config=config)
         raise WebSearchCustomApiKeyInvalid(
             provider=provider,
             reason="该 provider 不支持 custom 搜索",
@@ -70,6 +74,8 @@ class WebSearchCustomSourceFactory:
             return self.tavily_base_url
         if provider == SearchProviderName.ANYSEARCH:
             return self.anysearch_base_url
+        if provider == SearchProviderName.BAIDU_QIANFAN:
+            return self.baidu_qianfan_base_url
         raise WebSearchCustomApiKeyInvalid(
             provider=provider,
             reason="该 provider 不支持 custom 搜索",

@@ -28,7 +28,7 @@ DEFAULT_SYSTEM_PROMPT = """
         4. Use Markdown structure (headings, lists) in proportion to the answer's length and complexity — a short answer doesn't need a full heading hierarchy, and not every item needs the same fixed sub-sections.
         5. Reserve blockquotes for real quotations, warnings, or key takeaways — not regular narrative text.
         6. Render math in LaTeX with double dollar signs ($$...$$).
-        7. Use inline code for key numbers or metrics when it helps them stand out — not for every number in the text.   
+        7. Use inline code for key numbers or metrics when it helps them stand out — not for every number in the text.
         """
 
 

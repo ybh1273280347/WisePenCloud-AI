@@ -23,6 +23,7 @@ from chat.application.tools.utils.batching import batched
 from chat.application.utils.chunking_engine import UnitType
 
 _UNIT_TYPE_ENUM = [unit_type.value for unit_type in UnitType]
+DEFAULT_MAX_MATCHES = tool_settings.TOOL_CONTENT_READ_DEFAULT_MAX_MATCHES
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -122,7 +123,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
         },
         "max_matches": {
             "type": "integer",
-            "default": 10,
+            "default": DEFAULT_MAX_MATCHES,
             "description": "For regex_match. Maximum number of matches across all content_ids.",
         },
         "merge_before": {
@@ -213,7 +214,7 @@ class ToolContentReadTool:
                 query=kwargs.get("query"),
                 top_k=int(kwargs.get("top_k") or 5),
                 pattern=kwargs.get("pattern"),
-                max_matches=int(kwargs.get("max_matches") or 10),
+                max_matches=int(kwargs.get("max_matches") or DEFAULT_MAX_MATCHES),
                 merge_before=int(kwargs.get("merge_before") or 0),
                 merge_after=int(kwargs.get("merge_after") or 0),
             )

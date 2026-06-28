@@ -10,7 +10,7 @@ from .scorers import (
     FieldedBM25Scorer,
     FieldedBM25ScorerConfig,
 )
-from .text import JiebaRankingTokenizer, ThuLacRankingTokenizer
+from .tokenizer import JiebaRankingTokenizer, ThuLacRankingTokenizer
 
 
 class RankingEngineRegistry:
@@ -44,8 +44,8 @@ class RankingEngineRegistry:
             "rag.knowledge_search": RankingEngine(
                 pipeline=RankingPipeline(
                     name="rag.knowledge_search",
-                    # Qdrant / Elasticsearch 的分数和融合由上游 RAG orchestrator 完成。
-                    # 这里从输入顺序起步，只做模型 rerank 和同组多样性控制。
+                    # Qdrant / Elasticsearch 的分数应转换为 ScoreSignal 后融合
+                    fusion=WeightedRrfFusion(),
                     reranker=reranker,
                     diversifiers=(
                         MmrDiversifier(

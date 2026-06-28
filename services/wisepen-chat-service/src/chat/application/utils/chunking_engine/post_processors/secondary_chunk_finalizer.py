@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .utils import assign_chunk_ids, merge_heading_only, merge_short_tails
+from ._post_process_utils import assign_chunk_ids, merge_heading_only, merge_short_tails
 from ..models import Chunk
 
 

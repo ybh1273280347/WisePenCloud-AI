@@ -1,4 +1,4 @@
-﻿from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod
 from typing import List, Set, Optional
 
 from chat.core.config.app_settings import settings

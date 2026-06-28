@@ -351,6 +351,14 @@ result builder 根据专用搜索类型定义自己的可见字段（如新闻�
 | 凭证仓储 | `core/persistence/mongo/web_search_credential_repository.py` |
 | 容器接线 | `src/chat/container.py` |
 
-## 七、一句话原则
+## 八、当前普通搜索源接入状态
+
+- 平台默认：4get/DDG。
+- 平台可选：Exa，受平台 Exa 开关和平台 key 控制。
+- Custom：Exa、Tavily、AnySearch、百度千帆。
+
+百度千帆当前只作为普通网页搜索源接入 `web_search`，请求百度千帆 AI 搜索 `POST /v2/ai_search/web_search`，响应只映射 `references` 中的 web 候选。它不打开 `supports_academic_search`，也不影响 `academic_search` 的 Exa/OpenAlex 边界。
+
+## 九、一句话原则
 
 后续扩展搜索工具时，优先扩展 provider capability 和显式工具链，不要重新长回隐式路由、多垂类 endpoint 主链和跨工具族的错误公共抽象。

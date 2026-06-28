@@ -10,7 +10,7 @@ from chat.application.utils.ranking_engine.models import (
     ScoreSignal,
     ScoreSignalKind,
 )
-from ..text import RankingTokenizer
+from ..tokenizer import RankingTokenizer
 
 
 @dataclass(frozen=True, slots=True)

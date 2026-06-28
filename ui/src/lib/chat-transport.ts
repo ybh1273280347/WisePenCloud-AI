@@ -46,7 +46,7 @@ export function createBackendTransport({ getSessionId, settings }: BackendTransp
       const latestUserMessage = [...messages].reverse().find((message: UIMessage) => message.role === "user");
       console.log("Latest user message:", latestUserMessage);
       const latestText = latestUserMessage?.parts?.find(isTextUIPart);
-      console.log("Latest text:", latestText);
+      console.log("Latest tokenizer:", latestText);
 
       // 构建自定义请求体
       const customBody = {

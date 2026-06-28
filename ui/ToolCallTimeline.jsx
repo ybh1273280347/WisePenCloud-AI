@@ -138,10 +138,10 @@ function StepCard({ step, isLast }) {
       <div className="relative flex w-6 shrink-0 flex-col items-center">
         <div
           className={
-            "relative z-10 flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ring-1" +
+            "relative z-10 flex h-6 w-6 items-center justify-center rounded-full tokenizer-xs font-semibold ring-1" +
             (isGroup
-              ? " bg-violet-100 text-violet-700 ring-violet-300"
-              : " bg-emerald-50 text-emerald-600 ring-emerald-200")
+              ? " bg-violet-100 tokenizer-violet-700 ring-violet-300"
+              : " bg-emerald-50 tokenizer-emerald-600 ring-emerald-200")
           }
         >
           {isGroup ? step.count : <Check className="h-3.5 w-3.5" />}
@@ -156,7 +156,7 @@ function StepCard({ step, isLast }) {
           onClick={toggle}
           onKeyDown={handleKeyDown}
           className={
-            "flex w-full cursor-pointer items-center justify-between rounded-xl border px-3.5 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300" +
+            "flex w-full cursor-pointer items-center justify-between rounded-xl border px-3.5 py-2.5 tokenizer-left transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300" +
             (isGroup
               ? " border-violet-200 bg-violet-50 hover:bg-violet-50"
               : " border-slate-200 bg-white hover:border-slate-300")
@@ -165,7 +165,7 @@ function StepCard({ step, isLast }) {
           <span className="flex min-w-0 items-center gap-2.5">
             <Icon
               className={
-                "h-4 w-4 shrink-0" + (isGroup ? " text-violet-500" : " text-slate-400")
+                "h-4 w-4 shrink-0" + (isGroup ? " tokenizer-violet-500" : " tokenizer-slate-400")
               }
             />
             <span className="truncate font-mono text-sm text-slate-700">{meta.label}</span>
@@ -196,7 +196,7 @@ function StepCard({ step, isLast }) {
             </button>
             <ChevronDown
               className={
-                "h-4 w-4 text-slate-400 transition-transform duration-200" +
+                "h-4 w-4 tokenizer-slate-400 transition-transform duration-200" +
                 (open ? " rotate-180" : "")
               }
             />

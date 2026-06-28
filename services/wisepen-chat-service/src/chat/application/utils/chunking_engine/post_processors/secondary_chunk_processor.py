@@ -85,8 +85,18 @@ class SecondaryChunkProcessor:
                         metadata={
                             "child_index": i,
                             "child_count": len(units),
+                            **_page_metadata_from(parent),
                         },
                     )
                 )
 
         return (*chunks, *children)
+
+
+def _page_metadata_from(parent: Chunk) -> dict[str, object]:
+    metadata: dict[str, object] = {}
+    if page_numbers := parent.metadata.get("page_numbers"):
+        metadata["page_numbers"] = page_numbers
+    if page_range := parent.metadata.get("page_range"):
+        metadata["page_range"] = page_range
+    return metadata

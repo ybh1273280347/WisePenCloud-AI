@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from chat.application.utils.ranking_engine.models import RankedCandidate
 from ._diversify_utils import assign_ranks, jaccard_similarity
-from ..text import RankingTokenizer
+from ..tokenizer import RankingTokenizer
 
 
 @dataclass(frozen=True, slots=True)

@@ -7,7 +7,6 @@ from typing import Protocol, runtime_checkable
 
 import httpx
 
-from chat.application.tools.skill_tools.create_skill import SkillAssetFile
 from chat.application.tools.skill_tools.create_skill.serializer import SkillAssetFile
 from chat.service_client import AIAssetClient
 

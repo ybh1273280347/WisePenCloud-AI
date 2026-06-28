@@ -11,8 +11,8 @@ from .models import (
     SearchPreview,
     SearchProviderName,
 )
-from .utils.coerce import as_dict_tuple, as_str, as_str_or_none
-from .utils.search_result import dedupe_by_url, is_valid_result
+from ._search_provider_utils.coerce import as_dict_tuple, as_str, as_str_or_none
+from ._search_provider_utils.search_result import dedupe_by_url, is_valid_result
 
 
 @dataclass(frozen=True, slots=True)

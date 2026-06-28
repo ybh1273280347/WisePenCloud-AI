@@ -1,4 +1,5 @@
 from .anysearch import AnySearchSearcher
+from .baidu_qianfan import BaiduQianfanSearcher
 from .base import (
     BaseProviderSearcher,
     ProviderSearcher,
@@ -15,6 +16,7 @@ from .tavily import TavilySearcher
 
 __all__ = [
     "AnySearchSearcher",
+    "BaiduQianfanSearcher",
     "BaseProviderSearcher",
     "DdgSearcher",
     "ExaSearcher",

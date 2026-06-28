@@ -24,7 +24,7 @@ from .cleaners.base import BaseCleaner
 from .errors import WebFetchError
 from .fetchers.base import BaseFetcher, RawFetchOutput
 from .models import WebFetchResult
-from .utils import judge_quality
+from ._web_fetch_utils import judge_quality
 
 _REFRESH_LOCK_TTL_SECONDS = 300
 

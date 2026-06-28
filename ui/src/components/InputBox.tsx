@@ -127,10 +127,10 @@ export function InputBox({
                         {platformCredential ? (
                           <button
                             className={cn(
-                              "flex h-8 items-center justify-between rounded-xl border px-2.5 text-xs font-semibold transition-colors",
+                              "flex h-8 items-center justify-between rounded-xl border px-2.5 tokenizer-xs font-semibold transition-colors",
                               activeSearchSource === "platform"
-                                ? "border-sky-200 bg-sky-50 text-sky-500"
-                                : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
+                                ? "border-sky-200 bg-sky-50 tokenizer-sky-500"
+                                : "border-gray-200 bg-white tokenizer-gray-800 hover:bg-gray-50",
                             )}
                             disabled={savingSearch}
                             onClick={() => {
@@ -152,10 +152,10 @@ export function InputBox({
                             {customProviders.map((provider) => (
                               <button
                                 className={cn(
-                                  "h-8 rounded-xl border px-2.5 text-xs font-semibold transition-colors",
+                                  "h-8 rounded-xl border px-2.5 tokenizer-xs font-semibold transition-colors",
                                   selectedCustomProvider === provider
-                                    ? "border-sky-200 bg-sky-50 text-sky-500"
-                                    : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
+                                    ? "border-sky-200 bg-sky-50 tokenizer-sky-500"
+                                    : "border-gray-200 bg-white tokenizer-gray-800 hover:bg-gray-50",
                                 )}
                                 key={provider}
                                 onClick={() => setSelectedCustomProvider(provider)}
@@ -247,10 +247,10 @@ export function InputBox({
                             {group.models.map((option) => (
                               <button
                                 className={cn(
-                                  "rounded-xl border px-2.5 py-2 text-left transition-colors",
+                                  "rounded-xl border px-2.5 py-2 tokenizer-left transition-colors",
                                   option.value === selectedModelValue
-                                    ? "border-sky-200 bg-sky-50 text-sky-500"
-                                    : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
+                                    ? "border-sky-200 bg-sky-50 tokenizer-sky-500"
+                                    : "border-gray-200 bg-white tokenizer-gray-800 hover:bg-gray-50",
                                 )}
                                 key={option.value}
                                 onClick={() => onSelectModel(option)}
@@ -299,7 +299,7 @@ export function InputBox({
             <textarea
               aria-label="消息输入框"
               className={cn(
-                "scrollbar-thin min-w-0 flex-1 resize-none border-0 bg-transparent text-sm font-medium leading-6 text-gray-900 outline-none placeholder:text-gray-500",
+                "scrollbar-thin min-w-0 flex-1 resize-none border-0 bg-transparent tokenizer-sm font-medium leading-6 tokenizer-gray-900 outline-none placeholder:tokenizer-gray-500",
                 hasDraft ? "max-h-40 min-h-[84px]" : "h-8 min-h-8 overflow-hidden py-1",
               )}
               onChange={(event) => onChange(event.target.value)}
@@ -314,7 +314,7 @@ export function InputBox({
                   aria-label={status === "streaming" ? "停止生成" : "发送消息"}
                   className={cn(
                     "h-9 w-9 rounded-full border-0 p-0",
-                    status === "streaming" ? "bg-red-50 text-red-700 hover:bg-red-100" : "bg-gray-900 text-white hover:bg-gray-800",
+                    status === "streaming" ? "bg-red-50 tokenizer-red-700 hover:bg-red-100" : "bg-gray-900 tokenizer-white hover:bg-gray-800",
                   )}
                   onClick={status === "streaming" ? onStop : onSubmit}
                   variant={status === "streaming" ? "danger" : "primary"}
@@ -340,7 +340,7 @@ export function InputBox({
                   aria-label={status === "streaming" ? "停止生成" : "发送消息"}
                   className={cn(
                     "h-10 w-10 rounded-full border-0 p-0",
-                    status === "streaming" ? "bg-red-50 text-red-700 hover:bg-red-100" : "bg-gray-900 text-white hover:bg-gray-800",
+                    status === "streaming" ? "bg-red-50 tokenizer-red-700 hover:bg-red-100" : "bg-gray-900 tokenizer-white hover:bg-gray-800",
                   )}
                   onClick={status === "streaming" ? onStop : onSubmit}
                   variant={status === "streaming" ? "danger" : "primary"}

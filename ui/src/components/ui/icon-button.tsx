@@ -11,7 +11,7 @@ export function IconButton({ className, label, children, ...props }: IconButtonP
     <button
       aria-label={label}
       className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-gray-600 transition-colors hover:bg-sky-50 hover:text-sky-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/25",
+        "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent tokenizer-gray-600 transition-colors hover:bg-sky-50 hover:tokenizer-sky-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/25",
         className,
       )}
       type="button"

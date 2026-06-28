@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .anysearch import AnySearchRequest
+from .baidu_qianfan import BaiduQianfanSearchRequest
 from .exa import ExaSearchRequest
 from .fourget import FourGetSearchRequest
 from .models import (
@@ -15,6 +16,7 @@ from .tavily import TavilySearchRequest
 
 __all__ = [
     "AnySearchRequest",
+    "BaiduQianfanSearchRequest",
     "ExaSearchRequest",
     "FourGetSearchRequest",
     "ProviderSearchHttpRequest",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..models import Chunk, ChunkLevel, TextUnit
+from ..models import Chunk, ChunkLevel, TextUnit, UnitType
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +13,7 @@ class BlockAwarePackerConfig:
     level: ChunkLevel = ChunkLevel.READ  # 输出 chunk 的用途层级
     separator: str = "\n\n"  # chunk 内多个 unit 文本之间的连接符
     chunk_id_prefix: str = "chunk"  # chunk ID 前缀（会被 finalizer 覆盖）
+    hard_boundary_unit_types: tuple[UnitType, ...] = ()  # 这些 unit 永远开启新 chunk
 
 
 class BlockAwarePacker:
@@ -45,19 +46,55 @@ class BlockAwarePacker:
         chunk_start = 0  # 当前 chunk 起始 unit 的 index
         chunk_chars = 0  # 当前 chunk 累计字符数
         chunk_size = self.config.chunk_size
+        active_page_number: str | None = None
+        chunk_page_numbers: tuple[str, ...] = ()
 
         for unit in units:
             unit_chars = len(unit.text)
-            # 如果加入当前 unit 会超限，且当前 chunk 不为空，则切分
-            if unit.unit_index > chunk_start and chunk_chars + unit_chars > chunk_size:
-                chunks.append(self._build_chunk(units, chunk_start, unit.unit_index - 1, len(chunks)))
+            if unit.unit_type in self.config.hard_boundary_unit_types:
+                if unit.unit_index > chunk_start and chunk_chars > 0:
+                    chunks.append(
+                        self._build_chunk(
+                            units,
+                            chunk_start,
+                            unit.unit_index - 1,
+                            len(chunks),
+                            page_numbers=chunk_page_numbers,
+                        )
+                    )
+                if page_number := _extract_page_number(unit):
+                    active_page_number = page_number
+                chunk_page_numbers = (active_page_number,) if active_page_number else ()
                 chunk_start = unit.unit_index
                 chunk_chars = 0
+
+            # 如果加入当前 unit 会超限，且当前 chunk 不为空，则切分
+            if unit.unit_index > chunk_start and chunk_chars + unit_chars > chunk_size:
+                chunks.append(
+                    self._build_chunk(
+                        units,
+                        chunk_start,
+                        unit.unit_index - 1,
+                        len(chunks),
+                        page_numbers=chunk_page_numbers,
+                    )
+                )
+                chunk_start = unit.unit_index
+                chunk_chars = 0
+                chunk_page_numbers = (active_page_number,) if active_page_number else ()
             chunk_chars += unit_chars
 
         # 处理最后一个 chunk
         if chunk_start < len(units):
-            chunks.append(self._build_chunk(units, chunk_start, len(units) - 1, len(chunks)))
+            chunks.append(
+                self._build_chunk(
+                    units,
+                    chunk_start,
+                    len(units) - 1,
+                    len(chunks),
+                    page_numbers=chunk_page_numbers,
+                )
+            )
 
         return tuple(chunks)
 
@@ -67,6 +104,8 @@ class BlockAwarePacker:
         start_unit: int,
         end_unit: int,
         chunk_index: int,
+        *,
+        page_numbers: tuple[str, ...] = (),
     ) -> Chunk:
         """从 units[start_unit..end_unit] 构建一个 Chunk。"""
         selected = units[start_unit:end_unit + 1]
@@ -103,5 +142,12 @@ class BlockAwarePacker:
                 "end_block": selected[-1].unit_index,
                 "section_paths": section_paths,
                 **({"titles": titles} if titles else {}),
+                **({"page_numbers": page_numbers} if page_numbers else {}),
+                **({"page_range": (page_numbers[0], page_numbers[-1])} if page_numbers else {}),
             },
         )
+
+
+def _extract_page_number(unit: TextUnit) -> str | None:
+    page_number = unit.metadata.get("page_number")
+    return str(page_number) if page_number is not None else None

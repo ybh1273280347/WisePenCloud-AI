@@ -13,7 +13,7 @@ from chat.application.tools.utils.file_type_detect import detect_file_type_from_
 from common.logger import info, warn
 from .base import RawFetchOutput
 from ..errors import WebFetchHttpError, WebFetchNetworkError, WebFetchUnsupportedUrlError
-from ..utils import decode_bytes, filename_from_url
+from .._web_fetch_utils import decode_bytes, filename_from_url
 
 _URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 

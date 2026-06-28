@@ -62,7 +62,7 @@ function SidebarBody({
       <motion.button
         animate={{ opacity: 1, y: 0 }}
         className={cn(
-          "group relative w-full overflow-hidden rounded-lg border px-3 py-2.5 text-left transition-colors duration-150",
+          "group relative w-full overflow-hidden rounded-lg border px-3 py-2.5 tokenizer-left transition-colors duration-150",
           active
             ? "border-transparent"
             : "border-transparent bg-transparent hover:border-gray-200 hover:bg-gray-50",

@@ -7,7 +7,7 @@ from scrapling.fetchers import StealthyFetcher
 from common.logger import warn
 from .base import RawFetchOutput
 from ..errors import WebFetchHttpError, WebFetchNetworkError, WebFetchUnsupportedUrlError
-from ..utils import decode_bytes
+from .._web_fetch_utils import decode_bytes
 
 _URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 

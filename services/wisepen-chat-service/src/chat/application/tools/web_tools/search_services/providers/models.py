@@ -11,6 +11,7 @@ class SearchProviderName(StrEnum):
     EXA = "exa"
     TAVILY = "tavily"
     ANYSEARCH = "anysearch"
+    BAIDU_QIANFAN = "baidu_qianfan"
 
     @property
     def supports_academic_search(self) -> bool:

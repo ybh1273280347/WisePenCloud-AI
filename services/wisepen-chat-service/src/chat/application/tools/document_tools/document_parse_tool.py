@@ -44,7 +44,7 @@ from chat.application.tools.common.web_content_cache import (
 )
 from chat.application.tools.web_tools.web_fetch.errors import WebFetchError
 from chat.application.tools.web_tools.web_fetch.fetchers.base import BaseFetcher, RawFetchOutput
-from chat.application.tools.web_tools.web_fetch.utils import filename_from_url
+from chat.application.tools.web_tools.web_fetch._web_fetch_utils import filename_from_url
 
 MAX_DOCUMENT_PARSE_FILE_REFS = 64
 SERVICE_BATCH_SIZE = tool_settings.DOCUMENT_PARSE_MAX_FILE_REFS

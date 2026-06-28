@@ -97,7 +97,7 @@ function ReasoningBlock({ messageId, parts, hasTextOutput, toolParts }: Reasonin
       <button
         aria-expanded={expanded}
         className={cn(
-          "flex w-full items-center justify-between gap-3 border-b border-transparent px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/25 focus-visible:ring-inset",
+          "flex w-full items-center justify-between gap-3 border-b border-transparent px-3 py-2 tokenizer-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/25 focus-visible:ring-inset",
           hasContent && (thinkingState === "error" ? "hover:bg-red-50/60" : "hover:bg-blue-50/40"),
         )}
         disabled={!hasContent}
@@ -214,10 +214,10 @@ function ToolGroupCard(
             className={cn(
               "relative z-10 mt-1 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-white shadow-[0_6px_12px_rgba(15,23,42,0.08)]",
               status === "error"
-                ? "border-red-300 text-red-700"
+                ? "border-red-300 tokenizer-red-700"
                 : status === "running"
-                  ? "border-sky-300 text-sky-700"
-                  : "border-emerald-300 text-emerald-700",
+                  ? "border-sky-300 tokenizer-sky-700"
+                  : "border-emerald-300 tokenizer-emerald-700",
             )}
           >
             {status === "error" ? (
@@ -280,7 +280,7 @@ function ToolGroupCard(
 
             <span
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full text-violet-400 transition-transform duration-200",
+                "flex h-8 w-8 items-center justify-center rounded-full tokenizer-violet-400 transition-transform duration-200",
                 expanded && "rotate-180",
               )}
             >
@@ -407,7 +407,7 @@ export function MessageBubble({ message, isStreaming = false, expandAllTools = f
           </div>
         )}
 
-        <div className={cn("flex items-center gap-2 font-mono text-xs text-gray-600", isUser && "justify-end")}>
+        <div className={cn("flex items-center gap-2 font-mono tokenizer-xs tokenizer-gray-600", isUser && "justify-end")}>
           <span>{message.createdAt ? formatTime(message.createdAt) : ""}</span>
           <AnimatePresence initial={false}>
             {hovered && !isUser ? (

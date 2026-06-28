@@ -7,8 +7,8 @@ from typing import Any
 import sympy as sp
 
 from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.solvers.utils.expression_parser import MathExpressionParser
-from chat.application.tools.math_tools.services.solvers.utils.reader import (
+from chat.application.tools.math_tools.services.solvers._solver_utils.expression_parser import MathExpressionParser
+from chat.application.tools.math_tools.services.solvers._solver_utils.reader import (
     read_latex,
     read_variable_names,
 )

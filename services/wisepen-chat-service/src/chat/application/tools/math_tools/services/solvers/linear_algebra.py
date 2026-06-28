@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 
 from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.solvers.utils.reader import (
+from chat.application.tools.math_tools.services.solvers._solver_utils.reader import (
     read_latex,
     read_matrix,
     read_numeric_matrix,

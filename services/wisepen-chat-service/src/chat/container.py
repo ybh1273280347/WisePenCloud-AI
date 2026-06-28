@@ -373,6 +373,7 @@ class Container(containers.DeclarativeContainer):
         exa_base_url=settings.WEB_SEARCH_EXA_BASE_URL,
         tavily_base_url=settings.WEB_SEARCH_TAVILY_BASE_URL,
         anysearch_base_url=settings.WEB_SEARCH_ANYSEARCH_BASE_URL,
+        baidu_qianfan_base_url=settings.WEB_SEARCH_BAIDU_QIANFAN_BASE_URL,
     )
     web_search_candidate_repository = providers.Singleton(
         RedisWebSearchCandidateRepository,

@@ -78,11 +78,18 @@ class LiteLLMEmbeddingClient:
         encoding_format: str | None = None,
         **kwargs: Any,
     ) -> EmbeddingResult:
-        response = litellm.embedding(**self._build_kwargs(
-            model=model, input=input, api_base=api_base, api_key=api_key,
-            timeout=timeout, dimensions=dimensions, encoding_format=encoding_format,
-            extra_kwargs=kwargs,
-        ))
+        response = litellm.embedding(
+            **self._build_kwargs(
+                model=model,
+                input=input,
+                api_base=api_base,
+                api_key=api_key,
+                timeout=timeout,
+                dimensions=dimensions,
+                encoding_format=encoding_format,
+                extra_kwargs=kwargs,
+            )
+        )
         return self._parse_response(response)
 
     def _build_kwargs(

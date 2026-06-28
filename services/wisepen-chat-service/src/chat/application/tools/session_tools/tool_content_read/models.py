@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from chat.application.tools.tool_settings import tool_settings
+
+DEFAULT_MAX_MATCHES = tool_settings.TOOL_CONTENT_READ_DEFAULT_MAX_MATCHES
+
 
 class ToolContentReadMode(StrEnum):
     """ToolContentRead 支持的读取模式（字符串枚举）。"""
@@ -40,7 +44,7 @@ class ToolContentReadRequest:
     query: str | None = None                                               # ranked_expand 模式：排序查询文本
     top_k: int = 5                                                         # ranked_expand 模式：返回 Top-K
     pattern: str | None = None                                             # regex_match 模式：正则模式串
-    max_matches: int = 10                                                  # regex_match 模式：最大匹配数
+    max_matches: int = DEFAULT_MAX_MATCHES                                 # regex_match 模式：最大匹配数
     merge_before: int = 0                                                  # 窗口向前合并的 chunk 数
     merge_after: int = 0                                                   # 窗口向后合并的 chunk 数
 

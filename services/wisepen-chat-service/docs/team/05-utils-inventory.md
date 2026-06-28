@@ -13,6 +13,12 @@
 | `src/chat/application/utils/` | 应用层通用基础能力 | 不直接绑定某个 tool，可被多个应用服务或 tool 复用 |
 | `src/chat/application/tools/utils/` | 工具层辅助能力 | 面向 tool 输入输出、文件识别、Markdown 渲染等工具侧需求 |
 
+命名约定：
+
+- 只有跨 tool、跨子包复用的稳定能力，才使用 `utils.py` 或 `utils/` 作为公开共享入口。
+- 只服务于单个子包内部的辅助能力，应命名为 `_<子包标识>_utils.py` 或 `_<子包标识>_utils/`，例如 `_web_fetch_utils/`、`_search_provider_utils/`。
+- 邻近子包确需临时复用内部能力时，也应通过带子包标识的私有路径引用，避免把它误认为通用工具层能力。
+
 这里不重复写团队规则，只说明当前已有能力入口。
 
 ## Chunking Engine

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 
-from chat.application.utils.llm_clients import AdapterQueryClient, build_query_client
+from chat.application.utils.llm_clients import LiteLLMQueryClient, build_query_client
+from chat.core.config.app_settings import settings
 from common.logger import info
 
 CANDIDATE_RANKER_SYSTEM_PROMPT = """\
@@ -38,16 +39,18 @@ async def rank_candidate_ids(
     *,
     search_query: str,
     candidates_text: str,
-    client: AdapterQueryClient | None = None,
+    client: LiteLLMQueryClient | None = None,
 ) -> list[str]:
     """用小模型对候选编号按相关性排序，最多返回 MAX_RANKED_CANDIDATES 个编号。"""
-    result = await (client or build_query_client()).aquery(
+    query_client = client or build_query_client(
+        model=settings.QUERY_MODEL,
+    )
+    result = await query_client.aquery(
         prompt=(
             f"<search_query>{search_query.strip()}</search_query>\n"
             f"<candidates>{candidates_text.strip()}</candidates>"
         ),
         system_prompt=CANDIDATE_RANKER_SYSTEM_PROMPT,
-        temperature=0.0,
         max_tokens=256,
     )
     info("ranker.rank_candidate_ids", search_query=search_query.strip()[:80], raw_response=result.content)

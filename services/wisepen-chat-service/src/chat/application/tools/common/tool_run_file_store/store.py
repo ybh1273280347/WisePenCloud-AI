@@ -24,7 +24,7 @@ from .models import (
     ToolFileRefRecord,
     ToolRunFileCleanupResult,
 )
-from .utils import sanitize_tool_file_name
+from ._tool_run_file_store_utils import sanitize_tool_file_name
 
 DEFAULT_TOOL_RUN_FILE_ROOT = Path(tempfile.gettempdir()) / "wisepen-tool-run-files"
 DEFAULT_TOOL_RUN_FILE_REF_TTL_SECONDS = tool_settings.TOOL_RUN_FILE_REF_TTL_SECONDS

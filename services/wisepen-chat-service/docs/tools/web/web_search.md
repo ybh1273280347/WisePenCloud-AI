@@ -43,6 +43,12 @@ question
 - 第二次仍为空时直接失败。
 - 工具不会做 coverage retry、hop merge 或 next query rewrite。
 
+## 搜索源
+
+当前平台默认源仍是 4get/DDG，平台 Exa 只在平台配置打开时参与分流。用户自定义搜索凭证支持 Exa、Tavily、AnySearch、百度千帆 AI 搜索。
+
+百度千帆接入的是普通网页搜索源：请求 `POST /v2/ai_search/web_search`，从响应 `references` 中只映射 web 候选，不支持 `academic_search`。
+
 ## 输出
 
 返回 `ToolReturn(tag="web_search_result")`，不缓存正文内容。

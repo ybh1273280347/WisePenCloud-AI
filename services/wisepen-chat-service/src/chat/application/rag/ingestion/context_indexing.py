@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from chat.application.utils.llm_clients import AdapterQueryClient, build_query_client
+from chat.application.utils.llm_clients import LiteLLMQueryClient, build_query_client
 from chat.core.config.app_settings import settings
 
 from .models import ContextIndexingInput, ContextIndexingResult
@@ -42,9 +42,11 @@ class ContextIndexingService:
 
     __slots__ = ("_client",)
 
-    def __init__(self, *, client: AdapterQueryClient | None = None) -> None:
-        # 允许注入 client 是为了单测时替换成 fake，生产路径走 build_query_client() 的默认配置。
-        self._client = client or build_query_client()
+    def __init__(self, *, client: LiteLLMQueryClient | None = None) -> None:
+        # 允许注入 client 是为了单测时替换成 fake，生产路径按用途固定小模型配置。
+        self._client = client or build_query_client(
+            model=settings.SUMMARY_MODEL,
+        )
 
     async def build(
             self,
@@ -54,8 +56,6 @@ class ContextIndexingService:
             response = await self._client.aquery(
                 prompt=_build_llm_prompt(payload),
                 system_prompt=CONTEXT_INDEXING_SYSTEM_PROMPT,
-                model=settings.SUMMARY_MODEL,
-                temperature=0.0,
                 max_tokens=256,
             )
             context_summary, important_terms = _parse_llm_payload(response.content)
@@ -77,7 +77,6 @@ class ContextIndexingService:
             usage_tokens=response.usage_tokens,
             metadata={"strategy": "llm_contextualizer"},
         )
-
 
 def _build_llm_prompt(payload: ContextIndexingInput) -> str:
     section_path = " > ".join(payload.section_path) or "（无章节信息）"

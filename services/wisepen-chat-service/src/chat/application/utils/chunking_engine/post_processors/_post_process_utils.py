@@ -76,8 +76,12 @@ def merge_heading_only(chunks: tuple[Chunk, ...]) -> ChunkMergeResult:
         if pending is not None:
             # heading-only 合并到正文 chunk 前面，继承 pending 的 ID
             # 正文 chunk 的 ID 消失 → 映射到 pending 的 ID
-            remapped[chunk.chunk_id] = pending.chunk_id
-            merged.append(_merge_pair(pending, chunk))
+            if _can_merge_chunks(pending, chunk):
+                remapped[chunk.chunk_id] = pending.chunk_id
+                merged.append(_merge_pair(pending, chunk))
+            else:
+                merged.append(pending)
+                merged.append(chunk)
             pending = None
         else:
             merged.append(chunk)
@@ -85,8 +89,11 @@ def merge_heading_only(chunks: tuple[Chunk, ...]) -> ChunkMergeResult:
     if pending is not None:
         if merged:
             # 末尾 heading-only 合并到前一个，继承前一个的 ID
-            remapped[pending.chunk_id] = merged[-1].chunk_id
-            merged[-1] = _merge_pair(merged[-1], pending)
+            if _can_merge_chunks(merged[-1], pending):
+                remapped[pending.chunk_id] = merged[-1].chunk_id
+                merged[-1] = _merge_pair(merged[-1], pending)
+            else:
+                merged.append(pending)
         else:
             merged.append(pending)
 
@@ -105,7 +112,7 @@ def merge_short_tails(chunks: tuple[Chunk, ...], *, min_size: int) -> ChunkMerge
     remapped: dict[str, str] = {}
 
     for chunk in chunks:
-        if merged and len(chunk.text) < min_size:
+        if merged and len(chunk.text) < min_size and _can_merge_chunks(merged[-1], chunk):
             prev = merged[-1]
             # 短 chunk 合并到前一个，继承前一个的 ID
             remapped[chunk.chunk_id] = prev.chunk_id
@@ -131,6 +138,14 @@ def _merge_pair(head: Chunk, body: Chunk) -> Chunk:
         end_unit=body.end_unit,
         content_hash="",
     )
+
+
+def _can_merge_chunks(left: Chunk, right: Chunk) -> bool:
+    left_range = left.metadata.get("page_range")
+    right_range = right.metadata.get("page_range")
+    if left_range is None and right_range is None:
+        return True
+    return left_range == right_range
 
 
 def _is_heading_only(text: str) -> bool:
