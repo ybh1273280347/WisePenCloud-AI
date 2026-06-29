@@ -33,13 +33,22 @@ class _Settings:
     ZERO_ENTROPY_API_KEY = "test-zero-entropy-key"
     EVIDENCE_RANKER_ZE_MODEL = "test-rerank-model"
     EVIDENCE_RANKER_ZE_TOP_N = 20
+    QUERY_MODEL = "test-query-model"
 
 
 config_module = types.ModuleType("chat.core.config.app_settings")
 config_module.settings = _Settings()
 sys.modules["chat.core.config.app_settings"] = config_module
 
-from chat.application.rag.answerability import AnswerabilityGate, RagAnswerabilityInput, RagRefusalReason
+from chat.application.rag.answerability import (
+    AnswerabilityHardGate,
+    AnswerabilitySoftGate,
+    AnswerabilitySoftGateError,
+    RagAnswerabilityInput,
+    RagAnswerabilityLevel,
+    RagAnswerabilityWarningReason,
+    RagHardGateReason,
+)
 from chat.application.rag.ranking import (
     RagEvidenceRankingRequest,
     RagEvidenceRankingService,
@@ -155,8 +164,21 @@ async def test_dense_and_sparse_scores_are_fused_by_ranking_engine() -> None:
     }
 
 
-def test_answerability_refuses_when_final_score_is_low() -> None:
-    decision = AnswerabilityGate().decide(
+def test_hard_gate_rejects_empty_retrieval() -> None:
+    decision = AnswerabilityHardGate().decide(
+        RagAnswerabilityInput(
+            query="AppBuilder API Key 鉴权",
+            retrieval_profile=RagRetrievalProfile.BALANCED.value,
+            ranked=(),
+        )
+    )
+
+    assert not decision.should_continue
+    assert decision.reason == RagHardGateReason.EMPTY_RETRIEVAL
+
+
+def test_hard_gate_rejects_when_all_topk_scores_are_extremely_low() -> None:
+    decision = AnswerabilityHardGate().decide(
         RagAnswerabilityInput(
             query="AppBuilder API Key 鉴权",
             retrieval_profile=RagRetrievalProfile.BALANCED.value,
@@ -167,14 +189,67 @@ def test_answerability_refuses_when_final_score_is_low() -> None:
                         text="AppBuilder API Key 用于接口鉴权。",
                     ),
                     rank=1,
-                    score=0.12,
+                    score=0.01,
                 ),
             ),
         )
     )
 
-    assert decision.status == "insufficient_evidence"
-    assert decision.refusal_reason == RagRefusalReason.LOW_RERANK_SCORE
+    assert not decision.should_continue
+    assert decision.reason == RagHardGateReason.TOPK_ALL_BELOW_ABSOLUTE_MIN_SCORE
+
+
+@pytest.mark.anyio
+async def test_soft_gate_returns_warning_and_triggers_graph_enhancement() -> None:
+    warning = await AnswerabilitySoftGate(client=_SoftGateClient()).evaluate(
+        RagAnswerabilityInput(
+            query="AppBuilder API Key 鉴权覆盖哪些接口？",
+            retrieval_profile=RagRetrievalProfile.BALANCED.value,
+            ranked=(
+                RankedCandidate(
+                    candidate=RankCandidate(
+                        candidate_id="chunk-partial",
+                        text="AppBuilder API Key 用于部分接口鉴权。",
+                    ),
+                    rank=1,
+                    score=0.42,
+                ),
+            ),
+        )
+    )
+
+    assert warning.answerability_level == RagAnswerabilityLevel.PARTIAL
+    assert warning.warnings == (RagAnswerabilityWarningReason.PARTIAL_COVERAGE,)
+    assert warning.should_enhance_with_neo4j
+
+
+@pytest.mark.anyio
+async def test_soft_gate_rejects_inconsistent_level_and_warning_severity() -> None:
+    service = AnswerabilitySoftGate(client=_SoftGateClient(
+        content=(
+            '{"answerability_level":"partial",'
+            '"warnings":["ENTITY_AMBIGUOUS"],'
+            '"guidance":"请先澄清实体。"}'
+        )
+    ))
+
+    with pytest.raises(AnswerabilitySoftGateError):
+        await service.evaluate(
+            RagAnswerabilityInput(
+                query="这里的 Apple 指哪个公司？",
+                retrieval_profile=RagRetrievalProfile.BALANCED.value,
+                ranked=(
+                    RankedCandidate(
+                        candidate=RankCandidate(
+                            candidate_id="chunk-ambiguous",
+                            text="Apple 在不同上下文中可能指公司或水果。",
+                        ),
+                        rank=1,
+                        score=0.51,
+                    ),
+                ),
+            )
+        )
 
 
 def _scored_hit(
@@ -197,3 +272,23 @@ def _scored_hit(
             rank=rank,
         ),
     )
+
+
+class _SoftGateClient:
+    def __init__(self, *, content: str | None = None) -> None:
+        self._content = content or (
+            '{"answerability_level":"partial",'
+            '"warnings":["PARTIAL_COVERAGE"],'
+            '"guidance":"当前证据只覆盖部分接口，回答时说明范围限制。"}'
+        )
+
+    async def aquery(self, *args, **kwargs):
+        return _SoftGateResponse(
+            content=self._content
+        )
+
+
+class _SoftGateResponse:
+    def __init__(self, *, content: str) -> None:
+        self.content = content
+        self.usage_tokens = 12

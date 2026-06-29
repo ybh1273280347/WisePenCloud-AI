@@ -12,21 +12,20 @@ CONTEXT_INDEXING_SYSTEM_PROMPT = """\
 <system_prompt>
   <role>你是 WisePen 私有知识库的 Context Indexing 助手。</role>
 
-  <objective>结合 parent_text 和 child_text 生成短上下文，让后续 embedding、Elasticsearch BM25 和图谱抽取消歧更稳定。</objective>
+  <objective>结合 parent_text 和 child_text 生成一段上下文补充，让后续 embedding 和 lexical indexing 更稳定。</objective>
 
   <rules>
     <rule>只能使用输入中已经给出的信息，不要补充外部知识。</rule>
-    <rule>parent_text 是 child_text 所在父块，只用于判断局部语义位置和术语边界。</rule>
+    <rule>parent_text 是 child_text 所在父块，只用于判断 child_text 的局部语义位置。</rule>
     <rule>不要改写 child_text 的事实。</rule>
-    <rule>context_summary 必须短，控制在 80 个中文字以内。</rule>
-    <rule>important_terms 只保留文档内出现或由标题路径明确给出的术语。</rule>
+    <rule>indexing_context 只补充检索需要的上下文，不抽取实体、关系或关键词列表。</rule>
+    <rule>indexing_context 必须短，控制在 120 个中文字以内。</rule>
     <rule>输出必须是严格 JSON，绝对不要带有 Markdown 标记（如 ```json）、不要有任何解释性文字或前后缀。</rule>
   </rules>
 
   <output_format>
     {
-      "context_summary": "这个片段在文档中的局部语义作用",
-      "important_terms": ["术语1", "术语2"]
+      "indexing_context": "这个片段在文档中的局部语义位置和必要上下文"
     }
   </output_format>
 </system_prompt>
@@ -58,30 +57,26 @@ class ContextIndexingService:
                 system_prompt=CONTEXT_INDEXING_SYSTEM_PROMPT,
                 max_tokens=256,
             )
-            context_summary, important_terms = _parse_llm_payload(response.content)
+            indexing_context = _parse_llm_payload(response.content)
         except Exception as exc:
             # indexing_text 会进入长期检索索引；失败时不写低质量替代结果，交给入库任务重试。
             raise ContextIndexingError("Context indexing LLM call failed.") from exc
 
-        # evidence_text 保留原始 child_text，检索召回后展示给用户的必须是未被模型改写过的原文。
         indexing_text = _compose_indexing_text(
             payload=payload,
-            context_summary=context_summary,
-            important_terms=important_terms,
+            indexing_context=indexing_context,
         )
         return ContextIndexingResult(
-            evidence_text=payload.child_text.strip(),
-            indexing_text=indexing_text,
-            context_summary=context_summary,
-            important_terms=important_terms,
-            usage_tokens=response.usage_tokens,
-            metadata={"strategy": "llm_contextualizer"},
+            child_chunk=payload.child_chunk.with_indexing_context(
+                indexing_context=indexing_context,
+                indexing_text=indexing_text,
+            ),
         )
 
 
 def _build_llm_prompt(payload: ContextIndexingInput) -> str:
     """把 Context Indexing 输入整理成单次小模型提示词。"""
-    section_path = " > ".join(payload.section_path) or "（无章节信息）"
+    section_path = " > ".join(payload.child_chunk.section_path) or "（无章节信息）"
     return "\n".join(
         (
             "<context_indexing_input>",
@@ -90,66 +85,47 @@ def _build_llm_prompt(payload: ContextIndexingInput) -> str:
             f"    <section_path>{section_path}</section_path>",
             "  </metadata>",
             "",
-            "  <parent_text usage=\"只用于判断 child_text 在文档中的局部语义位置和术语边界；"
-            "不要从这一段提取术语，也不要概括这一段的内容\">",
+            "  <parent_text usage=\"只用于判断 child_text 在文档中的局部语义位置；"
+            "不要从这一段抽取实体、关系或关键词列表\">",
             payload.parent_text.strip(),
             "  </parent_text>",
             "",
-            "  <child_text usage=\"context_summary 和 important_terms 必须只围绕这一段生成\">",
-            payload.child_text.strip(),
+            "  <child_text usage=\"indexing_context 必须只围绕这一段生成\">",
+            payload.child_chunk.text.strip(),
             "  </child_text>",
             "</context_indexing_input>",
         )
     )
 
 
-def _parse_llm_payload(content: str) -> tuple[str, tuple[str, ...]]:
+def _parse_llm_payload(content: str) -> str:
     """解析并校验 Context Indexing 小模型输出。"""
     # LLM 输出是外部边界，即使 prompt 要求 JSON，也必须做结构校验。
     payload: Any = json.loads(content)
     if not isinstance(payload, dict):
         raise ValueError("Context indexing response must be a JSON object.")
 
-    context_summary = str(payload.get("context_summary") or "").strip()
-    raw_terms = payload.get("important_terms") or []
-    if not isinstance(raw_terms, list):
-        raise ValueError("important_terms must be a list.")
-
-    important_terms = _dedupe_terms(str(term) for term in raw_terms)
-    return context_summary, important_terms
+    indexing_context = str(payload.get("indexing_context") or "").strip()
+    if not indexing_context:
+        raise ValueError("indexing_context must not be empty.")
+    return indexing_context
 
 
 def _compose_indexing_text(
     *,
     payload: ContextIndexingInput,
-    context_summary: str,
-    important_terms: tuple[str, ...],
+    indexing_context: str,
 ) -> str:
-    # indexing_text 服务检索和消歧；最终引用仍使用原始 evidence_text。
+    # indexing_text 服务检索；最终引用仍使用原始 evidence_text。
     parts = [
         ("文档", payload.document_title),
-        ("章节", " > ".join(payload.section_path)),
-        ("上下文", context_summary),
-        ("重要术语", "、".join(important_terms)),
-        ("正文", payload.child_text),
+        ("章节", " > ".join(payload.child_chunk.section_path)),
+        ("上下文补充", indexing_context),
+        ("正文", payload.child_chunk.text),
     ]
-    # 过滤空字段，避免 important_terms 为空时拼出一行多余的 "重要术语: "。
     lines = [
         f"{label}: {value.strip()}"
         for label, value in parts
         if value and value.strip()
     ]
     return "\n".join(lines)
-
-
-def _dedupe_terms(values: tuple[str, ...] | Any) -> tuple[str, ...]:
-    """按首次出现顺序去重术语，减少索引文本噪音。"""
-    terms: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        term = str(value).strip()
-        if not term or term in seen:
-            continue
-        seen.add(term)
-        terms.append(term)
-    return tuple(terms)

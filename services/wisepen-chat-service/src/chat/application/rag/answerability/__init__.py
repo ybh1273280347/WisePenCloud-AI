@@ -1,21 +1,28 @@
-"""RAG 可回答性判断。
+"""RAG Answerability Hard Gate / Soft Gate。"""
 
-这里承接 retrieval 之后、context builder 之前的证据充分性判断。
-"""
-
-from .gate import AnswerabilityGate
+from .hard_gate import AnswerabilityHardGate
 from .models import (
     RagAnswerabilityDecision,
     RagAnswerabilityInput,
-    RagAnswerabilityStatus,
-    RagRefusalReason,
+    RagAnswerabilityLevel,
+    RagAnswerabilityWarning,
+    RagAnswerabilityWarningReason,
+    RagHardGateDecision,
+    RagHardGateReason,
+    RagHardGateStatus,
 )
+from .soft_gate import AnswerabilitySoftGate, AnswerabilitySoftGateError
 
-# 包根只暴露可回答性边界模型与门控入口。
 __all__ = [
-    "AnswerabilityGate",
+    "AnswerabilityHardGate",
+    "AnswerabilitySoftGate",
+    "AnswerabilitySoftGateError",
     "RagAnswerabilityDecision",
     "RagAnswerabilityInput",
-    "RagAnswerabilityStatus",
-    "RagRefusalReason",
+    "RagAnswerabilityLevel",
+    "RagAnswerabilityWarning",
+    "RagAnswerabilityWarningReason",
+    "RagHardGateDecision",
+    "RagHardGateReason",
+    "RagHardGateStatus",
 ]
