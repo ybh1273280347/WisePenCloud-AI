@@ -109,7 +109,7 @@ result = RankingEngine(pipeline=pipeline).rank(
 | `FieldedBM25Scorer` | 对配置中的 `fields` 分别做 BM25 | `candidate.fields` 中存在对应 key |
 | `PriorRankScorer` | 把上游原始排名转成信号 | `prior_rank` |
 | `DenseVectorScorer` | query/candidate embedding 余弦相似度 | `metadata["embedding"]` |
-| `RawScoreSignalScorer` | 读取上游检索系统已经产出的原始排序信号 | `metadata["raw_score_signals"]` |
+| `` | 读取上游检索系统已经产出的原始排序信号 | `metadata["raw_score_signals"]` |
 
 ### Filters
 

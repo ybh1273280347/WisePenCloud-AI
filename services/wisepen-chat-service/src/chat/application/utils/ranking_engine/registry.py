@@ -9,7 +9,6 @@ from .scorers import (
     BM25Scorer,
     FieldedBM25Scorer,
     FieldedBM25ScorerConfig,
-    RawScoreSignalScorer,
 )
 from .tokenizer import JiebaRankingTokenizer, ThuLacRankingTokenizer
 
@@ -45,9 +44,6 @@ class RankingEngineRegistry:
             "rag.knowledge_search": RankingEngine(
                 pipeline=RankingPipeline(
                     name="rag.knowledge_search",
-                    # Qdrant / Elasticsearch 的分数应转换为 ScoreSignal 后融合
-                    scorers=(RawScoreSignalScorer(),),
-                    fusion=WeightedRrfFusion(),
                     reranker=reranker,
                     diversifiers=(
                         MmrDiversifier(

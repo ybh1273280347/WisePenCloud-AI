@@ -40,7 +40,7 @@ config_module = types.ModuleType("chat.core.config.app_settings")
 config_module.settings = _Settings()
 sys.modules["chat.core.config.app_settings"] = config_module
 
-from chat.application.rag.answerability import (
+from chat.application.rag.answerability import (  # noqa: E402
     AnswerabilityHardGate,
     AnswerabilitySoftGate,
     AnswerabilitySoftGateError,
@@ -49,39 +49,31 @@ from chat.application.rag.answerability import (
     RagAnswerabilityWarningReason,
     RagHardGateReason,
 )
-from chat.application.rag.ranking import (
+from chat.application.rag.ranking import (  # noqa: E402
     RagEvidenceRankingRequest,
     RagEvidenceRankingService,
 )
-from chat.application.rag.retrieval import (
+from chat.application.rag.retrieval import (  # noqa: E402
     RagRetrievalProfile,
     ScoredChunk,
 )
-from chat.application.rag.ingestion import (
+from chat.application.rag.ingestion import (  # noqa: E402
     RagChildChunk,
     RagChunkingService,
     RagParentChunk,
 )
-from chat.application.utils.ranking_engine.models import (
+from chat.application.utils.ranking_engine.models import (  # noqa: E402
     RankCandidate,
     RankedCandidate,
-    ScoreSignal,
-    ScoreSignalKind,
 )
-from chat.application.utils.ranking_engine.engine import RankingEngine
-from chat.application.utils.ranking_engine.fusion import WeightedRrfFusion
-from chat.application.utils.ranking_engine.pipeline import RankingPipeline
-from chat.application.utils.ranking_engine.scorers.raw_score_signal_scorer import (
-    RawScoreSignalScorer,
-)
+from chat.application.utils.ranking_engine.engine import RankingEngine  # noqa: E402
+from chat.application.utils.ranking_engine.pipeline import RankingPipeline  # noqa: E402
 
 
 def _ranking_engine_without_reranker() -> RankingEngine:
     return RankingEngine(
         pipeline=RankingPipeline(
             name="test.rag.knowledge_search",
-            scorers=(RawScoreSignalScorer(),),
-            fusion=WeightedRrfFusion(),
         )
     )
 
@@ -111,7 +103,7 @@ def test_chunking_service_produces_parent_and_child_chunks() -> None:
 
 
 @pytest.mark.anyio
-async def test_dense_and_sparse_scores_are_fused_by_ranking_engine() -> None:
+async def test_qdrant_rrf_order_is_passed_to_rerank_stage_without_fusion() -> None:
     service = RagEvidenceRankingService(
         ranking_engine=_ranking_engine_without_reranker()
     )
@@ -120,37 +112,23 @@ async def test_dense_and_sparse_scores_are_fused_by_ranking_engine() -> None:
         RagEvidenceRankingRequest(
             query="AppBuilder API Key 鉴权",
             chunks=(
-                _scored_hit(
+                _retrieved_hit(
                     chunk_id="chunk-a",
                     text="AppBuilder API Key 用于接口鉴权。",
-                    name="retrieval.dense",
-                    kind=ScoreSignalKind.VECTOR,
-                    score=0.92,
-                    rank=1,
+                    retrieval_score=0.71,
+                    retrieval_rank=1,
                 ),
-                _scored_hit(
+                _retrieved_hit(
                     chunk_id="chunk-b",
                     text="另一个接口说明 Bearer token。",
-                    name="retrieval.dense",
-                    kind=ScoreSignalKind.VECTOR,
-                    score=0.89,
-                    rank=2,
+                    retrieval_score=0.69,
+                    retrieval_rank=2,
                 ),
-                _scored_hit(
-                    chunk_id="chunk-b",
-                    text="另一个接口说明 Bearer token。",
-                    name="retrieval.sparse",
-                    kind=ScoreSignalKind.LEXICAL,
-                    score=11.4,
-                    rank=1,
-                ),
-                _scored_hit(
+                _retrieved_hit(
                     chunk_id="chunk-a",
                     text="AppBuilder API Key 用于接口鉴权。",
-                    name="retrieval.sparse",
-                    kind=ScoreSignalKind.LEXICAL,
-                    score=8.6,
-                    rank=2,
+                    retrieval_score=0.64,
+                    retrieval_rank=3,
                 ),
             ),
             top_k=2,
@@ -158,10 +136,9 @@ async def test_dense_and_sparse_scores_are_fused_by_ranking_engine() -> None:
     )
 
     assert [item.candidate_id for item in ranking_result.ranked] == ["chunk-a", "chunk-b"]
-    assert {signal.name for signal in ranking_result.ranked[0].signals} == {
-        "retrieval.dense",
-        "retrieval.sparse",
-    }
+    assert [item.candidate.prior_rank for item in ranking_result.ranked] == [1, 2]
+    assert ranking_result.ranked[0].candidate.metadata == {"retrieval_score": 0.71}
+    assert all(not item.signals for item in ranking_result.ranked)
 
 
 def test_hard_gate_rejects_empty_retrieval() -> None:
@@ -252,25 +229,18 @@ async def test_soft_gate_rejects_inconsistent_level_and_warning_severity() -> No
         )
 
 
-def _scored_hit(
+def _retrieved_hit(
     *,
     chunk_id: str,
     text: str,
-    name: str,
-    kind: ScoreSignalKind,
-    score: float,
-    rank: int,
+    retrieval_score: float,
+    retrieval_rank: int,
 ) -> ScoredChunk:
     return ScoredChunk(
         chunk_id=chunk_id,
         text=text,
-        score_signal=ScoreSignal(
-            candidate_id=chunk_id,
-            name=name,
-            value=score,
-            kind=kind,
-            rank=rank,
-        ),
+        retrieval_score=retrieval_score,
+        retrieval_rank=retrieval_rank,
     )
 
 

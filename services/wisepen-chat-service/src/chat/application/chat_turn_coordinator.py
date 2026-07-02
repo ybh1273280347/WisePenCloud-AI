@@ -203,13 +203,9 @@ class ChatTurnCoordinator:
             tool_context["allowed_skill_ids"] = [s.skill_id for s in available_skills]
 
         if search_config.supports_academic:
-            if expose_tool_name_set is None:
-                expose_tool_name_set = set()
             expose_tool_name_set.update(_ACADEMIC_TOOL_NAMES)
 
         if session_summary is not None:
-            if expose_tool_name_set is None:
-                expose_tool_name_set = set()
             expose_tool_name_set.update(_SESSION_TOOL_NAMES)
 
         # 构建工具视图

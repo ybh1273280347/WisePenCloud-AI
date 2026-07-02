@@ -27,7 +27,7 @@ from chat.application.tools.document_tools.document_parse import (
     DocumentParsePlanner,
     DocumentParseService,
 )
-from chat.application.tools.document_tools.document_parse.parsers.ocr import (
+from chat.application.tools.document_tools.document_parse.parsers.specialized.ocr import (
     PaddleCloudClient,
     PaddleCloudConfig,
 )

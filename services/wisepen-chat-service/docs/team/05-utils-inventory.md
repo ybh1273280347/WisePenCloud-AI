@@ -81,7 +81,7 @@
 | 子目录 | 能力 |
 | --- | --- |
 | `filters/` | `KeywordFilter` |
-| `scorers/` | `BM25Scorer`、`FieldedBM25Scorer`、`PriorRankScorer`、`DenseVectorScorer`、`RawScoreSignalScorer` |
+| `scorers/` | `BM25Scorer`、`FieldedBM25Scorer`、`PriorRankScorer`、`DenseVectorScorer`、`` |
 | `fusion/` | `WeightedRrfFusion`，当前默认推荐融合方式 |
 | `rerankers/` | `ZeroEntropyReranker` |
 | `diversifiers/` | `MmrDiversifier`、`GroupRoundRobinDiversifier`、`MaxMinDiversifier` |

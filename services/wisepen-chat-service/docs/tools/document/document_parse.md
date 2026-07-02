@@ -56,6 +56,12 @@ document parse 读取缓存时不能在 public/private 域之间回退，避免�
 - 不负责文件上传、资产持久化、知识库入库或文件展示。
 - 单个文件解析失败会记录为 failed item，不阻断其它文件。
 - 内部最多并发解析 3 个文件；大量输入会按内部批次切分后顺序聚合。
-- 解析计划由 `DocumentParsePlanner` 决定：PDF 走 PDF 策略，DOCX/PPTX/HTML 走 Docling，XLSX 走 Pandas，图片走 OCR，最后使用 MarkItDown 兜底。
+- 解析计划由 `DocumentParsePlanner` 决定：PDF 走专职 PDF 策略，DOCX/PPTX/HTML 走 Docling，XLSX 走 Pandas，图片走 OCR，最后使用 MarkItDown 兜底。
+- `parsers/common/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、XLSX、图片 OCR 和 OCR provider。通用 Docling 不维护额外 `allowed_formats` 白名单，PDF 的额外模型和页级混合逻辑只存在于专职 PDF 策略中。
+- PDF 主链路使用 Docling，开启表格结构和图片抽取，关闭 Docling OCR；PDF 内部统一按页判定文本页/扫描页，文本页优先保留 Docling 结构化结果，扫描页在原页位用 OCR 替换或补全，Docling 单页空结果再用 PyMuPDF4LLM 逐页补页。
+- 可分页文档尽量按页插入 `<!-- page N -->` 标记；Docling 解析结果存在 `pages` 时按 `page_no` 分页导出后再注入页码，无可靠页信息的格式保持原始 Markdown 输出。PyMuPDF4LLM 兜底链路按页单独解析，避免单页异常拖垮整份 PDF。
+- Docling Markdown 导出固定保留已抽取图片，尽量把图片写成 data URI；如果上游格式或 Docling pipeline 无法生成图片对象，才会退化为普通 Markdown 占位。
+- 本地开发机上 Docling native 层偶发 `std::bad_alloc` 通常表示本机内存紧张，不代表 PDF 主链路设计不可用；容器环境资源更稳定，实测该链路可稳定运行。
+- OCR 不作为 document_parse 的全局兜底 parser：图片文件走独立 `ImageOcrParser`，PDF 扫描页 OCR 保留在 `PdfParseStrategy` 内部，以便和 Docling/PyMuPDF4LLM 文本页结果按原页序合并。
 - 工具门面不手写 `cnt_*` receipt；大文本缓存由 `ToolOutputCache` 和 `ToolContentStore` 统一处理。
 - URL cache 的 Mongo `doc_id`、Redis key 和 `source_cache_doc_id` 不暴露给模型；它们只在工具内部 metadata 中流转。

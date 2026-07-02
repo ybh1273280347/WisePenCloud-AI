@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass
 
 from chat.application.rag.retrieval.models import ScoredChunk
@@ -12,9 +11,6 @@ from chat.application.utils.ranking_engine.models import (
     RankRequest,
 )
 from chat.application.utils.ranking_engine.registry import get_ranking_engine
-from chat.application.utils.ranking_engine.scorers.raw_score_signal_scorer import (
-    RAW_SCORE_SIGNALS_METADATA_KEY,
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,7 +18,7 @@ class RagEvidenceRankingRequest:
     """已检索候选进入 evidence ranking 的输入。"""
 
     query: str  # 用户原始问题
-    chunks: tuple[ScoredChunk, ...] = ()  # 已完成检索和打分的候选
+    chunks: tuple[ScoredChunk, ...] = ()  # 已完成上游融合排序的候选
     top_k: int = 20  # 最终返回上限
     candidate_limit: int = 100  # rerank/diversify 前的中间窗口
 
@@ -67,17 +63,21 @@ class RagEvidenceRankingService:
     def _build_rank_candidates(
         chunks: tuple[ScoredChunk, ...],
     ) -> tuple[RankCandidate, ...]:
-        signals_by_chunk_id = defaultdict(list)
-        text_by_chunk_id: dict[str, str] = {}
+        candidates_by_chunk_id: dict[str, RankCandidate] = {}
         for chunk in chunks:
-            signals_by_chunk_id[chunk.chunk_id].append(chunk.score_signal)
-            text_by_chunk_id.setdefault(chunk.chunk_id, chunk.text)
+            if chunk.chunk_id in candidates_by_chunk_id:
+                continue
 
-        return tuple(
-            RankCandidate(
-                candidate_id=chunk_id,
-                text=text_by_chunk_id[chunk_id],
-                metadata={RAW_SCORE_SIGNALS_METADATA_KEY: tuple(signals)},
+            metadata = {}
+            if chunk.retrieval_score is not None:
+                metadata["retrieval_score"] = chunk.retrieval_score
+
+            candidates_by_chunk_id[chunk.chunk_id] = RankCandidate(
+                candidate_id=chunk.chunk_id,
+                text=chunk.text,
+                prior_rank=chunk.retrieval_rank,
+                group_key=chunk.group_key,
+                metadata=metadata,
             )
-            for chunk_id, signals in signals_by_chunk_id.items()
-        )
+
+        return tuple(candidates_by_chunk_id.values())
