@@ -11,9 +11,8 @@ from typing import Any
 import fitz
 import httpx
 
-from chat.application.tools.document_tools.document_parse.errors import PrimaryParserError
+from chat.application.tools.document_tools.document_parse.errors import DocumentParserError
 from chat.application.tools.document_tools.document_parse.models import (
-    DocumentParseMonitorName,
     OcrPageResult,
 )
 from chat.application.tools.tool_settings import tool_settings
@@ -55,7 +54,7 @@ class PaddleCloudClient:
             http_client: httpx.AsyncClient,
     ) -> None:
         if not config.token:
-            raise PrimaryParserError("PaddleOCR token is required.")
+            raise DocumentParserError("PaddleOCR token is required.")
 
         self._config = config
         self._http = http_client
@@ -103,10 +102,10 @@ class PaddleCloudClient:
 
         result = resp.json()
         if err := result.get("errorCode"):
-            raise PrimaryParserError(f"PaddleOCR API error {err}: {result.get('errorMsg')}")
+            raise DocumentParserError(f"PaddleOCR API error {err}: {result.get('errorMsg')}")
 
         if not (job_id := result.get("data", {}).get("jobId")):
-            raise PrimaryParserError("PaddleOCR response missing jobId")
+            raise DocumentParserError("PaddleOCR response missing jobId")
         return job_id
 
     async def _poll_job(self, job_id: str) -> str:
@@ -124,26 +123,24 @@ class PaddleCloudClient:
             # 使用 StrEnum 映射安全校验
             try:
                 state = JobState(data.get("state", JobState.PENDING))
-            except PrimaryParserError:
+            except ValueError:
                 state = JobState.PENDING
 
             # 纵向对齐状态路由切面
             if state == JobState.DONE:
                 if not (json_url := data.get("resultUrl", {}).get("jsonUrl")):
-                    raise PrimaryParserError("PaddleOCR response missing jsonUrl")
+                    raise DocumentParserError("PaddleOCR response missing jsonUrl")
                 return json_url
 
             if state == JobState.FAILED:
-                raise PrimaryParserError(
+                raise DocumentParserError(
                     f"PaddleOCR job failed: {data.get('errorMsg', 'Unknown error')}",
-                    parser_name=DocumentParseMonitorName.OCR_PADDLE,
                 )
 
             await asyncio.sleep(self._config.poll_interval_seconds)
 
-        raise PrimaryParserError(
+        raise DocumentParserError(
             "PaddleOCR job polling timeout",
-            parser_name=DocumentParseMonitorName.OCR_PADDLE,
         )
 
     async def _download_results(self, json_url: str) -> list[dict[str, Any]]:
@@ -158,7 +155,7 @@ def _render_pdf_page_to_png(path: Path, *, page_number: int) -> bytes:
     with fitz.open(str(path)) as doc:
         page_index = page_number - 1
         if not (0 <= page_index < doc.page_count):
-            raise PrimaryParserError(f"PDF page {page_number} is out of range.")
+            raise DocumentParserError(f"PDF page {page_number} is out of range.")
         return doc.load_page(page_index).get_pixmap(dpi=200, alpha=False).tobytes("png")
 
 
@@ -166,7 +163,7 @@ def _extract_page_result(results: list[dict[str, Any]], *, page_number: int) -> 
     """从多页 JSONL 结果树中精准提取目标页面的 Markdown 文本。"""
     page_index = page_number - 1
     if not (0 <= page_index < len(results)):
-        raise PrimaryParserError(f"Page {page_number} not found in results")
+        raise DocumentParserError(f"Page {page_number} not found in results")
 
     layout_results = results[page_index].get("result", {}).get("layoutParsingResults", [])
     if not layout_results:

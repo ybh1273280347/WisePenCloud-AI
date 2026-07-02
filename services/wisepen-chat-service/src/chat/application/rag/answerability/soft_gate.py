@@ -9,7 +9,7 @@ from chat.application.rag.answerability.models import (
     RagAnswerabilityWarning,
     RagAnswerabilityWarningReason,
 )
-from chat.application.utils.llm_clients import LiteLLMQueryClient, build_query_client
+from chat.application.utils.llm_clients import QueryClient, build_query_client
 from chat.core.config.app_settings import settings
 
 
@@ -103,7 +103,7 @@ class AnswerabilitySoftGate:
 
     __slots__ = ("_client",)
 
-    def __init__(self, *, client: LiteLLMQueryClient | None = None) -> None:
+    def __init__(self, *, client: QueryClient | None = None) -> None:
         self._client = client or build_query_client(model=settings.QUERY_MODEL)
 
     async def evaluate(

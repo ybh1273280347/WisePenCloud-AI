@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from chat.application.utils.llm_clients import LiteLLMQueryClient, build_query_client
+from chat.application.utils.llm_clients import QueryClient, build_query_client
 from chat.core.config.app_settings import settings
 from common.logger import info
 
@@ -39,7 +39,7 @@ async def rank_candidate_ids(
     *,
     search_query: str,
     candidates_text: str,
-    client: LiteLLMQueryClient | None = None,
+    client: QueryClient | None = None,
 ) -> list[str]:
     """用小模型对候选编号按相关性排序，最多返回 MAX_RANKED_CANDIDATES 个编号。"""
     query_client = client or build_query_client(

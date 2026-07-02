@@ -6,9 +6,8 @@ from typing import Any
 from docling.document_converter import DocumentConverter
 from docling_core.types.doc import ImageRefMode
 
-from chat.application.tools.document_tools.document_parse.errors import PrimaryParserError
+from chat.application.tools.document_tools.document_parse.errors import DocumentParserError
 from chat.application.tools.document_tools.document_parse.models import (
-    DocumentParseMonitorName,
     DocumentParseRequest,
     DocumentParseResult,
 )
@@ -23,9 +22,8 @@ class DoclingParser:
                 markdown=_export_docling_markdown(result.document),
             )
         except Exception as e:
-            raise PrimaryParserError(
+            raise DocumentParserError(
                 "Docling parser failed.",
-                parser_name=DocumentParseMonitorName.DOCLING,
                 cause=e,
             ) from e
 

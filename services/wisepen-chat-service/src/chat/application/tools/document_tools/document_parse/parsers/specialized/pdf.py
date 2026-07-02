@@ -12,9 +12,8 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMo
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.types.doc import ImageRefMode
 
-from chat.application.tools.document_tools.document_parse.errors import PrimaryParserError
+from chat.application.tools.document_tools.document_parse.errors import DocumentParserError
 from chat.application.tools.document_tools.document_parse.models import (
-    DocumentParseMonitorName,
     DocumentParseRequest,
     DocumentParseResult,
 )
@@ -57,12 +56,11 @@ class PdfParseStrategy:
 
             return DocumentParseResult(markdown=markdown)
 
-        except PrimaryParserError:
+        except DocumentParserError:
             raise
         except Exception as e:
-            raise PrimaryParserError(
+            raise DocumentParserError(
                 "PDF parser failed.",
-                parser_name=DocumentParseMonitorName.PDF,
                 cause=e,
             ) from e
 
@@ -102,9 +100,8 @@ class PdfParseStrategy:
 
         markdown = "\n\n".join(part for part in page_markdowns if part.strip()).strip()
         if not markdown:
-            raise PrimaryParserError(
+            raise DocumentParserError(
                 "Docling PDF parser returned empty markdown.",
-                parser_name=DocumentParseMonitorName.DOCLING,
             )
         return markdown
 
@@ -142,9 +139,8 @@ class PdfParseStrategy:
 
         markdown = "\n\n".join(part for part in page_markdowns if part.strip()).strip()
         if not markdown:
-            raise PrimaryParserError(
+            raise DocumentParserError(
                 "PyMuPDF4LLM PDF fallback returned empty markdown.",
-                parser_name=DocumentParseMonitorName.PDF,
             )
         return markdown
 

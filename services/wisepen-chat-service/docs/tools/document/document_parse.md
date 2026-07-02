@@ -63,17 +63,16 @@ document parse 读取缓存时不能在 public/private 域之间回退，避免�
 
 ## 解析策略
 
-解析计划由 `DocumentParsePlanner` 决定：
+解析路由由 `DocumentParseService` 直接决定：
 
 | 文件类型 | 策略 |
 | --- | --- |
-| PDF | 专职 PDF 策略 |
-| DOCX/PPTX/HTML等 | Docling |
+| PDF | 专职 PDF 策略，内部自行维护 PyMuPDF4LLM/OCR 兜底 |
 | XLSX | Pandas |
 | 图片 | OCR |
-| 兜底 | MarkItDown |
+| 其它普通文档 | Docling -> MarkItDown |
 
-`parsers/common/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、XLSX、图片 OCR 和 OCR provider。通用 Docling 不维护额外 `allowed_formats` 白名单，PDF 的额外模型和页级混合逻辑只存在于专职 PDF 策略中。
+`parsers/common/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、XLSX、图片 OCR 和 OCR provider。通用 Docling 不维护额外 `allowed_formats` 白名单。PDF、XLSX、图片等专用路径不追加通用 MarkItDown 兜底；专用解析器如果需要特殊兜底，应在自己的策略内部维护，避免专用行为反向污染通用解析链路。
 
 ### PDF 主链路
 

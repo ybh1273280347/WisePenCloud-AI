@@ -120,32 +120,12 @@
 
 路径：`src/chat/application/tools/utils/markdown_renderer/`
 
-用途：把结构化表格或 HTML 渲染成适合模型阅读、缓存和分块的 Markdown。
+用途：把 HTML 渲染成适合模型阅读、缓存和分块的 Markdown。
 
 现有入口：
 
-- `TableMarkdownRenderer`
-- `TableMarkdownRenderResult`
-- `TableRenderInfo`
 - `FragmentMarkdownRenderer`
 - `WebPageMarkdownRenderer`
-
-### TableMarkdownRenderer
-
-将二维表格数据渲染为 GitHub-flavored Markdown 表格，负责：
-
-- 输入形态归一化。
-- 单元格换行、反斜杠、竖线转义。
-- 行列截断。
-- 返回渲染规模和截断元信息。
-
-支持三种调用形态：
-
-- `render([["姓名", "分数"], ["Alice", 98]])`
-- `render(headers=["姓名", "分数"], rows=[["Alice", 98]])`
-- `render(data=[["Alice", 98]], headers=["姓名", "分数"])`
-
-适用场景：Excel、OCR 表格、外部 API 返回的表格矩阵。
 
 ### FragmentMarkdownRenderer
 
@@ -169,7 +149,6 @@
 | 需要对候选排序、融合、多样性控制 | `ranking_engine` |
 | 需要轻量调用模型或 embedding | `llm_clients` |
 | 需要识别本地文件类型 | `detect_file_type` / `detect_mime_type` |
-| 需要表格转 Markdown | `TableMarkdownRenderer` |
 | 需要 HTML 片段转 Markdown | `FragmentMarkdownRenderer` |
 | 需要网页主体抽取成 Markdown | `WebPageMarkdownRenderer` |
 | 需要复用外部 URL 抓取、HTML 清洗或文件解析结果 | `src/chat/application/tools/common/web_content_cache/`，不要混入 `ToolContentStore` |

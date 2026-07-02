@@ -1,28 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
-
-
-class DocumentParseMonitorName(StrEnum):
-    """解析链路监控名称，值保持短字符串，便于日志聚合。"""
-
-    DOCLING = "docling.parse"
-    FALLBACK = "fallback.markitdown"
-    IMAGE_OCR = "image.ocr"
-    OCR_PADDLE = "ocr.paddle.request"
-    PDF = "pdf.strategy"
-    SPREADSHEET = "spreadsheet.parse"
-
-
-class ParserRole(StrEnum):
-    """候选解析器在 ParsePlan 中承担的角色。"""
-
-    PRIMARY = "primary"
-    OCR = "ocr"
-    STRATEGY = "strategy"
-    FALLBACK = "fallback"
 
 
 @dataclass(frozen=True, slots=True)

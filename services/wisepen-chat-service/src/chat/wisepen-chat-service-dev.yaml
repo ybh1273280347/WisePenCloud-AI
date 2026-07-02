@@ -19,10 +19,13 @@ DEV: true
 LLM_BASE_URL: "https://api.zhizengzeng.com/v1"
 LLM_API_KEY: "sk-your-production-key-here"
 
-# --- 模型配置 ---
-QUERY_MODEL: "openai/qwen3-4b"
-EMBEDDING_MODEL: "openai/qwen3-embedding-8b"
-EMBEDDING_DIMENSIONS: 1024
+# --- 工具性小模型配置 ---
+# 小模型仅用于 application 层工具性调用（answerability gate / context indexing / ranking 等），
+# 禁止与主对话模型、记忆模型、摘要模型交叉复用。
+QUERY_MODEL: "deepseek-v4-flash"
+EMBEDDING_MODEL: "qwen3-embedding-8b"
+EMBEDDING_DIMENSIONS: 4096
+SUMMARY_MODEL: ""  # 仅用于长文本摘要，必须单独配置，禁止挪作小模型调用
 
 
 # --- 安全 ---

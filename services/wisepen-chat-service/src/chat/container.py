@@ -23,10 +23,7 @@ from chat.application.tools.common.tool_run_file_store.gc import (
 )
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
-from chat.application.tools.document_tools.document_parse import (
-    DocumentParsePlanner,
-    DocumentParseService,
-)
+from chat.application.tools.document_tools.document_parse import DocumentParseService
 from chat.application.tools.document_tools.document_parse.parsers.specialized.ocr import (
     PaddleCloudClient,
     PaddleCloudConfig,
@@ -50,10 +47,7 @@ from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillM
 from chat.application.tools.tool_output_cache import ToolOutputCache
 from chat.application.tools.tool_output_renderer import ToolOutputRenderer
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.utils.markdown_renderer import (
-    TableMarkdownRenderer,
-    WebPageMarkdownRenderer,
-)
+from chat.application.tools.utils.markdown_renderer import WebPageMarkdownRenderer
 from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
 from chat.application.tools.web_tools.search_services.custom_source_factory import (
     WebSearchCustomSourceFactory,
@@ -340,14 +334,9 @@ class Container(containers.DeclarativeContainer):
         _build_paddle_ocr_client,
         http_client=paddle_ocr_http_client,
     )
-    document_parse_planner = providers.Singleton(
-        DocumentParsePlanner,
-        ocr_client=paddle_ocr_client,
-        table_renderer=providers.Factory(TableMarkdownRenderer),
-    )
     document_parse_service = providers.Singleton(
         DocumentParseService,
-        planner=document_parse_planner,
+        ocr_client=paddle_ocr_client,
     )
 
     # --- Web Search 组件 ---

@@ -1,52 +1,64 @@
 from __future__ import annotations
 
+from typing import Any
+
 from chat.application.tools.document_tools.document_parse.errors import (
     DocumentParseFailedError,
 )
-from chat.application.tools.document_tools.document_parse.models import DocumentParseRequest, DocumentParseResult
-from chat.application.tools.document_tools.document_parse.planner import DocumentParsePlanner
+from chat.application.tools.document_tools.document_parse.models import (
+    DocumentParseRequest,
+    DocumentParseResult,
+)
+from chat.application.tools.document_tools.document_parse.parsers.common import (
+    DoclingParser,
+    MarkItDownParser,
+)
+from chat.application.tools.document_tools.document_parse.parsers.specialized import (
+    PandasSpreadsheetParser,
+    PdfParseStrategy,
+)
+from chat.application.tools.document_tools.document_parse.parsers.specialized.ocr import ImageOcrParser
+from chat.application.tools.utils.file_type_detect import detect_file_type
 
 
 class DocumentParseService:
-    """文档解析编排入口。
-
-    Service 只负责执行 ParsePlan 和汇总失败，不关心具体格式解析细节。
-    """
+    """文档解析编排入口。"""
 
     def __init__(
         self,
         *,
-        planner: DocumentParsePlanner | None = None,
+        ocr_client: Any | None = None,
     ) -> None:
-        self._planner = planner or DocumentParsePlanner()
+        self._ocr_client = ocr_client
 
     async def parse(self, request: DocumentParseRequest) -> DocumentParseResult:
-        """按候选计划顺序解析文档。
+        detected_type = detect_file_type(request.file_path)
+        mime_type = (request.mime_type or detected_type.mime_type).lower()
+        label = detected_type.label
 
-        Args:
-            request: 文档解析请求。
+        if label == "pdf" or mime_type == "application/pdf":
+            return await PdfParseStrategy(ocr_client=self._ocr_client).parse(request)
 
-        Returns:
-            第一个成功候选产出的解析结果。
+        if label == "xlsx" or mime_type in {
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }:
+            return await PandasSpreadsheetParser().parse(request)
 
-        Raises:
-            DocumentParseFailedError: 所有候选解析器都失败时抛出。
-        """
-        plan = self._planner.plan(request)
+        if mime_type.startswith("image/"):
+            return await ImageOcrParser(ocr_client=self._ocr_client).parse(request)
+
+        return await self._parse_common_document(request)
+
+    @staticmethod
+    async def _parse_common_document(request: DocumentParseRequest) -> DocumentParseResult:
         last_error: BaseException | None = None
-        for candidate in plan.candidates:
+        for parser in (DoclingParser(), MarkItDownParser()):
             try:
-                return await candidate.parser.parse(request)
+                return await parser.parse(request)
             except Exception as e:
-                # 候选失败不立即中断，交给后续候选或兜底解析器继续尝试。
                 last_error = e
 
         raise DocumentParseFailedError(
-            "Every document parser candidate failed.",
-            parser_name=(
-                "component=document_parse_service;stage=execute_plan;"
-                f"suffix={request.suffix or '<none>'};mime={request.mime_type or '<none>'};"
-                f"roles={','.join(candidate.role for candidate in plan.candidates)}"
-            ),
+            "Common document parsers failed.",
             cause=last_error,
         )

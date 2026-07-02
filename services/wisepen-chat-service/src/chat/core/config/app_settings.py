@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import threading
 from pathlib import Path
 from typing import Literal
@@ -22,11 +22,15 @@ class AppSettings(BaseModel):
     LLM_API_KEY: str
     DEFAULT_MODEL_ID: str
 
-    # ── Model Selection (模型选型) ─────────────────────────────────────
-    QUERY_MODEL: str = "openai/gpt-4o-mini"
-    EMBEDDING_MODEL: str = "openai/qwen3-embedding-8b"
-    EMBEDDING_DIMENSIONS: int = 1024
-    SUMMARY_MODEL: str
+    # ── Tool-Use Small Models (工具性小模型调用栈) ───────────────────────
+    # 以下模型专门服务于 application 层工具性轻量 LLM 调用：RAG answerability gate、
+    # context indexing、web search ranking、工具内结构化推理等。
+    # 它们必须与主对话模型、记忆模型、摘要模型隔离，禁止交叉复用。
+    QUERY_MODEL: str = "deepseek-v4-flash"  # 工具性轻量推理，低成本 + 快速响应
+    EMBEDDING_MODEL: str = "qwen3-embedding-8b"  # 向量索引，与 MEMORY_EMBEDDING_MODEL 隔离
+    EMBEDDING_DIMENSIONS: int = 4096  # qwen3-embedding-8b 默认输出维度
+    
+    SUMMARY_MODEL: str              # 仅用于长文本摘要，必须单独维护，禁止挪作小模型调用
 
     # ── Memory Models (长期记忆模型) ───────────────────────────────────
     MEMORY_LLM_MODEL: str
