@@ -7,11 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
-from chat.application.tools.common.tool_run_file_store.errors import (
-    InvalidToolFileRefError,
-    ToolFileNotFoundError,
-    ToolFileUnreadableError,
-)
+from chat.application.tools.common.tool_run_file_store.errors import tool_file_error_reason
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExecutionError,
@@ -42,9 +38,12 @@ from chat.application.tools.common.web_content_cache import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
 )
-from chat.application.tools.web_tools.web_fetch.errors import WebFetchError
-from chat.application.tools.web_tools.web_fetch.fetchers.base import BaseFetcher, RawFetchOutput
-from chat.application.tools.web_tools.web_fetch._web_fetch_utils import filename_from_url
+from chat.application.tools.utils.url_fetcher import (
+    BaseFetcher,
+    RawFetchOutput,
+    UrlFetchError,
+    filename_from_url,
+)
 
 MAX_DOCUMENT_PARSE_FILE_REFS = 64
 SERVICE_BATCH_SIZE = tool_settings.DOCUMENT_PARSE_MAX_FILE_REFS
@@ -53,10 +52,9 @@ DOCUMENT_PARSE_CONCURRENCY = tool_settings.DOCUMENT_PARSE_CONCURRENCY
 
 @dataclass(frozen=True, slots=True)
 class DocumentParseToolItem:
-    file_ref: str  # 调用方传入的 tfile_* 引用
+    source: str  # 调用方传入的 tfile_* 引用或直链 URL
     status: str  # success 或 failed
     file_name: str | None = None  # 解析出的展示文件名
-    content_ref: int | None = None  # 对应 ToolReturn.cacheable_texts 的索引
     source_scope: str | None = None  # 通过 ToolRunFileStore metadata 识别出的来源范围
     reason: str | None = None  # 单项失败原因，供模型判断下一步
 
@@ -106,19 +104,19 @@ class DocumentParseTool:
                     "\n"
                     "WHEN TO TRIGGER:\n"
                     "  - MUST trigger when previous tools returned tfile_* references (e.g. from web_fetch, web_crawl, or uploads) and you need their textual content.\n"
-                    "  - MUST trigger directly when the user provides obvious file URLs (PDF, image, Office, spreadsheet, or similar non-HTML files) and asks for their content.\n"
+                    "  - MUST trigger directly when the user provides obvious document file URLs (PDF, Office, spreadsheet, or similar non-HTML files) and asks for their content.\n"
                     "  - SHOULD trigger when the user asks to read, summarize, or answer questions about an attached document.\n"
                     "DO NOT TRIGGER when:\n"
                     "  - You need to read normal HTML pages — use web_fetch or web_crawl instead.\n"
                     "  - You already have content_ids from a previous parse — use tool_content_read or tool_content_sequential_read instead.\n"
-                    "  - You only have a non-file web page URL; mode='from_direct_urls' is only for direct file URLs.\n"
+                    "  - You need OCR for a standalone image after inspecting it — use image_ocr instead.\n"
                     "\n"
                     "INPUT RULES:\n"
-                    "  - mode='from_web_fetch' => provide file_refs with tfile_* values returned by web_fetch or another previous tool.\n"
-                    "  - mode='from_direct_urls' => provide direct_urls with full http(s) file URLs.\n"
-                    "  - file_refs and direct_urls are mutually exclusive; never provide both.\n"
+                    "  - Provide file_refs for tfile_* values returned by web_fetch or another previous tool.\n"
+                    "  - Provide direct_urls for full http(s) direct document file URLs.\n"
+                    "  - Provide exactly one of file_refs or direct_urls; never provide both.\n"
                     "  - Pass all selected files in one array; the tool auto-batches large sets and parses files concurrently within each batch.\n"
-                    "  - Do not wrap obvious direct file URLs through web_fetch first; use mode='from_direct_urls' directly.\n"
+                    "  - Do not wrap obvious direct document file URLs through web_fetch first; pass direct_urls directly.\n"
                     "\n"
                     "OUTPUT RULES:\n"
                     "  - Returns one item per input file with status success or failed.\n"
@@ -129,14 +127,6 @@ class DocumentParseTool:
                     {
                         "type": "object",
                         "properties": {
-                            "mode": {
-                                "type": "string",
-                                "enum": ["from_web_fetch", "from_direct_urls"],
-                                "description": (
-                                    "Required. Use from_web_fetch for tfile_* file_refs; "
-                                    "use from_direct_urls for obvious direct file URLs."
-                                ),
-                            },
                             "file_refs": {
                                 "type": "array",
                                 "items": {
@@ -146,7 +136,7 @@ class DocumentParseTool:
                                 "minItems": 1,
                                 "maxItems": MAX_DOCUMENT_PARSE_FILE_REFS,
                                 "description": (
-                                    "Required when mode='from_web_fetch'. tfile_* references produced by previous tools. "
+                                    "tfile_* references produced by previous tools. "
                                     "Large sets are automatically split into internal batches."
                                 ),
                             },
@@ -159,13 +149,12 @@ class DocumentParseTool:
                                 "minItems": 1,
                                 "maxItems": MAX_DOCUMENT_PARSE_FILE_REFS,
                                 "description": (
-                                    "Required when mode='from_direct_urls'. Full http(s) direct file URLs. "
+                                    "Full http(s) direct document file URLs. "
                                     "Large sets are automatically split into internal batches. "
                                     "Use this for obvious non-HTML file links instead of calling web_fetch first."
                                 ),
                             },
                         },
-                        "required": ["mode"],
                         "additionalProperties": False,
                     }
                 ),
@@ -185,67 +174,66 @@ class DocumentParseTool:
         """返回工具元定义。"""
         return self._definition
 
+    async def refresh_stale_parse_cache(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        file_ref: str,
+    ) -> None:
+        await self._cache.refresh_stale_parse_cache(
+            user_id=user_id,
+            session_id=session_id,
+            file_ref=file_ref,
+        )
+
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
         """批量解析文件引用，单项失败不影响其它文件。"""
         user_id = str(context["user_id"])
         session_id = str(context["session_id"])
-        mode = str(kwargs["mode"])
-        file_refs = tuple(str(value) for value in kwargs.get("file_refs", ()))
-        direct_urls = tuple(str(value) for value in kwargs.get("direct_urls", ()))
+        file_refs = tuple(str(value).strip() for value in kwargs.get("file_refs", ()))
+        direct_urls = tuple(str(value).strip() for value in kwargs.get("direct_urls", ()))
 
-        match mode:
-            case "from_web_fetch":
-                if not file_refs:
-                    raise ToolExecutionError(
-                        reason="missing_file_refs",
-                        detail_reason="file_refs is required when mode='from_web_fetch'.",
-                        retryable=False,
-                    )
-                if direct_urls:
-                    raise ToolExecutionError(
-                        reason="mixed_document_parse_inputs",
-                        detail_reason="direct_urls must not be provided when mode='from_web_fetch'.",
-                        retryable=False,
-                    )
-                item_results = await self._parse_file_ref_batches(
-                    user_id=user_id,
-                    session_id=session_id,
-                    file_refs=file_refs,
-                )
-            case "from_direct_urls":
-                if not direct_urls:
-                    raise ToolExecutionError(
-                        reason="missing_direct_urls",
-                        detail_reason="direct_urls is required when mode='from_direct_urls'.",
-                        retryable=False,
-                    )
-                if file_refs:
-                    raise ToolExecutionError(
-                        reason="mixed_document_parse_inputs",
-                        detail_reason="file_refs must not be provided when mode='from_direct_urls'.",
-                        retryable=False,
-                    )
-                item_results = await self._parse_direct_url_batches(
-                    user_id=user_id,
-                    session_id=session_id,
-                    direct_urls=direct_urls,
-                )
-            case _:
-                raise ToolExecutionError(
-                    reason="invalid_mode",
-                    detail_reason="mode must be 'from_web_fetch' or 'from_direct_urls'.",
-                    retryable=False,
-                )
+        if bool(file_refs) == bool(direct_urls):
+            raise ToolExecutionError(
+                reason="invalid_document_parse_input",
+                detail_reason="Provide exactly one of file_refs or direct_urls.",
+                retryable=False,
+            )
+        if any(not value for value in file_refs):
+            raise ToolExecutionError(
+                reason="invalid_file_refs",
+                detail_reason="file_refs must not contain blank values.",
+                retryable=False,
+            )
+        if any(not value for value in direct_urls):
+            raise ToolExecutionError(
+                reason="invalid_direct_urls",
+                detail_reason="direct_urls must not contain blank values.",
+                retryable=False,
+            )
+
+        if file_refs:
+            item_results = await self._parse_file_ref_batches(
+                user_id=user_id,
+                session_id=session_id,
+                file_refs=file_refs,
+            )
+        else:
+            item_results = await self._parse_direct_url_batches(
+                user_id=user_id,
+                session_id=session_id,
+                direct_urls=direct_urls,
+            )
 
         cacheable_texts: list[str] = []
         items: list[DocumentParseToolItem] = []
         for item, markdown in item_results:
             if markdown:
                 item = DocumentParseToolItem(
-                    file_ref=item.file_ref,
+                    source=item.source,
                     status=item.status,
                     file_name=item.file_name,
-                    content_ref=len(cacheable_texts),
                     source_scope=item.source_scope,
                 )
                 cacheable_texts.append(markdown)
@@ -342,7 +330,7 @@ class DocumentParseTool:
                         )
                     return (
                         DocumentParseToolItem(
-                            file_ref=file_ref,
+                            source=file_ref,
                             status="success",
                             file_name=resolved.filename,
                             source_scope=source_scope,
@@ -369,7 +357,7 @@ class DocumentParseTool:
                     )
                 return (
                     DocumentParseToolItem(
-                        file_ref=file_ref,
+                        source=file_ref,
                         status="success",
                         file_name=resolved.filename,
                         source_scope=source_scope,
@@ -379,10 +367,10 @@ class DocumentParseTool:
             except Exception as e:
                 return (
                     DocumentParseToolItem(
-                        file_ref=file_ref,
+                        source=file_ref,
                         status="failed",
                         source_scope=None,
-                        reason=_failure_reason(e),
+                        reason=tool_file_error_reason(e, default="parse_failed"),
                     ),
                     None,
                 )
@@ -399,7 +387,7 @@ class DocumentParseTool:
         if self._direct_fetcher is None:
             return (
                 DocumentParseToolItem(
-                    file_ref=direct_url,
+                    source=direct_url,
                     status="failed",
                     reason="direct_url_fetch_unavailable",
                 ),
@@ -410,7 +398,7 @@ class DocumentParseTool:
         if not url.startswith(("http://", "https://")):
             return (
                 DocumentParseToolItem(
-                    file_ref=direct_url,
+                    source=direct_url,
                     status="failed",
                     reason="invalid_direct_url",
                 ),
@@ -427,7 +415,7 @@ class DocumentParseTool:
             if cache_hit is not None:
                 return (
                     DocumentParseToolItem(
-                        file_ref=direct_url,
+                        source=direct_url,
                         status="success",
                         file_name=filename_from_url(url),
                         source_scope="web_public",
@@ -439,7 +427,7 @@ class DocumentParseTool:
             if raw.file_path is None:
                 return (
                     DocumentParseToolItem(
-                        file_ref=direct_url,
+                        source=direct_url,
                         status="failed",
                         reason="direct_url_not_file",
                     ),
@@ -473,10 +461,10 @@ class DocumentParseTool:
                 session_id=session_id,
                 file_ref=record.ref_id,
             )
-        except WebFetchError as e:
+        except UrlFetchError as e:
             return (
                 DocumentParseToolItem(
-                    file_ref=direct_url,
+                    source=direct_url,
                     status="failed",
                     reason=f"direct_url_fetch_failed:{e.reason}",
                 ),
@@ -485,7 +473,7 @@ class DocumentParseTool:
         except Exception:
             return (
                 DocumentParseToolItem(
-                    file_ref=direct_url,
+                    source=direct_url,
                     status="failed",
                     reason="direct_url_parse_failed",
                 ),
@@ -495,13 +483,3 @@ class DocumentParseTool:
             if raw is not None and raw.file_path is not None:
                 with contextlib.suppress(OSError):
                     Path(raw.file_path).unlink(missing_ok=True)
-
-
-def _failure_reason(error: Exception) -> str:
-    if isinstance(error, InvalidToolFileRefError):
-        return "invalid_file_ref"
-    if isinstance(error, ToolFileNotFoundError):
-        return "file_ref_unavailable"
-    if isinstance(error, ToolFileUnreadableError):
-        return "file_unreadable"
-    return "parse_failed"

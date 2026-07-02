@@ -19,12 +19,16 @@ from chat.application.tools.common.web_content_cache.refresh_queue import (
     WEB_FETCH_REFRESH_JOB,
     WebContentCacheRefreshTaskPublisher,
 )
+from chat.application.tools.utils.url_fetcher import (
+    BaseFetcher,
+    RawFetchOutput,
+    UrlFetchError,
+    filename_from_url,
+)
 from common.logger import info, warn
 from .cleaners.base import BaseCleaner
-from .errors import WebFetchError
-from .fetchers.base import BaseFetcher, RawFetchOutput
 from .models import WebFetchBatchResult, WebFetchFailure, WebFetchResult
-from ._web_fetch_utils import filename_from_url, judge_quality
+from ._web_fetch_utils import judge_quality
 
 _PRODUCER_NAME = "web_fetch"
 _REFRESH_LOCK_TTL_SECONDS = 300
@@ -95,7 +99,7 @@ class FetchCoordinator:
             WebFetchResult: 成功结果（HTML 页面或非 HTML 文件引用）。
 
         Raises:
-            WebFetchError: 抓取失败（HTTP 错误、网络错误、URL 不支持）。
+            UrlFetchError: 抓取失败（HTTP 错误、网络错误、URL 不支持）。
         """
         info("网页抓取开始", url=url)
 
@@ -112,7 +116,7 @@ class FetchCoordinator:
         warnings: list[str] = []
         try:
             raw = await self._httpx_fetcher.fetch(url)
-        except WebFetchError as exc:
+        except UrlFetchError as exc:
             warn(
                 "网页抓取 httpx 失败，降级到 scrapling",
                 url=url,
@@ -205,7 +209,7 @@ class FetchCoordinator:
                         session_id=session_id,
                         source_scope=source_scope,
                     )
-                except WebFetchError as exc:
+                except UrlFetchError as exc:
                     return WebFetchFailure(
                         url=u,
                         reason=exc.reason,
@@ -291,7 +295,7 @@ class FetchCoordinator:
                 source_scope=source_scope,
             )
         except ToolRunFileStoreError as exc:
-            raise WebFetchError(
+            raise UrlFetchError(
                 url=raw.source_url,
                 reason=f"file_publish_failed: {exc}",
             ) from exc

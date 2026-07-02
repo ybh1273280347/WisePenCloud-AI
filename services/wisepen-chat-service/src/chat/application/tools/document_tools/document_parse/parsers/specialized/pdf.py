@@ -32,12 +32,8 @@ class PdfParseStrategy:
             self,
             *,
             ocr_client: Any | None = None,
-            scan_coverage: float = 0.85,
-            min_text_chars: int = 20,
     ) -> None:
         self._ocr_client = ocr_client
-        self._scan_coverage = scan_coverage
-        self._min_text_chars = min_text_chars
 
     async def parse(self, request: DocumentParseRequest) -> DocumentParseResult:
         pdf_path = Path(request.file_path)
@@ -187,23 +183,8 @@ class PdfParseStrategy:
 
     def _classify_page(self, page: fitz.Page) -> Literal["text", "scanned"]:
         """判断单页 PDF 是文本页还是扫描件页。"""
-        page_area = abs(page.rect)
-        if page_area == 0:
-            return "scanned"
-
-        max_image_coverage = 0.0
-        for block in page.get_text("rawdict", flags=0)["blocks"]:
-            if block["type"] == 1:
-                coverage = abs(fitz.Rect(block["bbox"])) / page_area
-                if coverage > max_image_coverage:
-                    max_image_coverage = coverage
-
-        has_dominant_image = max_image_coverage >= self._scan_coverage
-        has_real_text = len(page.get_text("text").strip()) >= self._min_text_chars
-
-        if not has_dominant_image and has_real_text:
+        if page.get_text("text").strip():
             return "text"
-
         return "scanned"
 
 

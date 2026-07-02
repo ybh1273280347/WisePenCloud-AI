@@ -183,13 +183,21 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 ### `document_parse`
 
 - 默认暴露。
-- 通过 `mode` 明确区分 `from_web_fetch` 与 `from_direct_urls`。
-- `from_web_fetch` 只接受 `file_refs: tfile_*[]`，通过 `ToolRunFileStore.resolve_ref(...)` 解析真实文件路径。
-- `from_direct_urls` 只接受明显非 HTML 文件直链 URL，下载后复用同一文件解析链。
+- 只接受 `file_refs: tfile_*[]` 或 `direct_urls: http(s)[]`，二者互斥。
+- `file_refs` 通过 `ToolRunFileStore.resolve_ref(...)` 解析真实文件路径。
+- `direct_urls` 只接受明显非 HTML 文档文件直链 URL，下载后复用同一文件解析链。
 - `file_refs` 与 `direct_urls` 互斥；普通 HTML 页面仍使用 `web_fetch` / `web_crawl`。
 - web 来源的解析结果必须回写统一 URL 缓存路径。
 - 内部并发解析，单项失败返回 failed item。
 - 成功文件的 Markdown 进入 `ToolReturn.cacheable_texts`，由输出缓存切面分批生成多个 `cnt_*`。
+
+### `image_ocr`
+
+- 默认暴露。
+- 只在模型看图后仍需要精确抽取图片文字时使用。
+- 只接受 `file_ref: tfile_*` 或 `file_path`，二者互斥。
+- `file_ref` 走 `ToolRunFileStore.resolve_ref(...)`；`file_path` 只接受用户直接给出的 URL/路径或可信上游路径。
+- OCR Markdown 进入 `ToolReturn.cacheable_texts`，不直接塞进 `visible_result`。
 
 ### `math_tools`
 

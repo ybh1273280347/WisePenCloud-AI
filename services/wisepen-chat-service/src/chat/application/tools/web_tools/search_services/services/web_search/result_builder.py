@@ -31,7 +31,6 @@ def build_web_search_tool_return(
 
     suggested_action = SuggestedAction(
         tool_name="web_fetch",
-        mode="from_search_results",
         reason=(
             "Fetch selected search refs before using them as evidence. "
             "supplier_answers are only retrieval hints and must not replace your own fetch and analysis."

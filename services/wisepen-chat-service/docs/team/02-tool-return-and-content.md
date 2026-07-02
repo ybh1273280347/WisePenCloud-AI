@@ -36,11 +36,9 @@ return ToolReturn(
     visible_result={
         "items": [
             {
-                "file_ref": file_ref,
+                "source": file_ref,
                 "status": "success",
                 "file_name": file_name,
-                "content_ref": 0,
-                "text_length": len(markdown),
             }
         ]
     },
@@ -53,7 +51,7 @@ return ToolReturn(
 - `tag` 是 XML 根标签，必须是合法 XML tag。
 - `visible_result` 放模型马上需要理解的结构化信息。
 - `cacheable_texts` 只放运行时托管的大文本。
-- `content_ref` 必须是本次 `ToolReturn.cacheable_texts` 的全局索引。
+- 不在 `visible_result` 中暴露 `cacheable_texts` 的内部下标；后续读取凭证由统一缓存切面追加 `<contents>` 或 `<content_receipt>`。
 - 通用 ToolReturn 包装能表达清楚意图时应优先使用，例如 `SuggestedAction` / `SuggestedActions`。
 
 ## SuggestedAction
@@ -187,7 +185,6 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 
 ```json
 {
-  "mode": "from_web_fetch",
   "file_refs": ["tfile_xxx", "tfile_yyy"]
 }
 ```
@@ -196,21 +193,19 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 
 ```json
 {
-  "mode": "from_direct_urls",
   "direct_urls": ["https://example.com/report.pdf"]
 }
 ```
 
 规则：
 
-- `mode="from_web_fetch"` 只接受批量 `file_refs`。
-- `mode="from_direct_urls"` 只接受批量 `direct_urls`，用于明显的非 HTML 文件直链。
+- `file_refs` 用于批量 `tfile_*`。
+- `direct_urls` 用于明显的非 HTML 文件直链。
 - `file_refs` 和 `direct_urls` 互斥，单次总文件数最多 8 个。
 - `file_refs` 只接受 `ToolRunFileStore` 产生的 `tfile_*`，不接受本地绝对路径、上传对象 key 或 `cnt_*`。
 - 普通 HTML 页面 URL 不走 `document_parse`，应使用 `web_fetch` / `web_crawl`；明显文件直链不要先包一层 `web_fetch`。
 - 工具内部并发解析，单项失败不影响其它文件。
 - 每个成功文件对应一段 `cacheable_texts`，由 `ToolOutputCache` 分批生成多个 `cnt_*`。
-- `visible_result.items[*].content_ref` 指向对应 Markdown 在本次 `cacheable_texts` 中的全局索引。
 - 返回中应包含单个 `SuggestedAction`，推荐后续用 `tool_content_read` 的 `ranked_expand` 读取解析后的 Markdown。
 
 `web_fetch` 和 `document_parse` 是同一核心外界信息获取工具体系里的两个阶段化入口。二者共享 URL 内容缓存、HTTP 下载能力和 `source_kind/source_scope/source_url/source_cache_doc_id` metadata 是正确行为：它保证网页正文、文件直链和 web_fetch 产出的非 HTML 文件都能落在统一 URL 缓存路径上。
@@ -251,7 +246,7 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 | 统一递归渲染 | 是否依赖统一递归渲染，而不是工具内手写 result 转换层。 |
 | 大文本入口 | 大文本是否只通过 `ToolReturn.cacheable_texts` 进入缓存切面。 |
 | 内容单元边界 | 多段文本是否保持原始内容单元边界，而不是提前拼接。 |
-| `content_ref` | `visible_result` 是否用全局 `content_ref` 指向 `cacheable_texts`。 |
+| 缓存下标 | 是否避免把 `cacheable_texts` 的内部下标暴露到 `visible_result`。 |
 | 自定义缓存 | 是否存在工具内自定义缓存、手写 receipt 或重复读取协议。 |
 | URL 复用 | 是否把 URL 复用放进 `web_content_cache`，而不是混入 `ToolContentStore`。 |
 | 模型暴露 | 是否把 Mongo cache `doc_id`、Redis key、本地路径或 object key 暴露给模型。 |

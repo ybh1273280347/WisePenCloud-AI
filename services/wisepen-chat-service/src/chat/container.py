@@ -24,11 +24,12 @@ from chat.application.tools.common.tool_run_file_store.gc import (
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
 from chat.application.tools.document_tools.document_parse import DocumentParseService
-from chat.application.tools.document_tools.document_parse.parsers.specialized.ocr import (
+from chat.application.tools.document_tools.ocr import (
     PaddleCloudClient,
     PaddleCloudConfig,
 )
 from chat.application.tools.document_tools.document_parse_tool import DocumentParseTool
+from chat.application.tools.document_tools.image_ocr_tool import ImageOcrTool
 from chat.application.tools.math_tools.calculus_solve_tool import CalculusSolveTool
 from chat.application.tools.math_tools.equation_solve_tool import EquationSolveTool
 from chat.application.tools.math_tools.expression_solve_tool import ExpressionSolveTool
@@ -47,6 +48,7 @@ from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillM
 from chat.application.tools.tool_output_cache import ToolOutputCache
 from chat.application.tools.tool_output_renderer import ToolOutputRenderer
 from chat.application.tools.tool_settings import tool_settings
+from chat.application.tools.utils.url_fetcher import HttpxFetcher
 from chat.application.tools.utils.markdown_renderer import WebPageMarkdownRenderer
 from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
 from chat.application.tools.web_tools.search_services.custom_source_factory import (
@@ -77,9 +79,6 @@ from chat.application.tools.web_tools.web_fetch import (
 )
 from chat.application.tools.web_tools.web_fetch.cleaners.trafilatura_cleaner import (
     TrafilaturaCleaner,
-)
-from chat.application.tools.web_tools.web_fetch.fetchers.httpx_fetcher import (
-    HttpxFetcher,
 )
 from chat.application.tools.web_tools.web_fetch.fetchers.scrapling_fetcher import (
     ScraplingFetcher,
@@ -469,6 +468,12 @@ class Container(containers.DeclarativeContainer):
         refresh_task_publisher=web_content_cache_refresh_task_publisher,
         direct_fetcher=web_fetch_httpx_fetcher,
     )
+    image_ocr_tool = providers.Singleton(
+        ImageOcrTool,
+        file_store=tool_run_file_store,
+        ocr_client=paddle_ocr_client,
+        direct_fetcher=web_fetch_httpx_fetcher,
+    )
 
     # --- Session Tools ---
     search_history_tool = providers.Singleton(
@@ -531,6 +536,7 @@ class Container(containers.DeclarativeContainer):
     # --- Tool Registry ---
     tool_providers = providers.List(
         document_parse_tool,
+        image_ocr_tool,
         calculus_solver_tool,
         linear_algebra_solver_tool,
         equation_solver_tool,

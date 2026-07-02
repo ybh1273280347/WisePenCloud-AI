@@ -52,6 +52,7 @@
 ### document
 
 - [document_parse](document/document_parse.md)
+- [image_ocr](document/image_ocr.md)
 
 ### math
 

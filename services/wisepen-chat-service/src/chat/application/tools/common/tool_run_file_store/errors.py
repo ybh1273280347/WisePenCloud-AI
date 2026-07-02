@@ -16,3 +16,18 @@ class ToolFileUnreadableError(ToolRunFileStoreError):
 
 class ToolFileWriteError(ToolRunFileStoreError):
     """发布文件或创建暂存目录失败。"""
+
+
+def tool_file_error_reason(
+    error: BaseException,
+    *,
+    default: str = "file_ref_unavailable",
+) -> str:
+    """Map ToolRunFileStore errors to stable tool-visible reason codes."""
+    if isinstance(error, InvalidToolFileRefError):
+        return "invalid_file_ref"
+    if isinstance(error, ToolFileNotFoundError):
+        return "file_ref_unavailable"
+    if isinstance(error, ToolFileUnreadableError):
+        return "file_unreadable"
+    return default

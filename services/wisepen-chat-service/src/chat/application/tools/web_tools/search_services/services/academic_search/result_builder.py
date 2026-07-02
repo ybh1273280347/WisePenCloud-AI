@@ -98,7 +98,6 @@ def build_academic_search_tool_return(
             "recommended_ids": recommended_ids,
             "suggested_action": SuggestedAction(
                 tool_name="web_fetch",
-                mode="from_search_results",
                 reason="Fetch selected academic search refs before using them as evidence.",
                 priority=SuggestedActionPriority.HIGH,
             ),

@@ -116,6 +116,21 @@
 - `detect_mime_type(file_path) -> str`
 - `FileType(label, mime_type)`
 
+## URL 抓取器
+
+路径：`src/chat/application/tools/utils/url_fetcher.py`
+
+用途：工具层共享的 URL 抓取能力。HTML 返回文本，非 HTML 写入短期临时文件，供 `web_fetch`、`document_parse` 直链下载和 `image_ocr` 图片 URL 读取复用。
+
+现有入口：
+
+- `HttpxFetcher`
+- `RawFetchOutput`
+- `BaseFetcher`
+- `UrlFetchError` / `UrlFetchNetworkError` / `UrlFetchHttpError` / `UrlFetchUnsupportedUrlError`
+- `decode_bytes`
+- `filename_from_url`
+
 ## Markdown 渲染器
 
 路径：`src/chat/application/tools/utils/markdown_renderer/`
@@ -149,6 +164,7 @@
 | 需要对候选排序、融合、多样性控制 | `ranking_engine` |
 | 需要轻量调用模型或 embedding | `llm_clients` |
 | 需要识别本地文件类型 | `detect_file_type` / `detect_mime_type` |
+| 需要抓取 URL 并区分 HTML 与文件 | `tools/utils/url_fetcher.HttpxFetcher` |
 | 需要 HTML 片段转 Markdown | `FragmentMarkdownRenderer` |
 | 需要网页主体抽取成 Markdown | `WebPageMarkdownRenderer` |
 | 需要复用外部 URL 抓取、HTML 清洗或文件解析结果 | `src/chat/application/tools/common/web_content_cache/`，不要混入 `ToolContentStore` |

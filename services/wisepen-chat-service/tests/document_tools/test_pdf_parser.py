@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from chat.application.tools.document_tools.document_parse.models import OcrPageResult
+from chat.application.tools.document_tools.ocr import OcrPageResult
 from chat.application.tools.document_tools.document_parse.parsers.common.docling import (
     _export_docling_markdown,
 )
@@ -47,6 +47,22 @@ def test_export_docling_without_pages_keeps_original_markdown() -> None:
 class _FakeOcrClient:
     async def parse_page(self, *, file_path: str | Path, page_number: int) -> OcrPageResult:
         return OcrPageResult(page_number=page_number, markdown=f"ocr page {page_number}")
+
+
+class _FakePdfPage:
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def get_text(self, kind: str) -> str:
+        assert kind == "text"
+        return self._text
+
+
+def test_pdf_page_classification_only_uses_empty_text() -> None:
+    parser = PdfParseStrategy()
+
+    assert parser._classify_page(_FakePdfPage("caption near a large image")) == "text"
+    assert parser._classify_page(_FakePdfPage("  \n  ")) == "scanned"
 
 
 @pytest.mark.asyncio

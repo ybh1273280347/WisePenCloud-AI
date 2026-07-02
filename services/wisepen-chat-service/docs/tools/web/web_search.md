@@ -71,7 +71,7 @@ question
 - `overview`
 - `highlights`
 
-真实 URL 仍保存在候选映射缓存里，由 `web_fetch(mode="from_search_results")` 解析。
+真实 URL 仍保存在候选映射缓存里，由 `web_fetch(search_refs=[...])` 解析。
 
 ## search_ref 协议
 
@@ -85,7 +85,7 @@ question
 
 当前只建议：
 
-- `web_fetch(mode="from_search_results")`
+- `web_fetch(search_refs=[...])`
 
 补充约束：
 

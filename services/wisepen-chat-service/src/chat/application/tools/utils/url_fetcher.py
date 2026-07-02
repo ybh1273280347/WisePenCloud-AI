@@ -5,15 +5,16 @@ import os
 import re
 import tempfile
 from collections.abc import AsyncGenerator, AsyncIterator
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
+from urllib.parse import urlparse
 
 import httpx
+from charset_normalizer import from_bytes as detect_encoding
 
 from chat.application.tools.utils.file_type_detect import detect_file_type_from_bytes
-from common.logger import info, warn
-from .base import RawFetchOutput
-from ..errors import WebFetchHttpError, WebFetchNetworkError, WebFetchUnsupportedUrlError
-from .._web_fetch_utils import decode_bytes, filename_from_url
+from common.logger import warn
 
 _URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 
@@ -31,15 +32,56 @@ _SNIFF_BUFFER_BYTES = 32_768  # 32 KiB
 _STREAM_CHUNK_SIZE = 65_536   # 64 KiB
 
 
+class UrlFetchError(RuntimeError):
+    """URL 抓取基础异常。"""
+
+    def __init__(self, *, url: str, reason: str) -> None:
+        super().__init__(f"{url}: {reason}")
+        self.url = url
+        self.reason = reason
+
+    def __str__(self) -> str:
+        return f"{self.url}: {self.reason}"
+
+
+class UrlFetchNetworkError(UrlFetchError):
+    """网络层失败。"""
+
+
+class UrlFetchHttpError(UrlFetchError):
+    """HTTP 层失败。"""
+
+
+class UrlFetchUnsupportedUrlError(UrlFetchError):
+    """不支持的 URL 协议或安全策略拒绝。"""
+
+
+@dataclass(frozen=True, slots=True)
+class RawFetchOutput:
+    """URL 抓取原始结果：HTML 文本或非 HTML 临时文件路径。"""
+
+    source_url: str
+    fetcher: str
+    final_url: str | None = None
+    status_code: int | None = None
+    content_type: str | None = None
+    headers: dict[str, str] = field(default_factory=dict)
+    raw_html: str | None = None
+    file_path: str | None = None
+    file_label: str | None = None
+
+
+class BaseFetcher(Protocol):
+    @property
+    def name(self) -> str:
+        ...
+
+    async def fetch(self, url: str) -> RawFetchOutput:
+        ...
+
+
 class HttpxFetcher:
-    """httpx 静态抓取器。
-
-    流式嗅探前 32KB 判断文件类型：
-    - HTML：继续流式读完整，解码为 raw_html
-    - 非 HTML：写临时文件完整落盘，返回 file_path
-
-    不可恢复错误（HTTP 4xx/5xx、网络失败、URL 不支持）直接 raise WebFetchError。
-    """
+    """httpx URL 抓取器，HTML 返回文本，非 HTML 写入临时文件。"""
 
     __slots__ = ("_http", "_max_response_bytes")
 
@@ -58,7 +100,7 @@ class HttpxFetcher:
 
     async def fetch(self, url: str) -> RawFetchOutput:
         if not _URL_SCHEME_RE.match(url.strip()):
-            raise WebFetchUnsupportedUrlError(
+            raise UrlFetchUnsupportedUrlError(
                 url=url,
                 reason="unsupported url scheme, only http/https allowed",
             )
@@ -71,7 +113,7 @@ class HttpxFetcher:
                 follow_redirects=True,
             ) as response:
                 if response.status_code >= 400:
-                    raise WebFetchHttpError(url=url, reason=f"http {response.status_code}")
+                    raise UrlFetchHttpError(url=url, reason=f"http {response.status_code}")
 
                 content_type = response.headers.get("content-type")
                 final_url = str(response.url)
@@ -84,10 +126,7 @@ class HttpxFetcher:
                     fallback_name=filename_from_url(final_url),
                 )
 
-                # 嗅探已消耗的字节不计入后续预算
                 budget = self._max_response_bytes - len(sniff_buffer)
-
-                # 两条路径共享的不变字段
                 base = dict(
                     source_url=url,
                     fetcher=self.name,
@@ -105,33 +144,59 @@ class HttpxFetcher:
                     )
 
                 file_path = await _write_to_temp_file(
-                    stream, sniff_buffer, budget, url, file_type.label
+                    stream,
+                    sniff_buffer,
+                    budget,
+                    url,
+                    file_type.label,
                 )
-                info(
-                    "web_fetch httpx non-html file saved",
-                    url=url,
+                return RawFetchOutput(
+                    **base,
                     file_path=file_path,
-                    label=file_type.label,
+                    file_label=file_type.label,
                 )
-                return RawFetchOutput(**base, file_path=file_path, file_label=file_type.label)
 
-        except (WebFetchHttpError, WebFetchNetworkError, WebFetchUnsupportedUrlError):
+        except (UrlFetchHttpError, UrlFetchNetworkError, UrlFetchUnsupportedUrlError):
             raise
         except httpx.TimeoutException as exc:
-            raise WebFetchNetworkError(url=url, reason=f"timeout: {exc}") from exc
+            raise UrlFetchNetworkError(url=url, reason=f"timeout: {exc}") from exc
         except httpx.NetworkError as exc:
-            raise WebFetchNetworkError(url=url, reason=f"network: {exc}") from exc
+            raise UrlFetchNetworkError(url=url, reason=f"network: {exc}") from exc
         except httpx.HTTPError as exc:
-            raise WebFetchNetworkError(url=url, reason=f"http: {exc}") from exc
-        except Exception as exc:  # noqa: BLE001
-            raise WebFetchNetworkError(url=url, reason=f"unexpected: {exc}") from exc
+            raise UrlFetchNetworkError(url=url, reason=f"http: {exc}") from exc
+        except Exception as exc:
+            raise UrlFetchNetworkError(url=url, reason=f"unexpected: {exc}") from exc
+
+
+def decode_bytes(raw: bytes, declared_encoding: str | None) -> str:
+    """按声明编码、探测编码、UTF-8 的顺序解码。"""
+    if declared_encoding:
+        try:
+            return raw.decode(declared_encoding, errors="replace")
+        except LookupError:
+            pass
+
+    result = detect_encoding(
+        raw,
+        cp_isolation=["utf-8", "gbk", "big5", "shift_jis", "euc_kr"],
+    ).best()
+    return str(result) if result is not None else raw.decode("utf-8", errors="replace")
+
+
+def filename_from_url(url: str) -> str | None:
+    """从 URL 提取文件名，用于 fallback 文件类型检测或展示名。"""
+    try:
+        path = urlparse(url).path
+        name = Path(path).name
+        return name if name else None
+    except Exception:
+        return None
 
 
 async def _read_sniff_from_stream(
     stream: AsyncIterator[bytes],
     max_bytes: int,
 ) -> bytes:
-    """从流中读取最多 max_bytes 的嗅探缓冲区，不消费整个流。"""
     chunks: list[bytes] = []
     total = 0
     async for chunk in stream:
@@ -139,7 +204,7 @@ async def _read_sniff_from_stream(
         total += len(chunk)
         if total >= max_bytes:
             break
-    return b"".join(chunks)[:max_bytes]  # 直接 slice，无需条件判断
+    return b"".join(chunks)[:max_bytes]
 
 
 async def _bounded_stream(
@@ -147,16 +212,12 @@ async def _bounded_stream(
     budget: int,
     url: str,
 ) -> AsyncGenerator[bytes, None]:
-    """逐块 yield 流内容；预算耗尽时 warn + raise。
-
-    被 _drain_bounded 和 _write_to_temp_file 共用，消除重复的大小追踪逻辑。
-    """
     remaining = budget
     async for chunk in stream:
         remaining -= len(chunk)
         if remaining < 0:
-            warn("web_fetch response exceeded max bytes", url=url, max_bytes=budget)
-            raise WebFetchNetworkError(url=url, reason=f"response exceeded max bytes {budget}")
+            warn("tool url fetch response exceeded max bytes", url=url, max_bytes=budget)
+            raise UrlFetchNetworkError(url=url, reason=f"response exceeded max bytes {budget}")
         yield chunk
 
 
@@ -165,7 +226,6 @@ async def _drain_bounded(
     budget: int,
     url: str,
 ) -> bytes:
-    """将流剩余内容读入内存并返回，超出 budget 时 raise。"""
     return b"".join([chunk async for chunk in _bounded_stream(stream, budget, url)])
 
 
@@ -176,8 +236,7 @@ async def _write_to_temp_file(
     url: str,
     label: str,
 ) -> str:
-    """将完整响应写入临时文件，返回路径；超出 budget 或写入失败时清理并 raise。"""
-    fd, tmp_path = tempfile.mkstemp(prefix="web_fetch_", suffix=f".{label}" if label else "")
+    fd, tmp_path = tempfile.mkstemp(prefix="tool_fetch_", suffix=f".{label}" if label else "")
     try:
         with os.fdopen(fd, "wb") as fh:
             fh.write(sniff_buffer)

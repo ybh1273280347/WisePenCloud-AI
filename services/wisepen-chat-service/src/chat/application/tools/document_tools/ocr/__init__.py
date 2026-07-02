@@ -1,8 +1,10 @@
-from .image_ocr import ImageOcrParser
+from .errors import OcrError
+from .models import OcrPageResult
 from .paddle_cloud import PaddleCloudClient, PaddleCloudConfig
 
 __all__ = [
-    "ImageOcrParser",
+    "OcrError",
+    "OcrPageResult",
     "PaddleCloudClient",
     "PaddleCloudConfig",
 ]

@@ -90,7 +90,7 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 - 默认使用 Exa 返回的 URL
 - 若 OpenAlex 水合成功且 `open_access.oa_url` 可用，则返回该 URL
 - 最终 URL 会写入现有 `search_ref -> url` 映射缓存
-- 后续 `web_fetch(mode="from_search_results")` 可直接消费该 `search_ref`
+- 后续 `web_fetch(search_refs=[...])` 可直接消费该 `search_ref`
 
 ## 输出
 

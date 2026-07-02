@@ -47,11 +47,11 @@
 
 ## 已注册工具
 
-当前 `ToolRegistry` 注册 16 个工具：
+当前 `ToolRegistry` 注册 17 个工具：
 
 | 分组 | 工具 |
 | --- | --- |
-| document | `document_parse` |
+| document | `document_parse`、`image_ocr` |
 | math | `calculus_solver`、`linear_algebra_solver`、`equation_solver`、`stats_solver`、`expression_solver` |
 | session | `tool_content_read`、`tool_content_sequential_read`、`get_historical_chat_messages` |
 | web | `web_search`、`academic_search`、`web_fetch`、`web_crawl` |
@@ -86,7 +86,7 @@ ToolInvocation
 | --- | --- | --- |
 | Disclosure | `ToolRegistry.derive()` → `ToolScope.schemas()` | 默认隐藏工具必须被显式 expose；新增高风险工具优先默认隐藏；不得绕过 scope 把全量 schema 直接交给模型。 |
 | Preflight | `ToolExecutor` | 类型/枚举/required/min/max 放 JSON Schema；安全上下文放 `required_context_keys`；权限/白名单/manifest/跨字段校验放 custom preflight。 |
-| Execute | `tool.execute(context, **kwargs)` | 只做参数归一化、mode 路由、调用 service、错误映射、单项失败处理。service 不读 LLM schema，不生成 XML，不写 receipt。 |
+| Execute | `tool.execute(context, **kwargs)` | 只做参数归一化、互斥校验、调用 service、错误映射、单项失败处理。service 不读 LLM schema，不生成 XML，不写 receipt。 |
 | Render | `ToolOutputRenderer` | 普通返回值递归渲染；工具不得手写 XML 或为渲染构造私有 result layer。 |
 | Output Cache | `ToolOutputCache` | 小文本内联为 `<contents>`；大文本写入 `ToolContentStore` 生成 `cnt_*`；每段 `cacheable_texts[i]` 是独立内容单元，不能提前拼接。 |
 | Runtime File | `ToolRunFileStore` | 生产 `tfile_*`；按 `user_id/session_id` 校验作用域；模型和工具都不能传本地路径、OSS key 或 base64 作为跨工具文件协议。 |
@@ -98,8 +98,8 @@ ToolInvocation
 
 | 引用 | 生产者 | 消费者 | 语义 |
 | --- | --- | --- | --- |
-| `search_ref` | `web_search`、`academic_search` | `web_fetch(mode="from_search_results")` | 搜索候选到真实 URL 的短期映射，模型不直接拿 URL。 |
-| `tfile_*` | `web_fetch`、`document_parse` 直链下载等 | `document_parse(mode="from_web_fetch")` | 工具运行期临时文件引用，按 `user_id/session_id` 隔离。 |
+| `search_ref` | `web_search`、`academic_search` | `web_fetch(search_refs=[...])` | 搜索候选到真实 URL 的短期映射，模型不直接拿 URL。 |
+| `tfile_*` | `web_fetch`、`document_parse` 直链下载等 | `document_parse(file_refs=[...])`、`image_ocr(file_ref=...)` | 工具运行期临时文件引用，按 `user_id/session_id` 隔离。 |
 | `cnt_*` | `ToolOutputCache` | `tool_content_read`、`tool_content_sequential_read` | 大文本缓存凭证，表示已有内容，不代表新外部抓取需求。 |
 
 模型看到这些引用后应沿协议消费，不能猜测内部 URL、文件路径或缓存文档 ID。
@@ -111,7 +111,7 @@ ToolInvocation
 ```text
 web_search
   -> search_ref
-  -> web_fetch(mode="from_search_results")
+  -> web_fetch(search_refs=[...])
   -> cleaned markdown
   -> cnt_*
   -> tool_content_read / tool_content_sequential_read
@@ -122,7 +122,7 @@ web_search
 ```text
 academic_search
   -> search_ref
-  -> web_fetch(mode="from_search_results")
+  -> web_fetch(search_refs=[...])
   -> document_parse (when URL resolves to a file)
   -> cnt_*
   -> session read tools
@@ -143,7 +143,7 @@ academic_search
 ### 直达网页链
 
 ```text
-web_fetch(mode="from_direct_urls")
+web_fetch(urls=[...])
   -> cleaned markdown
   -> cnt_*
   -> session read tools
@@ -152,7 +152,7 @@ web_fetch(mode="from_direct_urls")
 ### 文件直链链路
 
 ```text
-document_parse(mode="from_direct_urls")
+document_parse(direct_urls=[...])
   -> httpx direct fetcher
   -> ToolRunFileStore
   -> DocumentParseService
@@ -164,18 +164,20 @@ document_parse(mode="from_direct_urls")
 ### 搜索命中文件但模型不确定资源类型时
 
 ```text
-web_fetch(mode="from_search_results")
+web_fetch(search_refs=[...])
   -> non-HTML file_ref tfile_*
-  -> document_parse(mode="from_web_fetch")
+  -> document_parse(file_refs=[...])
   -> parsed markdown
   -> URL content cache + cnt_*
+  -> session read tools
 ```
 
 `web_fetch` 和 `document_parse` 的强耦合是正确行为：它们共同构成核心外界信息获取工具体系。`web_fetch` 负责 HTML 抓取、未知 URL 探测和非 HTML 文件移交，`document_parse` 负责文件内容抽取；二者共享 URL 内容缓存、fetcher 和 `source_scope` metadata，保证同一 URL 的网页正文、文件占位和解析 Markdown 能走同一缓存路径。
 
 ## Web / Document 边界
 
-- 明显的 PDF、图片、Office、表格等文件直链，直接调用 `document_parse(mode="from_direct_urls")`。
+- 明显的 PDF、Office、表格等文件直链，直接调用 `document_parse(direct_urls=[...])`。
+- 明显图片 URL 需要精确抽字时调用 `image_ocr(file_path=...)`；普通看图理解优先交给主模型多模态能力。
 - 普通 HTML 页面或不确定类型 URL，调用 `web_fetch`。
 - 多页站点采集，调用 `web_crawl`。
 - `web_search` 只找候选，不能把 preview 或 supplier answer 当最终证据。
@@ -191,7 +193,7 @@ web_fetch(mode="from_search_results")
 - HTML crawl 页面同样通过 `WebContentCacheService` 读写同一 URL 缓存；缓存命中时仍保留 raw HTML 用于继续抽链。
 - 非 HTML 抓取后，`web_fetch` 先写占位文档，并把 `source_cache_doc_id` 写进 `tfile_*` metadata。
 - `document_parse` 解析来源为 `web_fetch` 的文件后，回填同一 URL 缓存文档的 Markdown，并标记 `parser=document_parse` 和 `parser_version`。
-- `document_parse(mode="from_direct_urls")` 也先读同一 URL parse 缓存；未命中时下载文件、预创建占位、解析并回填。
+- `document_parse(direct_urls=[...])` 也先读同一 URL parse 缓存；未命中时下载文件、预创建占位、解析并回填。
 - stale 命中返回旧内容，同时通过 Redis refresh lock 和 Arq refresh queue 安排后台刷新。
 
 缓存访问域由 `source_scope` 决定：`web_public` 走公共缓存，`web_custom` 走用户私有缓存。document parse 读取时不能在 public/private 间串域回退。
@@ -263,18 +265,23 @@ Web 工具的模型约束：search preview 不是证据；academic_search 水合
 ### Document 工具
 
 ```text
-document_parse(from_web_fetch)
+document_parse(file_refs=[...])
   -> ToolRunFileStore.resolve_ref
   -> parsed URL cache read
   -> DocumentParseService
   -> URL cache writeback when source_kind=web_fetch
   -> cacheable_texts -> cnt_*
 
-document_parse(from_direct_urls)
+document_parse(direct_urls=[...])
   -> parsed URL cache read
   -> direct fetcher
   -> ToolRunFileStore publish
   -> same parse path
+
+image_ocr(file_ref=... / file_path=...)
+  -> validate image source
+  -> OCR client
+  -> cacheable_texts -> cnt_*
 ```
 
 Document 工具的模型约束：只解析文件，不读普通 HTML；不接本地路径、OSS key、`cnt_*`。
@@ -334,7 +341,7 @@ Math 工具的模型约束：不访问外部信息，不执行任意 Python，�
 
 - 不要伪造 `search_ref`、`tfile_*`、`cnt_*`、`skill_id`、asset path 或内部 URL。
 - 不要把 search preview、supplier answer、hydration metadata 当作正文证据。
-- 不要把 obvious file URL 包一层 `web_fetch`，直接给 `document_parse` 的 direct URL 模式。
+- 不要把 obvious document file URL 包一层 `web_fetch`，直接给 `document_parse(direct_urls=[...])`。
 - 不要把 `file_refs` 和 `direct_urls` 混在一次 document parse 调用里；不要把 `urls` 和 `search_refs` 混在一次 web fetch 调用里。
 - 已有缓存凭证时先读缓存；只有用户明确要求刷新或现有证据不足时才重新获取。
 - 不能从模型参数传入 `user_id`、`session_id`、API key、object key 或本地路径；这些只能来自可信 context 或 preflight metadata。
@@ -345,17 +352,18 @@ Math 工具的模型约束：不访问外部信息，不执行任意 Python，�
 | --- | --- | --- |
 | 搜索 provider | 4get/DDG、Exa、自定义 Exa/Tavily/AnySearch/百度千帆 | provider 扩展、custom provider 扩展、provider capability 扩展（如 academic search）。 |
 | 搜索内部小模型 | candidate ranker（仅看 candidate 文本，不看 supplier answer） | 提示词调优、JSON 解析容错、候选重排模型替换。 |
-| Web fetcher | `HttpxFetcher` -> `ScraplingFetcher` fallback | 新增 Playwright/browser fetcher、反爬策略、质量判断阈值实验。 |
+| URL fetcher | `tools/utils/url_fetcher.HttpxFetcher` -> `ScraplingFetcher` fallback | 新增 Playwright/browser fetcher、反爬策略、质量判断阈值实验。 |
 | Web cleaner | `TrafilaturaCleaner` + Markdown renderer | cleaner 替换、正文保真度评估、表格/代码块渲染策略。 |
 | URL 缓存 | `WebContentCacheService` + Redis entry repository + Mongo value repository + Arq refresh queue | TTL 策略、ETag/Last-Modified 增量刷新、raw HTML 保留策略、hydrate 结果缓存。 |
-| 文档 parser | PDF strategy、Docling、Pandas、Image OCR、MarkItDown | Parser 顺序实验、OCR provider 替换、PDF 页级策略优化。 |
+| 文档 parser | PDF strategy、Docling、Pandas、MarkItDown | Parser 顺序实验、PDF 页级策略优化。 |
+| OCR provider | PaddleCloud OCR client | 扫描 PDF 页和 `image_ocr` 的 OCR provider 替换。 |
 | 内容分块 | Markdown/plain chunking pipeline | chunk 大小、结构索引、页面/锚点抽取策略。 |
 | 排序 | `RankingEngine` | 本地 embedding、cross-encoder、provider reranker、混合 BM25。 |
 | Skill 发布 | `SkillPublisher` protocol | 接入真实 ai-asset publisher、冲突检查、版本管理。 |
 
 ## 后续优化方向
 
-- 持续调优 `web_fetch` / `document_parse` 提示词中的模式边界，减少文件直链误路由。
+- 持续调优 `web_fetch` / `document_parse` / `image_ocr` 提示词中的文件边界，减少文件直链误路由。
 - 给直链文件类型判断增加可配置扩展名和 MIME allowlist，辅助模型和工具双层路由。
 - 继续收敛 web/document 中非 HTML 占位、parse 回填等缓存逻辑，减少业务类里重复的缓存细节。
 - 评估 academic_search 的 OpenAlex 水合缓存是否值得引入。

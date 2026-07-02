@@ -20,7 +20,7 @@ from chat.application.tools.common.web_content_cache import (
 from chat.application.tools.document_tools.document_parse.models import DocumentParseRequest
 from chat.application.tools.document_tools.document_parse.service import DocumentParseService
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.web_tools.web_fetch.fetchers.base import RawFetchOutput
+from chat.application.tools.utils.url_fetcher import RawFetchOutput
 from common.logger import warn
 
 

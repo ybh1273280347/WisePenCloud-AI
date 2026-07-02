@@ -19,10 +19,9 @@ from chat.application.tools.common.web_content_cache import (
     HtmlCacheWrite,
     WebContentCacheService,
 )
+from chat.application.tools.utils.url_fetcher import BaseFetcher, RawFetchOutput, UrlFetchError
 from common.logger import info, warn
 from .cleaners.base import BaseCleaner
-from .errors import WebFetchError
-from .fetchers.base import BaseFetcher, RawFetchOutput
 from .models import WebFetchResult
 from ._web_fetch_utils import judge_quality
 
@@ -169,11 +168,11 @@ class WebCrawler:
 
             try:
                 raw = await self._httpx_fetcher.fetch(url)
-            except WebFetchError as exc:
+            except UrlFetchError as exc:
                 warn("web_crawl httpx failed, fallback to scrapling", url=url, reason=exc.reason)
                 try:
                     raw = await self._scrapling_fetcher.fetch(url)
-                except WebFetchError as exc2:
+                except UrlFetchError as exc2:
                     warn("web_crawl scrapling failed", url=url, reason=exc2.reason)
                     return None
 
@@ -190,7 +189,7 @@ class WebCrawler:
                     fallback_raw = await self._scrapling_fetcher.fetch(url)
                     if fallback_raw.raw_html is not None:
                         raw = fallback_raw
-                except WebFetchError as exc2:
+                except UrlFetchError as exc2:
                     warn("web_crawl scrapling failed, using httpx result", url=url, reason=exc2.reason)
 
             page = self._build_page(raw, source_scope=source_scope)

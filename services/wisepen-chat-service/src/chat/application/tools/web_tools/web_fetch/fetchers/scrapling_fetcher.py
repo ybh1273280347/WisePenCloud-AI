@@ -4,10 +4,14 @@ import re
 
 from scrapling.fetchers import StealthyFetcher
 
+from chat.application.tools.utils.url_fetcher import (
+    RawFetchOutput,
+    UrlFetchHttpError,
+    UrlFetchNetworkError,
+    UrlFetchUnsupportedUrlError,
+    decode_bytes,
+)
 from common.logger import warn
-from .base import RawFetchOutput
-from ..errors import WebFetchHttpError, WebFetchNetworkError, WebFetchUnsupportedUrlError
-from .._web_fetch_utils import decode_bytes
 
 _URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 
@@ -34,7 +38,7 @@ class ScraplingFetcher:
 
     async def fetch(self, url: str) -> RawFetchOutput:
         if not _URL_SCHEME_RE.match(url.strip()):
-            raise WebFetchUnsupportedUrlError(
+            raise UrlFetchUnsupportedUrlError(
                 url=url,
                 reason="unsupported url scheme, only http/https allowed",
             )
@@ -47,7 +51,7 @@ class ScraplingFetcher:
                 timeout=self._timeout_ms,
             )
         except Exception as exc:
-            raise WebFetchNetworkError(
+            raise UrlFetchNetworkError(
                 url=url,
                 reason=f"scrapling fetch failed: {exc}",
             ) from exc
@@ -55,11 +59,11 @@ class ScraplingFetcher:
         # Response 字段：status, headers, url, body, encoding, history
         status: int = response.status
         if status >= 400:
-            raise WebFetchHttpError(url=url, reason=f"http {status}")
+            raise UrlFetchHttpError(url=url, reason=f"http {status}")
 
         raw_bytes: bytes = response.body or b""
         if not raw_bytes:
-            raise WebFetchNetworkError(url=url, reason="empty response body")
+            raise UrlFetchNetworkError(url=url, reason="empty response body")
 
         if len(raw_bytes) > self._max_response_bytes:
             warn(
@@ -67,7 +71,7 @@ class ScraplingFetcher:
                 url=url,
                 max_bytes=self._max_response_bytes,
             )
-            raise WebFetchNetworkError(
+            raise UrlFetchNetworkError(
                 url=url,
                 reason=f"response exceeded max bytes {self._max_response_bytes}",
             )

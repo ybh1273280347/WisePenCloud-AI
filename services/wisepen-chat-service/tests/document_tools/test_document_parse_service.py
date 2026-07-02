@@ -10,6 +10,12 @@ from chat.application.tools.document_tools.document_parse.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )
+from chat.application.tools.document_tools.document_parse.parsers.common import (
+    common_document as common_document_module,
+)
+from chat.application.tools.document_tools.document_parse.parsers.common.common_document import (
+    CommonDocumentParser,
+)
 from chat.application.tools.document_tools.document_parse import service as service_module
 from chat.application.tools.document_tools.document_parse.service import DocumentParseService
 
@@ -36,8 +42,7 @@ async def test_service_routes_xlsx_to_pandas_without_common_fallback(
         lambda _: SimpleNamespace(label="xlsx", mime_type="application/octet-stream"),
     )
     monkeypatch.setattr(service_module, "PandasSpreadsheetParser", _PandasParser)
-    monkeypatch.setattr(service_module, "DoclingParser", _UnexpectedCommonParser)
-    monkeypatch.setattr(service_module, "MarkItDownParser", _UnexpectedCommonParser)
+    monkeypatch.setattr(service_module, "CommonDocumentParser", _UnexpectedCommonParser)
 
     result = await DocumentParseService().parse(DocumentParseRequest(file_path="sample.xlsx"))
 
@@ -46,7 +51,31 @@ async def test_service_routes_xlsx_to_pandas_without_common_fallback(
 
 
 @pytest.mark.asyncio
-async def test_service_uses_markitdown_only_for_common_docling_failure(
+async def test_service_routes_common_files_to_common_parser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class _CommonParser:
+        async def parse(self, request: DocumentParseRequest) -> DocumentParseResult:
+            calls.append("common")
+            return DocumentParseResult(markdown="common")
+
+    monkeypatch.setattr(
+        service_module,
+        "detect_file_type",
+        lambda _: SimpleNamespace(label="txt", mime_type="text/plain"),
+    )
+    monkeypatch.setattr(service_module, "CommonDocumentParser", _CommonParser)
+
+    result = await DocumentParseService().parse(DocumentParseRequest(file_path="sample.txt"))
+
+    assert result.markdown == "common"
+    assert calls == ["common"]
+
+
+@pytest.mark.asyncio
+async def test_common_parser_uses_markitdown_only_after_docling_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
@@ -61,15 +90,10 @@ async def test_service_uses_markitdown_only_for_common_docling_failure(
             calls.append("markitdown")
             return DocumentParseResult(markdown="fallback")
 
-    monkeypatch.setattr(
-        service_module,
-        "detect_file_type",
-        lambda _: SimpleNamespace(label="txt", mime_type="text/plain"),
-    )
-    monkeypatch.setattr(service_module, "DoclingParser", _FailingDoclingParser)
-    monkeypatch.setattr(service_module, "MarkItDownParser", _MarkItDownParser)
+    monkeypatch.setattr(common_document_module, "DoclingParser", _FailingDoclingParser)
+    monkeypatch.setattr(common_document_module, "MarkItDownParser", _MarkItDownParser)
 
-    result = await DocumentParseService().parse(DocumentParseRequest(file_path="sample.txt"))
+    result = await CommonDocumentParser().parse(DocumentParseRequest(file_path="sample.txt"))
 
     assert result.markdown == "fallback"
     assert calls == ["docling", "markitdown"]

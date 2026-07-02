@@ -2,22 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from chat.application.tools.document_tools.document_parse.errors import (
-    DocumentParseFailedError,
-)
 from chat.application.tools.document_tools.document_parse.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )
-from chat.application.tools.document_tools.document_parse.parsers.common import (
-    DoclingParser,
-    MarkItDownParser,
-)
+from chat.application.tools.document_tools.document_parse.parsers.common import CommonDocumentParser
 from chat.application.tools.document_tools.document_parse.parsers.specialized import (
     PandasSpreadsheetParser,
     PdfParseStrategy,
 )
-from chat.application.tools.document_tools.document_parse.parsers.specialized.ocr import ImageOcrParser
 from chat.application.tools.utils.file_type_detect import detect_file_type
 
 
@@ -44,21 +37,4 @@ class DocumentParseService:
         }:
             return await PandasSpreadsheetParser().parse(request)
 
-        if mime_type.startswith("image/"):
-            return await ImageOcrParser(ocr_client=self._ocr_client).parse(request)
-
-        return await self._parse_common_document(request)
-
-    @staticmethod
-    async def _parse_common_document(request: DocumentParseRequest) -> DocumentParseResult:
-        last_error: BaseException | None = None
-        for parser in (DoclingParser(), MarkItDownParser()):
-            try:
-                return await parser.parse(request)
-            except Exception as e:
-                last_error = e
-
-        raise DocumentParseFailedError(
-            "Common document parsers failed.",
-            cause=last_error,
-        )
+        return await CommonDocumentParser().parse(request)

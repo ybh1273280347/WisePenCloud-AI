@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 
+from chat.application.tools.utils.url_fetcher import RawFetchOutput
 from ..cleaners.base import CleanedOutput
-from ..fetchers.base import RawFetchOutput
 from ..models import FetchQuality
 
 # 正文语义关键词，带词界避免误判

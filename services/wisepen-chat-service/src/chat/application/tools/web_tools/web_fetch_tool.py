@@ -18,11 +18,11 @@ from chat.application.tools.core.tool_return import (
 )
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.batching import batched
+from chat.application.tools.utils.url_fetcher import UrlFetchError
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
 from chat.application.tools.web_tools.web_fetch import FetchCoordinator
-from chat.application.tools.web_tools.web_fetch.errors import WebFetchError
 from chat.application.tools.web_tools.web_fetch.models import WebFetchBatchResult
 from common.logger import warn
 
@@ -33,18 +33,14 @@ SERVICE_BATCH_SIZE = 8
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "mode": {
-            "type": "string",
-            "enum": ["from_search_results", "from_direct_urls"],
-            "description": "Required. Routing mode for fetch input interpretation.",
-        },
         "urls": {
             "type": "array",
             "items": {"type": "string", "minLength": 1},
             "minItems": 1,
             "maxItems": MAX_URLS,
             "description": (
-                "Required. Target URLs to fetch. Each MUST be a full http(s) URL. "
+                "Target URLs to fetch. Each MUST be a full http(s) URL. "
+                "Provide either urls or search_refs, not both. "
                 "Large sets are automatically split into internal batches."
             ),
         },
@@ -54,12 +50,12 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
             "minItems": 1,
             "maxItems": MAX_URLS,
             "description": (
-                "Alternative to urls. Search refs returned by web_search. "
+                "Search refs returned by a prior web_search / academic_search in this session. "
+                "Provide either urls or search_refs, not both. "
                 "Large sets are automatically split into internal batches."
             ),
         },
     },
-    "required": ["mode"],
     "additionalProperties": False,
 }
 
@@ -100,14 +96,14 @@ class WebFetchTool:
                     "DO NOT TRIGGER when:\n"
                     "  - The user only needs search candidates — use web_search instead.\n"
                     "  - Multiple related pages on the same site are needed — use web_crawl instead.\n"
-                    "  - The target is an obvious direct file URL (PDF/image/Office/spreadsheet/etc.) and the user needs document content — call document_parse with mode='from_direct_urls' instead.\n"
+                    "  - The target is an obvious direct document file URL (PDF/Office/spreadsheet/etc.) and the user needs document content — call document_parse with direct_urls instead.\n"
                     "  - The URL is already fetched in this session — reuse the cached result instead of re-fetching.\n"
                     "\n"
                     "INPUT RULES:\n"
-                    "  - mode='from_direct_urls' => provide urls.\n"
-                    "  - mode='from_search_results' => provide search_refs.\n"
-                    "  - urls MUST be full http(s) URLs; large sets are auto-batched internally.\n"
-                    "  - search_refs MUST come from a prior web_search result in this session; large sets are auto-batched internally.\n"
+                    "  - Provide urls to fetch full http(s) URLs directly.\n"
+                    "  - Provide search_refs to resolve refs from a prior web_search / academic_search result in this session.\n"
+                    "  - Provide exactly one of urls or search_refs; providing both or neither is an error.\n"
+                    "  - Large sets are auto-batched internally.\n"
                     "\n"
                     "OUTPUT RULES:\n"
                     "  - HTML page: returns title and cleaned markdown.\n"
@@ -133,51 +129,44 @@ class WebFetchTool:
         return self._definition
 
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
-        mode = kwargs["mode"]
         raw_urls = kwargs.get("urls")
         raw_search_refs = kwargs.get("search_refs")
+
+        has_urls = raw_urls is not None
+        has_search_refs = raw_search_refs is not None
+        if has_urls and has_search_refs:
+            raise ToolExecutionError(
+                reason="ambiguous_input",
+                detail_reason="provide either urls or search_refs, not both.",
+                retryable=False,
+            )
+        if not has_urls and not has_search_refs:
+            raise ToolExecutionError(
+                reason="missing_input",
+                detail_reason="provide either urls or search_refs.",
+                retryable=False,
+            )
 
         urls: list[str] = []
         source_scope = "web_public"
 
-        # 1. 路由解析输入源模式
-        match mode:
-            case "from_direct_urls":
-                if raw_urls is None:
+        # 1. 根据输入自然路由：urls 直接抓取，search_refs 解析为真实 URL
+        if has_urls:
+            for u in raw_urls:
+                url = u.strip()
+                if not url.startswith(("http://", "https://")):
                     raise ToolExecutionError(
-                        reason="missing_urls",
-                        detail_reason="urls is required when mode='from_direct_urls'.",
+                        reason="invalid_url",
+                        detail_reason="each url must be a full http(s) URL.",
                         retryable=False,
                     )
-                for u in raw_urls:
-                    url = u.strip()
-                    if not url.startswith(("http://", "https://")):
-                        raise ToolExecutionError(
-                            reason="invalid_url",
-                            detail_reason="each url must be a full http(s) URL.",
-                            retryable=False,
-                        )
-                    urls.append(url)
-
-            case "from_search_results":
-                if raw_search_refs is None:
-                    raise ToolExecutionError(
-                        reason="missing_search_refs",
-                        detail_reason="search_refs is required when mode='from_search_results'.",
-                        retryable=False,
-                    )
-                search_refs = tuple(item.strip() for item in raw_search_refs)
-                urls, source_scope = await self._resolve_search_urls(
-                    user_id=str(context["user_id"]),
-                    search_refs=search_refs,
-                )
-
-            case _:
-                raise ToolExecutionError(
-                    reason="invalid_mode",
-                    detail_reason="mode must be 'from_direct_urls' or 'from_search_results'.",
-                    retryable=False,
-                )
+                urls.append(url)
+        else:
+            search_refs = tuple(item.strip() for item in raw_search_refs)
+            urls, source_scope = await self._resolve_search_urls(
+                user_id=str(context["user_id"]),
+                search_refs=search_refs,
+            )
 
         # 2. 调用批量异步核心抓取服务
         user_id = str(context["user_id"])
@@ -190,7 +179,7 @@ class WebFetchTool:
                 session_id=session_id,
                 source_scope=source_scope,
             )
-        except WebFetchError as exc:
+        except UrlFetchError as exc:
             raise ToolExecutionError(
                 reason="web_fetch_failed",
                 detail_reason=str(exc),
@@ -200,7 +189,6 @@ class WebFetchTool:
             warn(
                 "web fetch unexpected error.",
                 e=exc,
-                mode=mode,
                 urls=tuple(urls),
                 source_scope=source_scope,
                 audit_message="web_fetch 批量抓取发生未预期异常，已包装为不可重试 ToolExecutionError。",

@@ -24,6 +24,11 @@ TOOL_CATALOG_ITEMS = (
         tool_names=("web_search", "academic_search"),
     ),
     ToolCatalogItem(
+        key="image_ocr",
+        label="图片文字识别",
+        tool_names=("image_ocr",),
+    ),
+    ToolCatalogItem(
         key="math_tools",
         label="数学工具",
         tool_names=(
