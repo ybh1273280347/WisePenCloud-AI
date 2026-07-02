@@ -1,5 +1,7 @@
 # tool_content_read
 
+> 一句话：按 `cnt_*` 做跨文档语义检索或正则匹配，不创建新 receipt。
+
 实现入口：`src/chat/application/tools/session_tools/tool_content_read_tool.py`
 
 `tool_content_read` 从 `ToolContentStore` 中读取已有 `cnt_*` 内容。它用于上一轮工具返回 `<content_receipt>` 后，对一个或多个内容做跨文档语义检索或正则匹配。
@@ -31,11 +33,13 @@
 
 返回 `ToolContentReadResult`：
 
-- `mode`: 本次读取模式。
-- `matches`: 跨全部 `content_ids` 的全局有序命中列表。
-- `matches[*].content_id`: 该命中来自哪个 `cnt_*`。
-- `matches[*].window`: 命中的窗口文本与定位信息。
-- `failed`: 单项不可读、过期或不存在的 `content_id` 列表。
+| 字段 | 说明 |
+| --- | --- |
+| `mode` | 本次读取模式。 |
+| `matches` | 跨全部 `content_ids` 的全局有序命中列表。 |
+| `matches[*].content_id` | 该命中来自哪个 `cnt_*`。 |
+| `matches[*].window` | 命中的窗口文本与定位信息。 |
+| `failed` | 单项不可读、过期或不存在的 `content_id` 列表。 |
 
 ## 边界
 

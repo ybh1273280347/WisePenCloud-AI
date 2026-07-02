@@ -1,5 +1,7 @@
 # calculus_solver
 
+> 一句话：基于 SymPy 做确定性微积分、级数、ODE 和 Laplace 变换，不执行任意代码。
+
 实现入口：`src/chat/application/tools/math_tools/calculus_solver_tool.py`
 
 `calculus_solver` 执行确定性的微积分、级数、常微分方程和 Laplace 变换任务。它基于 SymPy，不是 Python REPL，不执行任意代码，不读取文件，也不访问网络。
@@ -27,16 +29,20 @@
 | `lower` / `upper` | `string` | 上下限别名；在 `summation` 中表示求和下标边界。 |
 | `lower2` / `upper2` | `string` | 二重积分第二变量上下限。 |
 
-支持任务：`differentiate`、`partial_differentiate`、`integrate`、`definite_integral`、`limit`、`taylor_series`、`summation`、`solve_ode`、`double_integral`、`laplace_transform`。
+支持任务：
+
+`differentiate`、`partial_differentiate`、`integrate`、`definite_integral`、`limit`、`taylor_series`、`summation`、`solve_ode`、`double_integral`、`laplace_transform`。
 
 ## 输出
 
 返回普通结构化结果：
 
-- `solver`: `calculus_solver`
-- `task`: 实际执行的任务
-- `exact_result`: SymPy 精确结果或结构化结果
-- `latex_result`: 可展示 LaTeX，若无法生成则为空
+| 字段 | 说明 |
+| --- | --- |
+| `solver` | `calculus_solver` |
+| `task` | 实际执行的任务 |
+| `exact_result` | SymPy 精确结果或结构化结果 |
+| `latex_result` | 可展示 LaTeX，若无法生成则为空 |
 
 ## 边界
 

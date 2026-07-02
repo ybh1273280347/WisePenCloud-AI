@@ -1,5 +1,7 @@
 # academic_search
 
+> 一句话：`academic_search` 是显式论文候选发现工具，默认隐藏，只有当前用户存在支持学术搜索的自定义凭证时才暴露。
+
 实现入口：`src/chat/application/tools/web_tools/academic_search_tool.py`
 
 `academic_search` 是显式论文候选发现工具。它独立于 `web_search`，默认隐藏，只有当前用户存在激活且支持学术搜索的自定义搜索凭证时才向模型暴露。当前实际支持的搜索源是 Exa。

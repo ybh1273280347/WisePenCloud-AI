@@ -1,5 +1,7 @@
 # stats_solver
 
+> 一句话：基于 SymPy/SciPy/NumPy 做概率、分布、描述统计、回归和相关性计算，不执行任意代码。
+
 实现入口：`src/chat/application/tools/math_tools/stats_solver_tool.py`
 
 `stats_solver` 处理概率、分布函数、描述统计、线性回归和相关性计算。符号概率表达式使用 SymPy，分布、回归和相关性使用 SciPy/NumPy。
@@ -29,17 +31,21 @@
 | `x_values` / `y_values` | `number[]` | 回归或相关性样本。 |
 | `method` | `string` | 相关性方法，`pearson` 或 `spearman`。 |
 
-支持任务：`binomial_prob`、`poisson_prob`、`normal_cdf`、`uniform_expectation_variance`、`descriptive_stats`、`t_cdf`、`chi2_cdf`、`f_cdf`、`linear_regression`、`correlation`。
+支持任务：
+
+`binomial_prob`、`poisson_prob`、`normal_cdf`、`uniform_expectation_variance`、`descriptive_stats`、`t_cdf`、`chi2_cdf`、`f_cdf`、`linear_regression`、`correlation`。
 
 ## 输出
 
 返回普通结构化结果：
 
-- `solver`: `stats_solver`
-- `task`: 实际执行的任务
-- `exact_result`: 符号或数值结果
-- `numeric_result`: 可直接消费的数值结果
-- `latex_result`: 可展示 LaTeX，若无法生成则为空
+| 字段 | 说明 |
+| --- | --- |
+| `solver` | `stats_solver` |
+| `task` | 实际执行的任务 |
+| `exact_result` | 符号或数值结果 |
+| `numeric_result` | 可直接消费的数值结果 |
+| `latex_result` | 可展示 LaTeX，若无法生成则为空 |
 
 ## 边界
 

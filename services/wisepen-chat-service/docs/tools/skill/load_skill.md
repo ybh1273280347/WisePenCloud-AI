@@ -1,5 +1,7 @@
 # load_skill
 
+> 一句话：按 `skill_id` 懒加载已发布 Skill 的 `SKILL.md` 和 assets manifest 摘要。
+
 实现入口：`src/chat/application/tools/skill_tools/load_skill_tool.py`
 
 `load_skill` 按 `skill_id` 懒加载已发布 Skill 的 `SKILL.md` 正文和 assets manifest 摘要。它默认不暴露给模型，只能在本轮工具上下文允许该 skill 时调用。

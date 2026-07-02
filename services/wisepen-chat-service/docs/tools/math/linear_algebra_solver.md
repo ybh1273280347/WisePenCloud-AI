@@ -1,5 +1,7 @@
 # linear_algebra_solver
 
+> 一句话：基于 SymPy/NumPy 做矩阵和线性代数任务，不执行任意代码。
+
 实现入口：`src/chat/application/tools/math_tools/linear_algebra_solver_tool.py`
 
 `linear_algebra_solver` 执行确定性的矩阵和线性代数任务。精确任务主要使用 SymPy，SVD、QR 和矩阵整数次幂使用 NumPy 数值计算。
@@ -19,17 +21,21 @@
 | `vector` | `array` | 向量右端项线性求解使用。 |
 | `power` | `integer` | `matrix_power` 使用的整数指数。 |
 
-支持任务：`determinant`、`trace`、`rank`、`inverse`、`rref`、`eigenvalues`、`linear_solve`、`matrix_multiply`、`svd`、`qr_decomposition`、`null_space`、`matrix_power`。
+支持任务：
+
+`determinant`、`trace`、`rank`、`inverse`、`rref`、`eigenvalues`、`linear_solve`、`matrix_multiply`、`svd`、`qr_decomposition`、`null_space`、`matrix_power`。
 
 ## 输出
 
 返回普通结构化结果：
 
-- `solver`: `linear_algebra_solver`
-- `task`: 实际执行的任务
-- `exact_result`: 精确结果或结构化数值结果
-- `numeric_result`: SVD、QR、矩阵幂等数值任务会填充
-- `latex_result`: 可展示 LaTeX，数值分解任务通常为空
+| 字段 | 说明 |
+| --- | --- |
+| `solver` | `linear_algebra_solver` |
+| `task` | 实际执行的任务 |
+| `exact_result` | 精确结果或结构化数值结果 |
+| `numeric_result` | SVD、QR、矩阵幂等数值任务会填充 |
+| `latex_result` | 可展示 LaTeX，数值分解任务通常为空 |
 
 ## 边界
 

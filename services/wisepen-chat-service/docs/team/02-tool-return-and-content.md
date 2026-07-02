@@ -1,8 +1,10 @@
 # Tool 返回值与缓存规范
 
+> 一句话：普通结果交给统一渲染器；大文本交给 `ToolReturn` 和 `ToolOutputCache`。
+
 本文约束工具返回值、`ToolReturn`、输出渲染、运行时内容缓存和 `tool_content_read` 的职责边界。
 
-跨工具统一切面总览见 [Tool 统一切面与流程规范](06-tool-cross-cutting-flow.md)。本文聚焦返回值、模型可见输出和内容托管。
+跨工具统一切面总览见 [06-tool-cross-cutting-flow](06-tool-cross-cutting-flow.md)。本文聚焦返回值、模型可见输出和内容托管。
 
 ## 返回值原则
 
@@ -17,13 +19,7 @@
 
 普通返回值只会由 `ToolOutputRenderer` 渲染为模型可见 XML，不进入 `ToolContentStore`。
 
-不得为普通返回值增加工具级缓存开关。
-
-中文强调：普通返回值由统一工具渲染器递归渲染，工具不要手动把 dataclass / dict / list 转成专用 result payload。
-
-English emphasis: normal tool outputs are rendered by the unified recursive renderer. Do not manually convert dataclasses, dicts, or lists into private result payloads just for rendering.
-
-UPPERCASE EMPHASIS: UNIFIED RENDERING IS THE RETURN BOUNDARY. DO NOT MANUALLY CONVERT RESULTS FOR RENDERING.
+**注意**：普通返回值由统一工具渲染器递归渲染，工具不要手动把 dataclass / dict / list 转成专用 result payload。统一渲染就是返回边界。
 
 ## ToolReturn 使用边界
 
@@ -83,7 +79,7 @@ return ToolReturn(
 5. 渲染多个 `<content_receipt>` 给模型。
 6. 错误输出不进入 `ToolContentStore`。
 
-不得：
+不要做：
 
 - 把多文件、多来源、多窗口文本提前拼成一个大 `cacheable_texts`。
 - 在工具内部手写 `<content_receipt>`。
@@ -107,7 +103,7 @@ return ToolReturn(
 - `text/markdown` 使用 Markdown pipeline。
 - 其他文本使用 plain text pipeline。
 
-不得把 `ToolContentStore` 当作永久资料库。`cnt_*` 是会话内短期读取凭证，不是长期业务 ID。
+不要把 `ToolContentStore` 当作永久资料库。`cnt_*` 是会话内短期读取凭证，不是长期业务 ID。
 
 ## URL 内容缓存与 ToolContentStore 的边界
 
@@ -126,7 +122,7 @@ return ToolReturn(
 - 不得用 `cnt_*` 替代 URL cache；`cnt_*` 过期后不代表 URL 内容必须重新抓取。
 - 不得用 URL cache 替代 `ToolContentStore`；模型读取窗口仍必须通过 session 工具。
 
-`web_fetch`、`web_crawl`、`document_parse` 可以共享 URL cache，这是核心外界信息获取体系的正确耦合。
+`web_fetch`、`web_crawl`、`document_parse` 可以共享 URL cache，这是核心外界信息获取工具体系的正确耦合。
 
 ## tool_content_read 规则
 
@@ -249,16 +245,18 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 
 ## Review 清单
 
-- 普通结构化结果是否直接返回普通 Python 值。
-- 是否依赖统一递归渲染，而不是工具内手写 result 转换层。
-- 大文本是否只通过 `ToolReturn.cacheable_texts` 进入缓存切面。
-- 多段文本是否保持原始内容单元边界，而不是提前拼接。
-- `visible_result` 是否用全局 `content_ref` 指向 `cacheable_texts`。
-- 是否存在工具内自定义缓存、手写 receipt 或重复读取协议。
-- 是否把 URL 复用放进 `web_content_cache`，而不是混入 `ToolContentStore`。
-- 是否把 Mongo cache `doc_id`、Redis key、本地路径或 object key 暴露给模型。
-- `tool_content_read` 是否只返回读取窗口，未把窗口文本再次放入 `ToolReturn.cacheable_texts`。
-- `tool_content_sequential_read` 是否保持单 `content_id` 顺序读取边界，没有把它做成跨文档搜索工具。
-- `cache_chunked` 是否只用于控制 chunk/index。
-- `cnt_*` 是否经过 `session_id` 隔离读取。
-- `tfile_*` 是否只通过 `ToolRunFileStore.resolve_ref(...)` 解析为真实路径。
+| 检查项 | 说明 |
+| --- | --- |
+| 普通结构化结果 | 是否直接返回普通 Python 值。 |
+| 统一递归渲染 | 是否依赖统一递归渲染，而不是工具内手写 result 转换层。 |
+| 大文本入口 | 大文本是否只通过 `ToolReturn.cacheable_texts` 进入缓存切面。 |
+| 内容单元边界 | 多段文本是否保持原始内容单元边界，而不是提前拼接。 |
+| `content_ref` | `visible_result` 是否用全局 `content_ref` 指向 `cacheable_texts`。 |
+| 自定义缓存 | 是否存在工具内自定义缓存、手写 receipt 或重复读取协议。 |
+| URL 复用 | 是否把 URL 复用放进 `web_content_cache`，而不是混入 `ToolContentStore`。 |
+| 模型暴露 | 是否把 Mongo cache `doc_id`、Redis key、本地路径或 object key 暴露给模型。 |
+| `tool_content_read` | 是否只返回读取窗口，未把窗口文本再次放入 `ToolReturn.cacheable_texts`。 |
+| `tool_content_sequential_read` | 是否保持单 `content_id` 顺序读取边界，没有把它做成跨文档搜索工具。 |
+| `cache_chunked` | 是否只用于控制 chunk/index。 |
+| `cnt_*` 隔离 | `cnt_*` 是否经过 `session_id` 隔离读取。 |
+| `tfile_*` 解析 | `tfile_*` 是否只通过 `ToolRunFileStore.resolve_ref(...)` 解析为真实路径。 |

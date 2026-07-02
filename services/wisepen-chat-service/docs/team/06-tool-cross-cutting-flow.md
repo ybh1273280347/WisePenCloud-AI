@@ -1,5 +1,7 @@
 # Tool 统一切面与流程规范
 
+> 一句话：一个 tool call 不是只执行 `execute()`，而是依次穿过可见性、校验、执行、渲染、缓存、存储、后台任务等多层切面。
+
 本文约束所有 tool 在 WisePen Chat Service 中必须遵守的统一切面。新增、重构或 review 工具时，先确认这些切面是否已经能表达需求，再决定是否写业务代码。
 
 ## 总原则
@@ -108,13 +110,15 @@ Redis entry 保存 active URL 索引、soft/hard TTL 和 refresh lock；Mongo va
 
 ## Review 清单
 
-- 是否把可以由 schema 表达的校验留给了 `JsonSchemaCheck`。
-- 是否把安全上下文放在 `required_context_keys` 或 preflight metadata。
-- 是否绕过 `ToolOutputRenderer` 手写 XML。
-- 是否把大文本放进普通 dict/list，而不是 `ToolReturn.cacheable_texts`。
-- 是否把读取窗口再次缓存成新 `cnt_*`。
-- 是否使用 `ToolRunFileStore` 传文件，而不是本地路径。
-- web/document 是否复用 `web_content_cache`。
-- stale refresh 是否异步入队，未阻塞工具返回。
-- Mongo cache GC 是否只删除不再 active 的 Mongo value，未删除 Redis entry。
-- 文档是否写明 tool 链路、模型约束和可插拔点。
+| 检查项 | 说明 |
+| --- | --- |
+| Schema 校验 | 是否把可以由 schema 表达的校验留给了 `JsonSchemaCheck`。 |
+| 安全上下文 | 是否把安全上下文放在 `required_context_keys` 或 preflight metadata。 |
+| 手写 XML | 是否绕过 `ToolOutputRenderer` 手写 XML。 |
+| 大文本位置 | 是否把大文本放进普通 dict/list，而不是 `ToolReturn.cacheable_texts`。 |
+| 重复缓存 | 是否把读取窗口再次缓存成新 `cnt_*`。 |
+| 文件协议 | 是否使用 `ToolRunFileStore` 传文件，而不是本地路径。 |
+| URL cache | web/document 是否复用 `web_content_cache`。 |
+| 刷新异步 | stale refresh 是否异步入队，未阻塞工具返回。 |
+| Mongo GC | Mongo cache GC 是否只删除不再 active 的 Mongo value，未删除 Redis entry。 |
+| 文档完整 | 文档是否写明 tool 链路、模型约束和可插拔点。 |

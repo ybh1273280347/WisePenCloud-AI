@@ -1,35 +1,34 @@
 # Toolchain Architecture
 
-实现入口：`src/chat/application/tools`，注册入口：`src/chat/container.py`
+> 一句话： WisePen Chat Service 的工具体系由若干业务域工具组成，它们通过 `search_ref`、`tfile_*`、`cnt_*` 和 URL 缓存形成稳定协作链。
 
-当前注册工具不是一组彼此孤立的函数，而是一个面向模型的工具体系。核心目标是：外界信息获取、文件解析、大文本缓存、证据定位、数学计算和 Skill 懒加载分别保持边界清晰，同时通过 `search_ref`、`tfile_*`、`cnt_*` 和 URL 缓存形成稳定的协作链。
+实现入口：`src/chat/application/tools`
+注册入口：`src/chat/container.py`
+
+核心目标是：外界信息获取、文件解析、大文本缓存、证据定位、数学计算和 Skill 懒加载分别保持边界清晰，同时通过统一引用协议协作。
 
 ## 工具族复用指导原则
 
-理解当前工具体系时，先记住这三条：
+理解当前工具体系时，先记住三条：
 
-- 工具族之间默认保持解耦
-- 工具族内部允许强复用
-- 跨工具族复用只在核心体系边界上作为例外成立
-
-这不是一句抽象口号，而是当前实现的直接判断标准。
+1. **工具族之间默认保持解耦**
+2. **工具族内部允许强复用**
+3. **跨工具族复用只在核心体系边界上作为例外成立**
 
 ### 工具族之间默认解耦
 
 如果某段实现只服务某个工具族内部语义，就不要因为“别的工具好像也能用”而直接把它当通用公共组件。
 
-例如：
-
-- 不应把 `web_fetch` 的 HTML 清洗器当成一般性的 HTML to Markdown 公共能力，供任意非 web 工具直接复用。
+**例子**：不应把 `web_fetch` 的 HTML 清洗器当成一般性的 HTML to Markdown 公共能力，供任意非 web 工具直接复用。
 
 ### 工具族内部允许强复用
 
 同一工具族内部，只要共享同一协议边界和运行时语义，就可以明确强复用。
 
-例如：
+**例子**：
 
-- `academic_search` 是 `web_search` 的垂类拓展
-- `web_crawl` 是 `web_fetch` 的递归增强
+- `academic_search` 是 `web_search` 的垂类拓展。
+- `web_crawl` 是 `web_fetch` 的递归增强。
 
 因此它们共享 `search_services/` 中的搜索编排、候选构建、URL 映射和抓取/清洗能力，属于有意设计，而不是默认要被拆散的耦合。
 
@@ -37,14 +36,12 @@
 
 只有当被复用的对象本身已经承担了统一切面或核心协议职责时，跨工具族复用才成立。
 
-例如：
-
-- `document_parse` 对文档直链解析复用了 web URL 缓存
+**例子**：`document_parse` 对文档直链解析复用了 web URL 缓存。
 
 这类复用之所以合理，本质上有两个原因：
 
 1. `document_parse` 和 web 工具体系同属于模型的核心 IO 工具，天然共享一部分统一边界。
-2. 这是架构与现实之间的必要妥协。如果不复用这条边界，那么文档直链经常都得先走一层 `web_fetch` 再转给 `document_parse`，这会让主链路明显变重，而且非常低效。
+2. 这是架构与现实之间的必要妥协。如果不复用这条边界，文档直链经常都得先走一层 `web_fetch` 再转给 `document_parse`，这会让主链路明显变重，而且非常低效。
 
 因此这里复用的是核心缓存边界，而不是 web 工具族内部的局部实现细节。
 
@@ -85,123 +82,17 @@ ToolInvocation
 
 所有 tool 都穿过同一组切面。工具文档和代码 review 必须按切面检查，而不是只看单个 `execute()`。
 
-### 1. Disclosure 切面
-
-`ToolRegistry.derive()` 根据默认暴露、allow/deny、显式 expose 生成本轮 `ToolScope`。模型只看到 `ToolScope.schemas()` 中的工具 schema。
-
-约束：
-
-- 默认隐藏工具不能靠描述词“诱导”模型调用，必须被显式 expose。
-- 新增高风险工具优先默认隐藏。
-- 不得绕过 scope 把全量工具 schema 直接交给模型。
-
-### 2. Preflight 切面
-
-`ToolExecutor` 固定执行：
-
-```text
-JsonSchemaCheck -> RequiredContextCheck -> custom preflight hooks
-```
-
-约束：
-
-- 类型、枚举、required、min/max 放 JSON Schema。
-- `user_id`、`session_id`、`search_config`、`allowed_skill_ids` 等可信上下文放 `required_context_keys`。
-- 权限、白名单、manifest path、跨字段外部校验放 custom preflight。
-- OpenAI function calling 不适合表达的互斥模式可在 execute 中校验，但提示词和 schema description 必须写清楚。
-
-### 3. Execute 切面
-
-`execute(context, **kwargs)` 只做业务入口适配：
-
-- 参数归一化。
-- mode 路由。
-- 调用内部 service。
-- 将可重试/不可重试错误映射为 `ToolExecutionError`。
-- 单项失败转为 failed item，除非整个请求不可执行。
-
-service 层不读取 LLM schema，不生成 XML，不写 `content_receipt`，不读取不可信模型上下文。
-
-### 4. Render 切面
-
-普通返回值由 `ToolOutputRenderer` 递归渲染。工具不得手写 XML 或为了渲染而构造私有 result layer。
-
-`ToolReturn` 只在有大文本托管需求时使用：
-
-- `visible_result` 给模型看状态、引用、warning、建议动作。
-- `cacheable_texts` 放 Markdown、正文、解析文本。
-
-### 5. Output Cache 切面
-
-`ToolOutputCache` 统一决定大文本内联还是存仓：
-
-- 小文本内联为 `<contents>`。
-- 大文本写入 `ToolContentStore`，生成 `cnt_*`。
-- 每段 `cacheable_texts[i]` 是独立内容单元，不能提前拼接多个文件或多个页面。
-
-消费 `cnt_*` 的工具是 session 工具；生产工具不要自己实现窗口读取。
-
-### 6. Runtime File 切面
-
-`ToolRunFileStore` 是工具间文件移交唯一协议：
-
-- 生产 `tfile_*`。
-- Redis 保存元数据，本地/共享文件系统保存对象。
-- `resolve_ref` 按 `user_id/session_id` 校验作用域。
-
-模型和工具都不能传本地路径、OSS object key 或 base64 作为跨工具文件协议。
-
-### 7. URL Cache 切面
-
-`WebContentCacheService` / repository 是 web/document 的 URL 缓存边界。当前公共协议位于：
-
-```text
-src/chat/application/tools/common/web_content_cache/
-```
-
-持久化实现位于：
-
-```text
-src/chat/core/persistence/redis/web_content_cache_entry_repository.py
-src/chat/core/persistence/mongo/web_content_cache_value_repository.py
-src/chat/core/persistence/redis/web_content_cache_refresh_queue.py
-src/chat/workers/web_content_cache_refresh_worker.py
-```
-
-职责拆分：
-
-- Redis `WebContentCacheEntry` 是 active entry、soft/hard TTL 和 refresh lock 的权威索引。
-- Mongo `WebContentCacheValue` 保存 raw HTML、Markdown 和 metadata 正文。
-- Arq refresh queue 只负责 stale cache 的后台刷新任务。
-- `WebContentCacheGcScheduler` 只清理不再被 active Redis entry 指向的 Mongo value。
-
-- HTML markdown：`web_fetch` 和 `web_crawl` 读写。
-- 非 HTML 文件：`web_fetch` 写占位，`document_parse` 回填解析 Markdown。
-- 文件直链：`document_parse(mode="from_direct_urls")` 直接读写同一 URL 缓存。
-- stale 命中先返回旧内容，刷新走后台队列。
-
-这不是普通工具间随意耦合，而是核心外界信息获取工具体系的统一切面。
-
-### 8. Background 切面
-
-后台行为分为：
-
-- 主服务自动启动：`ToolRunFileStoreGcScheduler`、`WebContentCacheGcScheduler`。
-- 独立 worker：Arq refresh worker 消费 `wisepen:web_content_cache:refresh`。
-
-如果只启动 API 不启动 worker，stale refresh 任务会入队但不会执行。开发环境可用 `start-chat-service.ps1` 同时启动 API 和 worker。
-
-### 9. Suggested Actions 切面
-
-`SuggestedAction` / `SuggestedActions` 给模型提示下一步链路，不是强制计划。
-
-规则：
-
-- 可以写工具名、mode、原因、优先级和轻量 metadata。
-- 不写完整调用参数。
-- 不代替工具 schema 和提示词边界。
-- 多工具链要通过 suggested actions 降低模型误路由概率。
-- 当某个工具当前只有一个明确下一步时，优先返回单个 `suggested_action`。
+| 切面 | 入口 | 约束 |
+| --- | --- | --- |
+| Disclosure | `ToolRegistry.derive()` → `ToolScope.schemas()` | 默认隐藏工具必须被显式 expose；新增高风险工具优先默认隐藏；不得绕过 scope 把全量 schema 直接交给模型。 |
+| Preflight | `ToolExecutor` | 类型/枚举/required/min/max 放 JSON Schema；安全上下文放 `required_context_keys`；权限/白名单/manifest/跨字段校验放 custom preflight。 |
+| Execute | `tool.execute(context, **kwargs)` | 只做参数归一化、mode 路由、调用 service、错误映射、单项失败处理。service 不读 LLM schema，不生成 XML，不写 receipt。 |
+| Render | `ToolOutputRenderer` | 普通返回值递归渲染；工具不得手写 XML 或为渲染构造私有 result layer。 |
+| Output Cache | `ToolOutputCache` | 小文本内联为 `<contents>`；大文本写入 `ToolContentStore` 生成 `cnt_*`；每段 `cacheable_texts[i]` 是独立内容单元，不能提前拼接。 |
+| Runtime File | `ToolRunFileStore` | 生产 `tfile_*`；按 `user_id/session_id` 校验作用域；模型和工具都不能传本地路径、OSS key 或 base64 作为跨工具文件协议。 |
+| URL Cache | `WebContentCacheService` + repositories | web/document 共享的 URL 缓存边界；Redis 存 active entry 和 TTL，Mongo 存正文，Arq 刷新 stale，GC 清理 inactive。 |
+| Background | GC schedulers + Arq worker | 主服务启动 `ToolRunFileStoreGcScheduler` 和 `WebContentCacheGcScheduler`；独立 worker 消费 stale refresh 队列。 |
+| Suggested Actions | `SuggestedAction(s)` | 可写工具名、mode、原因、优先级和轻量 metadata；不写完整调用参数；不代替 schema 和提示词边界。 |
 
 ## 三类引用
 
@@ -215,7 +106,7 @@ src/chat/workers/web_content_cache_refresh_worker.py
 
 ## 外界信息获取链
 
-标准网页信息链：
+### 标准网页信息链
 
 ```text
 web_search
@@ -226,7 +117,7 @@ web_search
   -> tool_content_read / tool_content_sequential_read
 ```
 
-学术候选链：
+### 学术候选链
 
 ```text
 academic_search
@@ -239,19 +130,17 @@ academic_search
 
 这里要特别明确一条架构约束：
 
-- `academic_search` 在模型可见层面是与 `web_search` 平行的工具
-- 但在实现层面，它属于 `web_search` 的定向扩展
-- 目录与编排入口上，它仍必须保持为 `web_tools/` 顶层并列工具，而不是嵌进 `web_search/` 目录
+- `academic_search` 在模型可见层面是与 `web_search` 平行的工具。
+- 但在实现层面，它属于 `web_search` 的定向扩展。
+- 目录与编排入口上，它仍必须保持为 `web_tools/` 顶层并列工具，而不是嵌进 `web_search/` 目录。
 
-因此 `academic_search` 与 `web_search` 之间共享缓存、runtime context、候选构建、排序和 `search_ref` 协议，不应被误判为“不够解耦”的问题。
-
-这类强耦合是有意设计，目标是让联网搜索工具族维持统一协议和统一缓存边界，而不是把它们拆成多个彼此独立、重复实现的子系统。
+因此 `academic_search` 与 `web_search` 之间共享缓存、runtime context、候选构建、排序和 `search_ref` 协议，不应被误判为“不够解耦”的问题。这类强耦合是有意设计，目标是让联网搜索工具族维持统一协议和统一缓存边界，而不是把它们拆成多个彼此独立、重复实现的子系统。
 
 所以后续不要因为 `academic_search` 复用了 `web_search` 内部逻辑，就把只服务于搜索工具族的能力机械提权到更高公共层。只有当这些逻辑已经被搜索工具族之外的多个系统稳定消费时，才值得评估是否真的应该抽成公共基础层。
 
 同时也不要因为它属于 `web_search` 的扩展，就把 `academic_search` 的编排入口重新塞回 `web_search/` 内部。工具间可以强复用，但单个工具的编排入口始终保持业务域顶层并列，这是刻意选择的目录与架构风格。
 
-直达网页链：
+### 直达网页链
 
 ```text
 web_fetch(mode="from_direct_urls")
@@ -260,7 +149,7 @@ web_fetch(mode="from_direct_urls")
   -> session read tools
 ```
 
-文件直链链路：
+### 文件直链链路
 
 ```text
 document_parse(mode="from_direct_urls")
@@ -272,7 +161,7 @@ document_parse(mode="from_direct_urls")
   -> session read tools
 ```
 
-搜索命中文件但模型不确定资源类型时：
+### 搜索命中文件但模型不确定资源类型时
 
 ```text
 web_fetch(mode="from_search_results")
@@ -296,7 +185,7 @@ web_fetch(mode="from_search_results")
 
 ## URL 缓存路径
 
-`web_content_cache` 是 web/document 共同的 URL 内容缓存边界。它不是某个 web tool 的私有目录，而是位于 `src/chat/application/tools/common/web_content_cache/` 的工具统一切面：
+`web_content_cache` 是 web/document 共同的 URL 内容缓存边界。它不是某个 web tool 的私有目录，而是位于 `src/chat/application/tools/common/web_content_cache/` 的工具统一切面。
 
 - HTML 成功抓取后，`web_fetch` 写入清洗后的 Markdown。
 - HTML crawl 页面同样通过 `WebContentCacheService` 读写同一 URL 缓存；缓存命中时仍保留 raw HTML 用于继续抽链。
@@ -428,16 +317,18 @@ Math 工具的模型约束：不访问外部信息，不执行任意 Python，�
 
 每个 tool 文档至少包含：
 
-- 实现入口和内部 service。
-- 何时使用 / 何时禁止使用。
-- 参数契约和无法由 schema 表达的 execute/preflight 校验。
-- 内部运行机制。
-- 输出结构和是否使用 `ToolReturn.cacheable_texts`。
-- 与其它工具的协作链。
-- 对模型的硬约束。
-- 可插拔组件。
-- 后续优化方向。
-- 相关测试。
+| 章节 | 内容 |
+| --- | --- |
+| 实现入口和内部 service | 文件位置和职责 |
+| 何时使用 / 何时禁止使用 | 触发边界和相邻工具分工 |
+| 参数契约 | schema 能表达的规则，以及 execute/preflight 才能表达的校验 |
+| 内部运行机制 | 调用链、fallback、缓存、排序、解析 |
+| 输出结构 | 是否使用 `ToolReturn.cacheable_texts` |
+| 与其它工具的协作链 | 上下游工具如何衔接 |
+| 对模型的硬约束 | 不能伪造、不能绕过的规则 |
+| 可插拔组件 | provider、parser、fetcher 等替换点 |
+| 后续优化方向 | 提示词、缓存、测试、可观测性 |
+| 相关测试 | 至少覆盖的范围 |
 
 ## 模型约束
 

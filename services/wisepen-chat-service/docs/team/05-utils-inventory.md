@@ -1,10 +1,10 @@
 # Utils 能力盘点
 
+> 一句话：新增业务能力前，先来这里看看有没有现成入口。
+
 本文只记录当前仓库已经沉淀的共享实现入口，方便快速定位“现成能力在哪里”。
 
-规则、职责边界、开发流程判断放到：
-
-- `docs/team/03-shared-engines-and-dev-flow.md`
+规则、职责边界、开发流程判断放到 [03-shared-engines-and-dev-flow](03-shared-engines-and-dev-flow.md)。
 
 ## 目录边界
 
@@ -81,7 +81,7 @@
 | 子目录 | 能力 |
 | --- | --- |
 | `filters/` | `KeywordFilter` |
-| `scorers/` | `BM25Scorer`、`FieldedBM25Scorer`、`PriorRankScorer`、`DenseVectorScorer`、`` |
+| `scorers/` | `BM25Scorer`、`FieldedBM25Scorer`、`PriorRankScorer`、`DenseVectorScorer` |
 | `fusion/` | `WeightedRrfFusion`，当前默认推荐融合方式 |
 | `rerankers/` | `ZeroEntropyReranker` |
 | `diversifiers/` | `MmrDiversifier`、`GroupRoundRobinDiversifier`、`MaxMinDiversifier` |
@@ -163,14 +163,16 @@
 
 新增业务能力前先检查：
 
-- 需要把大文本切块、生成章节/页码/锚点索引：用 `chunking_engine`。
-- 需要对候选排序、融合、多样性控制：用 `ranking_engine`。
-- 需要轻量调用模型或 embedding：用 `llm_clients`。
-- 需要识别本地文件类型：用 `detect_file_type` / `detect_mime_type`。
-- 需要表格转 Markdown：用 `TableMarkdownRenderer`。
-- 需要 HTML 片段转 Markdown：用 `FragmentMarkdownRenderer`。
-- 需要网页主体抽取成 Markdown：用 `WebPageMarkdownRenderer`。
-- 需要复用外部 URL 抓取、HTML 清洗或文件解析结果：用 `src/chat/application/tools/common/web_content_cache/`，不要混入 `ToolContentStore`。
+| 需求 | 用哪个能力 |
+| --- | --- |
+| 需要把大文本切块、生成章节/页码/锚点索引 | `chunking_engine` |
+| 需要对候选排序、融合、多样性控制 | `ranking_engine` |
+| 需要轻量调用模型或 embedding | `llm_clients` |
+| 需要识别本地文件类型 | `detect_file_type` / `detect_mime_type` |
+| 需要表格转 Markdown | `TableMarkdownRenderer` |
+| 需要 HTML 片段转 Markdown | `FragmentMarkdownRenderer` |
+| 需要网页主体抽取成 Markdown | `WebPageMarkdownRenderer` |
+| 需要复用外部 URL 抓取、HTML 清洗或文件解析结果 | `src/chat/application/tools/common/web_content_cache/`，不要混入 `ToolContentStore` |
 
 ## 文档入口
 

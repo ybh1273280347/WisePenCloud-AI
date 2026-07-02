@@ -1,6 +1,8 @@
 # web_crawl
 
-实现入口：`src/chat/application/tools/web_tools/web_crawl_tool.py`  
+> 一句话：`web_crawl` 从种子 URL 出发递归抓取同域 HTML 页面集合，不是单页抓取工具，也不解析文件。
+
+实现入口：`src/chat/application/tools/web_tools/web_crawl_tool.py`
 内部服务：`src/chat/application/tools/web_tools/web_fetch/crawler.py`
 
 `web_crawl` 从一个种子 URL 出发递归抓取 HTML 页面集合。它适合“读取站点的一组相关页面”，不是单 URL 抓取工具，也不是文件下载或 PDF 解析工具。
@@ -11,7 +13,7 @@
 - 一个入口页下面有多篇相关内容，单次 `web_fetch` 不足。
 - 用户要求读取某站点某栏目或文档站的一组页面。
 
-不要在这些场景使用：
+## 不要在这些场景使用
 
 - 只需要一个页面：用 `web_fetch`。
 - 只需要搜索候选：用 `web_search`。
@@ -53,11 +55,13 @@ crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `we
 
 返回 `ToolReturn(tag="web_crawl_result")`：
 
-- `visible_result.seed_url`：起点 URL。
-- `visible_result.pages_crawled`：成功页面数。
-- `visible_result.pages`：每页 `url`、`final_url`、`title`、`markdown_length`、`warnings`。
-- `visible_result.suggested_actions`：建议用 `tool_content_read(mode="ranked_expand")` 在爬取内容中定位答案；若后续只需继续阅读单个命中内容，再用 `tool_content_sequential_read`。
-- `cacheable_texts`：每个页面的 Markdown。
+| 字段 | 说明 |
+| --- | --- |
+| `visible_result.seed_url` | 起点 URL。 |
+| `visible_result.pages_crawled` | 成功页面数。 |
+| `visible_result.pages` | 每页 `url`、`final_url`、`title`、`markdown_length`、`warnings`。 |
+| `visible_result.suggested_actions` | 建议用 `tool_content_read(mode="ranked_expand")` 在爬取内容中定位答案；命中单个内容后可用 `tool_content_sequential_read` 继续阅读。 |
+| `cacheable_texts` | 每个页面的 Markdown。 |
 
 如果没有任何页面可抓取，工具抛出 `web_crawl_empty_result`。
 

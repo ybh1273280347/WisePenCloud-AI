@@ -1,5 +1,7 @@
 # create_skill
 
+> 一句话：从结构化标题树创建并发布新的 Skill，打包为符合 Agent Skills 规范的 zip 包后通过 `SkillPublisher` 发布。
+
 实现入口：`src/chat/application/tools/skill_tools/create_skill_tool.py`
 
 `create_skill` 从结构化标题树创建并发布新的 Skill 文档，打包为符合 Agent Skills 开放规范的 zip 包后通过 `SkillPublisher` 发布。它默认不暴露给模型，风险级别为 HIGH。
@@ -102,15 +104,17 @@ metadata:
 
 Tool 层在委托 Service 前执行以下 JSON Schema 无法表达的语义校验：
 
-1. **node_id 全树唯一**：整棵 children 树（含 SKILL.md 和所有 references/assets 中的 .md 文件）的 node_id 必须全局唯一；重复时错误信息包含首次路径和重复路径。
-2. **body 不含标题**：根 body 和每个 section 的 body 不得包含 Markdown 标题语法（ATX / Setext）；使用 markdown-it-py 解析 token，正确区分代码块中的 `#`。
-3. **路径合法性**：references / assets / scripts 的 path 不允许包含 `..` 或以 `/` 开头。
+| 校验项 | 说明 |
+| --- | --- |
+| `node_id` 全树唯一 | 整棵 children 树（含 SKILL.md 和所有 references/assets 中的 .md 文件）的 node_id 必须全局唯一；重复时错误信息包含首次路径和重复路径。 |
+| `body` 不含标题 | 根 body 和每个 section 的 body 不得包含 Markdown 标题语法（ATX / Setext）；使用 markdown-it-py 解析 token，正确区分代码块中的 `#`。 |
+| 路径合法性 | references / assets / scripts 的 path 不允许包含 `..` 或以 `/` 开头。 |
 
 校验失败时不写 OSS、不更新索引、不产生半发布状态。
 
 ## 内部架构
 
-```
+```text
 CreateSkillTool (校验 + 适配层)
   ├── 参数解析 → CreateSkillRequest
   ├── 业务校验 → validate_create_skill()

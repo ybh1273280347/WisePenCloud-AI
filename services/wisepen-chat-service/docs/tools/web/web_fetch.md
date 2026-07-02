@@ -1,9 +1,11 @@
 # web_fetch
 
-实现入口：`src/chat/application/tools/web_tools/web_fetch_tool.py`  
+> 一句话：`web_fetch` 批量抓取独立 URL，HTML 返回清洗后的 Markdown，非 HTML 文件发布为 `tfile_*` 供 `document_parse` 解析。
+
+实现入口：`src/chat/application/tools/web_tools/web_fetch_tool.py`
 内部服务：`src/chat/application/tools/web_tools/web_fetch/fetch_coordinator.py`
 
-`web_fetch` 批量抓取一组独立 URL，HTML 返回清洗后的 Markdown，非 HTML 文件发布为 `tfile_*` 供 `document_parse` 继续解析。它是外界信息获取链中的正文抓取工具，不负责搜索候选、不递归爬站、不直接解析 PDF/Office 内容。
+`web_fetch` 批量抓取一组独立 URL。它是外界信息获取链中的正文抓取工具，不负责搜索候选、不递归爬站、不直接解析 PDF/Office 内容。
 
 ## 何时使用
 
@@ -11,7 +13,7 @@
 - `web_search` 返回了 `search_ref`，需要把候选变成可验证正文。
 - URL 类型不确定，需要先探测是 HTML 还是文件。
 
-不要在这些场景使用：
+## 不要在这些场景使用
 
 - 用户给出明显文件直链并要求读文件内容：直接用 `document_parse(mode="from_direct_urls")`。
 - 用户需要多页站点采集：用 `web_crawl`。
@@ -63,11 +65,13 @@ src/chat/application/tools/common/web_content_cache/
 
 返回 `ToolReturn(tag="web_fetch_result")`：
 
-- `visible_result.items`：每个成功 URL 的轻量元数据，包含 `source_url`、`final_url`、`status_code`、`content_type`、`title`、`warnings`、`file_ref`、`file_label`、`source_scope`。
-- `visible_result.failed`：单 URL 失败列表；批量中单项失败不阻断其它 URL。
-- `visible_result.warnings`：批量级 warning。
-- `visible_result.suggested_actions`：通常建议 `tool_content_read`；若有 `file_ref`，同时建议 `document_parse`。在检索结果收敛到单个内容后，再使用 `tool_content_sequential_read` 继续顺序阅读。
-- `cacheable_texts`：HTML Markdown。超出内联阈值后变成 `cnt_*`。
+| 字段 | 说明 |
+| --- | --- |
+| `visible_result.items` | 每个成功 URL 的轻量元数据，包含 `source_url`、`final_url`、`status_code`、`content_type`、`title`、`warnings`、`file_ref`、`file_label`、`source_scope`。 |
+| `visible_result.failed` | 单 URL 失败列表；批量中单项失败不阻断其它 URL。 |
+| `visible_result.warnings` | 批量级 warning。 |
+| `visible_result.suggested_actions` | 通常建议 `tool_content_read`；若有 `file_ref`，同时建议 `document_parse`。 |
+| `cacheable_texts` | HTML Markdown。超出内联阈值后变成 `cnt_*`。 |
 
 visible result 不直接携带 Markdown，避免大正文污染模型上下文。
 
@@ -75,7 +79,7 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 
 - `web_search -> web_fetch(mode="from_search_results")`：标准搜索证据链。
 - `web_fetch -> document_parse(mode="from_web_fetch")`：不确定 URL 命中非 HTML 文件后的解析链。
-- `web_fetch -> tool_content_read`：HTML 正文进入 `cnt_*` 后的跨文档内容检索链；命中某个具体内容后，可继续调用 `tool_content_sequential_read` 顺序阅读该内容。
+- `web_fetch -> tool_content_read`：HTML 正文进入 `cnt_*` 后的跨文档内容检索链；命中具体内容后可继续调用 `tool_content_sequential_read`。
 - 与 `document_parse(mode="from_direct_urls")` 共享 URL 缓存和 fetcher 能力，这是正确的强耦合。
 
 ## 可插拔组件

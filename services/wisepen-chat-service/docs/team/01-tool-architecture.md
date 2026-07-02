@@ -1,8 +1,10 @@
 # Tool 架构规范
 
+> 一句话：业务工具只写业务逻辑，框架规则由 `tools/core/` 和 `container.py` 统一承载。
+
 本文约束 WisePen Chat Service 当前工具体系的注册、可见性、执行和审查边界。
 
-统一切面、后台队列、URL 缓存和工具开发流程见 [Tool 统一切面与流程规范](06-tool-cross-cutting-flow.md)。本文只约束 Tool 框架主链路。
+统一切面、后台队列、URL 缓存和工具开发流程见 [06-tool-cross-cutting-flow](06-tool-cross-cutting-flow.md)。本文只聚焦 Tool 框架主链路。
 
 ## 真实链路
 
@@ -34,7 +36,7 @@ container provider
 
 ## Tool 基本契约
 
-业务工具实现以下协议即可，不需要继承框架基类：
+业务工具实现下面这个协议即可，不需要继承框架基类：
 
 ```python
 @property
@@ -45,97 +47,62 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
     ...
 ```
 
-`definition` 描述工具如何暴露、校验和执行；`execute` 只写业务逻辑。
+- `definition` 描述工具如何暴露、校验和执行。
+- `execute` 只写业务逻辑。
 
 ## 统一递归渲染
 
-中文强调：普通工具直接返回普通 Python 值，例如 `dict`、`list`、dataclass、Pydantic model、scalar 或 `None`。统一工具渲染器 `ToolOutputRenderer` 会递归标准化并渲染结果。工具不要为了“结构化”手动转 result，不要手写 XML，不要为普通返回值增加私有 result_builder。
+普通工具直接返回普通 Python 值，例如 `dict`、`list`、dataclass、Pydantic model、scalar 或 `None`。统一工具渲染器 `ToolOutputRenderer` 会递归标准化并渲染结果。
 
-English emphasis: ordinary tools return ordinary Python values. `ToolOutputRenderer` performs unified recursive rendering. Tool implementations should not manually convert results only for rendering or structure.
-
-UPPERCASE EMPHASIS: UNIFIED RENDERING IS THE RETURN BOUNDARY. DO NOT MANUALLY CONVERT RESULTS FOR RENDERING. DO NOT BUILD PRIVATE RESULT PAYLOADS JUST FOR STRUCTURE.
+**注意**：工具不要为了“结构化”手动转 result，不要手写 XML，也不要为普通返回值增加私有 result_builder。统一渲染就是返回边界。
 
 ## 工具族复用原则
 
-默认原则是：
+默认原则可以记成三条：
 
-- **工具族之间保持解耦**
-- **工具族内部允许强复用**
-- **跨工具族复用只在核心体系边界上作为例外成立，不能视为一般情况**
+1. 工具族之间默认解耦。
+2. 工具族内部允许强复用。
+3. 跨工具族复用只在核心体系边界上作为例外成立。
 
-这里的“工具族”指的是已经围绕同一类外界交互或同一类运行时协议形成稳定边界的一组工具，例如：
-
-- web 工具族
-- document 工具族
-- session 工具族
-- math 工具族
-
-判断时按下面三层理解：
+这里的“工具族”指围绕同一类外界交互或运行时协议形成稳定边界的一组工具，例如 web 工具族、document 工具族、session 工具族、math 工具族。
 
 ### 1. 工具族之间默认解耦
 
 如果一段实现只服务某个工具族内部语义，就不要因为“别的工具也许也能用”而直接拿出去复用。
 
-例如：
+**例子**：不允许把 `web_fetch` 的 HTML 清洗器直接当成通用 HTML to Markdown 组件，供任意非 web 工具调用。
 
-- 不允许把 `web_fetch` 的 HTML 清洗器直接当成一般性的 HTML to Markdown 公共组件，供任意非 web 工具调用。
-
-原因是这类实现通常隐含了该工具族自己的：
-
-- 输入假设
-- 缓存语义
-- 来源约束
-- 输出格式约束
-
-强行跨族复用，通常会把局部最优实现误包装成错误的公共抽象。
+原因是这类实现通常隐含了该工具族自己的输入假设、缓存语义、来源约束和输出格式约束。强行跨族复用，容易把局部最优实现误包装成错误的公共抽象。
 
 ### 2. 工具族内部允许强复用
 
-同一工具族内部，只要协议和边界一致，就可以明确复用，而不需要为“看起来更解耦”强行拆散。
+同一工具族内部，只要协议和边界一致，就可以明确复用，不需要为了“看起来更解耦”强行拆散。
 
-例如：
+**例子**：
 
-- `academic_search` 是 `web_search` 的垂类拓展
-- `web_crawl` 是 `web_fetch` 的递归增强
+- `academic_search` 是 `web_search` 的垂类拓展。
+- `web_crawl` 是 `web_fetch` 的递归增强。
 
-这类关系下，允许共享：
-
-- runtime context
-- 缓存协议
-- 候选构建
-- 排序实现
-- fetch / clean / mapping 等内部能力
-
-这里的强耦合是有意设计，不应默认视为技术债。
+这类关系下，允许共享 runtime context、缓存协议、候选构建、排序实现、fetch / clean / mapping 等内部能力。这里的强耦合是有意设计，不应默认视为技术债。
 
 ### 3. 跨工具族复用是例外，不是常态
 
 部分核心体系如果本身就是跨工具族的统一边界，可以允许例外复用。
 
-例如：
+**例子**：`document_parse` 对文档直链解析复用了 web URL 缓存。
 
-- `document_parse` 对文档直链解析复用了 web URL 缓存
-
-这件事之所以合理，本质上有两个原因：
+这件事合理的原因有两个：
 
 1. `document_parse` 和 web 工具体系同属于模型的核心 IO 工具，客观上提供了可以稳定复用的统一边界。
-2. 这是架构与现实之间的必要妥协。如果不复用这条边界，那么文档直链几乎都要额外经过一层 `web_fetch` 转发，运行链会明显变重，而且效率很差。
+2. 这是架构与现实之间的必要妥协。如果不复用这条边界，文档直链几乎都要额外经过一层 `web_fetch` 转发，运行链会明显变重，而且效率很差。
 
-所以这里复用的不是某个 web 工具的局部业务细节，而是已经明确承担统一协议职责的核心体系边界。
+所以这里复用的是已经明确承担统一协议职责的核心体系边界，而不是某个工具族内部的具体实现。
 
-换句话说，跨工具族复用成立的前提是：
-
-- 复用目标本身已经是稳定的统一切面或核心协议
-
-而不是：
-
-- 某个工具族内部的具体实现碰巧能拿来用
-
-所以 review 时不要把个别成功的跨族复用案例，反推成“以后工具族之间都应该尽量共享实现”。
+**Review 提示**：不要把个别成功的跨族复用案例，反推成“以后工具族之间都应该尽量共享实现”。
 
 ## 注册规则
 
-新增工具必须：
+新增工具必须满足：
 
 - 放在 `src/chat/application/tools/<domain>_tools/` 或已有业务域目录下。
 - 单个工具的编排入口必须挂在该业务域的顶层。
@@ -147,23 +114,19 @@ UPPERCASE EMPHASIS: UNIFIED RENDERING IS THE RETURN BOUNDARY. DO NOT MANUALLY CO
 - 加入 `tool_providers` 后由 `_build_registry()` 注册。
 - 使用全局唯一的 `definition.llm_spec.name`。
 
-不得：
+不允许：
 
 - 把业务工具放进 `tools/core/`。
 - 把一个工具的编排入口挂到另一个工具的实现目录下面。
 - 在工具内部创建第二套 registry、dispatcher 或 executor。
 - 绕过 `ToolRegistry.derive()` 直接把全量工具 schema 交给 LLM。
 
-中文强调：
-
-- `web_search` 和 `academic_search` 可以共享搜索工具族内部实现，但 `academic_search` 的编排入口必须保持在 `web_tools/` 顶层，而不是放进 `web_search/` 目录里。
-- 这条规则是目录边界和编排边界约束，不否定工具族内部的强复用。
+**特别提醒**：`web_search` 和 `academic_search` 可以共享搜索工具族内部实现，但 `academic_search` 的编排入口必须保持在 `web_tools/` 顶层，而不是放进 `web_search/` 目录里。这条规则约束的是目录边界和编排边界，不否定工具族内部的强复用。
 
 ## 可见性规则
 
-`ToolPolicy.expose_by_default=True` 表示普通请求默认可见。适用于低风险、通用、经常需要的工具。
-
-`ToolPolicy.expose_by_default=False` 表示默认隐藏。适用于 skill 工具、场景工具、成本高或能力边界窄的工具。隐藏工具只有进入 `expose_tool_name_set` 后才会出现在本轮 `ToolScope`。
+- `ToolPolicy.expose_by_default=True`：普通请求默认可见。适用于低风险、通用、经常需要的工具。
+- `ToolPolicy.expose_by_default=False`：默认隐藏。适用于 skill 工具、场景工具、成本高或能力边界窄的工具。隐藏工具只有进入 `expose_tool_name_set` 后才会出现在本轮 `ToolScope`。
 
 当前 `ToolRegistry.derive()` 的行为要点：
 
@@ -196,26 +159,28 @@ UPPERCASE EMPHASIS: UNIFIED RENDERING IS THE RETURN BOUNDARY. DO NOT MANUALLY CO
 
 ## 新增工具 Review 清单
 
-- `name` 是否全局唯一且语义清楚。
-- `description` 是否说明何时使用，而不是堆实现细节。
-- JSON Schema 是否是 object，`required` 是否只引用已定义字段。
-- 是否声明 `timeout_seconds`。
-- 安全上下文是否走 `required_context_keys`。
-- 普通结构化结果是否交给统一递归渲染，而不是工具内手动转 result。
-- 大文本是否按 `ToolReturn.cacheable_texts` 交给统一切面。
-- 是否误把工具内部 helper 注册成 container provider。
-- 是否需要默认暴露；如果不是，谁负责加入 `expose_tool_name_set`。
+| 检查项 | 说明 |
+| --- | --- |
+| `name` | 是否全局唯一且语义清楚。 |
+| `description` | 是否说明何时使用，而不是堆实现细节。 |
+| JSON Schema | 是否是 object，`required` 是否只引用已定义字段。 |
+| `timeout_seconds` | 是否声明。 |
+| 安全上下文 | 是否走 `required_context_keys`。 |
+| 普通结构化结果 | 是否交给统一递归渲染，而不是工具内手动转 result。 |
+| 大文本 | 是否按 `ToolReturn.cacheable_texts` 交给统一切面。 |
+| provider 注册 | 是否误把工具内部 helper 注册成 container provider。 |
+| 默认暴露 | 是否需要默认暴露；如果不是，谁负责加入 `expose_tool_name_set`。 |
 
 ## 当前稳定工具约定
 
-`tool_content_read`
+### `tool_content_read`
 
 - 默认暴露。
 - 只通过 `content_ids` 批量读取 `cnt_*`。
 - 一次调用内所有 `content_ids` 共用同一组读取参数。
 - 单项读取失败返回 failed item，不拖垮整次工具调用。
 
-`document_parse`
+### `document_parse`
 
 - 默认暴露。
 - 通过 `mode` 明确区分 `from_web_fetch` 与 `from_direct_urls`。
@@ -226,7 +191,7 @@ UPPERCASE EMPHASIS: UNIFIED RENDERING IS THE RETURN BOUNDARY. DO NOT MANUALLY CO
 - 内部并发解析，单项失败返回 failed item。
 - 成功文件的 Markdown 进入 `ToolReturn.cacheable_texts`，由输出缓存切面分批生成多个 `cnt_*`。
 
-`math_tools`
+### `math_tools`
 
 - 默认暴露。
 - 拆成 `calculus_solver`、`linear_algebra_solver`、`equation_solver`、`stats_solver`、`expression_solver` 5 个窄工具。
@@ -235,6 +200,7 @@ UPPERCASE EMPHASIS: UNIFIED RENDERING IS THE RETURN BOUNDARY. DO NOT MANUALLY CO
 - 固定 task 集合使用 `StrEnum`，schema 和 service 从同一枚举来源读取。
 - 同类 helper 聚合为命名空间类，例如 task registry、expression parser、payload reader、result formatter。
 - 普通结果返回 dataclass，由统一递归渲染处理。
-- UNIFIED RENDERING IS THE RETURN BOUNDARY.
+
+## 引用协议
 
 工具之间的文件传递必须使用 `tfile_*`；工具之间的大文本传递必须使用 `cnt_*`。不得把本地路径、base64、OSS key 或工具私有缓存 ID 混入这两个协议。

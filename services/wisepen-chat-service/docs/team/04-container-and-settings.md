@@ -1,5 +1,7 @@
 # Container 与 Settings 边界规范
 
+> 一句话：只有带生命周期、成本高或应用级共享协调器的对象才进 container；settings 按“全局基础设施”和“工具行为参数”分层。
+
 本文约束依赖注入容器、应用配置和工具配置的职责边界。
 
 ## Container 注册原则
@@ -29,7 +31,7 @@ HTTP client 必须按外部集成命名，不能使用笼统名称。
 - `asset_download_http_client`
 - `search_api_http_client`
 
-禁止：
+避免：
 
 - `tool_http_client`
 - `common_http_client`
@@ -58,7 +60,7 @@ HTTP client 必须按外部集成命名，不能使用笼统名称。
 
 当前服务保持 `container` 作为唯一运行入口。
 
-不得为了 `tool_settings` 增加第二套 Nacos 加载路径，除非服务先完成清晰的多源配置设计。
+不要为了 `tool_settings` 增加第二套 Nacos 加载路径，除非服务先完成清晰的多源配置设计。
 
 `tool_settings` 可以暴露模块级实例：
 
@@ -72,14 +74,18 @@ tool_settings = ToolSettings()
 
 新增 provider 前必须回答：
 
-- 这个对象拥有哪个资源。
-- shutdown 时是否需要关闭或 flush。
-- 单例避免了什么具体成本。
-- 为什么 direct constructor 或模块级 cache 不够。
-- provider 名称是否绑定具体集成。
+| 问题 | 为什么问这个 |
+| --- | --- |
+| 这个对象拥有哪个资源 | 确认生命周期管理需求。 |
+| shutdown 时是否需要关闭或 flush | 确认必须注册到 container，而不是模块级缓存。 |
+| 单例避免了什么具体成本 | 确认不是为了“看起来规范”而注册。 |
+| 为什么 direct constructor 或模块级 cache 不够 | 确认注册到 container 是必要选择。 |
+| provider 名称是否绑定具体集成 | 避免 `common_xxx` 这类笼统命名。 |
 
 新增 setting 前必须回答：
 
-- 它是全局基础设施配置，还是某个工具的行为参数。
-- 是否复制了已有 setting。
-- 是否让 `tool_settings` 变成了 `app_settings` facade。
+| 问题 | 为什么问这个 |
+| --- | --- |
+| 它是全局基础设施配置，还是某个工具的行为参数 | 确认放在 `app_settings` 还是 `tool_settings`。 |
+| 是否复制了已有 setting | 避免同一配置出现两处。 |
+| 是否让 `tool_settings` 变成了 `app_settings` facade | 确认没有越界承载全局配置。 |

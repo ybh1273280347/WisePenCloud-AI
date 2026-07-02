@@ -1,5 +1,7 @@
 # get_historical_chat_messages
 
+> 一句话：在当前会话历史消息中做关键词全文检索。
+
 实现入口：`src/chat/application/tools/session_tools/get_historical_chat_messages_tool.py`
 
 `get_historical_chat_messages` 在当前会话的历史消息中做关键词全文检索。它默认不暴露给模型，只有请求级工具可见性显式开放时才可调用。

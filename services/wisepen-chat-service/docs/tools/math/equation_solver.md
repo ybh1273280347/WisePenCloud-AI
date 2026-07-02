@@ -1,5 +1,7 @@
 # equation_solver
 
+> 一句话：基于 SymPy/SciPy 解方程、不等式、数值求根和轻量优化，不执行任意代码。
+
 实现入口：`src/chat/application/tools/math_tools/equation_solver_tool.py`
 
 `equation_solver` 处理方程、不等式、数值求根和轻量优化任务。符号部分基于 SymPy，数值求根和优化基于 SciPy。
@@ -27,17 +29,21 @@
 | `lower_bounds` / `upper_bounds` | `number[]` | 约束优化变量边界。 |
 | `constraints` | `string[]` | 约束优化约束，按 `>= 0` 解释。 |
 
-支持任务：`solve_equation`、`solve_system`、`numeric_root`、`solve_inequality`、`numeric_minimize`、`constrained_minimize`。
+支持任务：
+
+`solve_equation`、`solve_system`、`numeric_root`、`solve_inequality`、`numeric_minimize`、`constrained_minimize`。
 
 ## 输出
 
 返回普通结构化结果：
 
-- `solver`: `equation_solver`
-- `task`: 实际执行的任务
-- `exact_result`: 符号解、关系解、根或优化结果
-- `numeric_result`: 数值任务会填充 float 或结构化数值结果
-- `latex_result`: 可展示 LaTeX，若无法生成则为空
+| 字段 | 说明 |
+| --- | --- |
+| `solver` | `equation_solver` |
+| `task` | 实际执行的任务 |
+| `exact_result` | 符号解、关系解、根或优化结果 |
+| `numeric_result` | 数值任务会填充 float 或结构化数值结果 |
+| `latex_result` | 可展示 LaTeX，若无法生成则为空 |
 
 ## 边界
 

@@ -1,5 +1,7 @@
 # expression_solver
 
+> 一句话：基于 SymPy 做表达式化简、展开、因式分解和组合数学/数论任务，不执行任意代码。
+
 实现入口：`src/chat/application/tools/math_tools/expression_solver_tool.py`
 
 `expression_solver` 处理基础符号表达式、组合数学和轻量数论任务。它基于 SymPy 和 Python 标准库数学函数，不执行任意代码。
@@ -21,17 +23,21 @@
 | `integers` | `integer[]` | `gcd`、`lcm` 使用，必须非空。 |
 | `integer` | `integer` | `prime_factors` 使用。 |
 
-支持任务：`simplify`、`expand`、`factor`、`numeric`、`factorial`、`combinations`、`permutations`、`gcd`、`lcm`、`prime_factors`。
+支持任务：
+
+`simplify`、`expand`、`factor`、`numeric`、`factorial`、`combinations`、`permutations`、`gcd`、`lcm`、`prime_factors`。
 
 ## 输出
 
 返回普通结构化结果：
 
-- `solver`: `expression_solver`
-- `task`: 实际执行的任务
-- `exact_result`: 精确结果
-- `numeric_result`: `numeric` 会尽量填充 float
-- `latex_result`: 可展示 LaTeX，若无法生成则为空
+| 字段 | 说明 |
+| --- | --- |
+| `solver` | `expression_solver` |
+| `task` | 实际执行的任务 |
+| `exact_result` | 精确结果 |
+| `numeric_result` | `numeric` 会尽量填充 float |
+| `latex_result` | 可展示 LaTeX，若无法生成则为空 |
 
 ## 边界
 

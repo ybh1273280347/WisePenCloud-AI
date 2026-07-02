@@ -1,5 +1,7 @@
 # web_search
 
+> 一句话：`web_search` 只负责发现普通网页候选，不读正文、不解析文件、不做多跳搜索。
+
 实现入口：`src/chat/application/tools/web_tools/web_search_tool.py`
 
 `web_search` 只做显式单次网页候选发现。它不再做意图路由，不再做内部多跳搜索，不再自动生成下一跳 query。工具内部只保留候选排序小模型。
@@ -75,9 +77,9 @@ question
 
 `search_ref` 是 `web_search` 的核心产物。
 
-- `web_search` 负责发现候选并写入 `search_ref -> url`
-- `web_fetch` 负责消费 `search_ref` 抓取正文
-- 模型不应伪造 `search_ref`
+- `web_search` 负责发现候选并写入 `search_ref -> url`。
+- `web_fetch` 负责消费 `search_ref` 抓取正文。
+- 模型不应伪造 `search_ref`。
 
 ## Suggested Actions
 

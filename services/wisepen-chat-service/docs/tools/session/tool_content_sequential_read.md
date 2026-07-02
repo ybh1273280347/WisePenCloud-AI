@@ -1,5 +1,7 @@
 # tool_content_sequential_read
 
+> 一句话：按 offset 顺序读取单个 `cnt_*`，不做跨文档搜索。
+
 实现入口：`src/chat/application/tools/session_tools/tool_content_sequential_read_tool.py`
 
 `tool_content_sequential_read` 按 `offset` 顺序读取单个 `cnt_*` 内容。它只解决“继续读这一个内容”的需求，不做跨文档搜索，也不做全局排序。
@@ -24,11 +26,11 @@
 
 返回普通结构化结果：
 
-- `content_id`
-- `status`
-- `window`
-
-`window` 包含 `text`、offset 范围，以及稳定的页码 / 段落标题 / 小节路径 / 锚点名。
+| 字段 | 说明 |
+| --- | --- |
+| `content_id` | 读取的 content id。 |
+| `status` | 成功或失败状态。 |
+| `window` | 包含 `text`、offset 范围，以及稳定的页码 / 段落标题 / 小节路径 / 锚点名。 |
 
 ## 边界
 

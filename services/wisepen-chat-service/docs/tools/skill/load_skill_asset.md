@@ -1,5 +1,7 @@
 # load_skill_asset
 
+> 一句话：按 `skill_id + path` 懒加载 Skill bundle 中的一个文本资产。
+
 实现入口：`src/chat/application/tools/skill_tools/load_skill_asset_tool.py`
 
 `load_skill_asset` 按 `skill_id + path` 懒加载 Skill bundle 中的一个文本资产。它默认不暴露给模型，只能在 skill 已允许且 asset path 出现在 manifest 中时调用。
@@ -23,9 +25,11 @@
 
 返回 `ToolReturn(tag="loaded_skill_asset")`：
 
-- `visible_result.skill_id`
-- `visible_result.path`
-- `visible_result.content`
+| 字段 | 说明 |
+| --- | --- |
+| `visible_result.skill_id` | Skill id。 |
+| `visible_result.path` | 资产路径。 |
+| `visible_result.content` | 资产正文。 |
 
 由于策略 `persist_output=False`，历史持久化时使用占位符而不是完整 asset 内容。
 
