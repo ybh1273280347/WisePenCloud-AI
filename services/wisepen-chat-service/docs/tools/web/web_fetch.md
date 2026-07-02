@@ -28,7 +28,7 @@
 | `urls` | `string[]` | 直接抓取一批完整 `http(s)` URL；超单批时工具内部自动分批。 |
 | `search_refs` | `string[]` | 来自本用户之前 `web_search` / `academic_search` 的 search_ref；工具会解析为真实 URL 并抓取。 |
 
-`urls` 与 `search_refs` 二选一，不可同时提供，也不可同时为空。`search_refs` 会先解析为真实 URL，并校验同一批次的 `source_scope` 一致，避免 public/custom 缓存串域。
+`urls` 与 `search_refs` 通过 `ToolParametersSchema.exactly_one_of` 统一校验：二者必须且只能提供一组，不可同时提供，也不可同时为空。`search_refs` 会先解析为真实 URL，并校验同一批次的 `source_scope` 一致，避免 public/custom 缓存串域。
 
 ## 内部运行机制
 

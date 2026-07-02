@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from chat.application.tools.core import ToolExecutionError
+from chat.application.tools.core import ExactlyOneOfCheck, ToolInvocation
 from chat.application.tools.document_tools.image_ocr_tool import ImageOcrTool
 from chat.application.tools.document_tools.ocr import OcrPageResult
 from chat.application.tools.utils.url_fetcher import RawFetchOutput
@@ -105,11 +105,19 @@ async def test_image_ocr_rejects_ambiguous_input(tmp_path: Path) -> None:
         ocr_client=_FakeOcrClient(),
     )
 
-    with pytest.raises(ToolExecutionError) as exc_info:
-        await tool.execute(
-            {"user_id": "u1", "session_id": "s1"},
-            file_ref="tfile_image",
-            file_path="https://example.test/image.png",
-        )
+    result = await ExactlyOneOfCheck().check(
+        ToolInvocation(
+            tool_call_id="call_1",
+            tool_name="image_ocr",
+            tool_call_arguments={
+                "file_ref": "tfile_image",
+                "file_path": "https://example.test/image.png",
+            },
+        ),
+        tool.definition.policy,
+        tool.definition.llm_spec.parameters_schema,
+        {"user_id": "u1", "session_id": "s1"},
+    )
 
-    assert exc_info.value.reason == "invalid_image_ocr_input"
+    assert result.ok is False
+    assert result.message == "Provide exactly one of file_ref or file_path."

@@ -9,6 +9,7 @@ from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.errors import tool_file_error_reason
 from chat.application.tools.core import (
     ToolDefinition,
+    ToolExactlyOneOf,
     ToolExecutionError,
     ToolLLMSpec,
     ToolParametersSchema,
@@ -94,7 +95,13 @@ class ImageOcrTool:
                             },
                         },
                         "additionalProperties": False,
-                    }
+                    },
+                    exactly_one_of=(
+                        ToolExactlyOneOf(
+                            groups=(("file_ref",), ("file_path",)),
+                            message="Provide exactly one of file_ref or file_path.",
+                        ),
+                    ),
                 ),
             ),
             policy=ToolPolicy(
@@ -121,12 +128,6 @@ class ImageOcrTool:
 
         file_ref = str(kwargs.get("file_ref") or "").strip()
         file_path = str(kwargs.get("file_path") or "").strip()
-        if bool(file_ref) == bool(file_path):
-            raise ToolExecutionError(
-                reason="invalid_image_ocr_input",
-                detail_reason="Provide exactly one of file_ref or file_path.",
-                retryable=False,
-            )
 
         if file_ref:
             result = await self._parse_file_ref(

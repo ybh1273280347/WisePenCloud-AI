@@ -4,7 +4,11 @@ import asyncio
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from chat.application.tools.core.execution.hooks.builtin import JsonSchemaCheck, RequiredContextCheck
+from chat.application.tools.core.execution.hooks.builtin import (
+    ExactlyOneOfCheck,
+    JsonSchemaCheck,
+    RequiredContextCheck,
+)
 from chat.application.tools.core.execution.result import ToolExecutionError, ToolExecutionResult
 from chat.application.tools.core.llm.invocation import ToolInvocation
 from chat.application.tools.core.llm.renderer import RenderToolResult
@@ -56,6 +60,7 @@ class ToolExecutor:
 
             preflight_hooks = [
                 JsonSchemaCheck(),
+                ExactlyOneOfCheck(),
                 RequiredContextCheck(),
                 *tool.definition.preflight_hooks,
             ]

@@ -4,6 +4,7 @@ from typing import Any
 
 from chat.application.tools.core import (
     ToolDefinition,
+    ToolExactlyOneOf,
     ToolExecutionError,
     ToolLLMSpec,
     ToolParametersSchema,
@@ -112,7 +113,15 @@ class WebFetchTool:
                     "  - Per-URL failure is returned in the failed list with a reason; do NOT silently drop failed URLs.\n"
                     "  - Within one session, do NOT re-fetch the same url unless new information is required.\n"
                 ),
-                parameters_schema=ToolParametersSchema(PARAMETERS_SCHEMA),
+                parameters_schema=ToolParametersSchema(
+                    PARAMETERS_SCHEMA,
+                    exactly_one_of=(
+                        ToolExactlyOneOf(
+                            groups=(("urls",), ("search_refs",)),
+                            message="Provide exactly one of urls or search_refs.",
+                        ),
+                    ),
+                ),
             ),
             policy=ToolPolicy(
                 expose_by_default=True,
@@ -129,30 +138,12 @@ class WebFetchTool:
         return self._definition
 
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
-        raw_urls = kwargs.get("urls")
-        raw_search_refs = kwargs.get("search_refs")
-
-        has_urls = raw_urls is not None
-        has_search_refs = raw_search_refs is not None
-        if has_urls and has_search_refs:
-            raise ToolExecutionError(
-                reason="ambiguous_input",
-                detail_reason="provide either urls or search_refs, not both.",
-                retryable=False,
-            )
-        if not has_urls and not has_search_refs:
-            raise ToolExecutionError(
-                reason="missing_input",
-                detail_reason="provide either urls or search_refs.",
-                retryable=False,
-            )
-
         urls: list[str] = []
         source_scope = "web_public"
 
         # 1. 根据输入自然路由：urls 直接抓取，search_refs 解析为真实 URL
-        if has_urls:
-            for u in raw_urls:
+        if "urls" in kwargs:
+            for u in kwargs["urls"]:
                 url = u.strip()
                 if not url.startswith(("http://", "https://")):
                     raise ToolExecutionError(
@@ -162,7 +153,7 @@ class WebFetchTool:
                     )
                 urls.append(url)
         else:
-            search_refs = tuple(item.strip() for item in raw_search_refs)
+            search_refs = tuple(item.strip() for item in kwargs["search_refs"])
             urls, source_scope = await self._resolve_search_urls(
                 user_id=str(context["user_id"]),
                 search_refs=search_refs,

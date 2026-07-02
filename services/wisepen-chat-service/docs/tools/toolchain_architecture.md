@@ -63,7 +63,7 @@
 
 ```text
 ToolInvocation
-  -> JsonSchemaCheck / RequiredContextCheck / custom preflight hooks
+  -> JsonSchemaCheck / ExactlyOneOfCheck / RequiredContextCheck / custom preflight hooks
   -> tool.execute(...)
   -> ToolOutputRenderer
   -> ToolOutputCache
@@ -85,8 +85,8 @@ ToolInvocation
 | 切面 | 入口 | 约束 |
 | --- | --- | --- |
 | Disclosure | `ToolRegistry.derive()` → `ToolScope.schemas()` | 默认隐藏工具必须被显式 expose；新增高风险工具优先默认隐藏；不得绕过 scope 把全量 schema 直接交给模型。 |
-| Preflight | `ToolExecutor` | 类型/枚举/required/min/max 放 JSON Schema；安全上下文放 `required_context_keys`；权限/白名单/manifest/跨字段校验放 custom preflight。 |
-| Execute | `tool.execute(context, **kwargs)` | 只做参数归一化、互斥校验、调用 service、错误映射、单项失败处理。service 不读 LLM schema，不生成 XML，不写 receipt。 |
+| Preflight | `ToolExecutor` | 类型/枚举/required/min/max 放 JSON Schema；`JsonSchemaCheck` 对 `minLength: 1` 字符串做 trim 后空白补强；OpenAI schema 不支持的 one-of 参数组放 `ToolParametersSchema.exactly_one_of`；安全上下文放 `required_context_keys`；权限/白名单/manifest/跨字段业务语义放 custom preflight。 |
+| Execute | `tool.execute(context, **kwargs)` | 只做参数归一化、调用 service、错误映射、单项失败处理，以及 URL 协议、资源解析等业务语义校验。service 不读 LLM schema，不生成 XML，不写 receipt。 |
 | Render | `ToolOutputRenderer` | 普通返回值递归渲染；工具不得手写 XML 或为渲染构造私有 result layer。 |
 | Output Cache | `ToolOutputCache` | 小文本内联为 `<contents>`；大文本写入 `ToolContentStore` 生成 `cnt_*`；每段 `cacheable_texts[i]` 是独立内容单元，不能提前拼接。 |
 | Runtime File | `ToolRunFileStore` | 生产 `tfile_*`；按 `user_id/session_id` 校验作用域；模型和工具都不能传本地路径、OSS key 或 base64 作为跨工具文件协议。 |
@@ -367,6 +367,5 @@ Math 工具的模型约束：不访问外部信息，不执行任意 Python，�
 - 给直链文件类型判断增加可配置扩展名和 MIME allowlist，辅助模型和工具双层路由。
 - 继续收敛 web/document 中非 HTML 占位、parse 回填等缓存逻辑，减少业务类里重复的缓存细节。
 - 评估 academic_search 的 OpenAlex 水合缓存是否值得引入。
-- 为 `ToolParametersSchema` 增加可表达互斥模式的 preflight DSL，减少工具 execute 内重复校验。
 - 继续按工具实际下一步收敛 `suggested_action` 与 `suggested_actions` 的使用边界。
 - 给跨工具链加端到端回归用例：search->fetch->read、direct file->parse->read、fetch file->parse cache hit。

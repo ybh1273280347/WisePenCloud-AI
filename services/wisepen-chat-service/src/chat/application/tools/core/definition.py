@@ -20,12 +20,37 @@ class ToolRiskLevel(StrEnum):
     MEDIUM = "medium"
     HIGH = "high"
 
+
+@dataclass(frozen=True)
+class ToolExactlyOneOf:
+    groups: tuple[tuple[str, ...], ...]
+    message: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.groups, tuple):
+            raise TypeError("exactly_one_of groups must be a tuple.")
+        if len(self.groups) < 2:
+            raise ValueError("exactly_one_of must contain at least two groups.")
+
+        for group in self.groups:
+            if not isinstance(group, tuple):
+                raise TypeError("exactly_one_of groups must contain tuples.")
+            if not group:
+                raise ValueError("exactly_one_of groups must not be empty.")
+            if not all(isinstance(field_name, str) and field_name for field_name in group):
+                raise ValueError("exactly_one_of groups must contain non-empty field names.")
+            if len(set(group)) != len(group):
+                raise ValueError("exactly_one_of groups must not contain duplicate fields.")
+
+
 @dataclass(frozen=True)
 class ToolParametersSchema:
     raw: dict[str, Any]
+    exactly_one_of: tuple[ToolExactlyOneOf, ...] = ()
 
     def __post_init__(self) -> None:
         self._validate_schema(self.raw)
+        self._validate_exactly_one_of()
 
     @property
     def properties(self) -> dict[str, dict[str, Any]]:
@@ -85,6 +110,36 @@ class ToolParametersSchema:
 
         if isinstance(items, dict):
             ToolParametersSchema._validate_schema_node(items, path=f"{path}.items")
+
+    def _validate_exactly_one_of(self) -> None:
+        properties = self.properties
+        for rule in self.exactly_one_of:
+            if not isinstance(rule, ToolExactlyOneOf):
+                raise TypeError("exactly_one_of must contain ToolExactlyOneOf instances.")
+
+            seen_fields: set[str] = set()
+            for group in rule.groups:
+                duplicate_fields = [
+                    field_name for field_name in group
+                    if field_name in seen_fields
+                ]
+                if duplicate_fields:
+                    raise ValueError(
+                        "exactly_one_of groups must not share fields: "
+                        f"{duplicate_fields}"
+                    )
+                seen_fields.update(group)
+
+                unknown_fields = [
+                    field_name for field_name in group
+                    if field_name not in properties
+                ]
+                if unknown_fields:
+                    raise ValueError(
+                        "exactly_one_of references fields not defined in properties: "
+                        f"{unknown_fields}"
+                    )
+
 
 @dataclass(frozen=True)
 class ToolLLMSpec:

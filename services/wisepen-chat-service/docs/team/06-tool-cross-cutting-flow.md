@@ -12,6 +12,7 @@ Tool 不是孤立函数。一个工具调用实际由多层统一切面共同完
 ToolScope disclosure
   -> LLM tool call
   -> JsonSchemaCheck
+  -> ExactlyOneOfCheck
   -> RequiredContextCheck
   -> custom preflight hooks
   -> tool.execute business logic
@@ -29,7 +30,8 @@ ToolScope disclosure
 | 切面 | 入口 | 职责 | 工具内不得重复实现 |
 | --- | --- | --- | --- |
 | 工具可见性 | `ToolRegistry.derive()` / `ToolScope.schemas()` | 控制本轮模型能看到哪些工具。 | 不得绕过 scope 暴露全量 schema。 |
-| Schema preflight | `JsonSchemaCheck` | 校验 JSON Schema 能表达的类型、required、枚举、范围。 | 不得在 service 层重复基础 schema 校验。 |
+| Schema preflight | `JsonSchemaCheck` | 校验 JSON Schema 能表达的类型、required、枚举、范围，并对 `minLength: 1` 字符串做 trim 后空白补强。 | 不得在 service 层重复基础 schema 校验，也不要重复写 `minLength: 1` 字段的空白字符串校验。 |
+| One-of 参数组 preflight | `ExactlyOneOfCheck` | 校验 `ToolParametersSchema.exactly_one_of` 中的“若干参数组必须且只能命中一组”。 | 不得在工具 `execute()` 中重复写 `urls/search_refs`、`file_refs/direct_urls` 这类 one-of 组校验。 |
 | Context preflight | `RequiredContextCheck` | 注入并校验 `user_id`、`session_id`、`search_config`、`allowed_skill_ids` 等可信上下文。 | 不得让模型通过参数传入安全上下文。 |
 | 自定义 preflight | `ToolPreflightHook` | 做权限、白名单、manifest path 等跨字段/外部校验。 | 不得把权限校验散落在多个 service。 |
 | 执行超时 | `ToolPolicy.timeout_seconds` | 对 tool call 施加统一超时。 | 不得在普通业务代码里另造不一致超时策略，外部 SDK 边界除外。 |
@@ -48,7 +50,7 @@ ToolScope disclosure
 
 1. **定位业务域**：放入已有 `<domain>_tools` 目录，或确认确实需要新域。
 2. **定义模型可见契约**：写 `ToolLLMSpec.description` 和 `ToolParametersSchema`，先表达模式边界、禁止场景和输出规则。
-3. **拆分 schema 与 execute 校验**：类型、枚举、required、范围放 schema；互斥模式、权限、manifest、跨字段语义放 preflight 或 execute。
+3. **拆分 schema 与 execute 校验**：类型、枚举、required、范围放 JSON Schema；OpenAI schema 不支持的 exactly-one-of 参数组放 `ToolParametersSchema.exactly_one_of`；权限、manifest、跨字段业务语义放 custom preflight 或 execute。
 4. **声明 policy**：设置 `expose_by_default`、`timeout_seconds`、`risk_level`、`required_context_keys`、`persist_output`、`cache_chunked`。
 5. **复用统一切面**：大文本用 `ToolReturn.cacheable_texts`；文件用 `ToolRunFileStore`；URL 内容用 `web_content_cache`；排序用 ranking engine；分块用 chunking engine。
 6. **实现业务 service**：service 不读取模型上下文，不关心 XML 渲染，不直接构造 receipt。

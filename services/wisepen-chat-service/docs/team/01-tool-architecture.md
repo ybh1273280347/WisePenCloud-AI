@@ -141,8 +141,11 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 `ToolExecutor` 固定执行：
 
 1. `JsonSchemaCheck`
-2. `RequiredContextCheck`
-3. 工具自定义 `preflight_hooks`
+2. `ExactlyOneOfCheck`
+3. `RequiredContextCheck`
+4. 工具自定义 `preflight_hooks`
+
+`ExactlyOneOfCheck` 读取 `ToolParametersSchema.exactly_one_of` 中的内部规则，用于表达 OpenAI function-calling JSON Schema 不支持的 one-of 参数组约束。它不会进入模型可见 schema。
 
 安全上下文必须来自 `context`，不能让模型通过参数传入。例如 `session_id`、`user_id`、权限范围、业务租户信息都应进入 `required_context_keys` 或可信上下文。
 
