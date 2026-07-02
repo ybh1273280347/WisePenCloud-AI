@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .extra_indexers.chunk_extral_indexer import ChunkExtraIndexer
+from .extra_indexers.chunk_extra_indexer import ChunkExtraIndexer
 from .models import ChunkLevel, UnitType
 from .packers.block_aware_packer import BlockAwarePacker, BlockAwarePackerConfig
 from .pipeline import ChunkingPipeline

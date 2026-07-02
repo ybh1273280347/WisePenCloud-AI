@@ -59,13 +59,15 @@ class ContextIndexingService:
             )
             indexing_context = _parse_llm_payload(response.content)
         except Exception as exc:
-            # indexing_text 会进入长期检索索引；失败时不写低质量替代结果，交给入库任务重试。
+            # indexing_text 会进入长期检索索引；失败时不写低质量替代结果，
+            # 而是让调用方（入库任务）标记失败并重试，避免污染搜索索引。
             raise ContextIndexingError("Context indexing LLM call failed.") from exc
 
         indexing_text = _compose_indexing_text(
             payload=payload,
             indexing_context=indexing_context,
         )
+        # 返回新的 child_chunk，不修改原 payload 中的对象，保持输入不可变。
         return ContextIndexingResult(
             child_chunk=payload.child_chunk.with_indexing_context(
                 indexing_context=indexing_context,

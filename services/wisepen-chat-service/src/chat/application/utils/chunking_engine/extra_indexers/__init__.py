@@ -1,4 +1,4 @@
-from .chunk_extral_indexer import ChunkExtraIndexer
+from .chunk_extra_indexer import ChunkExtraIndexer
 
 __all__ = [
     "ChunkExtraIndexer",

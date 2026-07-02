@@ -53,7 +53,7 @@
 - `start_offset` / `end_offset`
 - `metadata["unit_types"]`
 - `metadata["section_paths"]`
-- `metadata["anchor_names"]`
+- `metadata["page_label"]`
 - `ChunkIndex.name`
 - `ChunkIndex.kind`
 - `ChunkIndex.chunk_indices`

@@ -60,10 +60,10 @@ class ToolContentWindowBuilder:
             center_chunk=center_chunk,
             chunk_start=start_idx,
             chunk_end=end_idx,
-            page=locator["page"],
-            paragraph_title=locator["paragraph_title"],
+            page_label=locator["page_label"],
+            section_title=locator["section_title"],
             section_path=locator["section_path"],
-            anchor_names=locator["anchor_names"],
+            anchor_labels=locator["anchor_labels"],
         )
 
     @staticmethod
@@ -82,10 +82,10 @@ class ToolContentWindowBuilder:
         chunk_list = tuple(chunks)
         section_path = ToolContentWindowBuilder._section_path(chunk_list)
         return {
-            "page": ToolContentWindowBuilder._page_name(stored, chunk_list),
-            "paragraph_title": section_path[-1] if section_path else None,
+            "page_label": ToolContentWindowBuilder._page_label(stored, chunk_list),
+            "section_title": section_path[-1] if section_path else None,
             "section_path": section_path,
-            "anchor_names": ToolContentWindowBuilder._anchor_names(chunk_list),
+            "anchor_labels": ToolContentWindowBuilder._anchor_labels(chunk_list),
         }
 
     @staticmethod
@@ -96,36 +96,40 @@ class ToolContentWindowBuilder:
         return ()
 
     @staticmethod
-    def _anchor_names(chunks: tuple[ToolContentChunk, ...]) -> tuple[str, ...]:
+    def _anchor_labels(chunks: tuple[ToolContentChunk, ...]) -> tuple[str, ...]:
         seen: dict[str, None] = {}
         for chunk in chunks:
-            for name in chunk.anchor_names:
+            for name in chunk.anchor_labels:
                 text = str(name).strip()
                 if text:
                     seen.setdefault(text, None)
         return tuple(seen)
 
     @staticmethod
-    def _page_name(
+    def _page_label(
             stored: StoredToolContent,
             chunks: tuple[ToolContentChunk, ...],
     ) -> str | None:
+        for chunk in chunks:
+            if chunk.page_label:
+                return chunk.page_label
+
         if not chunks or stored.index is None:
             return None
 
         target_indices = {chunk.chunk_index for chunk in chunks}
         candidate_page: tuple[int, str] | None = None
         for entry in stored.index.entries:
-            if not entry.name.startswith("page:"):
+            if entry.index_kind != "page":
                 continue
             overlap = tuple(idx for idx in entry.chunk_indices if idx in target_indices)
             if not overlap:
                 continue
-            page_name = entry.name.split(":", 1)[1].strip()
-            if not page_name:
+            page_label = (entry.page_label or "").strip()
+            if not page_label:
                 continue
             first_overlap = min(overlap)
             if candidate_page is None or first_overlap < candidate_page[0]:
-                candidate_page = (first_overlap, page_name)
+                candidate_page = (first_overlap, page_label)
 
         return candidate_page[1] if candidate_page is not None else None

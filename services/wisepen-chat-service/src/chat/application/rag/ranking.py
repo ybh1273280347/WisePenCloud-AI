@@ -19,8 +19,8 @@ class RagEvidenceRankingRequest:
 
     query: str  # 用户原始问题
     chunks: tuple[ScoredChunk, ...] = ()  # 已完成上游融合排序的候选
-    top_k: int = 20  # 最终返回上限
-    candidate_limit: int = 100  # rerank/diversify 前的中间窗口
+    top_k: int = 20  # 最终返回给 answerability gate 的上限
+    candidate_limit: int = 100  # rerank/diversify 前的中间窗口，避免一次性喂给 ranking engine 过多候选
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +63,10 @@ class RagEvidenceRankingService:
     def _build_rank_candidates(
         chunks: tuple[ScoredChunk, ...],
     ) -> tuple[RankCandidate, ...]:
+        """把 ScoredChunk 去重后转成 RankingEngine 需要的 RankCandidate。
+
+        上游不同检索源可能召回同一个 chunk，这里按 chunk_id 去重，保留第一次出现。
+        """
         candidates_by_chunk_id: dict[str, RankCandidate] = {}
         for chunk in chunks:
             if chunk.chunk_id in candidates_by_chunk_id:

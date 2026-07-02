@@ -141,11 +141,11 @@ def _merge_pair(head: Chunk, body: Chunk) -> Chunk:
 
 
 def _can_merge_chunks(left: Chunk, right: Chunk) -> bool:
-    left_range = left.metadata.get("page_range")
-    right_range = right.metadata.get("page_range")
-    if left_range is None and right_range is None:
+    left_page_label = left.metadata.get("page_label")
+    right_page_label = right.metadata.get("page_label")
+    if left_page_label is None and right_page_label is None:
         return True
-    return left_range == right_range
+    return left_page_label == right_page_label
 
 
 def _is_heading_only(text: str) -> bool:

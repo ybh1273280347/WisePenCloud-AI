@@ -58,7 +58,7 @@ ToolContentStore 默认规则：
 - `end_offset`: chunk 在原文中的结束字符偏移。
 - `metadata["unit_types"]`: 该 chunk 覆盖的结构类型。
 - `metadata["section_paths"]`: 章节路径。
-- `metadata["anchor_names"]`: 表格、图片、公式等锚点名。
+- `metadata["page_label"]`: chunk 所在页码标签；Markdown pipeline 保证 chunk 不跨页。
 
 ToolContentStore 会把这些字段收敛成更小的 `ToolContentChunk`：
 
@@ -66,7 +66,10 @@ ToolContentStore 会把这些字段收敛成更小的 `ToolContentChunk`：
 - `start_offset / end_offset`
 - `unit_types`
 - `section_path`
-- `anchor_names`
+- `page_label`
+- `anchor_labels`
+
+其中 `anchor_labels` 不是 chunk metadata 的影子字段，而是由 `ChunkIndex(kind=ANCHOR)` 派生出来的稳定投影。
 
 ### ChunkIndex
 
@@ -75,10 +78,10 @@ ToolContentStore 会把这些字段收敛成更小的 `ToolContentChunk`：
 | kind | name 示例 | 用途 |
 | --- | --- | --- |
 | `SECTION` | `section:快速开始 > 安装` | 按章节筛选 |
-| `PAGE` | `page:3` | 按页码筛选 |
-| `ANCHOR` | `anchor:Table 1` | 按表格/图片/公式锚点筛选 |
+| `PAGE` | `page:3` | 按页码标签筛选 |
+| `ANCHOR` | `anchor:Table 1` | 按表格/图片/公式锚点标签筛选 |
 
-ToolContentRead 现在主要按 `entry.name` 和 `entry.chunk_indices` 使用索引，不依赖 `chunk_ids`。
+ToolContentRead 现在主要按 `entry.index_name`、`entry.index_kind` 和 `entry.chunk_indices` 使用索引，不依赖 `chunk_ids`。
 
 ## 不要依赖的内部细节
 

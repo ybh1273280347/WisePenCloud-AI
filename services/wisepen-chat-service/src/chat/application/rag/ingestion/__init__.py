@@ -9,7 +9,9 @@ from .models import (
     ContextIndexingInput,
     ContextIndexingResult,
     RagChildChunk,
+    RagChunkExtraIndex,
     RagChunkingResult,
+    RagMarkdownIngestionPayload,
     RagParentChunk,
 )
 
@@ -19,8 +21,10 @@ __all__ = [
     "ContextIndexingInput",
     "ContextIndexingResult",
     "RagChildChunk",
+    "RagChunkExtraIndex",
     "RagChunkingResult",
     "RagChunkingService",
+    "RagMarkdownIngestionPayload",
     "RagParentChunk",
     "ContextIndexingService",
 ]

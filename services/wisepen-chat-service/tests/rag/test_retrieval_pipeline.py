@@ -60,8 +60,10 @@ from chat.application.rag.retrieval import (  # noqa: E402
 from chat.application.rag.ingestion import (  # noqa: E402
     RagChildChunk,
     RagChunkingService,
+    RagMarkdownIngestionPayload,
     RagParentChunk,
 )
+from chat.application.utils.chunking_engine.models import IndexKind  # noqa: E402
 from chat.application.utils.ranking_engine.models import (  # noqa: E402
     RankCandidate,
     RankedCandidate,
@@ -79,12 +81,47 @@ def _ranking_engine_without_reranker() -> RankingEngine:
 
 
 def test_chunking_service_produces_parent_and_child_chunks() -> None:
+    page_one = "请求必须携带 AppBuilder API Key。 " * 120
+    page_two = "POST /v2/ai_search/web_search 使用 Bearer token。 " * 120
+    payload = RagMarkdownIngestionPayload(
+        resource_id="resource-auth",
+        document_id="doc-auth",
+        document_version="v1",
+        title="API 文档",
+        markdown="\n\n".join(
+            [
+                "<!-- page 1 -->",
+                "# 鉴权",
+                page_one,
+                "<!-- page 2 -->",
+                "## 接口",
+                page_two,
+            ]
+        ),
+    )
+
+    result = RagChunkingService().chunk_payload(payload)
+
+    assert result.resource_id == "resource-auth"
+    assert result.document_id == "doc-auth"
+    assert result.document_version == "v1"
+    assert result.pipeline == "nested_markdown"
+    assert result.parent_chunks
+    assert result.child_chunks
+    assert all(isinstance(chunk, RagParentChunk) for chunk in result.parent_chunks)
+    assert all(isinstance(chunk, RagChildChunk) for chunk in result.child_chunks)
+    assert all(chunk.parent_chunk_id for chunk in result.child_chunks)
+
+
+def test_chunking_service_persists_extra_indexes_for_evidence_location() -> None:
     markdown = "\n\n".join(
         [
+            "<!-- page 1 -->",
             "# 鉴权",
-            "请求必须携带 AppBuilder API Key。 " * 60,
+            "请求必须携带 AppBuilder API Key。 " * 120,
+            "<!-- page 2 -->",
             "## 接口",
-            "POST /v2/ai_search/web_search 使用 Bearer token。 " * 60,
+            "POST /v2/ai_search/web_search 使用 Bearer token。 " * 120,
         ]
     )
 
@@ -94,12 +131,31 @@ def test_chunking_service_produces_parent_and_child_chunks() -> None:
         title="API 文档",
     )
 
-    assert result.pipeline == "nested_markdown"
-    assert result.parent_chunks
-    assert result.child_chunks
-    assert all(isinstance(chunk, RagParentChunk) for chunk in result.parent_chunks)
-    assert all(isinstance(chunk, RagChildChunk) for chunk in result.child_chunks)
-    assert all(chunk.parent_chunk_id for chunk in result.child_chunks)
+    all_extra_indexes = tuple(
+        extra_index
+        for chunk in (*result.parent_chunks, *result.child_chunks)
+        for extra_index in chunk.extra_indexes
+    )
+    assert all_extra_indexes
+    assert {index.index_name for index in all_extra_indexes} >= {"page:1", "page:2"}
+
+    page_one = next(index for index in all_extra_indexes if index.index_name == "page:1")
+    page_two = next(index for index in all_extra_indexes if index.index_name == "page:2")
+    assert page_one.index_kind == IndexKind.PAGE
+    assert page_two.index_kind == IndexKind.PAGE
+    assert page_one.start_offset == 0
+    assert page_one.end_offset is not None
+    assert page_two.start_offset == page_one.end_offset
+
+    page_one_chunks = [
+        chunk
+        for chunk in result.child_chunks
+        if any(extra_index.index_name == "page:1" for extra_index in chunk.extra_indexes)
+    ]
+    assert page_one_chunks
+    assert all(chunk.page_label == "1" for chunk in page_one_chunks)
+    assert all(chunk.start_offset is not None for chunk in page_one_chunks)
+    assert all(chunk.end_offset is not None for chunk in page_one_chunks)
 
 
 @pytest.mark.anyio

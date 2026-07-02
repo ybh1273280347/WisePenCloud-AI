@@ -21,15 +21,26 @@ class ToolContentChunk:
     end_offset: int | None = None  # 在 StoredToolContent.text 中的结束字符偏移
     unit_types: tuple[str, ...] = ()  # 该 chunk 覆盖的 unit 类型，如 paragraph/code/table
     section_path: tuple[str, ...] = ()  # 所在章节路径，如 ("一级标题", "二级标题")
-    anchor_names: tuple[str, ...] = ()  # 表格、图片、公式等可定位锚点名称
+    page_label: str | None = None  # 所在页码标签，如 "3"
+    anchor_labels: tuple[str, ...] = ()  # 表格、图片、公式等可定位锚点标签
 
 
 @dataclass(frozen=True, slots=True)
 class ToolContentIndexEntry:
     """ToolContent 读取索引项。"""
 
-    name: str  # 索引名称，如章节名、页名、锚点名
+    index_name: str  # 完整索引名，如 section:快速开始 > 安装 / page:3
+    index_kind: str  # 索引类型，如 section / page / anchor
     chunk_indices: tuple[int, ...]  # 命中的 chunk 序号集合
+    start_offset: int | None = None  # 索引覆盖的原文起始 offset
+    end_offset: int | None = None  # 索引覆盖的原文结束 offset
+    section_path: tuple[str, ...] = ()  # section 索引对应的章节路径
+    page_label: str | None = None  # page 索引对应的页码标签
+    anchor_label: str | None = None  # anchor 索引对应的锚点标签
+
+    @property
+    def name(self) -> str:
+        return self.index_name
 
 
 @dataclass(frozen=True, slots=True)

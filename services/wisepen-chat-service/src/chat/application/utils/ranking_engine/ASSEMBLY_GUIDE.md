@@ -361,7 +361,7 @@ RankCandidate(
     text=chunk_text,
     fields={
         "section": " / ".join(section_path),
-        "anchor": " ".join(anchor_names),
+        "anchor": " ".join(anchor_labels),
     },
     metadata={"chunk_index": chunk_index},
 )

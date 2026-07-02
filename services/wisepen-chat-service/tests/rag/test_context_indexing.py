@@ -43,7 +43,12 @@ from chat.application.rag.ingestion.context_indexing import (
     ContextIndexingError,
     ContextIndexingService,
 )
-from chat.application.rag.ingestion.models import ContextIndexingInput, RagChildChunk
+from chat.application.rag.ingestion.models import (
+    ContextIndexingInput,
+    RagChildChunk,
+    RagChunkExtraIndex,
+)
+from chat.application.utils.chunking_engine.models import IndexKind
 
 
 class _FakeClient:
@@ -74,7 +79,13 @@ async def test_context_indexing_service_uses_llm_json_payload() -> None:
                 text="volatile-lru 只淘汰设置了过期时间的 key。",
                 chunk_index=1,
                 parent_chunk_id="parent-redis",
-                section_path=("内存管理",),
+                extra_indexes=(
+                    RagChunkExtraIndex(
+                        index_name="section:内存管理",
+                        index_kind=IndexKind.SECTION,
+                        section_path=("内存管理",),
+                    ),
+                ),
             ),
             document_title="Redis 运维手册",
         )
@@ -106,7 +117,13 @@ async def test_context_indexing_service_rejects_bad_llm_response() -> None:
                     text="请求必须携带 Authorization header。",
                     chunk_index=1,
                     parent_chunk_id="parent-auth",
-                    section_path=("鉴权",),
+                    extra_indexes=(
+                        RagChunkExtraIndex(
+                            index_name="section:鉴权",
+                            index_kind=IndexKind.SECTION,
+                            section_path=("鉴权",),
+                        ),
+                    ),
                 ),
                 document_title="API 文档",
             )
@@ -126,7 +143,13 @@ async def test_context_indexing_service_requires_parent_text() -> None:
                 text="请求必须携带 Authorization header。",
                 chunk_index=1,
                 parent_chunk_id="parent-auth",
-                section_path=("鉴权",),
+                extra_indexes=(
+                    RagChunkExtraIndex(
+                        index_name="section:鉴权",
+                        index_kind=IndexKind.SECTION,
+                        section_path=("鉴权",),
+                    ),
+                ),
             ),
             document_title="API 文档",
         )

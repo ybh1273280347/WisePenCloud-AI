@@ -46,8 +46,8 @@ class BlockAwarePacker:
         chunk_start = 0  # 当前 chunk 起始 unit 的 index
         chunk_chars = 0  # 当前 chunk 累计字符数
         chunk_size = self.config.chunk_size
-        active_page_number: str | None = None
-        chunk_page_numbers: tuple[str, ...] = ()
+        active_page_label: str | None = None
+        chunk_page_label: str | None = None
 
         for unit in units:
             unit_chars = len(unit.text)
@@ -59,12 +59,12 @@ class BlockAwarePacker:
                             chunk_start,
                             unit.unit_index - 1,
                             len(chunks),
-                            page_numbers=chunk_page_numbers,
+                            page_label=chunk_page_label,
                         )
                     )
-                if page_number := _extract_page_number(unit):
-                    active_page_number = page_number
-                chunk_page_numbers = (active_page_number,) if active_page_number else ()
+                if page_label := _extract_page_label(unit):
+                    active_page_label = page_label
+                chunk_page_label = active_page_label
                 chunk_start = unit.unit_index
                 chunk_chars = 0
 
@@ -76,12 +76,12 @@ class BlockAwarePacker:
                         chunk_start,
                         unit.unit_index - 1,
                         len(chunks),
-                        page_numbers=chunk_page_numbers,
+                        page_label=chunk_page_label,
                     )
                 )
                 chunk_start = unit.unit_index
                 chunk_chars = 0
-                chunk_page_numbers = (active_page_number,) if active_page_number else ()
+                chunk_page_label = active_page_label
             chunk_chars += unit_chars
 
         # 处理最后一个 chunk
@@ -92,7 +92,7 @@ class BlockAwarePacker:
                     chunk_start,
                     len(units) - 1,
                     len(chunks),
-                    page_numbers=chunk_page_numbers,
+                    page_label=chunk_page_label,
                 )
             )
 
@@ -105,7 +105,7 @@ class BlockAwarePacker:
         end_unit: int,
         chunk_index: int,
         *,
-        page_numbers: tuple[str, ...] = (),
+        page_label: str | None = None,
     ) -> Chunk:
         """从 units[start_unit..end_unit] 构建一个 Chunk。"""
         selected = units[start_unit:end_unit + 1]
@@ -142,12 +142,11 @@ class BlockAwarePacker:
                 "end_block": selected[-1].unit_index,
                 "section_paths": section_paths,
                 **({"titles": titles} if titles else {}),
-                **({"page_numbers": page_numbers} if page_numbers else {}),
-                **({"page_range": (page_numbers[0], page_numbers[-1])} if page_numbers else {}),
+                **({"page_label": page_label} if page_label else {}),
             },
         )
 
 
-def _extract_page_number(unit: TextUnit) -> str | None:
-    page_number = unit.metadata.get("page_number")
-    return str(page_number) if page_number is not None else None
+def _extract_page_label(unit: TextUnit) -> str | None:
+    page_label = unit.metadata.get("page_number")
+    return str(page_label) if page_label is not None else None

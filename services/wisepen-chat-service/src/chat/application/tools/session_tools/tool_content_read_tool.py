@@ -75,7 +75,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
                     },
                     "description": "Optional. Restrict search to matching section names or section path fragments.",
                 },
-                "pages": {
+                "page_labels": {
                     "type": "array",
                     "items": {
                         "type": "string",
@@ -84,14 +84,14 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
                     },
                     "description": "Optional. Restrict search to matching page labels when page metadata exists.",
                 },
-                "anchors": {
+                "anchor_labels": {
                     "type": "array",
                     "items": {
                         "type": "string",
                         "minLength": 1,
-                        "description": "One anchor name such as a table, figure, or equation label.",
+                        "description": "One anchor label such as a table, figure, or equation identifier.",
                     },
-                    "description": "Optional. Restrict search to matching anchor names.",
+                    "description": "Optional. Restrict search to matching anchor labels.",
                 },
                 "chunk_indices": {
                     "type": "array",
@@ -172,7 +172,7 @@ class ToolContentReadTool:
                     "  - content_ids MUST be cnt_* ids from previous content receipts; large sets are auto-batched internally.\n"
                     "  - mode MUST be one of: ranked_expand (semantic search), regex_match (exact pattern).\n"
                     "  - query is required for ranked_expand; pattern is required for regex_match.\n"
-                    "  - selector optionally prefilters chunks by unit_types, sections, pages, anchors, or chunk_indices.\n"
+                    "  - selector optionally prefilters chunks by unit_types, sections, page_labels, anchor_labels, or chunk_indices.\n"
                     "  - merge_before/merge_after expand windows around center chunks.\n"
                     "\n"
                     "OUTPUT RULES:\n"
@@ -202,8 +202,8 @@ class ToolContentReadTool:
             selector = ToolContentSelector(
                 unit_types=tuple(selector_payload.get("unit_types") or ()),
                 sections=tuple(selector_payload.get("sections") or ()),
-                pages=tuple(selector_payload.get("pages") or ()),
-                anchors=tuple(selector_payload.get("anchors") or ()),
+                page_labels=tuple(selector_payload.get("page_labels") or ()),
+                anchor_labels=tuple(selector_payload.get("anchor_labels") or ()),
                 chunk_indices=tuple(int(value) for value in (selector_payload.get("chunk_indices") or ())),
                 include_unknown=bool(selector_payload.get("include_unknown", False)),
             )

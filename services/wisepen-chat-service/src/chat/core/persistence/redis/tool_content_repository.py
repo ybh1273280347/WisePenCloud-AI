@@ -60,7 +60,15 @@ class RedisToolContentRepository(ToolContentRepository):
                 end_offset=chunk.get("end_offset"),
                 unit_types=tuple(str(v) for v in chunk.get("unit_types", [])),
                 section_path=tuple(str(v) for v in chunk.get("section_path", [])),
-                anchor_names=tuple(str(v) for v in chunk.get("anchor_names", [])),
+                page_label=(
+                    str(chunk["page_label"]).strip()
+                    if chunk.get("page_label") is not None
+                    else None
+                ),
+                anchor_labels=tuple(
+                    str(v)
+                    for v in chunk.get("anchor_labels", [])
+                ),
             )
             for chunk in payload.get("chunks", [])
         )
@@ -69,8 +77,22 @@ class RedisToolContentRepository(ToolContentRepository):
         index_payload: dict[str, Any] = payload.get("index") or {}
         entries = tuple(
             ToolContentIndexEntry(
-                name=str(entry["name"]),
+                index_name=str(entry["index_name"]),
+                index_kind=str(entry["index_kind"]),
                 chunk_indices=tuple(int(idx) for idx in entry.get("chunk_indices", [])),
+                start_offset=entry.get("start_offset"),
+                end_offset=entry.get("end_offset"),
+                section_path=tuple(str(v) for v in entry.get("section_path", [])),
+                page_label=(
+                    str(entry["page_label"]).strip()
+                    if entry.get("page_label") is not None
+                    else None
+                ),
+                anchor_label=(
+                    str(entry["anchor_label"]).strip()
+                    if entry.get("anchor_label") is not None
+                    else None
+                ),
             )
             for entry in index_payload.get("entries", [])
         )

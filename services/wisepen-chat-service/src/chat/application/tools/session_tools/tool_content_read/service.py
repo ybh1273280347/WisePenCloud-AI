@@ -146,10 +146,10 @@ class ToolContentReadService:
             text=stored.text[safe_offset:end],
             start_offset=safe_offset,
             end_offset=end,
-            page=locator["page"],
-            paragraph_title=locator["paragraph_title"],
+            page_label=locator["page_label"],
+            section_title=locator["section_title"],
             section_path=locator["section_path"],
-            anchor_names=locator["anchor_names"],
+            anchor_labels=locator["anchor_labels"],
         )
 
     async def _load_one(
@@ -206,8 +206,8 @@ class ToolContentReadService:
                         candidate_id=candidate_id,
                         text=text,
                         fields={
-                            "section": " / ".join(chunk.section_path),
-                            "anchor": " ".join(chunk.anchor_names),
+                            "section_path_text": " / ".join(chunk.section_path),
+                            "anchor_labels_text": " ".join(chunk.anchor_labels),
                         },
                         metadata={
                             "content_id": canonical_id,
@@ -344,22 +344,39 @@ class ToolContentReadService:
 
         for prefix, values in (
                 ("section", selector.sections),
-                ("page", selector.pages),
-                ("anchor", selector.anchors),
+                ("page", selector.page_labels),
+                ("anchor", selector.anchor_labels),
         ):
             if not values:
                 continue
 
             matched: set[int] = set()
             for entry in (stored.index.entries if stored.index else ()):
-                name = entry.name
-                bare_name = name.split(":", 1)[1] if ":" in name else name
-
-                # 匹配完整索引名、去前缀名或包含匹配，并校验前缀防止跨类误判
-                if any(v == name or v == bare_name or v in bare_name for v in values):
-                    if name.startswith(f"{prefix}:") or prefix in name:
-                        matched.update(entry.chunk_indices)
+                if entry.index_kind != prefix:
+                    continue
+                if _matches_selector_value(entry, values):
+                    matched.update(entry.chunk_indices)
 
             selected = matched if selected is None else selected & matched
 
         return selected
+
+
+def _matches_selector_value(entry, values: tuple[str, ...]) -> bool:
+    index_name = entry.index_name
+    match_values = [index_name]
+
+    if entry.index_kind == "section":
+        match_values.append(" > ".join(entry.section_path))
+    elif entry.index_kind == "page" and entry.page_label:
+        match_values.append(entry.page_label)
+    elif entry.index_kind == "anchor" and entry.anchor_label:
+        match_values.append(entry.anchor_label)
+
+    normalized_values = tuple(value.strip() for value in values if value and value.strip())
+    for target in normalized_values:
+        for candidate in match_values:
+            candidate_text = str(candidate).strip()
+            if candidate_text and (target == candidate_text or target in candidate_text):
+                return True
+    return False

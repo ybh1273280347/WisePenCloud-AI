@@ -91,10 +91,7 @@ class ChunkExtraIndexer:
                     chunk_ids=tuple(c.chunk_id for c in covered),
                     start_offset=section_start,
                     end_offset=section_end,
-                    metadata={
-                        "section_path": heading.section_path,
-                        "title": heading.metadata.get("title", ""),
-                    },
+                    metadata={"section_path": heading.section_path},
                 ))
         return indexes
 
@@ -114,7 +111,7 @@ class ChunkExtraIndexer:
 
         indexes: list[ChunkIndex] = []
         for page_idx, page_unit in enumerate(page_units):
-            page_name = _extract_page_name(page_unit.text)
+            page_label = _extract_page_label(page_unit.text)
             # page 范围：从当前页码标记到下一个页码标记之前
             page_end = (
                 page_units[page_idx + 1].start_offset
@@ -124,13 +121,13 @@ class ChunkExtraIndexer:
             covered = _chunks_covering_range(chunks, page_unit.start_offset, page_end)
             if covered:
                 indexes.append(ChunkIndex(
-                    name=f"page:{page_name}",
+                    name=f"page:{page_label}",
                     kind=IndexKind.PAGE,
                     chunk_indices=tuple(c.chunk_index for c in covered),
                     chunk_ids=tuple(c.chunk_id for c in covered),
                     start_offset=page_unit.start_offset,
                     end_offset=page_end,
-                    metadata={"page_name": page_name},
+                    metadata={"page_label": page_label},
                 ))
         return indexes
 
@@ -169,7 +166,7 @@ class ChunkExtraIndexer:
                     chunk_ids=(containing.chunk_id,),
                     start_offset=unit.start_offset,
                     end_offset=unit.end_offset,
-                    metadata={"anchor": anchor_name},
+                    metadata={"anchor_label": anchor_name},
                 ))
 
         return indexes
@@ -245,7 +242,7 @@ def _chunk_containing_unit(chunks: tuple[Chunk, ...], unit: TextUnit) -> Chunk |
     return None
 
 
-def _extract_page_name(text: str) -> str:
+def _extract_page_label(text: str) -> str:
     """从 page_marker 文本中提取页码。
 
     统一格式为 <!-- page N -->，提取 N。

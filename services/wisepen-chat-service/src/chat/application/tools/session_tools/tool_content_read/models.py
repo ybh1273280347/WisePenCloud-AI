@@ -21,15 +21,15 @@ class ToolContentSelector:
 
     所有条件同时存在时取交集（AND 逻辑）；为空则表示不过滤。
     - unit_types: 按块内单元类型过滤（如 code/table/formula）
-    - sections/page/anchors: 按结构化索引名称过滤
+    - sections/page_labels/anchor_labels: 按结构化索引值过滤
     - chunk_indices: 显式指定 chunk 序号（精准定位）
     - include_unknown: 是否保留"无结构元数据"的 chunk，默认 False
     """
 
     unit_types: tuple[str, ...] = ()
     sections: tuple[str, ...] = ()
-    pages: tuple[str, ...] = ()
-    anchors: tuple[str, ...] = ()
+    page_labels: tuple[str, ...] = ()
+    anchor_labels: tuple[str, ...] = ()
     chunk_indices: tuple[int, ...] = ()
     include_unknown: bool = False
 
@@ -63,10 +63,10 @@ class ToolContentWindow:
     center_chunk: int | None = None         # 中心 chunk 序号
     chunk_start: int | None = None          # 窗口起始 chunk 序号
     chunk_end: int | None = None            # 窗口结束 chunk 序号
-    page: str | None = None                 # 页码
-    paragraph_title: str | None = None      # 段落标题
+    page_label: str | None = None           # 页码标签
+    section_title: str | None = None        # section_path 最末级标题
     section_path: tuple[str, ...] = ()      # 小节路径
-    anchor_names: tuple[str, ...] = ()      # 锚点名称
+    anchor_labels: tuple[str, ...] = ()     # 锚点标签
 
 
 @dataclass(frozen=True, slots=True)

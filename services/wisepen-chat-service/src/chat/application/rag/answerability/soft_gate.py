@@ -160,6 +160,10 @@ def _format_evidence_block(*, index: int, item: Any) -> str:
 
 
 def _parse_soft_gate_payload(content: str) -> RagAnswerabilityWarning:
+    """解析并校验 Soft Gate 小模型输出。
+
+    校验逻辑和 prompt 中声明的 severity_mapping 保持一致，防止模型输出自相矛盾。
+    """
     payload: Any = json.loads(content)
     if not isinstance(payload, dict):
         raise ValueError("Soft gate response must be a JSON object.")
@@ -170,8 +174,10 @@ def _parse_soft_gate_payload(content: str) -> RagAnswerabilityWarning:
         raise ValueError("Soft gate warnings must be a list.")
 
     warnings = _dedupe_warning_reasons(raw_warnings)
+    # 校验空 warnings 时 answerability_level 必须为 good，避免模型保守性误报。
     if not warnings and level != RagAnswerabilityLevel.GOOD:
         raise ValueError("Soft gate level must be good when warnings is empty.")
+    # 校验非空 warnings 时 level 与 severity mapping 一致，否则下游图增强触发条件会被破坏。
     if warnings and level != _infer_answerability_level(warnings):
         raise ValueError("Soft gate level does not match warning severity mapping.")
 
@@ -197,6 +203,14 @@ def _dedupe_warning_reasons(values: list[Any]) -> tuple[RagAnswerabilityWarningR
 def _infer_answerability_level(
     warnings: tuple[RagAnswerabilityWarningReason, ...],
 ) -> RagAnswerabilityLevel:
+    """根据 warning 集合推断 answerability_level。
+
+    映射规则必须与 prompt 中的 severity_mapping 完全一致：
+    - 无 warning -> good
+    - 仅 1 个 mild -> partial
+    - 1 个 moderate 或 2 个及以上 mild -> risky
+    - 任意 severe 或 3 个及以上 warning -> poor
+    """
     if not warnings:
         return RagAnswerabilityLevel.GOOD
 
