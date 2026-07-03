@@ -9,31 +9,29 @@
 ## 何时使用
 
 - 用户需要一般网页候选，而不是论文候选。
-- 需要先拿到 `search_ref`，再交给 `web_fetch` 抓正文。
+- 需要先拿到网页候选；若摘要不足以回答，再交给 `web_fetch` 抓正文。
 - 需要实时、外部、可验证来源的信息。
 
 ## 不适合做什么
 
 - 不适合论文/文献检索。此类需求使用 `academic_search`。
 - 不适合直接读取正文、PDF 或 Office 文件。
-- 不适合把 preview 当最终证据。
+- 不适合在摘要不足、需要强证据或细节核验时把 preview 当最终证据。
 
 ## 输入
 
 | 参数 | 类型 | 规则 |
 | --- | --- | --- |
 | `question` | `string` | 用户原始问题。 |
-| `first_query` | `string` | 首次执行的网页搜索 query。 |
-| `fallback_query` | `string` | 仅当 `first_query` 返回空结果时执行一次。 |
+| `query` | `string` | 本次执行的网页搜索 query；若无结果，由模型重写后再次调用。 |
 | `max_results` | `integer` | 可选，默认 10，最大 20。 |
 
 ## 内部流程
 
 ```text
 question
-  -> first_query
+  -> query
   -> provider web search
-  -> if empty: fallback_query once
   -> candidate build
   -> candidate ranking (title/url/overview/highlights only)
   -> search_ref mapping
@@ -41,8 +39,8 @@ question
 
 约束：
 
-- `fallback_query` 只在首跳空结果时触发一次。
-- 第二次仍为空时直接失败。
+- 工具只执行一次显式 query，不内置 fallback query。
+- 查询为空结果时直接失败，由模型按任务目标重写 query 后重新调用。
 - 工具不会做 coverage retry、hop merge 或 next query rewrite。
 
 ## 搜索源
@@ -58,7 +56,6 @@ question
 可见结果包含：
 
 - `query`
-- `final_query`（仅当 fallback 查询与原始查询不同时展示）
 - `candidates`
 - `recommended_ids`
 - `supplier_answers`
@@ -71,7 +68,7 @@ question
 - `overview`
 - `highlights`
 
-真实 URL 仍保存在候选映射缓存里，由 `web_fetch(search_refs=[...])` 解析。
+真实 URL 仍保存在候选映射缓存里；需要正文、强证据或细节核验时，由 `web_fetch(search_refs=[...])` 解析。
 
 ## search_ref 协议
 
@@ -83,14 +80,15 @@ question
 
 ## Suggested Actions
 
-当前只建议：
+当前建议：
 
 - `web_fetch(search_refs=[...])`
 
 补充约束：
 
-- `supplier_answers` 仍可暴露给模型作为检索提示。
+- `supplier_answers` 和候选摘要仍可暴露给模型作为检索提示；若摘要已经足以回答用户问题，可以不继续调用 `web_fetch`。
 - 候选排序小模型不再读取 `supplier_answers`，只看候选自身字段。
+- 候选排序小模型每次输出 1 到 5 个候选编号，宁缺勿滥，不强制凑满 5 个。
 
 不再暴露任何 hydrate 工具建议。
 

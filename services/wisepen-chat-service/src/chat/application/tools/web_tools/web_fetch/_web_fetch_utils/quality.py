@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import re
 
-from chat.application.tools.utils.url_fetcher import RawFetchOutput
 from ..cleaners.base import CleanedOutput
-from ..models import FetchQuality
+from ..models import FetchQuality, RawFetchOutput
 
 # 正文语义关键词，带词界避免误判
 _CONTENT_BLOCKED_RE = re.compile(
@@ -40,7 +39,7 @@ def judge_quality(
     # 1. raw_html 为空
     if not raw.raw_html or not raw.raw_html.strip():
         return FetchQuality(
-            usable=False, should_fallback=True,
+            should_fallback=True,
             reason="empty_html", text_length=0,
         )
 
@@ -48,7 +47,7 @@ def judge_quality(
     markdown = cleaned.markdown or ""
     if not markdown.strip():
         return FetchQuality(
-            usable=False, should_fallback=True,
+            should_fallback=True,
             reason="empty_content", text_length=0,
         )
 
@@ -56,7 +55,7 @@ def judge_quality(
     text_length = len(markdown.strip())
     if text_length < min_text_length:
         return FetchQuality(
-            usable=False, should_fallback=True,
+            should_fallback=True,
             reason="content_too_short", text_length=text_length,
         )
 
@@ -71,12 +70,12 @@ def judge_quality(
             else "blocked_page:content"
         )
         return FetchQuality(
-            usable=False, should_fallback=True,
+            should_fallback=True,
             reason=reason, text_length=text_length,
         )
 
     # 5. 正常
     return FetchQuality(
-        usable=True, should_fallback=False,
+        should_fallback=False,
         reason="ok", text_length=text_length,
     )

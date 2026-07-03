@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
@@ -9,9 +9,5 @@ class WebSearchCandidateMapping:
 
     user_id: str
     search_ref: str
-    search_run_id: str
-    candidate_id: str
-    source_id: str
     url: str
     source_scope: str
-    metadata: dict[str, object] = field(default_factory=dict)

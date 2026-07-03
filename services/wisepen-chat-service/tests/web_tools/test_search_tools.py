@@ -39,9 +39,14 @@ def _build_query_client():
 
 
 llm_clients_module.AdapterQueryClient = _AdapterQueryClient
+llm_clients_module.QueryClient = _AdapterQueryClient
 llm_clients_module.build_query_client = _build_query_client
 sys.modules["chat.application.utils.llm_clients"] = llm_clients_module
 sys.modules["jieba"] = types.ModuleType("jieba")
+
+app_settings_module = types.ModuleType("chat.core.config.app_settings")
+app_settings_module.settings = SimpleNamespace(QUERY_MODEL="test-query-model")
+sys.modules["chat.core.config.app_settings"] = app_settings_module
 
 beanie_module = types.ModuleType("beanie")
 
@@ -69,6 +74,7 @@ sys.modules["chat.domain.entities"] = domain_entities_module
 sys.modules["chat.domain.entities.web_search_credential"] = web_search_credential_module
 
 from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
+from chat.application.tools.core import ToolExecutionError
 from chat.application.tools.web_tools.search_services.errors import WebSearchEmptyResult
 from chat.application.tools.web_tools.search_services.providers.models import (
     ProviderSearchResponse,
@@ -83,7 +89,6 @@ from chat.application.tools.web_tools.search_services.runtime_context import (
 from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import (
     HydratedPaper,
     HydratedPaperAuthor,
-    HydratedPaperOpenAccess,
 )
 from chat.application.tools.web_tools.search_services.services.academic_search.service import (
     AcademicSearchService,
@@ -225,7 +230,7 @@ def _response(
 
 
 @pytest.mark.anyio
-async def test_web_search_uses_fallback_only_when_first_query_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_web_search_empty_result_does_not_run_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _rank_candidates(**kwargs):
         return []
 
@@ -237,7 +242,6 @@ async def test_web_search_uses_fallback_only_when_first_query_is_empty(monkeypat
     service = FakeWebSearchService(
         responses=[
             _response(query="first", url=None),
-            _response(query="fallback", url="https://example.com/fallback"),
         ]
     )
     repository = FakeCandidateRepository(mappings=[])
@@ -246,35 +250,31 @@ async def test_web_search_uses_fallback_only_when_first_query_is_empty(monkeypat
         custom_source_factory=FakeCustomSourceFactory(),
         candidate_repository=repository,
     )
-    result = await tool.execute(
-        {
-            "user_id": "user-1",
-            "session_id": "session-1",
-            "search_config": WebSearchRuntimeConfig(
-                user_id="user-1",
-                session_id="session-1",
-                search_config_id="platform:4get_ddg",
-                search_mode=WebSearchMode.PLATFORM,
-                provider=SearchProviderName.FOUGET_DDG,
-                source_id="platform:4get_ddg",
-            ),
-        },
-        question="question",
-        first_query="first",
-        fallback_query="fallback",
-    )
+    with pytest.raises(ToolExecutionError) as exc_info:
+        await tool.execute(
+            {
+                "user_id": "user-1",
+                "session_id": "session-1",
+                "search_config": WebSearchRuntimeConfig(
+                    user_id="user-1",
+                    session_id="session-1",
+                    search_config_id="platform:4get_ddg",
+                    search_mode=WebSearchMode.PLATFORM,
+                    provider=SearchProviderName.FOUGET_DDG,
+                    source_id="platform:4get_ddg",
+                ),
+            },
+            question="question",
+            query="first",
+        )
 
-    assert service.calls == [
-        ("first", "web"),
-        ("fallback", "web"),
-    ]
-    assert result.visible_result["final_query"] == "fallback"
-    assert len(repository.mappings) == 1
-    assert repository.mappings[0].url == "https://example.com/fallback"
+    assert getattr(exc_info.value, "reason") == "web_search_empty_result"
+    assert service.calls == [("first", "web")]
+    assert repository.mappings == []
 
 
 @pytest.mark.anyio
-async def test_academic_search_replaces_final_url_with_openalex_oa_url(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_academic_search_keeps_exa_url_after_openalex_hydration(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _rank_candidates(**kwargs):
         return []
 
@@ -320,11 +320,6 @@ async def test_academic_search_replaces_final_url_with_openalex_oa_url(monkeypat
                 ),
             ),
             institutions=("Meta AI",),
-            open_access=HydratedPaperOpenAccess(
-                is_oa=True,
-                oa_status="green",
-                oa_url="https://arxiv.org/pdf/2005.11401.pdf",
-            ),
         )
     )
     academic_service = AcademicSearchService(
@@ -354,13 +349,14 @@ async def test_academic_search_replaces_final_url_with_openalex_oa_url(monkeypat
             ),
         },
         question="find rag papers",
-        first_query="rag paper",
-        fallback_query="retrieval augmented generation paper",
+        query="rag paper",
     )
 
     candidate = result.visible_result["candidates"][0]
+    assert result.visible_result["query"] == "rag paper"
     assert provider_searcher.calls == [("rag paper", "academic")]
-    assert candidate.url == "https://arxiv.org/pdf/2005.11401.pdf"
-    assert candidate.final_url_source == "openalex"
+    assert not hasattr(candidate, "url")
+    assert not hasattr(candidate, "final_url_source")
+    assert not hasattr(candidate, "open_access")
     assert candidate.doi == "10.1000/test"
-    assert repository.mappings[0].url == "https://arxiv.org/pdf/2005.11401.pdf"
+    assert repository.mappings[0].url == "https://arxiv.org/abs/1706.03762"

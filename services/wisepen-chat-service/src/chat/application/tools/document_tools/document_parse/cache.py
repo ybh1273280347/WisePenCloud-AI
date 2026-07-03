@@ -20,7 +20,7 @@ from chat.application.tools.common.web_content_cache import (
 from chat.application.tools.document_tools.document_parse.models import DocumentParseRequest
 from chat.application.tools.document_tools.document_parse.service import DocumentParseService
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.utils.url_fetcher import RawFetchOutput
+from chat.application.tools.utils.url_fetcher import FetchedUrl
 from common.logger import warn
 
 
@@ -59,7 +59,7 @@ class DocumentParseCache:
         self,
         *,
         user_id: str,
-        raw: RawFetchOutput,
+        raw: FetchedUrl,
     ) -> str | None:
         return await self._content_cache_service.write_non_html_stub(
             NonHtmlCacheStubWrite(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-type Metadata = dict[str, object]
+Metadata = dict[str, object]
 
 
 class ScoreSignalKind(StrEnum):

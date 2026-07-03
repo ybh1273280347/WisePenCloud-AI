@@ -74,7 +74,6 @@ class ToolContentReadMatch:
     """跨文档读取后的单条全局命中结果。"""
 
     content_id: str                          # 实际读取的内容 ID（可能经过重定向）
-    status: str                              # success 或 failed
     window: ToolContentWindow | None = None  # 匹配到的窗口
     reason: str | None = None                # 单项失败原因
 
@@ -83,6 +82,5 @@ class ToolContentReadMatch:
 class ToolContentReadResult:
     """tool_content_read 的全局有序结果。"""
 
-    mode: ToolContentReadMode
     matches: tuple[ToolContentReadMatch, ...] = ()
     failed: tuple[ToolContentReadMatch, ...] = ()

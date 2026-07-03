@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
@@ -9,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from chat.application.tools.core import ExactlyOneOfCheck, ToolInvocation
 from chat.application.tools.document_tools.image_ocr_tool import ImageOcrTool
 from chat.application.tools.document_tools.ocr import OcrPageResult
-from chat.application.tools.utils.url_fetcher import RawFetchOutput
 
 _PNG_BYTES = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
@@ -32,36 +32,34 @@ class _FakeFileStore:
 
 
 class _FakeOcrClient:
+    def __init__(self) -> None:
+        self.last_file_path: Path | None = None
+
     async def parse_image(self, *, file_path: str | Path) -> OcrPageResult:
+        self.last_file_path = Path(file_path)
         return OcrPageResult(page_number=1, markdown=f"ocr text from {Path(file_path).name}")
 
 
-class _FakeFetcher:
-    def __init__(self, path: Path) -> None:
-        self._path = path
-
-    @property
-    def name(self) -> str:
-        return "fake"
-
-    async def fetch(self, url: str) -> RawFetchOutput:
-        return RawFetchOutput(
-            source_url=url,
-            final_url=url,
-            fetcher=self.name,
-            content_type="image/png",
-            file_path=str(self._path),
-            file_label="png",
+def _mock_image_http_client() -> httpx.AsyncClient:
+    def _handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "image/png"},
+            content=_PNG_BYTES,
+            request=_,
         )
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(_handler))
 
 
 @pytest.mark.asyncio
 async def test_image_ocr_file_ref_returns_markdown_content(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.png"
     image_path.write_bytes(_PNG_BYTES)
+    ocr_client = _FakeOcrClient()
     tool = ImageOcrTool(
         file_store=_FakeFileStore(image_path),
-        ocr_client=_FakeOcrClient(),
+        ocr_client=ocr_client,
     )
 
     result = await tool.execute(
@@ -80,12 +78,11 @@ async def test_image_ocr_file_ref_returns_markdown_content(tmp_path: Path) -> No
 
 @pytest.mark.asyncio
 async def test_image_ocr_file_path_url_deletes_downloaded_temp_file(tmp_path: Path) -> None:
-    image_path = tmp_path / "download.png"
-    image_path.write_bytes(_PNG_BYTES)
+    ocr_client = _FakeOcrClient()
     tool = ImageOcrTool(
-        file_store=_FakeFileStore(image_path),
-        ocr_client=_FakeOcrClient(),
-        direct_fetcher=_FakeFetcher(image_path),
+        file_store=_FakeFileStore(tmp_path / "unused.png"),
+        ocr_client=ocr_client,
+        url_download_http_client=_mock_image_http_client(),
     )
 
     result = await tool.execute(
@@ -94,8 +91,9 @@ async def test_image_ocr_file_path_url_deletes_downloaded_temp_file(tmp_path: Pa
     )
 
     assert result.visible_result["status"] == "success"
-    assert result.cacheable_texts == ("<!-- page 1 -->\n\nocr text from download.png",)
-    assert not image_path.exists()
+    assert result.cacheable_texts[0].startswith("<!-- page 1 -->\n\nocr text from tool_fetch_")
+    assert ocr_client.last_file_path is not None
+    assert not ocr_client.last_file_path.exists()
 
 
 @pytest.mark.asyncio

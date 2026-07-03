@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.errors import tool_file_error_reason
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExactlyOneOf,
-    ToolExecutionError,
     ToolLLMSpec,
     ToolParametersSchema,
     ToolPolicy,
@@ -40,9 +41,10 @@ from chat.application.tools.common.web_content_cache import (
     WebContentCacheValueRepository,
 )
 from chat.application.tools.utils.url_fetcher import (
-    BaseFetcher,
-    RawFetchOutput,
-    UrlFetchError,
+    FetchedUrl,
+    UrlFetcherError,
+    UrlFetcherUnsupportedUrlError,
+    fetch_url,
     filename_from_url,
 )
 
@@ -56,7 +58,6 @@ class DocumentParseToolItem:
     source: str  # 调用方传入的 tfile_* 引用或直链 URL
     status: str  # success 或 failed
     file_name: str | None = None  # 解析出的展示文件名
-    source_scope: str | None = None  # 通过 ToolRunFileStore metadata 识别出的来源范围
     reason: str | None = None  # 单项失败原因，供模型判断下一步
 
 
@@ -68,10 +69,11 @@ class DocumentParseTool:
         "_content_cache_entry_repository",
         "_content_cache_value_repository",
         "_definition",
-        "_direct_fetcher",
         "_file_store",
+        "_max_download_bytes",
         "_parse_service",
         "_refresh_task_publisher",
+        "_url_download_http_client",
     )
 
     def __init__(
@@ -82,14 +84,16 @@ class DocumentParseTool:
         content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
         content_cache_value_repository: WebContentCacheValueRepository | None = None,
         refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
-        direct_fetcher: BaseFetcher | None = None,
+        url_download_http_client: httpx.AsyncClient | None = None,
+        max_download_bytes: int = 52_428_800,
     ) -> None:
         self._file_store = file_store
         self._parse_service = parse_service
         self._content_cache_entry_repository = content_cache_entry_repository
         self._content_cache_value_repository = content_cache_value_repository
         self._refresh_task_publisher = refresh_task_publisher
-        self._direct_fetcher = direct_fetcher
+        self._url_download_http_client = url_download_http_client
+        self._max_download_bytes = max_download_bytes
         self._cache = DocumentParseCache(
             file_store=file_store,
             parse_service=parse_service,
@@ -222,7 +226,6 @@ class DocumentParseTool:
                     source=item.source,
                     status=item.status,
                     file_name=item.file_name,
-                    source_scope=item.source_scope,
                 )
                 cacheable_texts.append(markdown)
             items.append(item)
@@ -321,7 +324,6 @@ class DocumentParseTool:
                             source=file_ref,
                             status="success",
                             file_name=resolved.filename,
-                            source_scope=source_scope,
                         ),
                         cache_hit.markdown,
                     )
@@ -348,7 +350,6 @@ class DocumentParseTool:
                         source=file_ref,
                         status="success",
                         file_name=resolved.filename,
-                        source_scope=source_scope,
                     ),
                     markdown or None,
                 )
@@ -357,7 +358,6 @@ class DocumentParseTool:
                     DocumentParseToolItem(
                         source=file_ref,
                         status="failed",
-                        source_scope=None,
                         reason=tool_file_error_reason(e, default="parse_failed"),
                     ),
                     None,
@@ -372,7 +372,7 @@ class DocumentParseTool:
         direct_url: str,
     ) -> tuple[DocumentParseToolItem, str | None]:
         """下载明显文件直链并复用 tfile 解析链路。"""
-        if self._direct_fetcher is None:
+        if self._url_download_http_client is None:
             return (
                 DocumentParseToolItem(
                     source=direct_url,
@@ -393,7 +393,7 @@ class DocumentParseTool:
                 None,
             )
 
-        raw: RawFetchOutput | None = None
+        raw: FetchedUrl | None = None
         try:
             metadata = direct_url_metadata(url=url, final_url=url, content_type=None)
             cache_hit = await self._cache.read_parsed_web_cache(
@@ -406,22 +406,16 @@ class DocumentParseTool:
                         source=direct_url,
                         status="success",
                         file_name=filename_from_url(url),
-                        source_scope="web_public",
                     ),
                     cache_hit.markdown,
                 )
 
-            raw = await self._direct_fetcher.fetch(url)
-            if raw.file_path is None:
-                return (
-                    DocumentParseToolItem(
-                        source=direct_url,
-                        status="failed",
-                        reason="direct_url_not_file",
-                    ),
-                    None,
-                )
-
+            raw = await fetch_url(
+                url,
+                http_client=self._url_download_http_client,
+                max_response_bytes=self._max_download_bytes,
+                allow_html=False,
+            )
             cache_doc_id = await self._cache.write_direct_url_cache_stub(
                 user_id=user_id,
                 raw=raw,
@@ -449,7 +443,21 @@ class DocumentParseTool:
                 session_id=session_id,
                 file_ref=record.ref_id,
             )
-        except UrlFetchError as e:
+        except UrlFetcherUnsupportedUrlError as e:
+            reason = (
+                "direct_url_not_file"
+                if e.reason == "url_resolved_to_html"
+                else f"direct_url_fetch_failed:{e.reason}"
+            )
+            return (
+                DocumentParseToolItem(
+                    source=direct_url,
+                    status="failed",
+                    reason=reason,
+                ),
+                None,
+            )
+        except UrlFetcherError as e:
             return (
                 DocumentParseToolItem(
                     source=direct_url,

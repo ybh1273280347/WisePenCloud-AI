@@ -5,7 +5,7 @@ from beanie import PydanticObjectId
 from pymongo.errors import DuplicateKeyError
 
 from chat.domain.entities.model import Model, ModelProviderMapping, ModelScope
-from chat.domain.entities.provider import Provider, ProviderScope, ProviderType
+from chat.domain.entities.provider import Provider, ProviderScope
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.repositories.model_repo import ModelInfo, ModelRepository, ModelRequestInfo
 from common.core.exceptions import ServiceException

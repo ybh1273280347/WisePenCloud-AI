@@ -101,10 +101,7 @@ class RedisToolContentRepository(ToolContentRepository):
         return StoredToolContent(
             content_id=str(payload["content_id"]),
             session_id=str(payload["session_id"]),
-            producer=str(payload["producer"]),
-            source=str(payload["source"]),
             content_type=str(payload["content_type"]),
-            content_role=str(payload["content_role"]),
             text=str(payload["text"]),
             chunks=chunks,
             index=ToolContentIndex(entries=entries),

@@ -82,7 +82,6 @@ class ToolContentReadService:
             raise ValueError(f"Unsupported read mode: {request.mode}")
 
         return ToolContentReadResult(
-            mode=request.mode,
             matches=matches,
             failed=tuple(failed),
         )
@@ -167,14 +166,12 @@ class ToolContentReadService:
             if loaded is None:
                 return ToolContentReadMatch(
                     content_id=content_id,
-                    status="failed",
                     reason="content_not_found",
                 )
             return loaded
         except Exception as exc:
             return ToolContentReadMatch(
                 content_id=content_id,
-                status="failed",
                 reason=exc.__class__.__name__,
             )
 
@@ -236,7 +233,6 @@ class ToolContentReadService:
         return tuple(
             ToolContentReadMatch(
                 content_id=source_by_candidate_id[item.candidate_id][0],
-                status="success",
                 window=ToolContentWindowBuilder.expand(
                     source_by_candidate_id[item.candidate_id][1],
                     center_chunk=source_by_candidate_id[item.candidate_id][2],
@@ -274,7 +270,6 @@ class ToolContentReadService:
                         matches.append(
                             ToolContentReadMatch(
                                 content_id=canonical_id,
-                                status="success",
                                 window=ToolContentWindowBuilder.expand(
                                     stored,
                                     center_chunk=chunk.chunk_index,

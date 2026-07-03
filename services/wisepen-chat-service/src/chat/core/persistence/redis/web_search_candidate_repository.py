@@ -51,17 +51,11 @@ class RedisWebSearchCandidateRepository(WebSearchCandidateRepository):
 
         # 内联反序列化解析 (Inline Decoding)
         payload: dict[str, Any] = json.loads(raw)
-        metadata = payload.get("metadata")
-
         return WebSearchCandidateMapping(
             user_id=str(payload["user_id"]),
             search_ref=str(payload["search_ref"]),
-            search_run_id=str(payload["search_run_id"]),
-            candidate_id=str(payload["candidate_id"]),
-            source_id=str(payload["source_id"]),
             url=str(payload["url"]),
             source_scope=str(payload["source_scope"]),
-            metadata=metadata if isinstance(metadata, dict) else {},
         )
 
     async def delete_mapping(

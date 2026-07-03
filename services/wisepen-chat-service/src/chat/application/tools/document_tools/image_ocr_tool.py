@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.errors import tool_file_error_reason
 from chat.application.tools.core import (
@@ -21,9 +23,10 @@ from chat.application.tools.document_tools.ocr import OcrPageResult
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.file_type_detect import detect_mime_type
 from chat.application.tools.utils.url_fetcher import (
-    BaseFetcher,
-    RawFetchOutput,
-    UrlFetchError,
+    FetchedUrl,
+    UrlFetcherError,
+    UrlFetcherUnsupportedUrlError,
+    fetch_url,
     filename_from_url,
 )
 
@@ -41,9 +44,10 @@ class ImageOcrTool:
 
     __slots__ = (
         "_definition",
-        "_direct_fetcher",
         "_file_store",
+        "_max_download_bytes",
         "_ocr_client",
+        "_url_download_http_client",
     )
 
     def __init__(
@@ -51,11 +55,13 @@ class ImageOcrTool:
         *,
         file_store: ToolRunFileStore,
         ocr_client: Any | None = None,
-        direct_fetcher: BaseFetcher | None = None,
+        url_download_http_client: httpx.AsyncClient | None = None,
+        max_download_bytes: int = 52_428_800,
     ) -> None:
         self._file_store = file_store
         self._ocr_client = ocr_client
-        self._direct_fetcher = direct_fetcher
+        self._url_download_http_client = url_download_http_client
+        self._max_download_bytes = max_download_bytes
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="image_ocr",
@@ -184,24 +190,30 @@ class ImageOcrTool:
         )
 
     async def _parse_image_url(self, url: str) -> ImageOcrToolResult:
-        if self._direct_fetcher is None:
+        if self._url_download_http_client is None:
             return ImageOcrToolResult(status="failed", reason="image_url_fetch_unavailable")
 
-        raw: RawFetchOutput | None = None
+        raw: FetchedUrl | None = None
         try:
-            raw = await self._direct_fetcher.fetch(url)
-            if raw.file_path is None:
-                return ImageOcrToolResult(
-                    status="failed",
-                    file_name=filename_from_url(raw.final_url or raw.source_url),
-                    reason="image_url_not_file",
-                )
+            raw = await fetch_url(
+                url,
+                http_client=self._url_download_http_client,
+                max_response_bytes=self._max_download_bytes,
+                allow_html=False,
+            )
             return await self._parse_image_path(
                 path=Path(raw.file_path),
                 file_name=filename_from_url(raw.final_url or raw.source_url),
                 content_type=raw.content_type,
             )
-        except UrlFetchError as e:
+        except UrlFetcherUnsupportedUrlError as e:
+            reason = (
+                "image_url_not_file"
+                if e.reason == "url_resolved_to_html"
+                else f"image_url_fetch_failed:{e.reason}"
+            )
+            return ImageOcrToolResult(status="failed", reason=reason)
+        except UrlFetcherError as e:
             return ImageOcrToolResult(
                 status="failed",
                 reason=f"image_url_fetch_failed:{e.reason}",

@@ -57,6 +57,13 @@ class JsonSchemaCheck(ToolPreflightHook):
                 invocation.tool_call_arguments,
                 path=(),
             )
+
+
+
+
+
+
+
             if blank_path is None:
                 return ToolPreflightResult(ok=True)
             return ToolPreflightResult(
@@ -112,6 +119,7 @@ def _matched_exactly_one_group(
 
     for group in rule.groups:
         group_keys = set(group)
+        # 参数组必须完整出现；只出现组内一部分字段时属于半组命中，直接判失败。
         if group_keys <= argument_keys:
             if matched_group is not None:
                 return None
@@ -135,13 +143,19 @@ def _blank_min_length_string_path_at(
     schema: dict[str, Any],
     value: Any,
     *,
-    path: tuple[str, ...],
+    path: tuple[str, ...]=(),
 ) -> str | None:
     schema_type = schema.get("type")
 
     if schema_type == "string":
         min_length = schema.get("minLength")
-        if isinstance(min_length, int) and min_length >= 1 and isinstance(value, str) and not value.strip():
+        # jsonschema 的 minLength 按原始长度计算，"   " 仍会通过，这里补上工具参数语义里的非空白约束。
+        if (
+            isinstance(min_length, int)
+            and min_length >= 1
+            and isinstance(value, str)
+            and not value.strip()
+        ):
             return _format_schema_path(path)
         return None
 

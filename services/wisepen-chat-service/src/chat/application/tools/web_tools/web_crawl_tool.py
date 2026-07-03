@@ -17,8 +17,8 @@ from chat.application.tools.core.tool_return import (
     ToolReturn,
 )
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.utils.url_fetcher import UrlFetchError
 from chat.application.tools.web_tools.web_fetch import WebCrawler
+from chat.application.tools.web_tools.web_fetch.errors import UrlFetchError
 from common.logger import warn
 
 # --- 全局常量限制（通过 tool_settings 调参控制）---
@@ -194,10 +194,8 @@ class WebCrawlTool:
         pages_summary = [
             {
                 "url": r.source_url,
-                "final_url": r.final_url,
                 "title": r.title,
                 "markdown_length": len(r.markdown or ""),
-                "warnings": list(r.warnings) if r.warnings else [],
             }
             for r in results
         ]

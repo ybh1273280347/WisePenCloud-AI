@@ -18,22 +18,21 @@ def build_web_search_tool_return(
     responses: tuple[ProviderSearchResponse, ...],
     display_query: str | None = None,
     recommended_ids: tuple[str, ...] = (),
-    final_query: str = "",
 ) -> ToolReturn:
     """组装 web_search 的可见返回。
 
     - candidates：完整候选列表。
     - supplier_answers：供应商对 query 的直答（去重），仅作为检索提示。
-    - final_query：最终生效的查询词（fallback 查询与原始查询不同时展示）。
-    - recommended_ids：按优先级排序的候选编号，最多 5 个。
+    - recommended_ids：按优先级排序的候选编号，1 到 5 个。
     """
     supplier_answers = tuple(dict.fromkeys(r.answer for r in responses if r.answer))
 
     suggested_action = SuggestedAction(
         tool_name="web_fetch",
         reason=(
-            "Fetch selected search refs before using them as evidence. "
-            "supplier_answers are only retrieval hints and must not replace your own fetch and analysis."
+            "Use supplier answers and candidate summaries as retrieval hints. "
+            "If those summaries fully answer the question, web_fetch is optional; "
+            "fetch selected search refs when you need stronger evidence, details, or verification."
         ),
         priority=SuggestedActionPriority.HIGH,
     )
@@ -52,8 +51,6 @@ def build_web_search_tool_return(
         "recommended_ids": recommended_ids,
         "suggested_action": suggested_action,
     }
-    if final_query and final_query != (display_query or result.query):
-        visible_result["final_query"] = final_query
     if supplier_answers:
         visible_result["supplier_answers"] = supplier_answers
 

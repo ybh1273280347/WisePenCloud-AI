@@ -19,15 +19,12 @@ from chat.application.tools.common.web_content_cache.refresh_queue import (
     WEB_FETCH_REFRESH_JOB,
     WebContentCacheRefreshTaskPublisher,
 )
-from chat.application.tools.utils.url_fetcher import (
-    BaseFetcher,
-    RawFetchOutput,
-    UrlFetchError,
-    filename_from_url,
-)
+from chat.application.tools.utils.url_fetcher import filename_from_url
 from common.logger import info, warn
 from .cleaners.base import BaseCleaner
-from .models import WebFetchBatchResult, WebFetchFailure, WebFetchResult
+from .errors import UrlFetchError
+from .fetchers import WebFetcher
+from .models import RawFetchOutput, WebFetchBatchResult, WebFetchFailure, WebFetchResult
 from ._web_fetch_utils import judge_quality
 
 _PRODUCER_NAME = "web_fetch"
@@ -53,8 +50,8 @@ class FetchCoordinator:
     def __init__(
         self,
         *,
-        httpx_fetcher: BaseFetcher,
-        scrapling_fetcher: BaseFetcher,
+        httpx_fetcher: WebFetcher,
+        scrapling_fetcher: WebFetcher,
         cleaner: BaseCleaner,
         file_store: ToolRunFileStore,
         content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
@@ -174,7 +171,6 @@ class FetchCoordinator:
             title=cleaned.title,
             markdown=cleaned.markdown,
             warnings=tuple(warnings),
-            source_scope=source_scope,
         )
         if not quality.should_fallback:
             await self._write_html_cache(
@@ -213,7 +209,6 @@ class FetchCoordinator:
                     return WebFetchFailure(
                         url=u,
                         reason=exc.reason,
-                        detail=str(exc),
                     )
 
         results = await asyncio.gather(*[_fetch_with_limit(u) for u in urls])
@@ -289,10 +284,9 @@ class FetchCoordinator:
                 content_type=raw.content_type,
                 title=None,
                 markdown=None,
-                warnings=tuple(warnings),
                 file_ref=record.ref_id,
                 file_label=raw.file_label,
-                source_scope=source_scope,
+                warnings=tuple(warnings),
             )
         except ToolRunFileStoreError as exc:
             raise UrlFetchError(
@@ -336,7 +330,6 @@ class FetchCoordinator:
             content_type=cached.content_type,
             title=cached.title,
             markdown=cached.markdown,
-            source_scope=source_scope,
         )
 
     async def refresh_stale_url(
@@ -388,7 +381,6 @@ class FetchCoordinator:
                     content_type=raw.content_type,
                     title=cleaned.title,
                     markdown=cleaned.markdown,
-                    source_scope=source_scope,
                 ),
             )
         except Exception as exc:

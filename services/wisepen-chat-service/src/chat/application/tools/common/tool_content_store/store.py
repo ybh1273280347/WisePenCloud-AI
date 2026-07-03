@@ -24,7 +24,6 @@ from .models import (
     ToolContentIndex,
     ToolContentIndexEntry,
     ToolContentReceipt,
-    ToolContentRole,
 )
 
 DEFAULT_TOOL_CONTENT_TTL_SECONDS = tool_settings.TOOL_CONTENT_DEFAULT_TTL_SECONDS
@@ -62,17 +61,13 @@ class ToolContentStore:
         self,
         *,
         session_id: str,
-        producer: str,
-        source: str,
         text: str,
         content_type: str = "text/markdown",
-        content_role: str | ToolContentRole = ToolContentRole.TOOL_OUTPUT,
         metadata: Metadata | None = None,
         chunking_pipeline_name: str | None = None,
         chunked: bool = True,
     ) -> ToolContentReceipt | None:
         """写入内容并返回 receipt；空文本或超长返回 None。"""
-        role_value = content_role.value if isinstance(content_role, ToolContentRole) else content_role
         normalized_text = text.strip()
         if not normalized_text or len(normalized_text) > DEFAULT_TOOL_CONTENT_MAX_CHARS:
             return None
@@ -121,10 +116,7 @@ class ToolContentStore:
         stored = StoredToolContent(
             content_id=f"cnt_{uuid.uuid4().hex[:16]}",
             session_id=session_id,
-            producer=producer,
-            source=source,
             content_type=content_type,
-            content_role=role_value,
             text=normalized_text,
             chunks=chunks,
             index=index,
@@ -138,9 +130,6 @@ class ToolContentStore:
         await self._repository.put(stored)
         return ToolContentReceipt(
             content_id=stored.content_id,
-            content_type=stored.content_type,
-            content_role=stored.content_role,
-            original_length=len(stored.text),
             chunk_count=len(stored.chunks),
             selectors=_selectors(stored),
         )
@@ -286,6 +275,8 @@ def _chunk_extra_index_view(indexes: tuple[ChunkIndex, ...]) -> dict[str, dict[s
 
 def _selectors(stored: StoredToolContent) -> tuple[str, ...]:
     selectors: list[str] = []
+    if stored.chunks:
+        selectors.append("chunk_indices")
     if any(chunk.unit_types for chunk in stored.chunks):
         selectors.append("unit_type")
     if stored.index is not None and stored.index.entries:

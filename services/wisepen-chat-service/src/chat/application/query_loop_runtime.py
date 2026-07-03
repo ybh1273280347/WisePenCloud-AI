@@ -1,4 +1,3 @@
-﻿import json
 import uuid
 from typing import AsyncIterator, Iterator, List, Optional, Union
 
@@ -23,7 +22,6 @@ from chat.application.token_counter import TokenCounter
 from chat.application.tools import ToolScope
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
 from chat.application.tools.core.llm.invocation import ToolInvocation
-from chat.application.tools.core.llm.renderer import tool_result_renderer
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
 from chat.domain.entities.message import MessageModelInfo, ToolCallMessage

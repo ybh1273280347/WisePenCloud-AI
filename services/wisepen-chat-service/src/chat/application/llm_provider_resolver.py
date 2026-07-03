@@ -1,4 +1,4 @@
-from chat.domain.entities.model import ModelFamily, Model
+from chat.domain.entities.model import ModelFamily
 from chat.domain.entities.provider import ProviderType
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider

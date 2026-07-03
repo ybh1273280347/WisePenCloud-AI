@@ -13,7 +13,8 @@ CANDIDATE_RANKER_SYSTEM_PROMPT = """\
 <rules>
   - 只能从给定候选编号中选择，禁止编造编号。
   - 按相关性从高到低排序，最相关的放最前。
-  - 最多返回 5 个编号；若候选不足 5 个，按实际数量返回。
+  - 每次返回 1 到 5 个高质量编号，宁缺勿滥；不要为了凑满 5 个返回弱相关候选。
+  - 若没有足够相关的候选，只返回你确信有帮助的编号。
 </rules>
 
 <invalid_examples>
@@ -41,7 +42,7 @@ async def rank_candidate_ids(
     candidates_text: str,
     client: QueryClient | None = None,
 ) -> list[str]:
-    """用小模型对候选编号按相关性排序，最多返回 MAX_RANKED_CANDIDATES 个编号。"""
+    """用小模型对候选编号按相关性排序，返回 1 到 MAX_RANKED_CANDIDATES 个编号。"""
     query_client = client or build_query_client(
         model=settings.QUERY_MODEL,
     )

@@ -19,10 +19,11 @@ from chat.application.tools.common.web_content_cache import (
     HtmlCacheWrite,
     WebContentCacheService,
 )
-from chat.application.tools.utils.url_fetcher import BaseFetcher, RawFetchOutput, UrlFetchError
 from common.logger import info, warn
 from .cleaners.base import BaseCleaner
-from .models import WebFetchResult
+from .errors import UrlFetchError
+from .fetchers import WebFetcher
+from .models import RawFetchOutput, WebFetchResult
 from ._web_fetch_utils import judge_quality
 
 _REFRESH_LOCK_TTL_SECONDS = 300
@@ -32,6 +33,7 @@ _REFRESH_LOCK_TTL_SECONDS = 300
 class _CrawlPage:
     result: WebFetchResult
     raw_html: str | None
+    should_cache: bool
 
 
 class WebCrawler:
@@ -61,8 +63,8 @@ class WebCrawler:
     def __init__(
         self,
         *,
-        httpx_fetcher: BaseFetcher,
-        scrapling_fetcher: BaseFetcher,
+        httpx_fetcher: WebFetcher,
+        scrapling_fetcher: WebFetcher,
         cleaner: BaseCleaner,
         content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
         content_cache_value_repository: WebContentCacheValueRepository | None = None,
@@ -192,8 +194,8 @@ class WebCrawler:
                 except UrlFetchError as exc2:
                     warn("web_crawl scrapling failed, using httpx result", url=url, reason=exc2.reason)
 
-            page = self._build_page(raw, source_scope=source_scope)
-            if not page.result.warnings:
+            page = self._build_page(raw)
+            if page.should_cache:
                 await self._write_html_cache(
                     url=url,
                     user_id=user_id,
@@ -203,13 +205,10 @@ class WebCrawler:
                 )
             return page
 
-    def _build_page(self, raw: RawFetchOutput, *, source_scope: str) -> _CrawlPage:
+    def _build_page(self, raw: RawFetchOutput) -> _CrawlPage:
         """将 RawFetchOutput 清洗为 WebFetchResult。"""
-        warnings: list[str] = []
         cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.final_url or raw.source_url)
         quality = judge_quality(raw=raw, cleaned=cleaned, min_text_length=self._min_text_length)
-        if quality.should_fallback:
-            warnings.append(f"content quality insufficient: {quality.reason}")
 
         return _CrawlPage(
             result=WebFetchResult(
@@ -219,10 +218,9 @@ class WebCrawler:
                 content_type=raw.content_type,
                 title=cleaned.title,
                 markdown=cleaned.markdown,
-                warnings=tuple(warnings),
-                source_scope=source_scope,
             ),
             raw_html=raw.raw_html,
+            should_cache=not quality.should_fallback,
         )
 
     async def _read_cached_page(
@@ -252,9 +250,9 @@ class WebCrawler:
                 content_type=cached.content_type,
                 title=cached.title,
                 markdown=cached.markdown,
-                source_scope=source_scope,
             ),
             raw_html=cached.raw_html,
+            should_cache=False,
         )
 
     async def _write_html_cache(

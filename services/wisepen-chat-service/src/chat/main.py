@@ -35,7 +35,9 @@ from chat.api.endpoints import session as session_endpoints
 from chat.api.endpoints import memory as memory_endpoints
 from chat.api.endpoints import model as model_endpoints
 from chat.api.endpoints import tool as tool_endpoints
+from chat.api.endpoints import web_search as web_search_endpoints
 from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping
+from chat.domain.entities.web_search_credential import WebSearchCredential
 
 
 # 避免 HTTP 代理拦截内部中间件请求。
@@ -56,7 +58,14 @@ async def lifespan(app: FastAPI):
     mongo_client = AsyncMongoClient(settings.MONGODB_URL)
     await init_beanie(
         database=mongo_client[settings.MONGODB_DB_NAME],
-        document_models=[ChatSession, ChatMessage, Provider, Model, ModelProviderMapping],
+        document_models=[
+            ChatSession,
+            ChatMessage,
+            Provider,
+            Model,
+            ModelProviderMapping,
+            WebSearchCredential,
+        ],
     )
     info("beanie initialized.", db=settings.MONGODB_DB_NAME)
 
@@ -119,6 +128,7 @@ container.wire(
         memory_endpoints,
         model_endpoints,
         tool_endpoints,
+        web_search_endpoints,
     ]
 )  # 注入依赖到路由模块
 app = FastAPI(title=bootstrap_settings.APP_NAME, lifespan=lifespan, docs_url="/docs")

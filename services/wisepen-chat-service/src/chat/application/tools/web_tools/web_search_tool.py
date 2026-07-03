@@ -13,7 +13,6 @@ from chat.application.tools.core import (
 from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.web_tools._search_tool_utils import (
-    search_with_fallback,
     select_recommended_ids,
     store_candidate_mappings,
 )
@@ -57,19 +56,16 @@ DO NOT TRIGGER when:
   - The question is pure common knowledge with no time-sensitivity and the user does not request a source.
 
 EXECUTION RULES:
-  - first_query is always executed first.
-  - fallback_query is used only when first_query returns no results.
-  - If fallback_query also returns no results, the tool stops and reports failure.
+  - Execute exactly one explicit query per tool call.
+  - If the query returns no results, stop and report failure; rewrite the query yourself before calling web_search again.
   - The tool may use a small internal model only to rank returned candidates. It does not rewrite queries or choose provider routes.
 
 INPUT RULES:
-  - first_query and fallback_query MUST NOT be identical or near-identical strings.
-  - fallback_query MUST differ from first_query in wording or language.
-  - Do NOT pass question text verbatim as both queries; rephrase for each.
+  - query MUST be a concise, search-engine-friendly phrasing.
+  - Do NOT pass question text verbatim when a shorter search query is clearer.
 
 BEFORE CALLING, ASK YOURSELF:
-  - Is first_query the most direct general-web phrasing for the target fact?
-  - If first_query comes back empty, does fallback_query provide a materially different wording or language?
+  - Is query the most direct general-web phrasing for the target fact?
   - If the user clearly wants papers, citations, or research results, use academic_search instead of trying to route that intent through web_search.
 
 COMPLEX QUERY STRATEGY:
@@ -78,8 +74,8 @@ COMPLEX QUERY STRATEGY:
   - Cross-validation: use multiple explicit calls with different source angles or languages when the same fact needs cross-checking.
 
 OUTPUT RULES:
-  - supplier_answers is ONLY a retrieval hint; you MUST fetch URLs via web_fetch before using any result as evidence.
-  - recommended_ids is a priority hint, not a guarantee of correctness; verify by fetching.
+  - supplier_answers and candidate summaries are retrieval hints. If they fully answer the user's question, you may answer without web_fetch; fetch selected URLs when you need stronger evidence, details, or verification.
+  - recommended_ids is a priority hint, not a guarantee of correctness; fetch when the answer needs verification beyond summaries.
   - If web_search fails (network/quota/empty), inform the user; do NOT silently answer from parametric memory.
   - Within one session, do NOT re-issue web_search for the same question unless new information is required.
 """
@@ -94,30 +90,17 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
             "description": (
                 "Required. The user's original information need, in the user's own language. "
                 "MUST be a non-empty string. Do NOT paraphrase into a search query here; "
-                "use first_query / fallback_query for search phrasings."
+                "use query for the search phrasing."
             ),
         },
-        "first_query": {
+        "query": {
             "type": "string",
             "minLength": 1,
             "description": (
-                "Required. The primary search query, executed on the first hop. "
+                "Required. The search query to execute for this tool call. "
                 "MUST be a concise, search-engine-friendly phrasing. "
                 "Invalid: passing the raw `question` verbatim; passing a full natural-language sentence. "
-                "Example: question='苹果最新财报利润' -> first_query='Apple Q4 2025 earnings net profit'."
-            ),
-        },
-        "fallback_query": {
-            "type": "string",
-            "minLength": 1,
-            "description": (
-                "Required. A backup search query used when first_query is insufficient. "
-                "It is executed only when first_query returns no results. "
-                "MUST differ from first_query in wording OR language. "
-                "Invalid: identical or near-identical to first_query. "
-                "Example: first_query='Apple Q4 2025 earnings net profit' -> "
-                "fallback_query='苹果 2025 财年第四季度 净利润' (different language) or "
-                "fallback_query='AAPL quarterly income statement' (different angle)."
+                "Example: question='苹果最新财报利润' -> query='Apple Q4 2025 earnings net profit'."
             ),
         },
         "max_results": {
@@ -128,13 +111,13 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
             "description": "Maximum candidate results per search request. SHOULD be left at default unless the user needs breadth.",
         },
     },
-    "required": ["question", "first_query", "fallback_query"],
+    "required": ["question", "query"],
     "additionalProperties": False,
 }
 
 
 class WebSearchTool:
-    """Web 搜索工具门面：单跳搜索，空结果时允许一次 fallback。"""
+    """Web 搜索工具门面：单次显式查询。"""
 
     __slots__ = (
         "_candidate_repository",
@@ -179,8 +162,7 @@ class WebSearchTool:
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
 
         question = kwargs["question"].strip()
-        first_query = kwargs["first_query"].strip()
-        fallback_query = kwargs["fallback_query"].strip()
+        query = kwargs["query"].strip()
         max_results = kwargs.get("max_results") or DEFAULT_WEB_SEARCH_RESULTS
 
         search_config = context["search_config"]
@@ -197,22 +179,18 @@ class WebSearchTool:
                     )
                 custom_source = self._custom_source_factory.build(search_config)
 
-            # 2. 执行搜索（主查询 → 空结果 fallback），结果数 clamp 到合法范围
-            result, final_query = await search_with_fallback(
-                search_once=lambda query: self._service.search(
-                    query=query,
-                    max_results=max(1, min(max_results, MAX_WEB_SEARCH_RESULTS)),
-                    custom_source=custom_source,
-                    platform_provider=search_config.provider,
-                ),
-                first_query=first_query,
-                fallback_query=fallback_query,
+            # 2. 执行单次显式查询；空结果交给模型改写 query 后重新调用。
+            result = await self._service.search(
+                query=query,
+                max_results=max(1, min(max_results, MAX_WEB_SEARCH_RESULTS)),
+                custom_source=custom_source,
+                platform_provider=search_config.provider,
             )
             candidates = build_candidates(result.responses, search_config=search_config)
             if not candidates:
                 raise WebSearchEmptyResult(
                     provider=search_config.provider,
-                    reason="两次搜索都没有返回结果",
+                    reason="搜索没有返回结果",
                 )
 
             # 3. 持久化 search_ref → URL 映射，供后续 web_fetch 溯源使用
@@ -249,7 +227,7 @@ class WebSearchTool:
             ) from exc
 
         except WebSearchEmptyResult as exc:
-            # 主查询 + fallback 均无结果，非系统故障，可重试
+            # 单次查询无结果，非系统故障；模型可改写 query 后重试。
             raise ToolExecutionError(
                 reason="web_search_empty_result",
                 detail_reason=str(exc),
@@ -266,7 +244,7 @@ class WebSearchTool:
 
         # 4. 用小模型排序候选结果，选出最相关的推荐给大模型优先关注
         recommended_ids = await select_recommended_ids(
-            search_query=first_query,
+            search_query=query,
             candidates=candidates,
             max_recommended_candidates=MAX_RECOMMENDED_CANDIDATES,
             fallback_candidates_count=FALLBACK_CANDIDATES_COUNT,
@@ -278,6 +256,4 @@ class WebSearchTool:
             responses=result.responses,
             display_query=question,
             recommended_ids=recommended_ids,
-            final_query=final_query,
         )
-

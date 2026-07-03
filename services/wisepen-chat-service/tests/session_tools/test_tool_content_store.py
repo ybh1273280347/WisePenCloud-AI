@@ -26,8 +26,6 @@ async def test_tool_content_store_projects_explicit_index_fields() -> None:
 
     receipt = await store.put(
         session_id="session-1",
-        producer="document_parse",
-        source="unit-test",
         text="\n\n".join(
             (
                 "<!-- page 1 -->",

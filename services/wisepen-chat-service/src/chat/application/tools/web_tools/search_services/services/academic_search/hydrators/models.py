@@ -27,7 +27,6 @@ class HydratedPaper:
     cited_by_count: int | None = None
     authors: tuple["HydratedPaperAuthor", ...] = ()
     institutions: tuple[str, ...] = ()
-    open_access: "HydratedPaperOpenAccess | None" = None
     failure_reason: OpenAlexFailureReason | None = None
 
 
@@ -36,9 +35,3 @@ class HydratedPaperAuthor:
     name: str
     institutions: tuple[str, ...] = ()
 
-
-@dataclass(frozen=True, slots=True)
-class HydratedPaperOpenAccess:
-    is_oa: bool | None = None
-    oa_status: str | None = None
-    oa_url: str | None = None

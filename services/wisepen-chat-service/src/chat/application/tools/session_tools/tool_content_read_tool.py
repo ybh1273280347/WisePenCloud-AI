@@ -241,7 +241,6 @@ class ToolContentReadTool:
                 all_failed.extend(batch_result.failed)
 
             return ToolContentReadResult(
-                mode=request.mode,
                 matches=tuple(all_matches),
                 failed=tuple(all_failed),
             )

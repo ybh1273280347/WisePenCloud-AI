@@ -19,11 +19,11 @@ from chat.application.tools.core.tool_return import (
 )
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.batching import batched
-from chat.application.tools.utils.url_fetcher import UrlFetchError
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
 from chat.application.tools.web_tools.web_fetch import FetchCoordinator
+from chat.application.tools.web_tools.web_fetch.errors import UrlFetchError
 from chat.application.tools.web_tools.web_fetch.models import WebFetchBatchResult
 from common.logger import warn
 
@@ -213,30 +213,31 @@ class WebFetchTool:
 
         cacheable_texts = tuple(r.markdown for r in batch.items if r.markdown)
 
-        # visible_result 中的 items 不能暴露 markdown，markdown 只能通过 cacheable_texts 走缓存
-        visible_items = tuple(
-            {
-                "source_url": r.source_url,
-                "final_url": r.final_url,
-                "status_code": r.status_code,
-                "content_type": r.content_type,
-                "title": r.title,
-                "warnings": r.warnings,
-                "file_ref": r.file_ref,
-                "file_label": r.file_label,
-                "source_scope": r.source_scope,
-            }
-            for r in batch.items
-        )
+        # visible_result 中只保留模型可直接消费的来源和下游定位符，正文走 cacheable_texts。
+        visible_items = []
+        for r in batch.items:
+            item: dict[str, object] = {"source_url": r.source_url}
+            if r.title:
+                item["title"] = r.title
+            if r.file_ref:
+                item["file_ref"] = r.file_ref
+            if r.file_label:
+                item["file_label"] = r.file_label
+            if r.warnings:
+                item["warnings"] = r.warnings
+            visible_items.append(item)
+
+        visible_result: dict[str, object] = {
+            "items": tuple(visible_items),
+            "failed": batch.failed,
+            "suggested_actions": suggested,
+        }
+        if batch.warnings:
+            visible_result["warnings"] = batch.warnings
 
         return ToolReturn(
             tag="web_fetch_result",
-            visible_result={
-                "items": visible_items,
-                "failed": batch.failed,
-                "warnings": batch.warnings,
-                "suggested_actions": suggested,
-            },
+            visible_result=visible_result,
             cacheable_texts=cacheable_texts,
         )
 

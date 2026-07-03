@@ -7,7 +7,6 @@ import httpx
 from .models import (
     HydratedPaper,
     HydratedPaperAuthor,
-    HydratedPaperOpenAccess,
     OpenAlexFailureReason,
 )
 
@@ -133,7 +132,6 @@ class PaperHydrator:
 
 def _paper_from_work(data: dict) -> HydratedPaper:
     # 将 OpenAlex work 响应映射为领域模型
-    open_access = data.get("open_access") or {}
     author_items: list[HydratedPaperAuthor] = []
     institution_names: list[str] = []
     for authorship in data.get("authorships") or ():
@@ -156,11 +154,6 @@ def _paper_from_work(data: dict) -> HydratedPaper:
         cited_by_count=data.get("cited_by_count"),
         authors=tuple(author_items),
         institutions=tuple(dict.fromkeys(institution_names)),
-        open_access=HydratedPaperOpenAccess(
-            is_oa=open_access.get("is_oa"),
-            oa_status=open_access.get("oa_status"),
-            oa_url=open_access.get("oa_url"),
-        ),
     )
 
 

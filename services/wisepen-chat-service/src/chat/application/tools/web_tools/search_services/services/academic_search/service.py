@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 
 from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
 from chat.application.tools.web_tools.search_services.searchers import ProviderSearcher
@@ -55,7 +54,7 @@ class AcademicSearchService:
         candidates: tuple[WebSearchCandidate, ...],
         openalex_api_key: str | None,
     ) -> tuple[AcademicHydrationOutcome, ...]:
-        """按既定边界对候选做 OpenAlex 水合，并保留 Exa 兜底 URL。"""
+        """按既定边界对候选做 OpenAlex 水合，抓取 URL 始终保留搜索源结果。"""
         outcomes: list[AcademicHydrationOutcome] = []
         quota_available = True
 
@@ -64,7 +63,6 @@ class AcademicSearchService:
                 outcomes.append(
                     AcademicHydrationOutcome(
                         candidate=candidate,
-                        final_url_source="exa",
                     )
                 )
                 continue
@@ -79,7 +77,6 @@ class AcademicSearchService:
                 outcomes.append(
                     AcademicHydrationOutcome(
                         candidate=candidate,
-                        final_url_source="exa",
                     )
                 )
                 continue
@@ -88,28 +85,18 @@ class AcademicSearchService:
                 outcomes.append(
                     AcademicHydrationOutcome(
                         candidate=candidate,
-                        final_url_source="exa",
                     )
                 )
                 continue
 
-            final_url = candidate.url
-            final_url_source = "exa"
-            oa_url = hydrated.open_access.oa_url if hydrated.open_access else None
-            if oa_url and oa_url.startswith(("http://", "https://")):
-                final_url = oa_url
-                final_url_source = "openalex"
-
             outcomes.append(
                 AcademicHydrationOutcome(
-                    candidate=replace(candidate, url=final_url),
-                    final_url_source=final_url_source,
+                    candidate=candidate,
                     doi=hydrated.doi,
                     publication_year=hydrated.publication_year,
                     cited_by_count=hydrated.cited_by_count,
                     authors=hydrated.authors,
                     institutions=hydrated.institutions,
-                    open_access=hydrated.open_access,
                 )
             )
 

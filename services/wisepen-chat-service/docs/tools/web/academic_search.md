@@ -30,8 +30,7 @@
 | 参数 | 类型 | 规则 |
 | --- | --- | --- |
 | `question` | `string` | 用户原始学术需求。 |
-| `first_query` | `string` | 首次执行的学术搜索 query。 |
-| `fallback_query` | `string` | 仅当 `first_query` 返回空结果时执行一次。 |
+| `query` | `string` | 本次执行的学术搜索 query；若无结果，由模型重写后再次调用。 |
 | `max_results` | `integer` | 可选，默认 10，最大 20。 |
 
 ## 暴露条件
@@ -45,13 +44,12 @@
 
 ```text
 question
-  -> first_query
+  -> query
   -> academic_search service
   -> provider academic search
-  -> if empty: fallback_query once
   -> candidate build
   -> optional OpenAlex hydration
-  -> final url selection
+  -> search_ref URL selection
   -> candidate ranking (title/url/overview/highlights only)
   -> search_ref mapping
 ```
@@ -67,13 +65,6 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 - `cited_by_count`
 - `authors`
 - `institutions`
-- `open_access`
-
-其中 `open_access` 只保留：
-
-- `is_oa`
-- `oa_status`
-- `oa_url`
 
 不返回 OpenAlex 原始对象，不返回 `display_name`，标题始终以 Exa 结果为准。
 
@@ -87,10 +78,11 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 
 ## URL 选择与缓存
 
-- 默认使用 Exa 返回的 URL
-- 若 OpenAlex 水合成功且 `open_access.oa_url` 可用，则返回该 URL
-- 最终 URL 会写入现有 `search_ref -> url` 映射缓存
+- 始终使用 Exa 返回的 URL 作为抓取 URL
+- OpenAlex 水合只补充 DOI、年份、引用数、作者和机构，不覆盖 `search_ref -> url`
+- Exa URL 会写入现有 `search_ref -> url` 映射缓存
 - 后续 `web_fetch(search_refs=[...])` 可直接消费该 `search_ref`
+- URL 不直接暴露给模型，模型只能通过 `search_ref` 交给 `web_fetch`
 
 ## 输出
 
@@ -100,8 +92,6 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 
 - `search_ref`
 - `title`
-- `url`
-- `final_url_source`
 - `overview`
 - `highlights`
 - 允许暴露的 OpenAlex 水合字段

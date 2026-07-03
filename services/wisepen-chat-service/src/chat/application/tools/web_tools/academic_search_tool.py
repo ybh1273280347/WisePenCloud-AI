@@ -13,7 +13,6 @@ from chat.application.tools.core import (
 from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.web_tools._search_tool_utils import (
-    search_with_fallback,
     select_recommended_ids,
     store_candidate_mappings,
 )
@@ -55,19 +54,12 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
                 "Required. The user's academic information need, in the user's own language."
             ),
         },
-        "first_query": {
+        "query": {
             "type": "string",
             "minLength": 1,
             "description": (
-                "Required. The primary academic search query. Write it in paper-style or literature-style wording."
-            ),
-        },
-        "fallback_query": {
-            "type": "string",
-            "minLength": 1,
-            "description": (
-                "Required. A backup academic query used only when first_query returns no results. "
-                "It MUST differ from first_query in wording or language."
+                "Required. The academic search query to execute for this tool call. "
+                "Write it in paper-style or literature-style wording."
             ),
         },
         "max_results": {
@@ -78,7 +70,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
             "description": "Maximum candidate results per academic search request.",
         },
     },
-    "required": ["question", "first_query", "fallback_query"],
+    "required": ["question", "query"],
     "additionalProperties": False,
 }
 
@@ -118,13 +110,12 @@ class AcademicSearchTool:
                     "  - The user already has a concrete paper DOI or title and only needs lightweight metadata enrichment.\n"
                     "\n"
                     "EXECUTION RULES:\n"
-                    "  - first_query is always executed first.\n"
-                    "  - fallback_query is used only when first_query returns no results.\n"
+                    "  - Execute exactly one explicit query per tool call.\n"
+                    "  - If the query returns no results, stop and report failure; rewrite the query yourself before calling academic_search again.\n"
                     "  - The tool may optionally hydrate Exa results with OpenAlex if the user configured an OpenAlex key.\n"
                     "  - The tool uses a small internal model only to rank returned candidates.\n"
                     "\n"
                     "OUTPUT RULES:\n"
-                    "  - Returned urls may come from Exa or from OpenAlex open_access.oa_url when hydration succeeds.\n"
                     "  - Fetch selected search refs before using them as evidence.\n"
                 ),
                 parameters_schema=ToolParametersSchema(PARAMETERS_SCHEMA),
@@ -145,8 +136,7 @@ class AcademicSearchTool:
 
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
         question = kwargs["question"].strip()
-        first_query = kwargs["first_query"].strip()
-        fallback_query = kwargs["fallback_query"].strip()
+        query = kwargs["query"].strip()
         max_results = kwargs.get("max_results") or DEFAULT_ACADEMIC_SEARCH_RESULTS
         search_config: WebSearchRuntimeConfig = context["search_config"]
 
@@ -170,23 +160,18 @@ class AcademicSearchTool:
                     reason=search_config.error_message or "custom 搜索配置不可用",
                 )
             custom_source = self._custom_source_factory.build(search_config)
-            # 执行学术搜索（Exa scholar 端点），包含主查询 + fallback 逻辑
-            result, final_query = await search_with_fallback(
-                search_once=lambda query: self._service.search(
-                    query=query,
-                    max_results=max(1, min(max_results, MAX_ACADEMIC_SEARCH_RESULTS)),
-                    custom_source=custom_source,
-                    platform_provider=search_config.provider,
-                ),
-                first_query=first_query,
-                fallback_query=fallback_query,
+            # 执行单次学术查询；空结果交给模型改写 query 后重新调用。
+            result = await self._service.search(
+                query=query,
+                max_results=max(1, min(max_results, MAX_ACADEMIC_SEARCH_RESULTS)),
+                custom_source=custom_source,
+                platform_provider=search_config.provider,
             )
             base_candidates = build_candidates(result.responses, search_config=search_config)
             if not base_candidates:
-                # 主查询 + fallback 均无结果
                 raise WebSearchEmptyResult(
                     provider=search_config.provider,
-                    reason="两次学术搜索都没有返回结果",
+                    reason="学术搜索没有返回结果",
                 )
             # 使用 OpenAlex 对候选结果进行水合（补充 DOI、引用数、作者、开放获取信息）
             outcomes = await self._service.hydrate_candidates(
@@ -237,14 +222,13 @@ class AcademicSearchTool:
             ) from exc
 
         recommended_ids = await select_recommended_ids(
-            search_query=first_query,
+            search_query=query,
             candidates=final_candidates,
             max_recommended_candidates=MAX_RECOMMENDED_CANDIDATES,
             fallback_candidates_count=FALLBACK_CANDIDATES_COUNT,
         )
         return build_academic_search_tool_return(
-            question=question,
-            final_query=final_query,
+            query=query,
             outcomes=outcomes,
             recommended_ids=recommended_ids,
         )

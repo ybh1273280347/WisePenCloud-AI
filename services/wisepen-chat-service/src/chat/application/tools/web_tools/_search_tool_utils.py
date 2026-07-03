@@ -1,34 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
-from chat.application.tools.web_tools.search_services.errors import WebSearchEmptyResult
 from chat.application.tools.web_tools.search_services.ranking import rank_candidate_ids
 from chat.application.tools.web_tools.search_services.services.candidates import (
     WebSearchCandidate,
     build_candidate_mappings,
 )
-from chat.application.tools.web_tools.search_services.services.search import WebSearchResult
-
-
-async def search_with_fallback(
-    *,
-    search_once: Callable[[str], Awaitable[WebSearchResult]],
-    first_query: str,
-    fallback_query: str,
-) -> tuple[WebSearchResult, str]:
-    # 先走主查询；主查询命中则直接返回
-    try:
-        return await search_once(first_query), first_query
-    except WebSearchEmptyResult:
-        # 主查询无结果时尝试备选查询
-        # 若备选与主查询完全相同则放弃（避免原地空转）
-        if fallback_query.strip() == first_query.strip():
-            raise
-        return await search_once(fallback_query), fallback_query
 
 
 async def select_recommended_ids(

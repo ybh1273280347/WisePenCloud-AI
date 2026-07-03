@@ -48,7 +48,6 @@ from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillM
 from chat.application.tools.tool_output_cache import ToolOutputCache
 from chat.application.tools.tool_output_renderer import ToolOutputRenderer
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.utils.url_fetcher import HttpxFetcher
 from chat.application.tools.utils.markdown_renderer import WebPageMarkdownRenderer
 from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
 from chat.application.tools.web_tools.search_services.custom_source_factory import (
@@ -69,9 +68,7 @@ from chat.application.tools.web_tools.search_services.searchers import (
 from chat.application.tools.web_tools.search_services.services.academic_search import AcademicSearchService
 from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import PaperHydrator
 from chat.application.tools.web_tools.search_services.services.web_search.service import WebSearchService
-from chat.application.tools.common.web_content_cache import (
-    WebContentCacheGcScheduler,
-)
+from chat.application.tools.common.web_content_cache.gc import WebContentCacheGcScheduler
 from chat.application.tools.web_tools.web_crawl_tool import WebCrawlTool
 from chat.application.tools.web_tools.web_fetch import (
     FetchCoordinator,
@@ -80,7 +77,8 @@ from chat.application.tools.web_tools.web_fetch import (
 from chat.application.tools.web_tools.web_fetch.cleaners.trafilatura_cleaner import (
     TrafilaturaCleaner,
 )
-from chat.application.tools.web_tools.web_fetch.fetchers.scrapling_fetcher import (
+from chat.application.tools.web_tools.web_fetch.fetchers import (
+    HttpxFetcher,
     ScraplingFetcher,
 )
 from chat.application.tools.web_tools.web_fetch_tool import WebFetchTool
@@ -466,13 +464,15 @@ class Container(containers.DeclarativeContainer):
         content_cache_entry_repository=web_content_cache_entry_repository,
         content_cache_value_repository=web_content_cache_value_repository,
         refresh_task_publisher=web_content_cache_refresh_task_publisher,
-        direct_fetcher=web_fetch_httpx_fetcher,
+        url_download_http_client=web_fetch_http_client,
+        max_download_bytes=tool_settings.WEB_FETCH_MAX_RESPONSE_BYTES,
     )
     image_ocr_tool = providers.Singleton(
         ImageOcrTool,
         file_store=tool_run_file_store,
         ocr_client=paddle_ocr_client,
-        direct_fetcher=web_fetch_httpx_fetcher,
+        url_download_http_client=web_fetch_http_client,
+        max_download_bytes=tool_settings.WEB_FETCH_MAX_RESPONSE_BYTES,
     )
 
     # --- Session Tools ---

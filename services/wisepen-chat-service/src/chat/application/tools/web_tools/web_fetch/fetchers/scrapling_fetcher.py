@@ -4,14 +4,14 @@ import re
 
 from scrapling.fetchers import StealthyFetcher
 
-from chat.application.tools.utils.url_fetcher import (
-    RawFetchOutput,
+from common.logger import warn
+from .._web_fetch_utils import decode_bytes
+from ..errors import (
     UrlFetchHttpError,
     UrlFetchNetworkError,
     UrlFetchUnsupportedUrlError,
-    decode_bytes,
 )
-from common.logger import warn
+from ..models import RawFetchOutput
 
 _URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 

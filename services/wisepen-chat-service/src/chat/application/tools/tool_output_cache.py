@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from chat.application.tools.common.tool_content_store.models import ToolContentReceipt, ToolContentRole
+from chat.application.tools.common.tool_content_store.models import ToolContentReceipt
 from chat.application.tools.common.tool_content_store.store import ToolContentStore
 from chat.application.tools.core.definition import ToolDefinition
 from chat.application.tools.core.llm.renderer import RenderToolResult
@@ -53,11 +53,8 @@ class ToolOutputCache:
                 for index, text in enumerate(cacheable_texts):
                     receipt = await self._content_store.put(
                         session_id=context["session_id"],
-                        producer=rendered.tool_name,
-                        source=f"tool_call:{rendered.tool_call_id}:cacheable_text:{index}",
                         text=text,
                         content_type="text/markdown",
-                        content_role=ToolContentRole.TOOL_OUTPUT,
                         metadata={
                             "tool": rendered.tool_name,
                             "tool_call_id": rendered.tool_call_id,
@@ -130,9 +127,6 @@ def _content_receipt_payload(receipt: ToolContentReceipt) -> dict[str, Any]:
     """将底层的 ToolContentReceipt 核心实体拍平为对模型可见的 XML 清晰字典载荷。"""
     return {
         "content_id": receipt.content_id,
-        "content_role": receipt.content_role,
-        "content_type": receipt.content_type,
-        "original_length": receipt.original_length,
         "chunk_count": receipt.chunk_count,
         "selectors": list(receipt.selectors),
     }
