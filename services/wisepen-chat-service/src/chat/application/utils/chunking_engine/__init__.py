@@ -3,7 +3,7 @@ from .models import (
     Chunk,
     ChunkDocument,
     ChunkIndex,
-    ChunkLevel,
+    ChunkRole,
     ChunkingResult,
     IndexKind,
     TextUnit,
@@ -11,27 +11,29 @@ from .models import (
 )
 from .pipeline import ChunkingPipeline
 from .protocols import (
-    ChunkExtraIndexer,
+    ChunkIndexBuilder,
     ChunkPacker,
-    ChunkPostProcessor,
-    PreProcessor,
+    ChunkTransformer,
+    DocumentTransformer,
     UnitSplitter,
 )
+from .registry import get_chunking_engine
 
 __all__ = [
     "Chunk",
     "ChunkDocument",
-    "ChunkExtraIndexer",
     "ChunkIndex",
-    "ChunkLevel",
+    "ChunkIndexBuilder",
+    "ChunkRole",
     "ChunkingEngine",
     "ChunkingPipeline",
     "ChunkingResult",
     "ChunkPacker",
-    "ChunkPostProcessor",
+    "ChunkTransformer",
+    "DocumentTransformer",
     "IndexKind",
-    "PreProcessor",
     "TextUnit",
     "UnitSplitter",
     "UnitType",
+    "get_chunking_engine",
 ]

@@ -38,14 +38,14 @@
 - `UnitType`
 - `IndexKind`
 
-推荐 pipeline 在 `presets.py`：
+推荐 engine 在 `registry.py`：
 
-| Pipeline | 适用场景 |
+| Engine 名称 | 适用场景 |
 | --- | --- |
-| `MARKDOWN_PIPELINE` | Markdown、网页正文、`document_parse` Markdown；默认首选 |
-| `PLAIN_TEXT_PIPELINE` | 无结构纯文本 |
-| `MARKDOWN_RECURSIVE_PIPELINE` | Markdown 很长且结构块过大，需要更均匀切分 |
-| `NESTED_MARKDOWN_PIPELINE` | 需要父子块召回的 RAG 场景，当前不要默认使用 |
+| `markdown` | Markdown、网页正文、`document_parse` Markdown；默认首选 |
+| `plain_text` | 无结构纯文本 |
+| `markdown_recursive` | Markdown 很长且结构块过大，需要更均匀切分 |
+| `parent_child_markdown` | 需要父子块召回的 RAG 场景，当前不要默认使用 |
 
 下游稳定入口：
 

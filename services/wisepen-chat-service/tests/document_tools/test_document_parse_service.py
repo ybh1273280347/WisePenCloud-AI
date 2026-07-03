@@ -10,10 +10,10 @@ from chat.application.tools.document_tools.document_parse.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )
-from chat.application.tools.document_tools.document_parse.parsers.comon_document import (
+from chat.application.tools.document_tools.document_parse.parsers.common_document import (
     common_document as common_document_module,
 )
-from chat.application.tools.document_tools.document_parse.parsers.comon_document.common_document import (
+from chat.application.tools.document_tools.document_parse.parsers.common_document.common_document import (
     CommonDocumentParser,
 )
 from chat.application.tools.document_tools.document_parse import service as service_module

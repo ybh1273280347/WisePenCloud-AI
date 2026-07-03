@@ -257,8 +257,8 @@ class RagIngestionApplicationService:
             document_id=payload.document_id,
             document_version=payload.document_version,
             content_hash=content_hash,
-            pipeline_name="nested_markdown",
-            pipeline_version=self._chunking_pipeline_version,
+            engine_name="parent_child_markdown",
+            engine_version=self._chunking_engine_version,
         )
         if cached:
             chunking_result = cached
@@ -725,8 +725,8 @@ Key 维度：
 document_id
 document_version
 content_hash
-chunking_pipeline_name
-chunking_pipeline_version
+chunking_engine_name
+chunking_engine_version
 context_indexing_model_version
 context_indexing_prompt_version
 embedding_model_version

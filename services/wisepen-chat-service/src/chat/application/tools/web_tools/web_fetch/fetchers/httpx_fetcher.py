@@ -9,7 +9,7 @@ from chat.application.tools.utils.url import (
     UrlFetcherUnsupportedUrlError,
     fetch_url,
 )
-from .._web_fetch_utils import decode_bytes
+from .._utils import decode_bytes
 from ..errors import (
     UrlFetchHttpError,
     UrlFetchNetworkError,

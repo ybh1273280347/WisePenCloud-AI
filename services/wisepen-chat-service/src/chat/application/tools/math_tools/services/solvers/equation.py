@@ -8,8 +8,11 @@ import sympy as sp
 from scipy import optimize
 
 from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.solvers._solver_utils.expression_parser import MathExpressionParser
-from chat.application.tools.math_tools.services.solvers._solver_utils.reader import (
+from chat.application.tools.math_tools.services.solvers._utils import (
+    parse_bound,
+    parse_equation,
+    parse_expr,
+    parse_inequality,
     read_latex,
     read_numeric_values,
     read_variable_name,
@@ -56,7 +59,7 @@ class EquationSolver:
     @staticmethod
     def _solve_equation(payload: dict[str, Any]) -> Any:
         var_name = read_variable_name(payload)
-        equation = MathExpressionParser.parse_equation(
+        equation = parse_equation(
             payload.get("equation") or payload.get("expression"),
             [var_name],
         )
@@ -68,7 +71,7 @@ class EquationSolver:
         equations = payload["equations"]
 
         return sp.solve(
-            [MathExpressionParser.parse_equation(eq, names) for eq in equations],
+            [parse_equation(eq, names) for eq in equations],
             [sp.Symbol(name) for name in names],
             dict=True,
         )
@@ -79,7 +82,7 @@ class EquationSolver:
         expr = payload.get("inequality") or payload.get("expression")
 
         return sp.solve_univariate_inequality(
-            MathExpressionParser.parse_inequality(expr, var_name),
+            parse_inequality(expr, var_name),
             sp.Symbol(var_name),
         )
 
@@ -87,7 +90,7 @@ class EquationSolver:
     def _numeric_root(payload: dict[str, Any]) -> tuple[Any, Any]:
         var_name = read_variable_name(payload)
         variable = sp.Symbol(var_name)
-        expression = MathExpressionParser.parse_expr(payload.get("expression"), [var_name])
+        expression = parse_expr(payload.get("expression"), [var_name])
         func = sp.lambdify(variable, expression, modules=["numpy"])
 
         # 分支 1: 区间求根 (Bracketed Root Search)
@@ -95,8 +98,8 @@ class EquationSolver:
             root = optimize.root_scalar(
                 func,
                 bracket=[
-                    float(MathExpressionParser.parse_bound(payload.get("lower"), "lower", [var_name])),
-                    float(MathExpressionParser.parse_bound(payload.get("upper"), "upper", [var_name])),
+                    float(parse_bound(payload.get("lower"), "lower", [var_name])),
+                    float(parse_bound(payload.get("upper"), "upper", [var_name])),
                 ],
             )
             if not root.converged:
@@ -104,7 +107,7 @@ class EquationSolver:
             return root.root, root.root
 
         # 分支 2: 单点迭代求根 (Point Estimation)
-        point = float(MathExpressionParser.parse_bound(payload.get("point"), "point", [var_name]))
+        point = float(parse_bound(payload.get("point"), "point", [var_name]))
         root = optimize.root(lambda values: [func(values[0])], [point])
         if not root.success:
             raise MathSolverError("numeric root search did not converge.")
@@ -115,11 +118,11 @@ class EquationSolver:
     def _numeric_minimize(payload: dict[str, Any]) -> tuple[Any, Any]:
         var_name = read_variable_name(payload)
         variable = sp.Symbol(var_name)
-        expression = MathExpressionParser.parse_expr(payload.get("expression"), [var_name])
+        expression = parse_expr(payload.get("expression"), [var_name])
         func = sp.lambdify(variable, expression, modules=["numpy"])
 
-        lower = float(MathExpressionParser.parse_bound(payload.get("lower"), "lower", [var_name]))
-        upper = float(MathExpressionParser.parse_bound(payload.get("upper"), "upper", [var_name]))
+        lower = float(parse_bound(payload.get("lower"), "lower", [var_name]))
+        upper = float(parse_bound(payload.get("upper"), "upper", [var_name]))
 
         result = optimize.minimize_scalar(func, bounds=(lower, upper), method="bounded")
         if not result.success:
@@ -132,7 +135,7 @@ class EquationSolver:
     def _constrained_minimize(payload: dict[str, Any]) -> tuple[Any, Any]:
         names = read_variable_names(payload, default=("x", "y"))
         symbols = [sp.Symbol(name) for name in names]
-        expression = MathExpressionParser.parse_expr(payload.get("expression"), names)
+        expression = parse_expr(payload.get("expression"), names)
         func = sp.lambdify(symbols, expression, modules=["numpy"])
 
         initial = read_numeric_values(payload["initial_guess"], name="initial_guess")
@@ -196,7 +199,7 @@ class OptimizationPayloadAdapter:
         if not raw.strip():
             raise MathSolverError("constraints must contain non-empty expressions interpreted as >= 0.")
 
-        expression = MathExpressionParser.parse_expr(raw, names)
+        expression = parse_expr(raw, names)
         func = sp.lambdify(symbols, expression, modules=["numpy"])
         return lambda values: float(func(*values))
 

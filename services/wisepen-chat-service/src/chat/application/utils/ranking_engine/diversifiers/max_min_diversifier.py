@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from chat.application.utils.ranking_engine.models import RankCandidate, RankedCandidate
-from ._diversify_utils import assign_ranks, jaccard_similarity
+from ._utils import assign_ranks, jaccard_similarity
 
 
 @dataclass(frozen=True, slots=True)

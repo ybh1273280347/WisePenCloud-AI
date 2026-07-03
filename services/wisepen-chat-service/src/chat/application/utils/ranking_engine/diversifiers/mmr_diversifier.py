@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from chat.application.utils.ranking_engine.models import RankedCandidate
-from ._diversify_utils import assign_ranks, jaccard_similarity
+from ._utils import assign_ranks, jaccard_similarity
 from ..tokenizer import RankingTokenizer
 
 

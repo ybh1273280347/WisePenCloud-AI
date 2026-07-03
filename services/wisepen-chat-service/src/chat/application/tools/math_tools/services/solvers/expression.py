@@ -7,8 +7,8 @@ from typing import Any
 import sympy as sp
 
 from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.solvers._solver_utils.expression_parser import MathExpressionParser
-from chat.application.tools.math_tools.services.solvers._solver_utils.reader import (
+from chat.application.tools.math_tools.services.solvers._utils import (
+    parse_expr,
     read_latex,
     read_variable_names,
 )
@@ -31,7 +31,7 @@ class ExpressionSolver:
         match task_type:
             # 1. 符号代数类任务 (需要解析表达式)
             case ExpressionTask.SIMPLIFY | ExpressionTask.EXPAND | ExpressionTask.FACTOR | ExpressionTask.NUMERIC:
-                expression = MathExpressionParser.parse_expr(
+                expression = parse_expr(
                     payload.get("expression"),
                     read_variable_names(payload),
                 )

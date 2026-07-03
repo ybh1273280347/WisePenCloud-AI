@@ -4,7 +4,7 @@ from collections import OrderedDict, deque
 from dataclasses import dataclass
 
 from chat.application.utils.ranking_engine.models import RankedCandidate
-from ._diversify_utils import assign_ranks
+from ._utils import assign_ranks
 
 
 @dataclass(frozen=True, slots=True)

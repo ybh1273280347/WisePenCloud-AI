@@ -15,10 +15,10 @@ _FORMULA_LABEL_RE = re.compile(r"(?:Equation|Eq\.?|公式)\s+[\(]?(\d+(?:\.\d+)*
 _FIGURE_NUMBER_RE = re.compile(r"^(?:Figure|Fig\.?|图)\s+(\d+(?:\.\d+)*)", re.IGNORECASE)
 
 
-class ChunkExtraIndexer:
-    """chunk 额外语义索引器，专为 Markdown pipeline 构建。
+class MarkdownLocatorIndexBuilder:
+    """Markdown chunk 定位索引构建器。
 
-    构建三种额外索引：
+    构建三种语义定位索引：
     1. section（IndexKind.SECTION）— Markdown heading section 到 chunk 的映射
        用途：按章节名定位 chunk，如 "安装章节包含哪些 chunk"
     2. page（IndexKind.PAGE）— page_marker（<!-- page N -->）到 chunk 的映射
@@ -34,14 +34,14 @@ class ChunkExtraIndexer:
     注意：Chunk 本身已有 chunk_index（顺序）和 start_offset/end_offset（位置），
     构成天然的连续索引，无需额外构建。此索引器只构建额外的语义维度索引。
 
-    非 Markdown pipeline（纯文本/连续读取）不应配置 extra_indexer，
+    非 Markdown pipeline（纯文本/连续读取）不应配置 index_builder，
     因为 RecursiveTextSplitter 不会产出这些结构化 unit。
     """
 
     __slots__ = ("name",)
 
     def __init__(self) -> None:
-        self.name = "chunk_extra_indexer"
+        self.name = "markdown_locator_index_builder"
 
     def index(
             self,
@@ -50,7 +50,7 @@ class ChunkExtraIndexer:
             units: tuple[TextUnit, ...],
             chunks: tuple[Chunk, ...],
     ) -> tuple[ChunkIndex, ...]:
-        """基于最终 chunk 构建额外语义索引。"""
+        """基于最终 chunk 构建语义定位索引。"""
         indexes: list[ChunkIndex] = []
         indexes.extend(self._build_section_indexes(document, units, chunks))
         indexes.extend(self._build_page_indexes(document, units, chunks))

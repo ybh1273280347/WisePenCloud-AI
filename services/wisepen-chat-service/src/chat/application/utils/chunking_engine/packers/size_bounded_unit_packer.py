@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..models import Chunk, ChunkLevel, TextUnit, UnitType
+from ..models import Chunk, ChunkRole, TextUnit, UnitType
 
 
 @dataclass(frozen=True, slots=True)
-class BlockAwarePackerConfig:
-    """块感知聚合器配置。"""
+class SizeBoundedUnitPackerConfig:
+    """按目标大小聚合 TextUnit 的配置。"""
 
     chunk_size: int  # 单个 chunk 的目标字符数，超过则切分到下一个 chunk
-    level: ChunkLevel = ChunkLevel.READ  # 输出 chunk 的用途层级
+    role: ChunkRole = ChunkRole.FLAT  # 输出 chunk 的结构角色
     separator: str = "\n\n"  # chunk 内多个 unit 文本之间的连接符
     chunk_id_prefix: str = "chunk"  # chunk ID 前缀（会被 finalizer 覆盖）
     hard_boundary_unit_types: tuple[UnitType, ...] = ()  # 这些 unit 永远开启新 chunk
 
 
-class BlockAwarePacker:
-    """块感知聚合器，将相邻 TextUnit 聚合成 Chunk。
+class SizeBoundedUnitPacker:
+    """按目标大小将相邻 TextUnit 聚合成 Chunk。
 
     核心原则：不从 unit 中间切开，保证每个 unit 完整。
     当累计字符数超过 chunk_size 时，从当前 unit 前切分，
@@ -29,9 +29,9 @@ class BlockAwarePacker:
 
     __slots__ = ("config", "name")
 
-    def __init__(self, config: BlockAwarePackerConfig) -> None:
+    def __init__(self, config: SizeBoundedUnitPackerConfig) -> None:
         self.config = config
-        self.name = "block_aware_packer"
+        self.name = "size_bounded_unit_packer"
 
     def pack(
             self,
@@ -130,7 +130,7 @@ class BlockAwarePacker:
             chunk_id=f"{self.config.chunk_id_prefix}-{chunk_index}",
             text=text,
             chunk_index=chunk_index,
-            level=self.config.level,
+            role=self.config.role,
             start_offset=selected[0].start_offset,
             end_offset=selected[-1].end_offset,
             start_unit=selected[0].unit_index,

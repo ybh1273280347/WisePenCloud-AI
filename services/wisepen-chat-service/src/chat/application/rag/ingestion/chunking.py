@@ -7,27 +7,23 @@ from chat.application.rag.ingestion.models import (
     RagMarkdownIngestionPayload,
     RagParentChunk,
 )
-from chat.application.utils.chunking_engine import ChunkDocument, ChunkLevel, ChunkingEngine
+from chat.application.utils.chunking_engine import ChunkDocument, ChunkRole, ChunkingEngine
 from chat.application.utils.chunking_engine.models import ChunkIndex, IndexKind
-from chat.application.utils.chunking_engine.registry import (
-    NESTED_MARKDOWN_PIPELINE_NAME,
-    get_chunking_pipeline,
-)
+from chat.application.utils.chunking_engine.registry import get_chunking_engine
 
 
 class RagChunkingService:
     """把已取得的 Markdown 正文接入 RAG 父子分块链路。"""
 
-    __slots__ = ("_engine", "_pipeline_name")
+    __slots__ = ("_engine",)
 
     def __init__(
             self,
             *,
             engine: ChunkingEngine | None = None,
-            pipeline_name: str = NESTED_MARKDOWN_PIPELINE_NAME,
+            engine_name: str = "parent_child_markdown",
     ) -> None:
-        self._engine = engine or ChunkingEngine()
-        self._pipeline_name = pipeline_name
+        self._engine = engine or get_chunking_engine(engine_name)
 
     def chunk(
             self,
@@ -38,8 +34,7 @@ class RagChunkingService:
             document_version: str = "",
             title: str = "",
     ) -> RagChunkingResult:
-        # 复用通用 ChunkingEngine，但固定使用 nested markdown 流水线。
-        # 该流水线会产出父子两层 chunk：SEARCH 级别供检索，DOCUMENT 级别用于引用完整上下文。
+        # 复用父子 Markdown 分块引擎：CHILD 供检索，PARENT 用于引用完整上下文。
         result = self._engine.chunk(
             document=ChunkDocument(
                 text=markdown,
@@ -47,7 +42,6 @@ class RagChunkingService:
                 content_type="text/markdown",
                 title=title or None,
             ),
-            pipeline=get_chunking_pipeline(self._pipeline_name),
         )
 
         extra_indexes_by_chunk = _extra_indexes_by_chunk(result.indexes)
@@ -56,8 +50,8 @@ class RagChunkingService:
 
         for chunk in result.chunks:
             extra_indexes = extra_indexes_by_chunk.get(chunk.chunk_id, ())
-            # SEARCH 级别作为子块进入检索索引；其余级别作为父块保留完整原文。
-            if chunk.level == ChunkLevel.SEARCH:
+            # CHILD 角色作为子块进入检索索引；其余角色作为父块保留完整原文。
+            if chunk.role == ChunkRole.CHILD:
                 child_chunks.append(
                     RagChildChunk.from_chunk(
                         chunk,

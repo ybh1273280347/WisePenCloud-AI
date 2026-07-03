@@ -1,5 +1,5 @@
-from chat.application.utils.chunking_engine import ChunkDocument, ChunkLevel, ChunkingEngine
-from chat.application.utils.chunking_engine.registry import get_chunking_pipeline
+from chat.application.utils.chunking_engine import ChunkDocument, ChunkRole
+from chat.application.utils.chunking_engine.registry import get_chunking_engine
 
 
 def test_markdown_pipeline_keeps_page_boundaries_as_chunk_boundaries() -> None:
@@ -12,9 +12,8 @@ def test_markdown_pipeline_keeps_page_boundaries_as_chunk_boundaries() -> None:
         )
     )
 
-    result = ChunkingEngine().chunk(
+    result = get_chunking_engine("markdown").chunk(
         document=ChunkDocument(text=text, content_type="text/markdown"),
-        pipeline=get_chunking_pipeline("markdown"),
     )
 
     assert len(result.chunks) == 2
@@ -24,7 +23,7 @@ def test_markdown_pipeline_keeps_page_boundaries_as_chunk_boundaries() -> None:
     assert "<!-- page 1 -->" not in result.chunks[1].text
 
 
-def test_nested_markdown_parent_chunks_do_not_cross_pages_after_finalizer_merges() -> None:
+def test_parent_child_markdown_parent_chunks_do_not_cross_pages_after_finalizer_merges() -> None:
     text = "\n\n".join(
         (
             "<!-- page 1 -->",
@@ -36,12 +35,11 @@ def test_nested_markdown_parent_chunks_do_not_cross_pages_after_finalizer_merges
         )
     )
 
-    result = ChunkingEngine().chunk(
+    result = get_chunking_engine("parent_child_markdown").chunk(
         document=ChunkDocument(text=text, content_type="text/markdown"),
-        pipeline=get_chunking_pipeline("nested_markdown"),
     )
 
-    parents = [chunk for chunk in result.chunks if chunk.level == ChunkLevel.RETRIEVAL]
+    parents = [chunk for chunk in result.chunks if chunk.role == ChunkRole.PARENT]
 
     assert len(parents) == 2
     assert parents[0].metadata["page_label"] == "1"
@@ -50,7 +48,7 @@ def test_nested_markdown_parent_chunks_do_not_cross_pages_after_finalizer_merges
     assert "<!-- page 1 -->" not in parents[1].text
 
 
-def test_nested_markdown_child_chunks_inherit_parent_page_label() -> None:
+def test_parent_child_markdown_child_chunks_inherit_parent_page_label() -> None:
     page_one = "第一页内容。" * 120
     page_two = "第二页内容。" * 120
     text = "\n\n".join(
@@ -62,17 +60,16 @@ def test_nested_markdown_child_chunks_inherit_parent_page_label() -> None:
         )
     )
 
-    result = ChunkingEngine().chunk(
+    result = get_chunking_engine("parent_child_markdown").chunk(
         document=ChunkDocument(text=text, content_type="text/markdown"),
-        pipeline=get_chunking_pipeline("nested_markdown"),
     )
 
     parents_by_id = {
         chunk.chunk_id: chunk
         for chunk in result.chunks
-        if chunk.level == ChunkLevel.RETRIEVAL
+        if chunk.role == ChunkRole.PARENT
     }
-    children = [chunk for chunk in result.chunks if chunk.level == ChunkLevel.SEARCH]
+    children = [chunk for chunk in result.chunks if chunk.role == ChunkRole.CHILD]
 
     assert children
     for child in children:

@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ._post_process_utils import assign_chunk_ids, merge_heading_only, merge_short_tails
+from ._chunk_merge_utils import assign_chunk_ids, merge_heading_only, merge_short_tails
 from ..models import Chunk
 
 
-class SecondaryChunkFinalizer:
-    """二次分块终态器，对父 chunk 做合并并维护父子引用关系。
+class ParentChildChunkFinalizer:
+    """父子 chunk 终态器，对父 chunk 做合并并维护父子引用关系。
 
-    与 SingleLayerFinalizer 的区别：
-    - SingleLayerFinalizer 适用于单层分块，合并所有 chunk 不区分层级。
-    - SecondaryChunkFinalizer 适用于二次分块（父子嵌套），分离父子后只对父 chunk
+    与 FlatChunkFinalizer 的区别：
+    - FlatChunkFinalizer 适用于单层分块，合并所有 chunk 不区分父子关系。
+    - ParentChildChunkFinalizer 适用于父子分块，分离父子后只对父 chunk
       做合并，子 chunk 由 RecursiveTextSplitter 精切，不参与合并。
 
     合并后的引用维护：
@@ -31,7 +31,7 @@ class SecondaryChunkFinalizer:
     __slots__ = ("name", "id_prefix", "min_size")
 
     def __init__(self, *, id_prefix: str = "", min_size: int = 320) -> None:
-        self.name = "secondary_chunk_finalizer"
+        self.name = "parent_child_chunk_finalizer"
         self.id_prefix = id_prefix
         self.min_size = min_size
 

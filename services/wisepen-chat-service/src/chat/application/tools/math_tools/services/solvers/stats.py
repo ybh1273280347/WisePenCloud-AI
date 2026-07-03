@@ -8,8 +8,9 @@ import sympy as sp
 from scipy import stats
 
 from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.solvers._solver_utils.expression_parser import MathExpressionParser
-from chat.application.tools.math_tools.services.solvers._solver_utils.reader import (
+from chat.application.tools.math_tools.services.solvers._utils import (
+    parse_bound,
+    parse_expr,
     read_latex,
     read_numeric_values,
     read_variable_name,
@@ -31,7 +32,7 @@ class StatsSolver:
         match task_type:
             # 1. 离散与连续概率分布任务
             case StatsTask.BINOMIAL_PROB:
-                probability = MathExpressionParser.parse_expr(payload.get("probability"), [])
+                probability = parse_expr(payload.get("probability"), [])
                 n = payload["n"]
                 k = payload["k"]
                 exact = sp.binomial(n, k) * probability ** k * (1 - probability) ** (n - k)
@@ -110,9 +111,9 @@ class StatsSolver:
         var_name = read_variable_name(payload)
         variable = sp.Symbol(var_name)
 
-        lower = int(MathExpressionParser.parse_bound(payload.get("lower"), "lower", [var_name]))
-        upper = int(MathExpressionParser.parse_bound(payload.get("upper"), "upper", [var_name]))
-        expression = MathExpressionParser.parse_expr(payload.get("expression"), [var_name])
+        lower = int(parse_bound(payload.get("lower"), "lower", [var_name]))
+        upper = int(parse_bound(payload.get("upper"), "upper", [var_name]))
+        expression = parse_expr(payload.get("expression"), [var_name])
 
         count = upper - lower + 1
         if count <= 0:

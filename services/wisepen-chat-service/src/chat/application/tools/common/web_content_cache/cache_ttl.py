@@ -17,9 +17,6 @@ from hishel._core.models import Response
 
 from chat.application.tools.tool_settings import tool_settings
 
-# ---------------------------------------------------------------------------
-# 业务默认值与上限（全部通过 tool_settings 调参控制）
-# ---------------------------------------------------------------------------
 
 _DEFAULT_SOFT_TTL = timedelta(seconds=tool_settings.CACHE_DEFAULT_SOFT_TTL_SECONDS)
 _DEFAULT_HARD_TTL = timedelta(seconds=tool_settings.CACHE_DEFAULT_HARD_TTL_SECONDS)
@@ -29,9 +26,6 @@ _MAX_SOFT_TTL = timedelta(seconds=tool_settings.CACHE_MAX_SOFT_TTL_SECONDS)
 _MAX_HARD_TTL = timedelta(seconds=tool_settings.CACHE_MAX_HARD_TTL_SECONDS)
 
 
-# ---------------------------------------------------------------------------
-# 公开数据类
-# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True, slots=True)
 class CacheTTL:
@@ -42,9 +36,6 @@ class CacheTTL:
     no_store: bool = False  # 当响应头含 no-store 时为 True
 
 
-# ---------------------------------------------------------------------------
-# 公开入口
-# ---------------------------------------------------------------------------
 
 def compute_ttl(
         *,

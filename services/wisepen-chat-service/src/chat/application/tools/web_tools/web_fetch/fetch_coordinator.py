@@ -21,7 +21,7 @@ from chat.application.tools.common.web_content_cache.refresh_queue import (
 )
 from chat.application.tools.utils.url import filename_from_url
 from common.logger import info, warn
-from ._web_fetch_utils import judge_quality
+from ._utils import judge_quality
 from .cleaners.base import BaseCleaner
 from .errors import UrlFetchError
 from .fetchers import WebFetcher

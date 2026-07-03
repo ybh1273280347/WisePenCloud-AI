@@ -37,7 +37,7 @@
 |--------------------|------------------------------|-------------------------------------------------|
 | `parent_chunks`    | `tuple[RagParentChunk, ...]` | 父块集合，用于后续上下文回填。                                 |
 | `child_chunks`     | `tuple[RagChildChunk, ...]`  | 子块集合，用于精准检索与 Context Indexing。                  |
-| `pipeline`         | `str`                        | 实际使用的 chunking pipeline。当前默认 `nested_markdown`。 |
+| `pipeline`         | `str`                        | 实际使用的 chunking pipeline 名。当前默认 `parent_child_markdown`。 |
 | `resource_id`      | `str`                        | 透传入库负载的资源归属标识。                                  |
 | `document_id`      | `str`                        | 透传入库负载的文档 ID。                                   |
 | `document_version` | `str`                        | 透传入库负载的文档版本。                                    |

@@ -105,7 +105,7 @@ def test_chunking_service_produces_parent_and_child_chunks() -> None:
     assert result.resource_id == "resource-auth"
     assert result.document_id == "doc-auth"
     assert result.document_version == "v1"
-    assert result.pipeline == "nested_markdown"
+    assert result.pipeline == "parent_child_markdown"
     assert result.parent_chunks
     assert result.child_chunks
     assert all(isinstance(chunk, RagParentChunk) for chunk in result.parent_chunks)

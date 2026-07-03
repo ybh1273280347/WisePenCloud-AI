@@ -5,14 +5,14 @@ from typing import Protocol
 from .models import Chunk, ChunkDocument, ChunkIndex, TextUnit
 
 
-class PreProcessor(Protocol):
-    """预处理器协议，在切分前对原始文档进行转换。
+class DocumentTransformer(Protocol):
+    """文档转换器协议，在切分前对原始文档进行转换。
 
     典型用途：为 Markdown 标题下的正文注入标题路径前缀，
     使后续切分出的 chunk 自带上下文信息。
     """
 
-    name: str  # 预处理器名称
+    name: str  # 转换器名称
 
     def process(self, *, document: ChunkDocument) -> ChunkDocument:
         """处理待分块文档，返回转换后的文档。"""
@@ -51,28 +51,28 @@ class ChunkPacker(Protocol):
         ...
 
 
-class ChunkPostProcessor(Protocol):
-    """chunk 后处理器协议，对聚合后的 chunk 进行修正或增强。
+class ChunkTransformer(Protocol):
+    """chunk 转换器协议，对聚合后的 chunk 进行修正或增强。
 
-    典型用途：合并纯标题 chunk、合并短尾 chunk、生成稳定 ID 等。
+    典型用途：生成子 chunk、合并纯标题 chunk、合并短尾 chunk、生成稳定 ID 等。
     """
 
-    name: str  # 后处理器名称
+    name: str  # 转换器名称
 
     def process(self, *, chunks: tuple[Chunk, ...]) -> tuple[Chunk, ...]:
         """处理 chunk 列表，返回修正后的 chunk 列表。"""
         ...
 
 
-class ChunkExtraIndexer(Protocol):
-    """chunk 额外语义索引器协议，构建 chunk 的额外定位索引（ChunkIndex）。
+class ChunkIndexBuilder(Protocol):
+    """chunk 定位索引构建器协议，构建 chunk 的语义定位索引（ChunkIndex）。
 
     Chunk 本身已有 chunk_index（顺序）和 start_offset/end_offset（位置），
-    构成天然的连续索引。此协议构建的是额外的语义维度索引（如章节、页码、锚标），
+    构成天然的连续索引。此协议构建的是语义维度索引（如章节、页码、锚标），
     供下游按 kind 指定维度查找 chunk。
     """
 
-    name: str  # 索引器名称
+    name: str  # 索引构建器名称
 
     def index(
             self,

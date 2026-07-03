@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .ranking_tokenizer import (
+from .ranking_tokenizers import (
     JiebaRankingTokenizer,
     RankingTokenizer,
     RankingTokenizerConfig,

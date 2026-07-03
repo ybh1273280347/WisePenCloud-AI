@@ -1,6 +1,6 @@
-from .block_aware_packer import BlockAwarePacker, BlockAwarePackerConfig
+from .size_bounded_unit_packer import SizeBoundedUnitPacker, SizeBoundedUnitPackerConfig
 
 __all__ = [
-    "BlockAwarePacker",
-    "BlockAwarePackerConfig",
+    "SizeBoundedUnitPacker",
+    "SizeBoundedUnitPackerConfig",
 ]

@@ -6,7 +6,7 @@ from chat.application.tools.document_tools.document_parse.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )
-from chat.application.tools.document_tools.document_parse.parsers.comon_document import (
+from chat.application.tools.document_tools.document_parse.parsers.common_document import (
     CommonDocumentParser,
 )
 from chat.application.tools.document_tools.document_parse.parsers.specialized import (

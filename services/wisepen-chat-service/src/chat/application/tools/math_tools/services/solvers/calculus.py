@@ -6,8 +6,10 @@ from typing import Any
 import sympy as sp
 
 from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.solvers._solver_utils.expression_parser import MathExpressionParser
-from chat.application.tools.math_tools.services.solvers._solver_utils.reader import (
+from chat.application.tools.math_tools.services.solvers._utils import (
+    parse_bound,
+    parse_expr,
+    parse_ode_equation,
     read_latex,
     read_variable_name,
     read_variable_names,
@@ -41,7 +43,7 @@ class CalculusSolver:
         if task_type is CalculusTask.DOUBLE_INTEGRAL:
             variables.add(str(payload.get("variable2") or "y"))
 
-        expression = MathExpressionParser.parse_expr(payload.get("expression"), sorted(variables))
+        expression = parse_expr(payload.get("expression"), sorted(variables))
         variable = sp.Symbol(var_name)
 
         # 3. 路由到标准的符号微积分计算分支
@@ -53,12 +55,12 @@ class CalculusSolver:
                 exact = sp.integrate(expression, variable)
 
             case CalculusTask.DEFINITE_INTEGRAL:
-                lower = MathExpressionParser.parse_bound(
+                lower = parse_bound(
                     payload.get("lower_bound") or payload.get("lower"),
                     "lower_bound",
                     [var_name],
                 )
-                upper = MathExpressionParser.parse_bound(
+                upper = parse_bound(
                     payload.get("upper_bound") or payload.get("upper"),
                     "upper_bound",
                     [var_name],
@@ -66,17 +68,17 @@ class CalculusSolver:
                 exact = sp.integrate(expression, (variable, lower, upper))
 
             case CalculusTask.LIMIT:
-                point = MathExpressionParser.parse_bound(payload.get("point"), "point", [var_name])
+                point = parse_bound(payload.get("point"), "point", [var_name])
                 exact = sp.limit(expression, variable, point)
 
             case CalculusTask.TAYLOR_SERIES:
-                point = MathExpressionParser.parse_bound(payload.get("point") or "0", "point", [var_name])
+                point = parse_bound(payload.get("point") or "0", "point", [var_name])
                 order = int(payload.get("order") or 6)
                 exact = sp.series(expression, variable, point, order)
 
             case CalculusTask.SUMMATION:
-                lower = MathExpressionParser.parse_bound(payload.get("lower"), "lower", [var_name])
-                upper = MathExpressionParser.parse_bound(payload.get("upper"), "upper", [var_name])
+                lower = parse_bound(payload.get("lower"), "lower", [var_name])
+                upper = parse_bound(payload.get("upper"), "upper", [var_name])
                 exact = sp.summation(expression, (variable, lower, upper))
 
             case CalculusTask.DOUBLE_INTEGRAL:
@@ -96,18 +98,18 @@ class CalculusSolver:
         second_var = sp.Symbol(second_var_name)
         variables = [first_var_name, second_var_name]
 
-        lower1 = MathExpressionParser.parse_bound(
+        lower1 = parse_bound(
             payload.get("lower_bound") or payload.get("lower"),
             "lower_bound",
             variables,
         )
-        upper1 = MathExpressionParser.parse_bound(
+        upper1 = parse_bound(
             payload.get("upper_bound") or payload.get("upper"),
             "upper_bound",
             variables,
         )
-        lower2 = MathExpressionParser.parse_bound(payload.get("lower2"), "lower2", variables)
-        upper2 = MathExpressionParser.parse_bound(payload.get("upper2"), "upper2", variables)
+        lower2 = parse_bound(payload.get("lower2"), "lower2", variables)
+        upper2 = parse_bound(payload.get("upper2"), "upper2", variables)
 
         return sp.integrate(expression, (first_var, lower1, upper1), (second_var, lower2, upper2))
 
@@ -116,7 +118,7 @@ class CalculusSolver:
         variable = read_variable_name(payload)
         function_name = str(payload.get("function") or "y")
 
-        equation, func_expr = MathExpressionParser.parse_ode_equation(
+        equation, func_expr = parse_ode_equation(
             payload.get("equation") or payload.get("expression"),
             function_name=function_name,
             variable_name=variable,
@@ -130,7 +132,7 @@ class CalculusSolver:
         if not transform_variable.isidentifier():
             raise MathSolverError(f"invalid transform variable name: {transform_variable}")
 
-        expression = MathExpressionParser.parse_expr(payload.get("expression"), [variable, transform_variable])
+        expression = parse_expr(payload.get("expression"), [variable, transform_variable])
 
         result, convergence_plane, condition = sp.laplace_transform(
             expression,

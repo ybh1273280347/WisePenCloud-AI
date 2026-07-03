@@ -24,7 +24,7 @@ ranking_engine_package.__path__ = [
 ]
 sys.modules["chat.application.utils.ranking_engine"] = ranking_engine_package
 
-from chat.application.utils.ranking_engine.tokenizer.ranking_tokenizer import (
+from chat.application.utils.ranking_engine.tokenizer.ranking_tokenizers import (
     JiebaRankingTokenizer,
     ThuLacRankingTokenizer,
 )

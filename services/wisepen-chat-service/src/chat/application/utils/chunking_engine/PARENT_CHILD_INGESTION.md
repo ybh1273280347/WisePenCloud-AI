@@ -1,28 +1,28 @@
 # 父子分块摄取指南（后续计划）
 
-本文档面向后续「父子双仓储」改造，说明如何从 `chunking_engine` 的 `nested_markdown` pipeline 产出中摄取父子 chunk。当前阶段仅
+本文档面向后续「父子双仓储」改造，说明如何从 `chunking_engine` 的 `parent_child_markdown` engine 产出中摄取父子 chunk。当前阶段仅
 chunking_engine 层面完成了父子区分与关系映射，存储层/检索层尚未拆分，本文档作为后续接手者的设计参考。
 
 ## 1. chunking_engine 产出的父子契约
 
-`nested_markdown` pipeline 的执行顺序：
+`parent_child_markdown` engine 绑定的 pipeline 执行顺序：
 
 ```text
-MarkdownPreProcessor → MarkdownBlockSplitter → BlockAwarePacker
-  → SecondaryChunkProcessor → SecondaryChunkFinalizer → ChunkExtraIndexer
+MarkdownSectionPathInjector → MarkdownBlockSplitter → SizeBoundedUnitPacker
+  → ChildChunkGenerator → ParentChildChunkFinalizer → MarkdownLocatorIndexBuilder
 ```
 
-其中 `SecondaryChunkProcessor` 在 `SecondaryChunkFinalizer` 之前执行：先用父 chunk 的临时 ID 生成子 chunk 并建立
-`parent_chunk_id` 引用，再由 `SecondaryChunkFinalizer` 对父 chunk 做合并（heading-only + short-tails），通过 `remapped_ids`
+其中 `ChildChunkGenerator` 在 `ParentChildChunkFinalizer` 之前执行：先用父 chunk 的临时 ID 生成子 chunk 并建立
+`parent_chunk_id` 引用，再由 `ParentChildChunkFinalizer` 对父 chunk 做合并（heading-only + short-tails），通过 `remapped_ids`
 更新子 chunk 的 `parent_chunk_id`，最后统一为父子 chunk 生成最终 ID 和 `content_hash`。
 
 ### 1.1 父子区分维度
 
 | 维度                          | 父 chunk                                  | 子 chunk                               |
 |-----------------------------|------------------------------------------|---------------------------------------|
-| `level`                     | `ChunkLevel.RETRIEVAL`                   | `ChunkLevel.SEARCH`                   |
+| `role`                      | `ChunkRole.PARENT`                       | `ChunkRole.CHILD`                     |
 | `parent_chunk_id`           | `None`                                   | 指向父 chunk 的 `chunk_id`                |
-| `chunk_id` 格式               | `{prefix}:retrieval:{index}:{hash[:16]}` | `{prefix}:search:{index}:{hash[:16]}` |
+| `chunk_id` 格式               | `{prefix}:parent:{index}:{hash[:16]}`    | `{prefix}:child:{index}:{hash[:16]}`  |
 | `content_hash`              | SHA-256 of text                          | SHA-256 of text                       |
 | `chunk_index`               | 全局连续编号（与子 chunk 共享同一序号空间，不冲突）            | 全局连续编号                                |
 | `metadata["child_index"]`   | 无                                        | 子在父内的序号                               |
@@ -32,16 +32,16 @@ MarkdownPreProcessor → MarkdownBlockSplitter → BlockAwarePacker
 ### 1.2 父子映射关系示例
 
 ```text
-父 read:0:1a986231df20f161  (level=read,  parent=None)
-  ├─ 子 retrieve:1:67dae6d6a9e48a53  (level=retrieve, parent=read:0:1a986231df20f161)
-  ├─ 子 retrieve:2:b59e58442568b61b  (level=retrieve, parent=read:0:1a986231df20f161)
-  └─ 子 retrieve:3:981b297cc77e6110  (level=retrieve, parent=read:0:1a986231df20f161)
+父 parent:0:1a986231df20f161  (role=parent, parent=None)
+  ├─ 子 child:1:67dae6d6a9e48a53  (role=child, parent=parent:0:1a986231df20f161)
+  ├─ 子 child:2:b59e58442568b61b  (role=child, parent=parent:0:1a986231df20f161)
+  └─ 子 child:3:981b297cc77e6110  (role=child, parent=parent:0:1a986231df20f161)
 ```
 
 ### 1.3 摄取时应依赖的字段
 
 - `chunk_id`：父子 chunk 的稳定唯一标识，子 chunk 的 `parent_chunk_id` 引用此字段。
-- `level`：区分父子（`READ` vs `RETRIEVE`），是拆分到双仓储的 discriminator。
+- `role`：区分父子（`PARENT` vs `CHILD`），是拆分到双仓储的 discriminator。
 - `parent_chunk_id`：跨仓储外键，子仓储通过此字段关联回父仓储。
 - `content_hash`：幂等去重依据，相同内容产生相同 hash。
 - `start_offset / end_offset`：在原文中的字符偏移，父仓储可用此字段从 `StoredToolContent.text` 切片还原父 chunk
@@ -64,16 +64,16 @@ chunk 文本（因为子 chunk 文本不等于父 chunk 文本的连续切片，
 ```text
 ChunkingResult.chunks
   │
-  ├─ filter(level == READ)    → 父 chunk 列表  → 父仓储.put(parent_chunks)
-  └─ filter(level == RETRIEVE) → 子 chunk 列表  → 子仓储.put(child_chunks, embeddings)
+  ├─ filter(role == PARENT) → 父 chunk 列表  → 父仓储.put(parent_chunks)
+  └─ filter(role == CHILD)  → 子 chunk 列表  → 子仓储.put(child_chunks, embeddings)
 ```
 
 ### 3.1 伪代码
 
 ```python
 def ingest(result: ChunkingResult, *, content_id: str) -> None:
-    parents = [c for c in result.chunks if c.level == ChunkLevel.RETRIEVAL]
-    children = [c for c in result.chunks if c.level == ChunkLevel.SEARCH]
+    parents = [c for c in result.chunks if c.role == ChunkRole.PARENT]
+    children = [c for c in result.chunks if c.role == ChunkRole.CHILD]
 
     # 1. 父 chunk 写入父仓储（只存元数据，文本通过 offset 从 StoredToolContent 切片）
     parent_store.put(
@@ -215,12 +215,12 @@ class ChildChunkRecord:
 
 5. **降级路径**：若子仓储不可用，父仓储仍可独立工作（退化为单层 chunk 检索，按 `chunk_index` 连续读取）。反之子仓储不可独立工作（失去上下文）。
 
-6. **`chunk_id` 格式稳定性**：当前格式为 `{prefix}:{level}:{index}:{hash[:16]}`，`prefix` 默认为空。若后续需要跨 content
-   唯一，应在 finalizer 初始化时传入 `id_prefix=content_id`，此时 `chunk_id` 会变为 `{content_id}:read:0:...`，天然带
+6. **`chunk_id` 格式稳定性**：当前格式为 `{prefix}:{role}:{index}:{hash[:16]}`，`prefix` 默认为空。若后续需要跨 content
+   唯一，应在 finalizer 初始化时传入 `id_prefix=content_id`，此时 `chunk_id` 会变为 `{content_id}:parent:0:...`，天然带
    content 归属信息，便于跨 content 检索时区分来源。
 
-7. **`SecondaryChunkFinalizer` 对父 chunk 做合并并维护引用关系**：父子场景下不能直接复用 `SingleLayerFinalizer`（它的
-   `merge_short_tails` 不区分 level，会把短子 chunk 合并到父 chunk 或短父 chunk 合并后子 chunk 孤儿）。拆分出的
-   `SecondaryChunkFinalizer` 分离父子后只对父 chunk 做 heading-only 合并和短尾合并，通过合并函数返回的
+7. **`ParentChildChunkFinalizer` 对父 chunk 做合并并维护引用关系**：父子场景下不能直接复用 `FlatChunkFinalizer`（它的
+   `merge_short_tails` 不区分父子关系，会把短子 chunk 合并到父 chunk 或短父 chunk 合并后子 chunk 孤儿）。拆分出的
+   `ParentChildChunkFinalizer` 分离父子后只对父 chunk 做 heading-only 合并和短尾合并，通过合并函数返回的
    `ChunkMergeResult.remapped_ids`（"被合并的旧 ID → 存活的旧 ID"）更新子 chunk 的 `parent_chunk_id`，保证父子关系在合并后仍然正确。子
    chunk 由 `RecursiveTextSplitter` 精切，不参与合并。

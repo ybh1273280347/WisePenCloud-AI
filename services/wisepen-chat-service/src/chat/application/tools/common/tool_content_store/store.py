@@ -9,14 +9,9 @@ from chat.application.utils.chunking_engine import (
     Chunk,
     ChunkIndex,
     ChunkDocument,
-    ChunkingEngine,
     IndexKind,
 )
-from chat.application.utils.chunking_engine.registry import (
-    MARKDOWN_PIPELINE_NAME,
-    PLAIN_TEXT_PIPELINE_NAME,
-    get_chunking_pipeline,
-)
+from chat.application.utils.chunking_engine.registry import get_chunking_engine
 from .models import (
     Metadata,
     StoredToolContent,
@@ -28,7 +23,6 @@ from .models import (
 
 DEFAULT_TOOL_CONTENT_TTL_SECONDS = tool_settings.TOOL_CONTENT_DEFAULT_TTL_SECONDS
 DEFAULT_TOOL_CONTENT_MAX_CHARS = tool_settings.TOOL_CONTENT_MAX_CHARS
-_DEFAULT_CHUNKING_ENGINE = ChunkingEngine()
 
 
 class ToolContentRepository(Protocol):
@@ -46,16 +40,14 @@ class ToolContentRepository(Protocol):
 class ToolContentStore:
     """工具内容存储门面：原始文本 → 分块 → 持久化 → receipt。"""
 
-    __slots__ = ("_repository", "_chunking_engine")
+    __slots__ = ("_repository",)
 
     def __init__(
             self,
             *,
             repository: ToolContentRepository,
-            chunking_engine: ChunkingEngine | None = None,
     ) -> None:
         self._repository = repository
-        self._chunking_engine = chunking_engine or _DEFAULT_CHUNKING_ENGINE
 
     async def put(
             self,
@@ -64,7 +56,7 @@ class ToolContentStore:
             text: str,
             content_type: str = "text/markdown",
             metadata: Metadata | None = None,
-            chunking_pipeline_name: str | None = None,
+            chunking_engine_name: str | None = None,
             chunked: bool = True,
     ) -> ToolContentReceipt | None:
         """写入内容并返回 receipt；空文本或超长返回 None。"""
@@ -78,23 +70,22 @@ class ToolContentStore:
         chunks: tuple[ToolContentChunk, ...] = ()
         index = ToolContentIndex()
         chunk_metadata: Metadata = {}
-        used_chunking_pipeline_name: str | None = None
+        used_chunking_engine_name: str | None = None
 
         if chunked:
-            pipeline_name = chunking_pipeline_name or (
-                MARKDOWN_PIPELINE_NAME
+            engine_name = chunking_engine_name or (
+                "markdown"
                 if content_type == "text/markdown"
-                else PLAIN_TEXT_PIPELINE_NAME
+                else "plain_text"
             )
-            pipeline = get_chunking_pipeline(pipeline_name)
+            chunking_engine = get_chunking_engine(engine_name)
 
-            result = self._chunking_engine.chunk(
+            result = chunking_engine.chunk(
                 document=ChunkDocument(
                     text=normalized_text,
                     content_type=content_type,
                     metadata=safe_metadata,
                 ),
-                pipeline=pipeline,
             )
 
             chunk_extra_index_view = _chunk_extra_index_view(result.indexes)
@@ -111,7 +102,7 @@ class ToolContentStore:
                 for idx in result.indexes
             ))
             chunk_metadata = dict(result.metadata)
-            used_chunking_pipeline_name = result.pipeline
+            used_chunking_engine_name = result.pipeline
 
         stored = StoredToolContent(
             content_id=f"cnt_{uuid.uuid4().hex[:16]}",
@@ -123,7 +114,7 @@ class ToolContentStore:
             metadata={
                 **safe_metadata,
                 "chunked": chunked,
-                "chunking_pipeline": used_chunking_pipeline_name,
+                "chunking_engine": used_chunking_engine_name,
                 "chunking": chunk_metadata,
             },
         )

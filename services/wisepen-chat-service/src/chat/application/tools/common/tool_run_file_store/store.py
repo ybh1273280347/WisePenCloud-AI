@@ -13,7 +13,6 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from chat.application.tools.tool_settings import tool_settings
-from ._tool_run_file_store_utils import sanitize_tool_file_name
 from .errors import (
     InvalidToolFileRefError,
     ToolFileNotFoundError,
@@ -33,6 +32,12 @@ DEFAULT_TOOL_RUN_FILE_MAX_BYTES = tool_settings.TOOL_RUN_FILE_MAX_BYTES
 
 _REF_ID_PREFIX = "tfile_"
 _SAFE_COMPONENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
+_SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._\-\u4e00-\u9fff]+")
+_MAX_FILENAME_LENGTH = 180
+_DANGEROUS_INNER_SUFFIXES = frozenset({
+    ".bat", ".cmd", ".com", ".dll", ".exe",
+    ".jar", ".js", ".msi", ".ps1", ".scr", ".sh", ".vbs",
+})
 _HASH_CHUNK_BYTES = 1024 * 1024  # SHA-256 流式哈希分块大小，算法常量
 
 
@@ -160,7 +165,7 @@ class ToolRunFileStore:
         source_path, size_bytes = await asyncio.to_thread(
             self._resolve_publish_source, Path(path),
         )
-        safe_filename = sanitize_tool_file_name(filename or source_path.name)
+        safe_filename = _sanitize_tool_file_name(filename or source_path.name)
         safe_suffix = Path(safe_filename).suffix.lower()
         sha256 = await asyncio.to_thread(_sha256_file, source_path)
 
@@ -240,7 +245,7 @@ class ToolRunFileStore:
         if self._max_file_size_bytes is not None and len(content) > self._max_file_size_bytes:
             raise ToolFileUnreadableError()
 
-        safe_filename = sanitize_tool_file_name(filename)
+        safe_filename = _sanitize_tool_file_name(filename)
         staging_dir = self.create_staging_dir(
             user_id=user_id,
             session_id=session_id,
@@ -442,6 +447,33 @@ def _safe_component(value: str | None, *, fallback: str) -> str:
     raw = PurePosixPath(str(value or "").replace("\\", "/")).name
     safe = _SAFE_COMPONENT_PATTERN.sub("_", raw).strip("._-")
     return safe or fallback
+
+
+def _sanitize_tool_file_name(filename: str, *, default: str = "file") -> str:
+    """将任意文件名清理为对文件系统和下载均安全的形式。
+
+    Args:
+        filename: 原始文件名；可能来自工具输出、URL 推断名或上游元数据。
+        default: 清洗后为空时使用的默认文件名。
+
+    Returns:
+        已移除路径片段、危险字符和危险内层后缀的安全文件名。
+    """
+    base = PurePosixPath(str(filename).replace("\\", "/")).name.strip()
+    if not base:
+        return default
+
+    path = PurePosixPath(base)
+    suffix = _SAFE_FILENAME_PATTERN.sub("", path.suffix).lower()
+    stem = path.stem or default
+    stem_path = PurePosixPath(stem)
+    # 防双重扩展名伪装，例如 report.exe.pdf 最终会变成 report.pdf。
+    if stem_path.suffix.lower() in _DANGEROUS_INNER_SUFFIXES:
+        stem = stem_path.stem or default
+
+    safe_stem = _SAFE_FILENAME_PATTERN.sub("_", stem).strip("._-") or default
+    safe = f"{safe_stem}{suffix}"
+    return safe[:_MAX_FILENAME_LENGTH] or default
 
 
 def _build_ref_id(prefix: str | None) -> str:

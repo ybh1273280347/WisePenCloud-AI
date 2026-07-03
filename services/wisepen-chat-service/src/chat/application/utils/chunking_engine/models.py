@@ -21,26 +21,19 @@ class UnitType(StrEnum):
     UNKNOWN = "unknown"  # 未识别类型
 
 
-class ChunkLevel(StrEnum):
-    """Chunk 的用途层级。
+class ChunkRole(StrEnum):
+    """Chunk 在分块结果中的结构角色。"""
 
-    READ 和 RETRIEVAL 地位等价，只是功能差异：
-    - READ：阅读级，大 chunk，用于单层分块场景的 RAG 上下文注入
-    - RETRIEVAL：检索级，大 chunk，用于父子分块场景的父 chunk（RAG 上下文注入）
-    - SEARCH：搜索级，小 chunk，用于父子分块场景的子 chunk（精准搜索）
-    正常单层分块场景都是 READ；父子分块场景父用 RETRIEVAL，子用 SEARCH。
-    """
-
-    READ = "read"
-    RETRIEVAL = "retrieval"
-    SEARCH = "search"
+    FLAT = "flat"  # 单层分块产出的普通 chunk
+    PARENT = "parent"  # 父子分块中的父 chunk，用于上下文注入
+    CHILD = "child"  # 父子分块中的子 chunk，用于精准检索
 
 
 class IndexKind(StrEnum):
     """ChunkIndex 的索引类型，提供按不同维度查找 chunk 的能力。
 
     Chunk 本身已有 chunk_index（顺序）和 start_offset/end_offset（位置），
-    构成天然的连续索引。IndexKind 提供的是额外的语义维度索引。
+    构成天然的连续索引。IndexKind 提供的是语义定位索引。
     """
 
     SECTION = "section"  # 按章节名定位 chunk
@@ -88,14 +81,14 @@ class Chunk:
     分块流程的核心输出，由 packer 将多个 TextUnit 聚合而成，
     或由 engine 在无 packer 时从 TextUnit 一对一映射而来。
 
-    嵌套分块时，父 chunk（level=READ）用于上下文注入，
-    子 chunk（level=RETRIEVE）用于精准检索，通过 parent_chunk_id 关联。
+    父子分块时，父 chunk（role=PARENT）用于上下文注入，
+    子 chunk（role=CHILD）用于精准检索，通过 parent_chunk_id 关联。
     """
 
     chunk_id: str  # chunk 唯一标识
     text: str  # chunk 文本内容
-    chunk_index: int  # chunk 在同 level 中的顺序（从 0 开始，由 engine 自动分配）
-    level: ChunkLevel = ChunkLevel.READ  # 用途层级
+    chunk_index: int  # chunk 在结果中的顺序（从 0 开始，由 engine 自动分配）
+    role: ChunkRole = ChunkRole.FLAT  # chunk 在结果中的结构角色
     parent_chunk_id: str | None = None  # 父 chunk ID（嵌套分块时，子 chunk 指向父 chunk）
     start_offset: int | None = None  # 在原文中的起始字符偏移量
     end_offset: int | None = None  # 在原文中的结束字符偏移量
@@ -107,10 +100,10 @@ class Chunk:
 
 @dataclass(frozen=True, slots=True)
 class ChunkIndex:
-    """chunk 额外语义索引，提供按不同维度查找 chunk 的能力。
+    """chunk 语义定位索引，提供按不同维度查找 chunk 的能力。
 
     Chunk 本身已有 chunk_index（顺序）和 start_offset/end_offset（位置），
-    构成天然的连续索引。ChunkIndex 提供额外的语义维度索引，
+    构成天然的连续索引。ChunkIndex 提供语义定位索引，
     如按章节名、页码、锚标等定位 chunk。
     """
 

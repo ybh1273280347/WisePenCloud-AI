@@ -10,11 +10,13 @@ from ..models import ChunkDocument
 _md = MarkdownIt().use(dollarmath_plugin)
 
 
-class MarkdownPreProcessor:
+class MarkdownSectionPathInjector:
+    """为 Markdown 正文块注入所属标题路径。"""
+
     __slots__ = ("name",)
 
     def __init__(self) -> None:
-        self.name = "markdown_preprocessor"
+        self.name = "markdown_section_path_injector"
 
     def process(self, *, document: ChunkDocument) -> ChunkDocument:
         if not document.text:

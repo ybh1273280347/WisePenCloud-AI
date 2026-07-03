@@ -3,7 +3,7 @@
 `ChunkingEngine` 把一段文本切成可读取、可检索、可定位的 chunks。它是 ToolContentStore 的下游基础设施之一，但不关心 Redis、不关心
 content_id，也不关心模型输出格式。
 
-这份文档只说明接手者最需要知道的事：怎么选 pipeline、输出里哪些字段可靠、不要依赖哪些内部细节。
+这份文档只说明接手者最需要知道的事：怎么选 chunking engine、输出里哪些字段可靠、不要依赖哪些内部细节。
 
 ## 什么时候用
 
@@ -24,24 +24,24 @@ content_id，也不关心模型输出格式。
 
 ```text
 ChunkDocument
-  -> PreProcessor
+  -> DocumentTransformer
   -> UnitSplitter
   -> ChunkPacker
-  -> ChunkPostProcessor
-  -> ChunkExtraIndexer
+  -> ChunkTransformer
+  -> ChunkIndexBuilder
   -> ChunkingResult
 ```
 
-工具或 Store 一般不需要关心每一步，只需要选择合适的 preset 名称。
+工具或 Store 一般不需要关心每一步，只需要选择合适的 registry 名称。
 
-## 推荐 Pipeline
+## 推荐 Engine
 
-| Pipeline             | 什么时候用                                 | 说明                        |
-|----------------------|---------------------------------------|---------------------------|
-| `markdown`           | Markdown、网页正文、document_parse Markdown | 默认首选，保留标题/表格/代码块等结构       |
-| `plain_text`         | 无结构纯文本                                | 没有 section/page/anchor 索引 |
-| `markdown_recursive` | Markdown 很长且结构块过大                     | 会更偏字符递归切分                 |
-| `nested_markdown`    | 后续需要父子块召回                             | 当前不要默认使用，除非明确需要嵌套语义       |
+| Engine 名称               | 什么时候用                                 | 说明                        |
+|-------------------------|---------------------------------------|---------------------------|
+| `markdown`              | Markdown、网页正文、document_parse Markdown | 默认首选，保留标题/表格/代码块等结构       |
+| `plain_text`            | 无结构纯文本                                | 没有 section/page/anchor 索引 |
+| `markdown_recursive`    | Markdown 很长且结构块过大                     | 会更偏字符递归切分                 |
+| `parent_child_markdown` | 后续需要父子块召回                             | 当前不要默认使用，除非明确需要父子语义       |
 
 ToolContentStore 默认规则：
 
@@ -74,7 +74,7 @@ ToolContentStore 会把这些字段收敛成更小的 `ToolContentChunk`：
 
 ### ChunkIndex
 
-`ChunkExtraIndexer` 会产生额外索引：
+`MarkdownLocatorIndexBuilder` 会产生语义定位索引：
 
 | kind      | name 示例             | 用途              |
 |-----------|---------------------|-----------------|
@@ -90,11 +90,11 @@ ToolContentRead 现在主要按 `entry.index_name`、`entry.index_kind` 和 `ent
 
 - `chunk_id`
 - `parent_chunk_id`
-- `level`
+- `role`
 - `content_hash`
 - `start_unit / end_unit`
 
-原因：上层读取窗口真正需要的是 content 内顺序、offset 和结构索引。把内部 ID/层级暴露到 ToolContentStore
+原因：上层读取窗口真正需要的是 content 内顺序、offset 和结构索引。把内部 ID/角色暴露到 ToolContentStore
 会让模型和调用方误以为可以跨内容长期引用，实际并不稳定。
 
 ## Markdown 结构识别约定
@@ -117,21 +117,20 @@ Markdown pipeline 会识别：
 ```
 
 这个标记应由 document_parse 或预处理阶段注入，并独占一行。Markdown pipeline 会把 page marker 当作硬边界：chunk
-不应跨页；单页过长时可以在页内拆成多个 chunk。`nested_markdown` 的子 chunk 会继承父 chunk 的页码 metadata。
+不应跨页；单页过长时可以在页内拆成多个 chunk。`parent_child_markdown` 的子 chunk 会继承父 chunk 的页码 metadata。
 
 ## 最小用法
 
 ```python
-from chat.application.utils.chunking_engine import ChunkDocument, ChunkingEngine
-from chat.application.utils.chunking_engine.registry import get_chunking_pipeline
+from chat.application.utils.chunking_engine import ChunkDocument
+from chat.application.utils.chunking_engine.registry import get_chunking_engine
 
-engine = ChunkingEngine()
+engine = get_chunking_engine("markdown")
 result = engine.chunk(
     document=ChunkDocument(
         text="# 标题\n\n正文内容",
         content_type="text/markdown",
     ),
-    pipeline=get_chunking_pipeline("markdown"),
 )
 
 for chunk in result.chunks:
@@ -140,9 +139,9 @@ for chunk in result.chunks:
 
 ## Review 时重点看什么
 
-- 业务是否选了合适的 pipeline。
+- 业务是否选了合适的 chunking engine。
 - Markdown 文本是否保留标题、表格、页码标记等结构。
-- 是否在上层依赖了 `chunk_id/parent_chunk_id/level` 这类内部字段。
+- 是否在上层依赖了 `chunk_id/parent_chunk_id/role` 这类内部字段。
 - 是否把 chunking engine 当成 ranking 或解析器使用。
 - 是否把很长文本先切块再让模型读取，而不是一次性塞进上下文。
 
@@ -154,10 +153,10 @@ chunking_engine/
 ├── protocols.py        # 协议接口
 ├── engine.py           # 分块引擎
 ├── pipeline.py         # 管线配置
-├── pre_processors/     # Markdown 标题路径注入
+├── registry.py         # 推荐 engine
+├── document_transformers/ # Markdown 标题路径注入
 ├── splitters/          # Markdown 块切分、递归文本切分
 ├── packers/            # TextUnit 聚合为 Chunk
-├── post_processors/    # Chunk 终态处理
-├── extra_indexers/     # section/page/anchor 索引
-└── presets.py          # 推荐 pipeline
+├── chunk_transformers/ # Chunk 终态处理和子 chunk 生成
+└── index_builders/     # section/page/anchor 索引
 ```

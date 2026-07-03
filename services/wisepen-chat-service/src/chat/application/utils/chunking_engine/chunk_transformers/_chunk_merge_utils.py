@@ -22,7 +22,7 @@ class ChunkMergeResult:
 def assign_chunk_ids(chunks: tuple[Chunk, ...], *, id_prefix: str = "") -> tuple[Chunk, ...]:
     """为 chunks 生成最终 ID 和 content_hash，并更新子 chunk 的 parent_chunk_id。
 
-    格式：{prefix}:{level}:{index}:{hash前16位}
+    格式：{prefix}:{role}:{index}:{hash前16位}
     hash 保证相同内容产生相同 ID，支持幂等处理。
 
     嵌套分块场景下，子 chunk 的 parent_chunk_id 引用的是父 chunk 的旧 ID
@@ -38,7 +38,7 @@ def assign_chunk_ids(chunks: tuple[Chunk, ...], *, id_prefix: str = "") -> tuple
         parts: list[str] = []
         if id_prefix:
             parts.append(id_prefix)
-        parts.append(chunk.level)
+        parts.append(chunk.role)
         parts.append(str(chunk.chunk_index))
         parts.append(hash_suffix)
         new_id = ":".join(parts)
