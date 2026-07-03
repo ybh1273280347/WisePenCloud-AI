@@ -11,11 +11,11 @@ class AllowedSkillIdCheck(ToolPreflightHook):
     name = "allowed_skill_id"
 
     async def check(
-        self,
-        invocation: ToolInvocation,
-        policy: ToolPolicy,
-        parameters_schema: ToolParametersSchema,
-        context: dict[str, Any],
+            self,
+            invocation: ToolInvocation,
+            policy: ToolPolicy,
+            parameters_schema: ToolParametersSchema,
+            context: dict[str, Any],
     ) -> ToolPreflightResult:
         skill_id = invocation.tool_call_arguments.get("skill_id")
         allowed_skill_ids = context.get("allowed_skill_ids") or []
@@ -28,20 +28,21 @@ class AllowedSkillIdCheck(ToolPreflightHook):
 
         return ToolPreflightResult(ok=True)
 
+
 class SkillPermissionCheck(ToolPreflightHook):
 
     def __init__(
-        self,
-        resource_client: ResourceClient,
+            self,
+            resource_client: ResourceClient,
     ) -> None:
         self._resource_client = resource_client
 
     async def check(
-        self,
-        invocation: ToolInvocation,
-        policy: ToolPolicy,
-        parameters_schema: ToolParametersSchema,
-        context: dict[str, Any],
+            self,
+            invocation: ToolInvocation,
+            policy: ToolPolicy,
+            parameters_schema: ToolParametersSchema,
+            context: dict[str, Any],
     ) -> ToolPreflightResult:
         skill_id = invocation.tool_call_arguments.get("skill_id")
         try:

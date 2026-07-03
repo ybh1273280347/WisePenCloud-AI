@@ -26,11 +26,11 @@ class RedisWebContentCacheEntryRepository:
         self._redis = redis.from_url(redis_url, decode_responses=True)
 
     async def get_entry(
-        self,
-        *,
-        user_id: str,
-        url: str,
-        cache_mode: WebContentCacheMode | str,
+            self,
+            *,
+            user_id: str,
+            url: str,
+            cache_mode: WebContentCacheMode | str,
     ) -> WebContentCacheEntry | None:
         mode = WebContentCacheMode(cache_mode)
         raw = await self._redis.get(self._entry_key(user_id=user_id, url=url, cache_mode=mode))
@@ -59,10 +59,10 @@ class RedisWebContentCacheEntryRepository:
         )
 
     async def get_readable_entry(
-        self,
-        *,
-        user_id: str,
-        url: str,
+            self,
+            *,
+            user_id: str,
+            url: str,
     ) -> WebContentCacheEntry | None:
         private_entry = await self.get_entry(
             user_id=user_id,
@@ -102,20 +102,20 @@ class RedisWebContentCacheEntryRepository:
         )
 
     async def delete_entry(
-        self,
-        *,
-        user_id: str,
-        url: str,
-        cache_mode: WebContentCacheMode | str,
+            self,
+            *,
+            user_id: str,
+            url: str,
+            cache_mode: WebContentCacheMode | str,
     ) -> None:
         mode = WebContentCacheMode(cache_mode)
         await self._redis.delete(self._entry_key(user_id=user_id, url=url, cache_mode=mode))
 
     async def try_acquire_refresh_lock(
-        self,
-        *,
-        key: str,
-        ttl_seconds: int,
+            self,
+            *,
+            key: str,
+            ttl_seconds: int,
     ) -> bool:
         locked = await self._redis.set(
             f"{_REFRESH_LOCK_KEY_PREFIX}{self._hash(key)}",

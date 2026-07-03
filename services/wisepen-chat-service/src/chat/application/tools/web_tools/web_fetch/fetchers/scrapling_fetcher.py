@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import re
-
 from scrapling.fetchers import StealthyFetcher
 
+from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
 from common.logger import warn
 from .._web_fetch_utils import decode_bytes
 from ..errors import (
@@ -12,8 +11,6 @@ from ..errors import (
     UrlFetchUnsupportedUrlError,
 )
 from ..models import RawFetchOutput
-
-_URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
 
 _DEFAULT_TIMEOUT_MS = 30_000
 
@@ -24,10 +21,10 @@ class ScraplingFetcher:
     __slots__ = ("_timeout_ms", "_max_response_bytes")
 
     def __init__(
-        self,
-        *,
-        timeout_ms: int = _DEFAULT_TIMEOUT_MS,
-        max_response_bytes: int = 52_428_800,
+            self,
+            *,
+            timeout_ms: int = _DEFAULT_TIMEOUT_MS,
+            max_response_bytes: int = 52_428_800,
     ) -> None:
         self._timeout_ms = timeout_ms
         self._max_response_bytes = max_response_bytes
@@ -37,11 +34,13 @@ class ScraplingFetcher:
         return "scrapling"
 
     async def fetch(self, url: str) -> RawFetchOutput:
-        if not _URL_SCHEME_RE.match(url.strip()):
+        try:
+            url = validate_public_http_url(url.strip())
+        except UrlSecurityError as exc:
             raise UrlFetchUnsupportedUrlError(
                 url=url,
-                reason="unsupported url scheme, only http/https allowed",
-            )
+                reason=str(exc),
+            ) from exc
 
         try:
             response = await StealthyFetcher.async_fetch(
@@ -78,7 +77,10 @@ class ScraplingFetcher:
 
         headers: dict[str, str] = dict(response.headers)
         content_type = headers.get("content-type")
-        final_url: str = response.url
+        try:
+            final_url = validate_public_http_url(str(response.url))
+        except UrlSecurityError as exc:
+            raise UrlFetchUnsupportedUrlError(url=str(response.url), reason=str(exc)) from exc
         encoding: str = response.encoding
 
         raw_html = decode_bytes(raw_bytes, encoding)

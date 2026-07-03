@@ -556,4 +556,8 @@ P3:
 
 ## 13. 最终口径
 
-WisePen RAG 缓存不围绕 query 字符串，也不缓存 final answer，而是围绕可校验的中间事实做优化。入库阶段缓存 chunking、context indexing、embedding 和 graph extraction；查询阶段在 Qdrant / Neo4j 返回 evidence ids 后，通过 Redis 缓存同一 user、session、ACL scope、corpus version 下已经授权并物化过的 child / parent evidence view，从而降低 evidence 回源和 Context Builder 组装成本；Neo4j 稳定后再引入 Graph Enhancement Cache，减少重复图增强。所有缓存必须绑定权限和版本，任何权限或版本不确定时直接 cache miss，并回退完整、安全的 RAG 链路。
+WisePen RAG 缓存不围绕 query 字符串，也不缓存 final answer，而是围绕可校验的中间事实做优化。入库阶段缓存 chunking、context
+indexing、embedding 和 graph extraction；查询阶段在 Qdrant / Neo4j 返回 evidence ids 后，通过 Redis 缓存同一
+user、session、ACL scope、corpus version 下已经授权并物化过的 child / parent evidence view，从而降低 evidence 回源和 Context
+Builder 组装成本；Neo4j 稳定后再引入 Graph Enhancement Cache，减少重复图增强。所有缓存必须绑定权限和版本，任何权限或版本不确定时直接
+cache miss，并回退完整、安全的 RAG 链路。

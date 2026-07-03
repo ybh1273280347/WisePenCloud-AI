@@ -21,22 +21,22 @@ class RagChunkingService:
     __slots__ = ("_engine", "_pipeline_name")
 
     def __init__(
-        self,
-        *,
-        engine: ChunkingEngine | None = None,
-        pipeline_name: str = NESTED_MARKDOWN_PIPELINE_NAME,
+            self,
+            *,
+            engine: ChunkingEngine | None = None,
+            pipeline_name: str = NESTED_MARKDOWN_PIPELINE_NAME,
     ) -> None:
         self._engine = engine or ChunkingEngine()
         self._pipeline_name = pipeline_name
 
     def chunk(
-        self,
-        *,
-        markdown: str,
-        resource_id: str = "",
-        document_id: str = "",
-        document_version: str = "",
-        title: str = "",
+            self,
+            *,
+            markdown: str,
+            resource_id: str = "",
+            document_id: str = "",
+            document_version: str = "",
+            title: str = "",
     ) -> RagChunkingResult:
         # 复用通用 ChunkingEngine，但固定使用 nested markdown 流水线。
         # 该流水线会产出父子两层 chunk：SEARCH 级别供检索，DOCUMENT 级别用于引用完整上下文。

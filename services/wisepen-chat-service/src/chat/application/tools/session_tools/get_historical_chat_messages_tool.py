@@ -129,5 +129,3 @@ class GetHistoricalChatMessagesTool:
             raw = raw[:self._max_output_chars] + "\n...[truncated]"
 
         return raw
-
-

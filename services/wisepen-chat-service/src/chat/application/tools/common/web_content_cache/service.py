@@ -84,25 +84,25 @@ class WebContentCacheService:
     __slots__ = ("_entry_repository", "_value_repository", "_refresh_task_publisher")
 
     def __init__(
-        self,
-        *,
-        entry_repository: WebContentCacheEntryRepository | None,
-        value_repository: WebContentCacheValueRepository | None,
-        refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
+            self,
+            *,
+            entry_repository: WebContentCacheEntryRepository | None,
+            value_repository: WebContentCacheValueRepository | None,
+            refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
     ) -> None:
         self._entry_repository = entry_repository
         self._value_repository = value_repository
         self._refresh_task_publisher = refresh_task_publisher
 
     async def read_markdown_page(
-        self,
-        *,
-        url: str,
-        user_id: str,
-        session_id: str,
-        refresh_job_prefix: str,
-        refresh_task_name: str = WEB_FETCH_REFRESH_JOB,
-        refresh_lock_ttl_seconds: int = DEFAULT_REFRESH_LOCK_TTL_SECONDS,
+            self,
+            *,
+            url: str,
+            user_id: str,
+            session_id: str,
+            refresh_job_prefix: str,
+            refresh_task_name: str = WEB_FETCH_REFRESH_JOB,
+            refresh_lock_ttl_seconds: int = DEFAULT_REFRESH_LOCK_TTL_SECONDS,
     ) -> CachedMarkdownPage | None:
         """读取 URL markdown 缓存，stale 命中时返回旧内容并安排后台刷新。"""
         entry_repository = self._entry_repository
@@ -308,11 +308,11 @@ class WebContentCacheService:
             return None
 
     async def read_markdown_by_metadata(
-        self,
-        *,
-        user_id: str,
-        metadata: dict[str, object],
-        parser_version: str | None = None,
+            self,
+            *,
+            user_id: str,
+            metadata: dict[str, object],
+            parser_version: str | None = None,
     ) -> CachedMarkdownPage | None:
         """按 metadata 中的 URL/source_scope 精确读取 markdown 缓存，不做 public/private 回退。"""
         entry_repository = self._entry_repository
@@ -364,14 +364,14 @@ class WebContentCacheService:
             return None
 
     async def write_markdown_from_metadata(
-        self,
-        *,
-        user_id: str,
-        metadata: dict[str, object],
-        content_type: str | None,
-        markdown: str,
-        parser: str,
-        parser_version: str,
+            self,
+            *,
+            user_id: str,
+            metadata: dict[str, object],
+            content_type: str | None,
+            markdown: str,
+            parser: str,
+            parser_version: str,
     ) -> str | None:
         """回写非 HTML parser 结果到已有 URL 缓存文档。"""
         entry_repository = self._entry_repository
@@ -447,18 +447,18 @@ class WebContentCacheService:
             return None
 
     async def schedule_stale_refresh(
-        self,
-        *,
-        url: str,
-        user_id: str,
-        session_id: str,
-        source_scope: str,
-        cache_mode: WebContentCacheMode,
-        refresh_job_prefix: str,
-        payload: dict[str, object] | None = None,
-        refresh_identity_suffix: str | None = None,
-        refresh_task_name: str = WEB_FETCH_REFRESH_JOB,
-        refresh_lock_ttl_seconds: int = DEFAULT_REFRESH_LOCK_TTL_SECONDS,
+            self,
+            *,
+            url: str,
+            user_id: str,
+            session_id: str,
+            source_scope: str,
+            cache_mode: WebContentCacheMode,
+            refresh_job_prefix: str,
+            payload: dict[str, object] | None = None,
+            refresh_identity_suffix: str | None = None,
+            refresh_task_name: str = WEB_FETCH_REFRESH_JOB,
+            refresh_lock_ttl_seconds: int = DEFAULT_REFRESH_LOCK_TTL_SECONDS,
     ) -> None:
         entry_repository = self._entry_repository
         if entry_repository is None:
@@ -469,8 +469,8 @@ class WebContentCacheService:
             lock_suffix = f":{refresh_identity_suffix}" if refresh_identity_suffix else ""
             lock_key = f"{refresh_job_prefix}:{cache_mode.value}:{lock_owner}:{url}{lock_suffix}"
             if not await entry_repository.try_acquire_refresh_lock(
-                key=lock_key,
-                ttl_seconds=refresh_lock_ttl_seconds,
+                    key=lock_key,
+                    ttl_seconds=refresh_lock_ttl_seconds,
             ):
                 return
         except Exception as exc:
@@ -492,13 +492,13 @@ class WebContentCacheService:
                     name=refresh_task_name,
                     job_id=job_id,
                     payload=payload
-                    or {
-                        "url": url,
-                        "user_id": user_id,
-                        "session_id": session_id,
-                        "source_scope": source_scope,
-                        "cache_mode": cache_mode.value,
-                    },
+                            or {
+                                "url": url,
+                                "user_id": user_id,
+                                "session_id": session_id,
+                                "source_scope": source_scope,
+                                "cache_mode": cache_mode.value,
+                            },
                 )
             )
         except Exception as exc:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+
 class RagRetrievalProfile(StrEnum):
     """主模型可选择的 RAG 检索意图。
 

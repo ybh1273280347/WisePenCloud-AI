@@ -15,9 +15,9 @@ class MongoProviderRepository(ProviderRepository):
     """用户 Provider 的 MongoDB 仓储实现。"""
 
     async def get_provider(
-        self,
-        provider_id: PydanticObjectId,
-        user_id: Optional[str] = None,
+            self,
+            provider_id: PydanticObjectId,
+            user_id: Optional[str] = None,
     ) -> Provider:
         scope = self._scope_for(user_id)
 
@@ -32,8 +32,8 @@ class MongoProviderRepository(ProviderRepository):
         return provider
 
     async def list_providers(
-        self,
-        user_id: Optional[str] = None,
+            self,
+            user_id: Optional[str] = None,
     ) -> List[Provider]:
         scope = self._scope_for(user_id)
 
@@ -43,9 +43,9 @@ class MongoProviderRepository(ProviderRepository):
         ).sort("-is_active", "-updated_at").to_list()
 
     async def create_provider(
-        self,
-        provider: Provider,
-        user_id: Optional[str] = None,
+            self,
+            provider: Provider,
+            user_id: Optional[str] = None,
     ) -> Provider:
         now = datetime.now(timezone.utc)
 
@@ -63,10 +63,10 @@ class MongoProviderRepository(ProviderRepository):
         return provider
 
     async def update_provider(
-        self,
-        provider_id: PydanticObjectId,
-        updates: dict[str, Any],
-        user_id: Optional[str] = None,
+            self,
+            provider_id: PydanticObjectId,
+            updates: dict[str, Any],
+            user_id: Optional[str] = None,
     ) -> Provider:
         provider = await self.get_provider(provider_id, user_id)
 
@@ -92,9 +92,9 @@ class MongoProviderRepository(ProviderRepository):
         return provider
 
     async def remove_provider(
-        self,
-        provider_id: PydanticObjectId,
-        user_id: Optional[str] = None,
+            self,
+            provider_id: PydanticObjectId,
+            user_id: Optional[str] = None,
     ) -> None:
         provider = await self.get_provider(provider_id, user_id)
 
@@ -110,11 +110,11 @@ class MongoProviderRepository(ProviderRepository):
         await provider.delete()
 
     async def increment_usage(
-        self,
-        provider_id: PydanticObjectId,
-        user_id: Optional[str],
-        token_usage: int,
-        billable_token_usage: int = 0,
+            self,
+            provider_id: PydanticObjectId,
+            user_id: Optional[str],
+            token_usage: int,
+            billable_token_usage: int = 0,
     ) -> None:
         if token_usage <= 0 and billable_token_usage <= 0:
             return

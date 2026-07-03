@@ -32,15 +32,14 @@ CANDIDATE_RANKER_SYSTEM_PROMPT = """\
 </output_format>
 </instructions>"""
 
-
 MAX_RANKED_CANDIDATES = 5
 
 
 async def rank_candidate_ids(
-    *,
-    search_query: str,
-    candidates_text: str,
-    client: QueryClient | None = None,
+        *,
+        search_query: str,
+        candidates_text: str,
+        client: QueryClient | None = None,
 ) -> list[str]:
     """用小模型对候选编号按相关性排序，返回 1 到 MAX_RANKED_CANDIDATES 个编号。"""
     query_client = client or build_query_client(

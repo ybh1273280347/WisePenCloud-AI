@@ -5,7 +5,6 @@ from typing import Any
 
 from chat.application.utils.llm_clients import QueryClient, build_query_client
 from chat.core.config.app_settings import settings
-
 from .models import ContextIndexingInput, ContextIndexingResult
 
 CONTEXT_INDEXING_SYSTEM_PROMPT = """\
@@ -48,8 +47,8 @@ class ContextIndexingService:
         )
 
     async def build(
-        self,
-        payload: ContextIndexingInput,
+            self,
+            payload: ContextIndexingInput,
     ) -> ContextIndexingResult:
         try:
             response = await self._client.aquery(
@@ -114,9 +113,9 @@ def _parse_llm_payload(content: str) -> str:
 
 
 def _compose_indexing_text(
-    *,
-    payload: ContextIndexingInput,
-    indexing_context: str,
+        *,
+        payload: ContextIndexingInput,
+        indexing_context: str,
 ) -> str:
     # indexing_text 服务检索；最终引用仍使用原始 evidence_text。
     parts = [

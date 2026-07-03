@@ -9,6 +9,7 @@ class AgentModelPolicy(BaseModel):
     default_provider_id: Optional[str] = None
     allow_request_override: bool = True
 
+
 # 工具与skill策略
 class AgentToolAndSkillPolicy(BaseModel):
     # 是否允许使用工具
@@ -35,6 +36,7 @@ class AgentToolAndSkillPolicy(BaseModel):
             self.on_demand_skill_ids = None
             self.force_enabled_skill_ids = None
         return self
+
 
 # 记忆策略
 class AgentMemoryPolicy(BaseModel):
@@ -70,6 +72,7 @@ class AgentMemoryPolicy(BaseModel):
             self.long_term_memory_limit = None
             self.long_term_memory_score_threshold = None
         return self
+
 
 class AgentSpec(BaseModel):
     # 系统提示词

@@ -5,14 +5,13 @@ from google import genai
 from google.genai import types
 
 from chat.domain.entities import ChatMessage, Role
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.entities.provider import ProviderType
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
 from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMUsage
-from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
-
 from .utils import dump_provider_value, read_provider_value
 
 
@@ -50,15 +49,15 @@ class GeminiAdapter(LLMProvider):
             },
             "defaults": {
                 "temperature": 0.7,
-                "thinking_config": {"thinking_budget": -1}, # 模型按任务复杂度自动决定 thinking budget
+                "thinking_config": {"thinking_budget": -1},  # 模型按任务复杂度自动决定 thinking budget
             },
         }
 
     async def stream_chat_completion(
-        self,
-        messages: List[ChatMessage],
-        model_request: ModelRequestInfo,
-        tools: Optional[List[Dict[str, Any]]] = None,
+            self,
+            messages: List[ChatMessage],
+            model_request: ModelRequestInfo,
+            tools: Optional[List[Dict[str, Any]]] = None,
     ) -> AsyncGenerator[LLMStreamEvent, None]:
         # 构造 SDK Client（指定 api_key 与 base_url）
         client_kwargs: dict[str, Any] = {"api_key": model_request.api_key}
@@ -71,17 +70,18 @@ class GeminiAdapter(LLMProvider):
 
         # 设置请求参数
         config_kwargs: dict[str, Any] = {
-            "tools": self._gemini_tools_formatter(tools), # 工具集
+            "tools": self._gemini_tools_formatter(tools),  # 工具集
             **model_request.runtime_options
         }
 
-        accumulated_parts: list[Any] = [] # 积累消息
+        accumulated_parts: list[Any] = []  # 积累消息
         final_usage: Any = None
         try:
             stream = await client.aio.models.generate_content_stream(
                 model=model_request.model_name,
                 contents=contents,
-                config=types.GenerateContentConfig(**{key: value for key, value in config_kwargs.items() if value is not None}),
+                config=types.GenerateContentConfig(
+                    **{key: value for key, value in config_kwargs.items() if value is not None}),
             )
             # 流式调用
             async for chunk in stream:
@@ -96,11 +96,13 @@ class GeminiAdapter(LLMProvider):
                         text = read_provider_value(part, "text")
                         if text:
                             if read_provider_value(part, "thought", False):  # 思考增量
-                                yield LLMStreamEvent(type=LLMEventType.REASONING_DELTA, delta=text) # 传递 LLMStreamEvent REASONING_DELTA
+                                yield LLMStreamEvent(type=LLMEventType.REASONING_DELTA,
+                                                     delta=text)  # 传递 LLMStreamEvent REASONING_DELTA
                             else:  # 普通文本增量
-                                yield LLMStreamEvent(type=LLMEventType.TEXT_DELTA, delta=text) # 传递 LLMStreamEvent TEXT_DELTA
+                                yield LLMStreamEvent(type=LLMEventType.TEXT_DELTA,
+                                                     delta=text)  # 传递 LLMStreamEvent TEXT_DELTA
 
-                usage = getattr(chunk, "usage_metadata", None) # 如果收集到 usage_metadata，就是最终的用量
+                usage = getattr(chunk, "usage_metadata", None)  # 如果收集到 usage_metadata，就是最终的用量
                 if usage:
                     final_usage = usage
         except Exception as e:
@@ -108,7 +110,7 @@ class GeminiAdapter(LLMProvider):
 
         # 计费
         token_usage = int(getattr(final_usage, "total_token_count", 0) or 0) if final_usage else 0
-        if token_usage: # 传递 LLMStreamEvent USAGE
+        if token_usage:  # 传递 LLMStreamEvent USAGE
             yield LLMStreamEvent(type=LLMEventType.USAGE, usage=LLMUsage(output_tokens=token_usage))
 
         # 解析工具调用
@@ -125,7 +127,7 @@ class GeminiAdapter(LLMProvider):
                     arguments=args if isinstance(args, dict) else {}
                 ))
 
-        if calls: # 传递 LLMStreamEvent TOOL_CALLS
+        if calls:  # 传递 LLMStreamEvent TOOL_CALLS
             yield LLMStreamEvent(type=LLMEventType.TOOL_CALLS, tool_calls=calls)
         yield LLMStreamEvent(type=LLMEventType.STATE, provider_payload={"content": accumulated_parts})
 
@@ -148,7 +150,8 @@ class GeminiAdapter(LLMProvider):
                 # 执行工具结果以 role user 的 parts 返回，包含 function_response part 且 name 对应返回的 name
                 contents.append({
                     "role": "user",
-                    "parts": [{"function_response": {"name": msg.tool_name or "", "response": {"result": msg.content or ""}}}],
+                    "parts": [{"function_response": {"name": msg.tool_name or "",
+                                                     "response": {"result": msg.content or ""}}}],
                 })
                 continue
             # 对于用户消息，或其他非 GEMINI 提供的消息

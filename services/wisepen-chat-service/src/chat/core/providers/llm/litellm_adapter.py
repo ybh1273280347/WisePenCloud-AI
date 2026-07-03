@@ -6,6 +6,7 @@ import litellm
 from chat.core.config.app_settings import settings
 from chat.core.config.bootstrap_settings import bootstrap_settings
 from chat.domain.entities import ChatMessage, Role
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.entities.provider import ProviderType
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
@@ -16,10 +17,8 @@ from chat.domain.interfaces.llm import (
     LLMUsage,
     TextCompletionProvider,
 )
-from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
-
 from .utils import json_object, read_provider_value
 
 litellm.telemetry = False
@@ -143,11 +142,11 @@ class LiteLLMAdapter(LLMProvider, TextCompletionProvider):
         tool_acc: dict[int, dict[str, str]] = {}
         try:
             response = await litellm.acompletion(
-                model=litellm_model, # 模型名
-                messages=formatted_msgs, # 消息
+                model=litellm_model,  # 模型名
+                messages=formatted_msgs,  # 消息
                 stream=True,
                 stream_options={"include_usage": True},
-                tools=tools, # 工具集
+                tools=tools,  # 工具集
                 drop_params=True,
                 api_base=model_request.base_url or self._default_api_base,
                 api_key=model_request.api_key or self._default_api_key,
@@ -168,24 +167,25 @@ class LiteLLMAdapter(LLMProvider, TextCompletionProvider):
                 delta = read_provider_value(choices[0], "delta", {}) or {}
                 # 思考增量
                 reasoning = read_provider_value(delta, "reasoning_content")
-                if reasoning: # 传递 LLMStreamEvent REASONING_DELTA
+                if reasoning:  # 传递 LLMStreamEvent REASONING_DELTA
                     yield LLMStreamEvent(type=LLMEventType.REASONING_DELTA, delta=reasoning)
                 # 文本增量
                 if getattr(delta, "content", None):
                     assistant_text += delta.content
-                    yield LLMStreamEvent(type=LLMEventType.TEXT_DELTA, delta=delta.content) # 传递 LLMStreamEvent TEXT_DELTA
+                    yield LLMStreamEvent(type=LLMEventType.TEXT_DELTA,
+                                         delta=delta.content)  # 传递 LLMStreamEvent TEXT_DELTA
                 # 工具调用参数的增量
                 if getattr(delta, "tool_calls", None):
-                    for tool_call_delta in delta.tool_calls: # 分片积累
+                    for tool_call_delta in delta.tool_calls:  # 分片积累
                         idx = tool_call_delta.index
                         acc = tool_acc.setdefault(idx, {"id": "", "name": "", "arguments": ""})
                         # 按 index 找到对应 accumulator
-                        if tool_call_delta.id: # 累加 id（如果有）
+                        if tool_call_delta.id:  # 累加 id（如果有）
                             acc["id"] = tool_call_delta.id
-                        if tool_call_delta.function: # 累加 name
-                            if tool_call_delta.function.name: # 累加 name
+                        if tool_call_delta.function:  # 累加 name
+                            if tool_call_delta.function.name:  # 累加 name
                                 acc["name"] += tool_call_delta.function.name
-                            if tool_call_delta.function.arguments: # 累加 arguments
+                            if tool_call_delta.function.arguments:  # 累加 arguments
                                 acc["arguments"] += tool_call_delta.function.arguments
 
         except litellm.ContextWindowExceededError:
@@ -222,4 +222,4 @@ class LiteLLMAdapter(LLMProvider, TextCompletionProvider):
         }
         if tool_call_payloads:
             assistant_message["tool_calls"] = tool_call_payloads
-        yield LLMStreamEvent(type=LLMEventType.STATE, provider_payload={ "message": assistant_message })
+        yield LLMStreamEvent(type=LLMEventType.STATE, provider_payload={"message": assistant_message})

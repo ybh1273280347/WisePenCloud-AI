@@ -36,9 +36,9 @@ class MaxMinDiversifier:
         self.name = "max_min_diversifier"
 
     def diversify(
-        self,
-        *,
-        ranked: tuple[RankedCandidate, ...],
+            self,
+            *,
+            ranked: tuple[RankedCandidate, ...],
     ) -> tuple[RankedCandidate, ...]:
 
         if not ranked:
@@ -84,8 +84,8 @@ class MaxMinDiversifier:
 
                 # 综合分 = 加权求和，diversity_weight 越大越倾向多样性
                 selection_score = (
-                    (1.0 - diversity_weight) * relevance
-                    + diversity_weight * diversity
+                        (1.0 - diversity_weight) * relevance
+                        + diversity_weight * diversity
                 )
                 if best_score is None or selection_score > best_score:
                     best_index = index
@@ -167,7 +167,3 @@ class MaxMinDiversifier:
             item.candidate_id: (item.score - min_score) / (max_score - min_score)
             for item in items
         }
-
-    
-
-

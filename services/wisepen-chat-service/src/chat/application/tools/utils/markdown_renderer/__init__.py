@@ -1,6 +1,5 @@
-from .html_renderer import FragmentMarkdownRenderer, WebPageMarkdownRenderer
+from .html2markdown import HtmlToMarkdownRenderer
 
 __all__ = [
-    "FragmentMarkdownRenderer",
-    "WebPageMarkdownRenderer",
+    "HtmlToMarkdownRenderer",
 ]

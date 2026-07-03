@@ -12,15 +12,15 @@ from ..models import ChunkDocument, TextUnit, UnitType
 _PAGE_MARKER_RE = re.compile(r"^<!--\s*page\s+(\d+)\s*-->\s*$")
 
 _TOKEN_TO_UNIT_TYPE: dict[str, UnitType] = {
-    "heading_open":      UnitType.HEADING,
-    "fence":             UnitType.CODE,
-    "code_block":        UnitType.CODE,
-    "table_open":        UnitType.TABLE,
-    "blockquote_open":   UnitType.QUOTE,
-    "bullet_list_open":  UnitType.LIST,
+    "heading_open": UnitType.HEADING,
+    "fence": UnitType.CODE,
+    "code_block": UnitType.CODE,
+    "table_open": UnitType.TABLE,
+    "blockquote_open": UnitType.QUOTE,
+    "bullet_list_open": UnitType.LIST,
     "ordered_list_open": UnitType.LIST,
-    "paragraph_open":    UnitType.PARAGRAPH,
-    "math_block":        UnitType.FORMULA,
+    "paragraph_open": UnitType.PARAGRAPH,
+    "math_block": UnitType.FORMULA,
 }
 
 _BLOCK_OPENERS = frozenset(_TOKEN_TO_UNIT_TYPE)

@@ -13,19 +13,19 @@ class MessageRepository(ABC):
 
     @abstractmethod
     async def list_session_messages(
-        self,
-        session_id: str,
-        after: datetime = None,
-        limit: int = 50,
+            self,
+            session_id: str,
+            after: datetime = None,
+            limit: int = 50,
     ) -> List[ChatMessage]:
         pass
 
     @abstractmethod
     async def list_session_message_turns_page(
-        self,
-        session_id: str,
-        page: int,
-        size: int,
+            self,
+            session_id: str,
+            page: int,
+            size: int,
     ) -> Tuple[List[ChatMessage], int]:
         """
         按对话回合分页拉取消息，以 user 消息为回合锚点。
@@ -41,12 +41,12 @@ class MessageRepository(ABC):
 
     @abstractmethod
     async def search_messages_by_text(
-        self,
-        keyword: str,
-        session_id: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        limit: int = 10,
+            self,
+            keyword: str,
+            session_id: Optional[str] = None,
+            start_time: Optional[datetime] = None,
+            end_time: Optional[datetime] = None,
+            limit: int = 10,
     ) -> List[ChatMessage]:
         """对 content 字段进行全文检索（依赖 MongoDB Text Index）"""
         pass

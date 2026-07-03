@@ -58,10 +58,10 @@ def validate_create_skill(request: CreateSkillRequest) -> list[str]:
 
 
 def _collect_node_ids(
-    sections: list[SkillSection],
-    file_path: str,
-    seen: dict[str, str],
-    errors: list[str],
+        sections: list[SkillSection],
+        file_path: str,
+        seen: dict[str, str],
+        errors: list[str],
 ) -> None:
     """递归收集 node_id，发现重复时记录首次路径和重复路径。"""
     for section in sections:

@@ -12,7 +12,7 @@ class ToolContentReadMode(StrEnum):
     """ToolContentRead 支持的读取模式（字符串枚举）。"""
 
     RANKED_EXPAND = "ranked_expand"  # 在候选 chunk 内排序后展开窗口
-    REGEX_MATCH = "regex_match"    # 在候选 chunk 内正则匹配后展开窗口
+    REGEX_MATCH = "regex_match"  # 在候选 chunk 内正则匹配后展开窗口
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,15 +38,15 @@ class ToolContentSelector:
 class ToolContentReadRequest:
     """ToolContentRead 内部请求，包含所有读取参数。"""
 
-    content_ids: tuple[str, ...]                                           # 要批量读取的内容 ID 集合
-    mode: ToolContentReadMode = ToolContentReadMode.RANKED_EXPAND          # 读取模式
-    selector: ToolContentSelector | None = None                            # 前置过滤器
-    query: str | None = None                                               # ranked_expand 模式：排序查询文本
-    top_k: int = 5                                                         # ranked_expand 模式：返回 Top-K
-    pattern: str | None = None                                             # regex_match 模式：正则模式串
-    max_matches: int = DEFAULT_MAX_MATCHES                                 # regex_match 模式：最大匹配数
-    merge_before: int = 0                                                  # 窗口向前合并的 chunk 数
-    merge_after: int = 0                                                   # 窗口向后合并的 chunk 数
+    content_ids: tuple[str, ...]  # 要批量读取的内容 ID 集合
+    mode: ToolContentReadMode = ToolContentReadMode.RANKED_EXPAND  # 读取模式
+    selector: ToolContentSelector | None = None  # 前置过滤器
+    query: str | None = None  # ranked_expand 模式：排序查询文本
+    top_k: int = 5  # ranked_expand 模式：返回 Top-K
+    pattern: str | None = None  # regex_match 模式：正则模式串
+    max_matches: int = DEFAULT_MAX_MATCHES  # regex_match 模式：最大匹配数
+    merge_before: int = 0  # 窗口向前合并的 chunk 数
+    merge_after: int = 0  # 窗口向后合并的 chunk 数
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,25 +57,25 @@ class ToolContentWindow:
     ranked_expand 模式额外携带 rank/score，regex_match 模式携带 match_text。
     """
 
-    text: str                               # 窗口文本内容
-    start_offset: int | None = None         # 在原文中的起始字符偏移
-    end_offset: int | None = None           # 在原文中的结束字符偏移
-    center_chunk: int | None = None         # 中心 chunk 序号
-    chunk_start: int | None = None          # 窗口起始 chunk 序号
-    chunk_end: int | None = None            # 窗口结束 chunk 序号
-    page_label: str | None = None           # 页码标签
-    section_title: str | None = None        # section_path 最末级标题
-    section_path: tuple[str, ...] = ()      # 小节路径
-    anchor_labels: tuple[str, ...] = ()     # 锚点标签
+    text: str  # 窗口文本内容
+    start_offset: int | None = None  # 在原文中的起始字符偏移
+    end_offset: int | None = None  # 在原文中的结束字符偏移
+    center_chunk: int | None = None  # 中心 chunk 序号
+    chunk_start: int | None = None  # 窗口起始 chunk 序号
+    chunk_end: int | None = None  # 窗口结束 chunk 序号
+    page_label: str | None = None  # 页码标签
+    section_title: str | None = None  # section_path 最末级标题
+    section_path: tuple[str, ...] = ()  # 小节路径
+    anchor_labels: tuple[str, ...] = ()  # 锚点标签
 
 
 @dataclass(frozen=True, slots=True)
 class ToolContentReadMatch:
     """跨文档读取后的单条全局命中结果。"""
 
-    content_id: str                          # 实际读取的内容 ID（可能经过重定向）
+    content_id: str  # 实际读取的内容 ID（可能经过重定向）
     window: ToolContentWindow | None = None  # 匹配到的窗口
-    reason: str | None = None                # 单项失败原因
+    reason: str | None = None  # 单项失败原因
 
 
 @dataclass(frozen=True, slots=True)

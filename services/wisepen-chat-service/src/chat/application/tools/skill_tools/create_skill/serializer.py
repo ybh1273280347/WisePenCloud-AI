@@ -28,16 +28,16 @@ class SkillAssetFile:
 
 
 def serialize_skill_markdown(
-    *,
-    skill_id: str,
-    trigger_description: str,
-    title: str,
-    body: str,
-    children: list[SkillSection],
-    user_id: str,
-    session_id: str,
-    version: int = 1,
-    created_at: datetime | None = None,
+        *,
+        skill_id: str,
+        trigger_description: str,
+        title: str,
+        body: str,
+        children: list[SkillSection],
+        user_id: str,
+        session_id: str,
+        version: int = 1,
+        created_at: datetime | None = None,
 ) -> str:
     """生成 SKILL.md 内容（YAML frontmatter + Markdown body）。
 
@@ -69,10 +69,10 @@ def serialize_skill_markdown(
 
 
 def serialize_skill_file_markdown(
-    *,
-    title: str,
-    body: str,
-    children: list[SkillSection],
+        *,
+        title: str,
+        body: str,
+        children: list[SkillSection],
 ) -> str:
     """生成 references/ 或 assets/ 中的 .md 文件内容（无 YAML frontmatter）。
 
@@ -84,19 +84,19 @@ def serialize_skill_file_markdown(
 
 
 def build_skill_assets(
-    *,
-    skill_id: str,
-    trigger_description: str,
-    title: str,
-    body: str,
-    children: list[SkillSection],
-    references: list[SkillFile],
-    scripts: list[SkillScript],
-    assets: list[SkillFile],
-    user_id: str,
-    session_id: str,
-    version: int = 1,
-    created_at: datetime | None = None,
+        *,
+        skill_id: str,
+        trigger_description: str,
+        title: str,
+        body: str,
+        children: list[SkillSection],
+        references: list[SkillFile],
+        scripts: list[SkillScript],
+        assets: list[SkillFile],
+        user_id: str,
+        session_id: str,
+        version: int = 1,
+        created_at: datetime | None = None,
 ) -> list[SkillAssetFile]:
     """构建完整的 Skill 资源文件列表，替代原有的 zip 打包方式。
 
@@ -147,10 +147,10 @@ def build_skill_assets(
 
 
 def _append_markdown_body(
-    title: str,
-    body: str,
-    children: list[SkillSection],
-    lines: list[str],
+        title: str,
+        body: str,
+        children: list[SkillSection],
+        lines: list[str],
 ) -> None:
     """向 lines 追加 Markdown 正文（H1 + body + children 标题树）。"""
     # H1: 文档唯一一级标题
@@ -168,9 +168,9 @@ def _append_markdown_body(
 
 
 def _serialize_section(
-    section: SkillSection,
-    level: int,
-    lines: list[str],
+        section: SkillSection,
+        level: int,
+        lines: list[str],
 ) -> None:
     """递归序列化单个标题节点。"""
     if level <= 6:

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ._search_provider_utils.coerce import as_dict_tuple, as_str, as_str_or_none
+from ._search_provider_utils.search_result import dedupe_by_url, is_valid_result
 from .models import (
     ProviderSearchHttpRequest,
     ProviderSearchRequest,
@@ -11,8 +13,6 @@ from .models import (
     SearchPreview,
     SearchProviderName,
 )
-from ._search_provider_utils.coerce import as_dict_tuple, as_str, as_str_or_none
-from ._search_provider_utils.search_result import dedupe_by_url, is_valid_result
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,10 +42,10 @@ class FourGetSearchRequest(ProviderSearchRequest):
 
 
 def map_fourget_response(
-    data: dict[str, Any],
-    *,
-    query: str,
-    max_results: int,
+        data: dict[str, Any],
+        *,
+        query: str,
+        max_results: int,
 ) -> ProviderSearchResponse:
     """把 4get JSON 响应归一化为 provider 搜索响应。"""
     raw_items = data.get("web")
@@ -65,8 +65,8 @@ def map_fourget_response(
 
 
 def _map_fourget_item(
-    *,
-    item: dict[str, Any],
+        *,
+        item: dict[str, Any],
 ) -> ProviderSearchResult | None:
     """归一化 4get web 单条结果。"""
     title = as_str(item.get("title"))

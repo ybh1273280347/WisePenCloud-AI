@@ -1,8 +1,9 @@
-from enum import Enum
-import jieba
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
-from datetime import datetime, timezone
 from copy import deepcopy
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
+
+import jieba
 from beanie import Document
 from pydantic import Field, BaseModel
 from pymongo import IndexModel, ASCENDING
@@ -59,7 +60,7 @@ class MessageModelInfo(BaseModel):
 class ChatMessage(Document):
     """单条消息实体（Beanie Document，映射到 chat_messages 集合）"""
     session_id: str
-    role: Role # 消息标识
+    role: Role  # 消息标识
 
     # 生成该消息所用的模型安全快照，仅 assistant 消息必填
     model_info: Optional[MessageModelInfo] = None
@@ -78,8 +79,8 @@ class ChatMessage(Document):
     tool_calls: Optional[List[ToolCallMessage]] = None
     token_usage: int = 0
 
-    content: Optional[str] = None   # 返回内容
-    content_token_count: int = 0 # 消息 token 计数，用于上下文压缩
+    content: Optional[str] = None  # 返回内容
+    content_token_count: int = 0  # 消息 token 计数，用于上下文压缩
 
     # 内容搜索分词，用于规避 MongoDB 中文分词缺陷
     content_search_tokens: Optional[str] = None

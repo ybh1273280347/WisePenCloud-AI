@@ -9,16 +9,16 @@ Metadata = dict[str, object]
 class UnitType(StrEnum):
     """TextUnit 的语义块类型。"""
 
-    HEADING = "heading"          # 标题（# ~ ######）
-    PARAGRAPH = "paragraph"      # 普通段落
-    TABLE = "table"              # Markdown 表格
-    CODE = "code"                # 围栏代码块
-    FORMULA = "formula"          # 数学公式（$$ 或 \[...\]）
-    IMAGE = "image"              # 图片（![alt](url)）
-    LIST = "list"                # 有序/无序列表
-    QUOTE = "quote"              # 引用块（>）
+    HEADING = "heading"  # 标题（# ~ ######）
+    PARAGRAPH = "paragraph"  # 普通段落
+    TABLE = "table"  # Markdown 表格
+    CODE = "code"  # 围栏代码块
+    FORMULA = "formula"  # 数学公式（$$ 或 \[...\]）
+    IMAGE = "image"  # 图片（![alt](url)）
+    LIST = "list"  # 有序/无序列表
+    QUOTE = "quote"  # 引用块（>）
     PAGE_MARKER = "page_marker"  # 页码标记，统一格式：<!-- page N -->
-    UNKNOWN = "unknown"          # 未识别类型
+    UNKNOWN = "unknown"  # 未识别类型
 
 
 class ChunkLevel(StrEnum):
@@ -44,8 +44,8 @@ class IndexKind(StrEnum):
     """
 
     SECTION = "section"  # 按章节名定位 chunk
-    PAGE = "page"        # 按页码定位 chunk
-    ANCHOR = "anchor"    # 按锚标（Table/Figure/Equation）定位 chunk
+    PAGE = "page"  # 按页码定位 chunk
+    ANCHOR = "anchor"  # 按锚标（Table/Figure/Equation）定位 chunk
 
 
 @dataclass(frozen=True, slots=True)

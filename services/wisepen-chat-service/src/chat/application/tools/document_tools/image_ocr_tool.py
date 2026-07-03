@@ -22,12 +22,14 @@ from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.document_tools.ocr import OcrPageResult
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.file_type_detect import detect_mime_type
-from chat.application.tools.utils.url_fetcher import (
+from chat.application.tools.utils.url import (
     FetchedUrl,
     UrlFetcherError,
     UrlFetcherUnsupportedUrlError,
+    UrlSecurityError,
     fetch_url,
     filename_from_url,
+    validate_public_http_url,
 )
 
 
@@ -51,12 +53,12 @@ class ImageOcrTool:
     )
 
     def __init__(
-        self,
-        *,
-        file_store: ToolRunFileStore,
-        ocr_client: Any | None = None,
-        url_download_http_client: httpx.AsyncClient | None = None,
-        max_download_bytes: int = 52_428_800,
+            self,
+            *,
+            file_store: ToolRunFileStore,
+            ocr_client: Any | None = None,
+            url_download_http_client: httpx.AsyncClient | None = None,
+            max_download_bytes: int = 52_428_800,
     ) -> None:
         self._file_store = file_store
         self._ocr_client = ocr_client
@@ -159,11 +161,11 @@ class ImageOcrTool:
         )
 
     async def _parse_file_ref(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        file_ref: str,
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            file_ref: str,
     ) -> ImageOcrToolResult:
         try:
             resolved = await self._file_store.resolve_ref(
@@ -195,6 +197,7 @@ class ImageOcrTool:
 
         raw: FetchedUrl | None = None
         try:
+            url = validate_public_http_url(url)
             raw = await fetch_url(
                 url,
                 http_client=self._url_download_http_client,
@@ -213,6 +216,11 @@ class ImageOcrTool:
                 else f"image_url_fetch_failed:{e.reason}"
             )
             return ImageOcrToolResult(status="failed", reason=reason)
+        except UrlSecurityError as e:
+            return ImageOcrToolResult(
+                status="failed",
+                reason=f"invalid_image_url:{e}",
+            )
         except UrlFetcherError as e:
             return ImageOcrToolResult(
                 status="failed",
@@ -224,11 +232,11 @@ class ImageOcrTool:
                     Path(raw.file_path).unlink(missing_ok=True)
 
     async def _parse_image_path(
-        self,
-        *,
-        path: Path,
-        file_name: str | None,
-        content_type: str | None,
+            self,
+            *,
+            path: Path,
+            file_name: str | None,
+            content_type: str | None,
     ) -> ImageOcrToolResult:
         if not path.is_file():
             return ImageOcrToolResult(

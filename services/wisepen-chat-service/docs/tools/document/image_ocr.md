@@ -51,7 +51,8 @@ file_ref
   -> cacheable_texts
 
 file_path URL
-  -> tools/utils/url_fetcher.HttpxFetcher
+  -> tools/utils/url/security.validate_public_http_url
+  -> tools/utils/url/fetcher.fetch_url
   -> temp file
   -> MIME check
   -> OCR client
@@ -64,4 +65,4 @@ file_path URL
 
 - OCR provider 是 `document_tools/ocr/` 下的辅助能力，不属于 `document_parse/parsers/`。
 - `ToolRunFileStore` 相关错误统一通过 `tool_file_error_reason(...)` 映射为模型可见 reason。
-- URL 下载能力复用 `tools/utils/url_fetcher.py`，不依赖 `web_fetch` 私有 fetcher。
+- URL 下载能力复用 `tools/utils/url/fetcher.py`，不依赖 `web_fetch` 私有 fetcher；URL 安全性校验复用 `tools/utils/url/security.py`，不做页面内容阻断。

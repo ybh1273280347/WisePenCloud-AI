@@ -41,10 +41,10 @@ class AcademicHydrationOutcome:
 
 
 def build_academic_search_tool_return(
-    *,
-    query: str,
-    outcomes: tuple[AcademicHydrationOutcome, ...],
-    recommended_ids: tuple[str, ...],
+        *,
+        query: str,
+        outcomes: tuple[AcademicHydrationOutcome, ...],
+        recommended_ids: tuple[str, ...],
 ) -> ToolReturn:
     return ToolReturn(
         tag="academic_search_result",

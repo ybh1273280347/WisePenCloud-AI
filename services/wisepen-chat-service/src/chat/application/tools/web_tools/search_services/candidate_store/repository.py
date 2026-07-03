@@ -12,25 +12,25 @@ class WebSearchCandidateRepository(Protocol):
     """
 
     async def set_mapping(
-        self,
-        mapping: WebSearchCandidateMapping,
-        *,
-        ttl_seconds: int,
+            self,
+            mapping: WebSearchCandidateMapping,
+            *,
+            ttl_seconds: int,
     ) -> None:
         ...
 
     async def get_mapping(
-        self,
-        *,
-        user_id: str,
-        search_ref: str,
+            self,
+            *,
+            user_id: str,
+            search_ref: str,
     ) -> WebSearchCandidateMapping | None:
         ...
 
     async def delete_mapping(
-        self,
-        *,
-        user_id: str,
-        search_ref: str,
+            self,
+            *,
+            user_id: str,
+            search_ref: str,
     ) -> None:
         ...

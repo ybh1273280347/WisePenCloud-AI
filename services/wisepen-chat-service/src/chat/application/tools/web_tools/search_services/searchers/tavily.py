@@ -13,10 +13,10 @@ class TavilySearcher(BaseProviderSearcher):
     response_mapper = staticmethod(map_tavily_response)
 
     def __init__(
-        self,
-        *,
-        http_client: httpx.AsyncClient,
-        config: SearchProviderConfig,
+            self,
+            *,
+            http_client: httpx.AsyncClient,
+            config: SearchProviderConfig,
     ) -> None:
         if not config.api_key:
             raise SearchProviderCredentialError("Tavily API key is required.")

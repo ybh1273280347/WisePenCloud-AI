@@ -15,7 +15,7 @@ class PriorRankScorerConfig:
     """原始排名先验打分配置。"""
 
     signal_name: str = "prior_rank"
-    k: float = 60.0 # 平滑度控制
+    k: float = 60.0  # 平滑度控制
     weight: float = 1.0
 
 
@@ -29,10 +29,10 @@ class PriorRankScorer:
         self.name = "prior_rank_scorer"
 
     def score(
-        self,
-        *,
-        query: RankQuery,
-        candidates: tuple[RankCandidate, ...],
+            self,
+            *,
+            query: RankQuery,
+            candidates: tuple[RankCandidate, ...],
     ) -> tuple[ScoreSignal, ...]:
 
         signals: list[ScoreSignal] = []
@@ -70,4 +70,3 @@ class PriorRankScorer:
                 ),
             )
         )
-

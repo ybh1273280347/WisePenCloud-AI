@@ -12,12 +12,12 @@ from ..candidates import VisibleWebSearchCandidate, WebSearchCandidate
 
 
 def build_web_search_tool_return(
-    result: Any,
-    *,
-    candidates: tuple[WebSearchCandidate, ...],
-    responses: tuple[ProviderSearchResponse, ...],
-    display_query: str | None = None,
-    recommended_ids: tuple[str, ...] = (),
+        result: Any,
+        *,
+        candidates: tuple[WebSearchCandidate, ...],
+        responses: tuple[ProviderSearchResponse, ...],
+        display_query: str | None = None,
+        recommended_ids: tuple[str, ...] = (),
 ) -> ToolReturn:
     """组装 web_search 的可见返回。
 

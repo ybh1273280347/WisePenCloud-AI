@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Mapping
 
+from chat.domain.entities import ResourceItemInfo, ResourcePermission
 from common.core.domain import GroupRoleType
 from common.core.exceptions import RpcError
 from common.http.rpc_client import RpcClient
-from chat.domain.entities import ResourceItemInfo, ResourcePermission
 
 _DEFAULT_SERVICE_NAME = "wisepen-resource-service"
 _CHECK_RES_PERMISSION_PATH = "/internal/resource/checkResPermission"
@@ -14,19 +14,19 @@ _GET_RESOURCE_INFO_PATH = "/internal/resource/getResourceInfo"
 
 class ResourceClient:
     def __init__(
-        self,
-        rpc: RpcClient,
-        *,
-        service_name: str = _DEFAULT_SERVICE_NAME,
+            self,
+            rpc: RpcClient,
+            *,
+            service_name: str = _DEFAULT_SERVICE_NAME,
     ) -> None:
         self._rpc = rpc
         self._service_name = service_name
 
     async def check_res_permission(
-        self,
-        resource_id: str,
-        user_id: str | int,
-        group_role_map: Mapping[str, GroupRoleType],
+            self,
+            resource_id: str,
+            user_id: str | int,
+            group_role_map: Mapping[str, GroupRoleType],
     ) -> ResourcePermission:
         resource_id = (resource_id or "").strip()
         try:
@@ -49,11 +49,11 @@ class ResourceClient:
         return ResourcePermission.from_response(data)
 
     async def get_resource_info(
-        self,
-        resource_id: str,
-        user_id: str | int,
-        group_role_map: Mapping[str, GroupRoleType],
-        target_version: int | None = None,
+            self,
+            resource_id: str,
+            user_id: str | int,
+            group_role_map: Mapping[str, GroupRoleType],
+            target_version: int | None = None,
     ) -> ResourceItemInfo:
         resource_id = (resource_id or "").strip()
         try:

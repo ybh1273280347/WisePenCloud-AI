@@ -28,9 +28,9 @@ class VisibleWebSearchCandidate:
 
 
 def build_candidates(
-    responses: tuple[ProviderSearchResponse, ...],
-    *,
-    search_config: WebSearchRuntimeConfig,
+        responses: tuple[ProviderSearchResponse, ...],
+        *,
+        search_config: WebSearchRuntimeConfig,
 ) -> tuple[WebSearchCandidate, ...]:
     """从 provider 响应构建候选列表，使用 [1]、[2] 形式的稳定编号。"""
     return tuple(
@@ -51,9 +51,9 @@ def build_candidates(
 
 
 def build_candidate_mappings(
-    candidates: tuple[WebSearchCandidate, ...],
-    *,
-    user_id: str,
+        candidates: tuple[WebSearchCandidate, ...],
+        *,
+        user_id: str,
 ) -> tuple[WebSearchCandidateMapping, ...]:
     return tuple(
         WebSearchCandidateMapping(

@@ -22,6 +22,8 @@
 
 `file_refs` 和 `direct_urls` 通过 `ToolParametersSchema.exactly_one_of` 统一校验：二者必须且只能提供一组。执行上下文必须包含 `user_id` 和 `session_id`。工具会用这两个值解析并校验 `tfile_*` 的作用域；直链会先下载到短期工具文件，再复用同一解析链路。
 
+`direct_urls` 会先经过 `tools/utils/url/security.validate_public_http_url` 校验。该校验只判断 URL 本身是否适合作为外部抓取目标，不做页面内容阻断。
+
 ## 与 web_fetch 的关系
 
 `web_fetch` 和 `document_parse` 共同构成核心外界信息获取工具体系：`web_fetch` 负责网页正文和不确定 URL 的抓取，`document_parse` 负责文件内容解析。两者共享 URL 内容缓存、HTTP fetcher 能力和 `source_*` metadata 是有意设计的正确行为，不视为需要拆除的错误耦合。
@@ -71,7 +73,7 @@ document parse 读取缓存时不能在 public/private 域之间回退，避免�
 | 图片 | 不作为通用文档解析入口；模型看图后需要精确抽字时使用 `image_ocr` |
 | 其它普通文档 | Docling -> MarkItDown |
 
-`parsers/common/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、XLSX。通用 Docling 不维护额外 `allowed_formats` 白名单。PDF、XLSX 等专用路径不追加通用 MarkItDown 兜底；专用解析器如果需要特殊兜底，应在自己的策略内部维护，避免专用行为反向污染通用解析链路。
+`parsers/comon_document/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、XLSX。通用 Docling 不维护额外 `allowed_formats` 白名单。PDF、XLSX 等专用路径不追加通用 MarkItDown 兜底；专用解析器如果需要特殊兜底，应在自己的策略内部维护，避免专用行为反向污染通用解析链路。
 
 OCR provider 不属于 parser 树，统一放在 `document_tools/ocr/`。PDF 扫描页和 `image_ocr` 工具都复用这个辅助能力。
 

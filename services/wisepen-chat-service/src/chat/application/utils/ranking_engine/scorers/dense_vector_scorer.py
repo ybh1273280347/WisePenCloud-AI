@@ -28,18 +28,18 @@ class DenseVectorScorer:
     __slots__ = ("config", "name")
 
     def __init__(
-        self,
-        *,
-        config: DenseVectorScorerConfig | None = None,
+            self,
+            *,
+            config: DenseVectorScorerConfig | None = None,
     ) -> None:
         self.config = config or DenseVectorScorerConfig()
         self.name = "dense_vector_scorer"
 
     def score(
-        self,
-        *,
-        query: RankQuery,
-        candidates: tuple[RankCandidate, ...],
+            self,
+            *,
+            query: RankQuery,
+            candidates: tuple[RankCandidate, ...],
     ) -> tuple[ScoreSignal, ...]:
         if not candidates:
             return ()
@@ -109,4 +109,3 @@ def _cosine(left: Sequence[float], right: Sequence[float]) -> float:
     if left_norm == 0.0 or right_norm == 0.0:
         return 0.0
     return dot / (left_norm * right_norm)
-

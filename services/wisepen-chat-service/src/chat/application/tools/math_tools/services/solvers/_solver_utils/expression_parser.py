@@ -69,10 +69,10 @@ class MathExpressionParser:
 
     @staticmethod
     def parse_expr(
-        expression: str | None,
-        variables: Iterable[str] | None = None,
-        *,
-        extra_locals: dict[str, object] | None = None,
+            expression: str | None,
+            variables: Iterable[str] | None = None,
+            *,
+            extra_locals: dict[str, object] | None = None,
     ) -> sp.Expr:
         """安全解析数学表达式。
 
@@ -117,10 +117,10 @@ class MathExpressionParser:
 
     @staticmethod
     def parse_equation(
-        equation: str | None,
-        variables: Iterable[str] | None = None,
-        *,
-        extra_locals: dict[str, object] | None = None,
+            equation: str | None,
+            variables: Iterable[str] | None = None,
+            *,
+            extra_locals: dict[str, object] | None = None,
     ) -> sp.Equality:
         """解析 `left = right` 或 SymPy 关系表达式为 Eq。"""
         if not isinstance(equation, str) or not equation.strip():
@@ -146,10 +146,10 @@ class MathExpressionParser:
 
     @staticmethod
     def parse_ode_equation(
-        equation: str | None,
-        *,
-        function_name: str,
-        variable_name: str,
+            equation: str | None,
+            *,
+            function_name: str,
+            variable_name: str,
     ) -> tuple[sp.Equality, sp.Expr]:
         """解析常微分方程，并返回方程和待求函数。"""
         if not function_name.isidentifier():

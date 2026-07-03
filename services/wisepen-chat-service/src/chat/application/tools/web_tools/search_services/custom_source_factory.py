@@ -50,9 +50,9 @@ class WebSearchCustomSourceFactory:
         )
 
     def _provider_searcher(
-        self,
-        provider: SearchProviderName,
-        config: SearchProviderConfig,
+            self,
+            provider: SearchProviderName,
+            config: SearchProviderConfig,
     ) -> BaseProviderSearcher:
         if provider == SearchProviderName.EXA:
             return ExaSearcher(http_client=self.http_client, config=config)

@@ -34,9 +34,9 @@ class BlockAwarePacker:
         self.name = "block_aware_packer"
 
     def pack(
-        self,
-        *,
-        units: tuple[TextUnit, ...],
+            self,
+            *,
+            units: tuple[TextUnit, ...],
     ) -> tuple[Chunk, ...]:
         """将 unit 列表按 chunk_size 聚合成 chunk 列表。"""
         if not units:
@@ -99,13 +99,13 @@ class BlockAwarePacker:
         return tuple(chunks)
 
     def _build_chunk(
-        self,
-        units: tuple[TextUnit, ...],
-        start_unit: int,
-        end_unit: int,
-        chunk_index: int,
-        *,
-        page_label: str | None = None,
+            self,
+            units: tuple[TextUnit, ...],
+            start_unit: int,
+            end_unit: int,
+            chunk_index: int,
+            *,
+            page_label: str | None = None,
     ) -> Chunk:
         """从 units[start_unit..end_unit] 构建一个 Chunk。"""
         selected = units[start_unit:end_unit + 1]

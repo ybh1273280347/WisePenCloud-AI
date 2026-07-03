@@ -6,7 +6,8 @@
 
 - 可以明确 Qdrant、Elasticsearch、Neo4j、缓存和 Context Builder 的主流程。
 - 可以明确入库 chunk 如何携带 `extra_indexes`，以及后续如何通过页码、章节、锚点精确定位证据。
-- 不定义 ACL 字段、不定义权限 filter 数据结构、不实现授权证据缓存模型。权限模型确定后，只在本文标出的 filter / cache key 插槽接入。
+- 不定义 ACL 字段、不定义权限 filter 数据结构、不实现授权证据缓存模型。权限模型确定后，只在本文标出的 filter / cache key
+  插槽接入。
 
 ## 1. 总链路
 
@@ -71,16 +72,17 @@ for child in chunking_result.child_chunks:
 
 `extra_indexes` 的稳定语义：
 
-| 字段 | 语义 |
-| --- | --- |
-| `index_name` | chunking engine 的完整索引名，例如 `page:3`、`section:鉴权 > Token`、`anchor:Table 1`。 |
-| `index_kind` | `PAGE` / `SECTION` / `ANCHOR`。 |
-| `page_label` | 页码标签，只在 `PAGE` 索引上有值。 |
-| `section_path` | 章节路径，只在 `SECTION` 索引上有值。 |
-| `anchor_label` | 表格、图片、公式等锚点标签，只在 `ANCHOR` 索引上有值。 |
-| `start_offset` / `end_offset` | 索引覆盖的 Markdown 原文字符偏移。 |
+| 字段                            | 语义                                                                        |
+|-------------------------------|---------------------------------------------------------------------------|
+| `index_name`                  | chunking engine 的完整索引名，例如 `page:3`、`section:鉴权 > Token`、`anchor:Table 1`。 |
+| `index_kind`                  | `PAGE` / `SECTION` / `ANCHOR`。                                            |
+| `page_label`                  | 页码标签，只在 `PAGE` 索引上有值。                                                     |
+| `section_path`                | 章节路径，只在 `SECTION` 索引上有值。                                                  |
+| `anchor_label`                | 表格、图片、公式等锚点标签，只在 `ANCHOR` 索引上有值。                                          |
+| `start_offset` / `end_offset` | 索引覆盖的 Markdown 原文字符偏移。                                                    |
 
-chunking engine 已保证 chunk 不跨页，所以不写 `page_range` / `page_numbers`。需要页码时，从 `extra_indexes` 中取 `index_kind == PAGE` 的 `page_label`。
+chunking engine 已保证 chunk 不跨页，所以不写 `page_range` / `page_numbers`。需要页码时，从 `extra_indexes` 中取
+`index_kind == PAGE` 的 `page_label`。
 
 ### 2.2 Corpus Store
 
@@ -167,13 +169,15 @@ class RagQdrantRepository:
 
 注意：
 
-- Qdrant payload 中的 `page_label`、`section_path`、`anchor_labels` 是从 `extra_indexes` 派生的检索投影，方便 filter，不是新的 chunk 协议字段。
+- Qdrant payload 中的 `page_label`、`section_path`、`anchor_labels` 是从 `extra_indexes` 派生的检索投影，方便 filter，不是新的
+  chunk 协议字段。
 - 不把完整 `extra_indexes` 当作 Qdrant 的事实源；完整结构仍在 Corpus Store。
 - 权限过滤位置在 Qdrant filter 组合处，当前不定义 filter 形状。
 
 ### 2.4 Elasticsearch 写入
 
-Elastic 只服务 strict keyword prefilter 和精准 locator 查询。它可以保存 `indexing_text`、标题、章节、页码、锚点等 keyword/text 字段。
+Elastic 只服务 strict keyword prefilter 和精准 locator 查询。它可以保存 `indexing_text`、标题、章节、页码、锚点等
+keyword/text 字段。
 
 ```python
 class RagElasticRepository:
@@ -299,7 +303,8 @@ class RagIngestionApplicationService:
         )
 ```
 
-入库缓存只基于内容、文档版本和处理配置，不基于权限。权限变化不应要求重新分块、重新生成 embedding 或重新抽图；后续只更新权限投影和检索 filter。
+入库缓存只基于内容、文档版本和处理配置，不基于权限。权限变化不应要求重新分块、重新生成 embedding 或重新抽图；后续只更新权限投影和检索
+filter。
 
 ## 4. 检索编排伪代码
 
@@ -386,7 +391,8 @@ class KnowledgeSearchApplicationService:
         return KnowledgeSearchResult.ready(context)
 ```
 
-`AnswerabilitySoftGate` 当前 prompt 读取 `RankedCandidate.candidate.text`。因此 retrieval 阶段要给 ranking 候选带上足够的 child evidence text；materialization 阶段再补 parent context、citation、locator 等完整上下文。
+`AnswerabilitySoftGate` 当前 prompt 读取 `RankedCandidate.candidate.text`。因此 retrieval 阶段要给 ranking 候选带上足够的
+child evidence text；materialization 阶段再补 parent context、citation、locator 等完整上下文。
 
 ## 5. Qdrant 主召回
 
@@ -438,7 +444,8 @@ class RagQdrantRepository:
         )
 ```
 
-如果 Qdrant payload 不保存 `evidence_text`，这里应批量回源 child chunks 填充 `ScoredChunk.text`。为了 Soft Gate 和 rerank 成本，建议 payload 可以保存短 child text，但最终引用仍以 Corpus Store 为准。
+如果 Qdrant payload 不保存 `evidence_text`，这里应批量回源 child chunks 填充 `ScoredChunk.text`。为了 Soft Gate 和 rerank
+成本，建议 payload 可以保存短 child text，但最终引用仍以 Corpus Store 为准。
 
 ## 6. Elastic strict prefilter
 
@@ -529,7 +536,8 @@ class EvidenceLocatorService:
 3. 同页 `page_label` 附近的 sibling child chunks。
 4. 同 `section_path` 的相邻 child chunks。
 
-由于 chunk 不跨页，`page_label` 命中后可以确定 child chunk 属于该页；如果需要“整页上下文”，加载所有带同一 `page_label` 的 child chunks 即可。
+由于 chunk 不跨页，`page_label` 命中后可以确定 child chunk 属于该页；如果需要“整页上下文”，加载所有带同一 `page_label` 的
+child chunks 即可。
 
 ## 8. Neo4j 图增强
 
@@ -694,7 +702,8 @@ class EvidenceMaterializer:
         return materialized
 ```
 
-权限模型未确定前，这个缓存不能做跨用户或跨权限域复用。第一阶段可以先实现“无缓存批量回源”，等权限 scope key 明确后再接 Redis 短 TTL 缓存。
+权限模型未确定前，这个缓存不能做跨用户或跨权限域复用。第一阶段可以先实现“无缓存批量回源”，等权限 scope key 明确后再接 Redis
+短 TTL 缓存。
 
 ## 10. 缓存体系
 

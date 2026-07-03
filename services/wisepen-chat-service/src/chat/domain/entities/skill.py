@@ -25,6 +25,7 @@ class SkillAssetMeta(BaseModel):
             size_bytes=int(payload.get("size") or 0),
         )
 
+
 class Skill(BaseModel):
     skill_id: str = Field(...)
     name: str = Field(default="")
@@ -48,6 +49,7 @@ class Skill(BaseModel):
             version=int(payload.get("version") or 0),
         )
 
+
 @dataclass(frozen=True)
 class SkillMeta:
     skill_id: str
@@ -61,5 +63,5 @@ class SkillMeta:
             skill_id=str(payload.get("resourceId")),
             name=str(payload.get("name")),
             description=str(payload.get("description")),
-            version=int(payload.get("version")  or 0),
+            version=int(payload.get("version") or 0),
         )

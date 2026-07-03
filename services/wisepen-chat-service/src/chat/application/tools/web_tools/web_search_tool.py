@@ -128,12 +128,12 @@ class WebSearchTool:
     )
 
     def __init__(
-        self,
-        *,
-        service: WebSearchService,
-        custom_source_factory: WebSearchCustomSourceFactory,
-        candidate_repository: WebSearchCandidateRepository,
-        candidate_ttl_seconds: int = 3600,
+            self,
+            *,
+            service: WebSearchService,
+            custom_source_factory: WebSearchCustomSourceFactory,
+            candidate_repository: WebSearchCandidateRepository,
+            candidate_ttl_seconds: int = 3600,
     ) -> None:
         self._service = service
         self._custom_source_factory = custom_source_factory

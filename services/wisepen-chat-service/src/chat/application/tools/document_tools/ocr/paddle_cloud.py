@@ -48,10 +48,10 @@ class PaddleCloudClient:
     """PaddleOCR 云端版面解析客户端（异步任务轮询模式）。"""
 
     def __init__(
-        self,
-        config: PaddleCloudConfig,
-        *,
-        http_client: httpx.AsyncClient,
+            self,
+            config: PaddleCloudConfig,
+            *,
+            http_client: httpx.AsyncClient,
     ) -> None:
         if not config.token:
             raise OcrError("PaddleOCR token is required.")

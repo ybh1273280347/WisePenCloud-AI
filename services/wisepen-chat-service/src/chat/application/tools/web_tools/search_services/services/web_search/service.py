@@ -14,19 +14,19 @@ class WebSearchService:
     """
 
     def __init__(
-        self,
-        *,
-        platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
+            self,
+            *,
+            platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
     ) -> None:
         self._platform_searchers = dict(platform_searchers)
 
     async def search(
-        self,
-        *,
-        query: str,
-        max_results: int = 10,
-        custom_source: WebSearchCustomSource | None = None,
-        platform_provider: SearchProviderName = SearchProviderName.FOUGET_DDG,
+            self,
+            *,
+            query: str,
+            max_results: int = 10,
+            custom_source: WebSearchCustomSource | None = None,
+            platform_provider: SearchProviderName = SearchProviderName.FOUGET_DDG,
     ) -> WebSearchResult:
         return await execute_provider_search(
             query=query,

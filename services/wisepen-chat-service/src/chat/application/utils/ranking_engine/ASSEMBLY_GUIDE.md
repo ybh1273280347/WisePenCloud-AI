@@ -77,14 +77,14 @@ result = engine.rank(
 
 ## RankCandidate 怎么填
 
-| 字段 | 用途 | 谁会用 |
-| --- | --- | --- |
-| `candidate_id` | 候选唯一 ID | 全链路 |
-| `text` | 主文本 | `BM25Scorer`、reranker、部分 diversifier |
-| `fields` | 字段文本 | `FieldedBM25Scorer`、`KeywordFilter` |
-| `prior_rank` | 上游原始排序 | `PriorRankScorer` |
-| `group_key` | 多样性分组 | diversifier |
-| `metadata` | 业务回填信息 | `DenseVectorScorer` 读取 `embedding`，其他多数不解释 |
+| 字段             | 用途      | 谁会用                                        |
+|----------------|---------|--------------------------------------------|
+| `candidate_id` | 候选唯一 ID | 全链路                                        |
+| `text`         | 主文本     | `BM25Scorer`、reranker、部分 diversifier       |
+| `fields`       | 字段文本    | `FieldedBM25Scorer`、`KeywordFilter`        |
+| `prior_rank`   | 上游原始排序  | `PriorRankScorer`                          |
+| `group_key`    | 多样性分组   | diversifier                                |
+| `metadata`     | 业务回填信息  | `DenseVectorScorer` 读取 `embedding`，其他多数不解释 |
 
 常见错误：
 
@@ -146,7 +146,7 @@ PriorRankScorer()
 
 `prior_rank=None` 的候选会跳过该信号。
 
-### 
+###   
 
 读取上游检索系统已经产出的原始排序信号，不重新计算 BM25 或向量分数。
 
@@ -325,11 +325,11 @@ diversifiers=(
 
 可选组件：
 
-| 组件 | 适合场景 |
-| --- | --- |
+| 组件                           | 适合场景                 |
+|------------------------------|----------------------|
 | `GroupRoundRobinDiversifier` | 按 `group_key` 打散同组结果 |
-| `MmrDiversifier` | 文本近重复、同文档 chunk 去重 |
-| `MaxMinDiversifier` | 有 embedding 时做语义多样性 |
+| `MmrDiversifier`             | 文本近重复、同文档 chunk 去重   |
+| `MaxMinDiversifier`          | 有 embedding 时做语义多样性  |
 
 多个 diversifier 串联时，前一个插件输出的排序结果会作为后一个插件输入。
 
@@ -434,12 +434,12 @@ RankingPipeline(
 
 建议：
 
-| 场景 | candidate_limit | top_k |
-| --- | --- | --- |
-| 纯 BM25/RRF | 100 到 300 | 业务需要多少就设多少 |
-| 本地 reranker | 20 到 100 | 5 到 20 |
-| 外部 API reranker | 20 到 50 | 5 到 20 |
-| 多样性明显重要 | 至少是 top_k 的 3 倍 | 最终展示数量 |
+| 场景              | candidate_limit | top_k      |
+|-----------------|-----------------|------------|
+| 纯 BM25/RRF      | 100 到 300       | 业务需要多少就设多少 |
+| 本地 reranker     | 20 到 100        | 5 到 20     |
+| 外部 API reranker | 20 到 50         | 5 到 20     |
+| 多样性明显重要         | 至少是 top_k 的 3 倍 | 最终展示数量     |
 
 ## Review 清单
 

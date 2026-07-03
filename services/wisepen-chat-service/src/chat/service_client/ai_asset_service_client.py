@@ -19,10 +19,10 @@ _PUBLISH_SKILL_VERSION_PATH = "/skill/publishSkillVersion"
 
 class AIAssetClient:
     def __init__(
-        self,
-        rpc: RpcClient,
-        *,
-        service_name: str = _DEFAULT_SERVICE_NAME,
+            self,
+            rpc: RpcClient,
+            *,
+            service_name: str = _DEFAULT_SERVICE_NAME,
     ) -> None:
         self._rpc = rpc
         self._service_name = service_name
@@ -72,7 +72,8 @@ class AIAssetClient:
             )
         return data
 
-    async def create_skill(self, *, title: str, name: str = None, description: str = None, source_type: str = "BY_AGENT") -> str:
+    async def create_skill(self, *, title: str, name: str = None, description: str = None,
+                           source_type: str = "BY_AGENT") -> str:
         """创建 Skill 基本信息。
 
         调用 Java 端 /skill/createSkill 接口，生成 resourceId 并自动创建版本 1 草案。
@@ -112,11 +113,11 @@ class AIAssetClient:
         return data
 
     async def init_upload_skill_assets(
-        self,
-        *,
-        resource_id: str,
-        draft_version: int,
-        assets: List[dict],
+            self,
+            *,
+            resource_id: str,
+            draft_version: int,
+            assets: List[dict],
     ) -> dict:
         """批量申请 Skill 资源文件的上传凭证。
 

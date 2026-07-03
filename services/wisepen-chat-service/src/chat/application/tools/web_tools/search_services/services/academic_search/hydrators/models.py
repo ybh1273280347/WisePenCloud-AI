@@ -34,4 +34,3 @@ class HydratedPaper:
 class HydratedPaperAuthor:
     name: str
     institutions: tuple[str, ...] = ()
-

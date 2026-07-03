@@ -1,12 +1,10 @@
-﻿from typing import List, Optional
+﻿import uuid
 from datetime import datetime, timezone
-import uuid
+from typing import List, Optional
 
 from chat.application.agents import AgentMemoryPolicy
 from chat.application.chat_context_assembler import WindowedMessages
 from chat.application.token_counter import TokenCounter
-from common.logger import error
-
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
 from chat.domain.entities.model import ModelScope
@@ -15,6 +13,7 @@ from chat.domain.interfaces.memory import MemoryProvider
 from chat.domain.repositories import MessageRepository, HotContextRepository, SessionRepository, ProviderRepository
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.kafka.producer import KafkaProducerClient
+from common.logger import error
 
 
 class ChatTurnFinalizer:
@@ -23,15 +22,15 @@ class ChatTurnFinalizer:
     """
 
     def __init__(
-        self,
-        text_llm: TextCompletionProvider,
-        token_counter: TokenCounter,
-        memory: MemoryProvider,
-        message_repo: MessageRepository,
-        session_repo: SessionRepository,
-        hot_context_repo: HotContextRepository,
-        provider_repo: ProviderRepository,
-        kafka_producer: KafkaProducerClient,
+            self,
+            text_llm: TextCompletionProvider,
+            token_counter: TokenCounter,
+            memory: MemoryProvider,
+            message_repo: MessageRepository,
+            session_repo: SessionRepository,
+            hot_context_repo: HotContextRepository,
+            provider_repo: ProviderRepository,
+            kafka_producer: KafkaProducerClient,
     ):
         self.text_llm = text_llm
         self.token_counter = token_counter
@@ -43,11 +42,11 @@ class ChatTurnFinalizer:
         self.kafka_producer = kafka_producer
 
     async def send_token_billing(
-        self,
-        user_id: str,
-        model_info: ModelRequestInfo,
-        token_usage: int,
-        group_id: Optional[str] = None,
+            self,
+            user_id: str,
+            model_info: ModelRequestInfo,
+            token_usage: int,
+            group_id: Optional[str] = None,
     ) -> None:
         """
         发送 token 计费消息到 Kafka
@@ -81,11 +80,11 @@ class ChatTurnFinalizer:
         await self.kafka_producer.send(topic=settings.KAFKA_TOKEN_CONSUMPTION_TOPIC, value=value)
 
     async def persist_messages(
-        self,
-        user_id: str,
-        session_id: str,
-        chat_record_messages: List[ChatMessage],
-        memory_policy: AgentMemoryPolicy
+            self,
+            user_id: str,
+            session_id: str,
+            chat_record_messages: List[ChatMessage],
+            memory_policy: AgentMemoryPolicy
     ) -> None:
         """后台统一处理所有存储逻辑: Redis 追加 → placeholder 裁剪 → MongoDB 落盘 → Memory 摄入"""
 
@@ -108,7 +107,7 @@ class ChatTurnFinalizer:
         if memory_policy.enable_persistence_chat_memory:
             try:
                 for msg in chat_record_messages:
-                    if msg.content: msg.build_search_tokens() # 构建搜索向量 (缓解中文分词问题)
+                    if msg.content: msg.build_search_tokens()  # 构建搜索向量 (缓解中文分词问题)
 
                 await self.message_repo.save_messages(chat_record_messages)
             except Exception as e:
@@ -120,7 +119,6 @@ class ChatTurnFinalizer:
                 await self.memory.add_interaction(user_id=user_id, messages=chat_record_messages)
             except Exception as e:
                 error("chat record message write long-term memory failed.", user_id=user_id, exc=e)
-
 
     async def auto_generate_title(self, session_id: str, user_id: str, user_query: str) -> None:
         """首轮对话后自动为 'New Chat' 会话生成简洁标题"""
@@ -134,7 +132,7 @@ class ChatTurnFinalizer:
                     session_id=session_id,
                     role=Role.SYSTEM,
                     content="You are a conversation title generator. Generate a concise conversation title based on the user's query."
-                    "Requirements: Maximum 20 words, no punctuation, no quotation marks, and output the title text directly."
+                            "Requirements: Maximum 20 words, no punctuation, no quotation marks, and output the title text directly."
                 ),
                 ChatMessage(
                     session_id=session_id,
@@ -159,12 +157,12 @@ class ChatTurnFinalizer:
             error("chat title generation failed.", session_id=session_id, exc=e)
 
     async def summarize_and_compress(
-        self,
-        session_id: str,
-        existing_summary: Optional[str],
-        windowed_history_messages: WindowedMessages | None,
-        chat_record_messages: List[ChatMessage] | None,
-        memory_policy: AgentMemoryPolicy,
+            self,
+            session_id: str,
+            existing_summary: Optional[str],
+            windowed_history_messages: WindowedMessages | None,
+            chat_record_messages: List[ChatMessage] | None,
+            memory_policy: AgentMemoryPolicy,
     ) -> None:
         """
         增量摘要压缩

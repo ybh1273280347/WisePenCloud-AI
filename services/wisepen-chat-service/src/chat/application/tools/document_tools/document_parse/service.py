@@ -6,7 +6,9 @@ from chat.application.tools.document_tools.document_parse.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )
-from chat.application.tools.document_tools.document_parse.parsers.common import CommonDocumentParser
+from chat.application.tools.document_tools.document_parse.parsers.comon_document import (
+    CommonDocumentParser,
+)
 from chat.application.tools.document_tools.document_parse.parsers.specialized import (
     PandasSpreadsheetParser,
     PdfParseStrategy,
@@ -18,9 +20,9 @@ class DocumentParseService:
     """文档解析编排入口。"""
 
     def __init__(
-        self,
-        *,
-        ocr_client: Any | None = None,
+            self,
+            *,
+            ocr_client: Any | None = None,
     ) -> None:
         self._ocr_client = ocr_client
 

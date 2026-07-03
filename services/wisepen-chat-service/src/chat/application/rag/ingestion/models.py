@@ -63,10 +63,10 @@ class RagParentChunk:
 
     @classmethod
     def from_chunk(
-        cls,
-        chunk: Chunk,
-        *,
-        extra_indexes: tuple[RagChunkExtraIndex, ...] = (),
+            cls,
+            chunk: Chunk,
+            *,
+            extra_indexes: tuple[RagChunkExtraIndex, ...] = (),
     ) -> "RagParentChunk":
         """把 chunking engine 的父块投影成父块表模型。"""
         return cls(
@@ -113,10 +113,10 @@ class RagChildChunk:
 
     @classmethod
     def from_chunk(
-        cls,
-        chunk: Chunk,
-        *,
-        extra_indexes: tuple[RagChunkExtraIndex, ...] = (),
+            cls,
+            chunk: Chunk,
+            *,
+            extra_indexes: tuple[RagChunkExtraIndex, ...] = (),
     ) -> "RagChildChunk":
         """把 chunking engine 的子块投影成子块表模型。"""
         return cls(
@@ -131,10 +131,10 @@ class RagChildChunk:
         )
 
     def with_indexing_context(
-        self,
-        *,
-        indexing_context: str,
-        indexing_text: str,
+            self,
+            *,
+            indexing_context: str,
+            indexing_text: str,
     ) -> "RagChildChunk":
         """返回已补充 Context Indexing 结果的子块写入模型。"""
         return RagChildChunk(

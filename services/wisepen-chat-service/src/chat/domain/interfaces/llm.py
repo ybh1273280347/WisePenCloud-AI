@@ -18,11 +18,13 @@ class LLMUsage:
     def total_tokens(self) -> int:
         return self.input_tokens + self.output_tokens
 
+
 @dataclass
 class LLMCompletionResult:
     content: str
     token_usage: int
     raw: Any = None
+
 
 class LLMEventType(str, Enum):
     TEXT_DELTA = "TEXT_DELTA"
@@ -30,6 +32,7 @@ class LLMEventType(str, Enum):
     TOOL_CALLS = "TOOL_CALLS"
     USAGE = "USAGE"
     STATE = "STATE"
+
 
 @dataclass
 class LLMStreamEvent:
@@ -39,6 +42,7 @@ class LLMStreamEvent:
     usage: LLMUsage | None = None
     provider_payload: dict[str, Any] | None = None
     response_id: str | None = None
+
 
 class LLMProvider(ABC):
     @staticmethod
@@ -72,6 +76,7 @@ class LLMProvider(ABC):
             tools: Optional[List[Dict[str, Any]]] = None,
     ) -> AsyncGenerator[LLMStreamEvent, None]:
         yield  # type: ignore[misc]
+
 
 class TextCompletionProvider(ABC):
     @abstractmethod

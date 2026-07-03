@@ -17,10 +17,10 @@ class ChunkingEngine:
     __slots__ = ()
 
     def chunk(
-        self,
-        *,
-        document: ChunkDocument,
-        pipeline: ChunkingPipeline,
+            self,
+            *,
+            document: ChunkDocument,
+            pipeline: ChunkingPipeline,
     ) -> ChunkingResult:
         """按 pipeline 执行一次分块，返回分块结果。
 

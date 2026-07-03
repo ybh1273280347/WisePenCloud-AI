@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.common.web_content_cache.models import (
     WebContentCacheCleanupResult,
     WebContentCacheMode,
@@ -11,6 +10,7 @@ from chat.application.tools.common.web_content_cache.models import (
 from chat.application.tools.common.web_content_cache.repository import (
     WebContentCacheEntryRepository,
 )
+from chat.application.tools.tool_settings import tool_settings
 from chat.domain.entities.web_content_cache import WebContentCacheValueDocument
 from common.logger import info, warn
 
@@ -31,12 +31,12 @@ class WebContentCacheGcScheduler:
     )
 
     def __init__(
-        self,
-        *,
-        entry_repository: WebContentCacheEntryRepository,
-        interval_seconds: int = tool_settings.WEB_CONTENT_CACHE_CLEANUP_INTERVAL_SECONDS,
-        retention_seconds: int = tool_settings.WEB_CONTENT_CACHE_INACTIVE_RETENTION_SECONDS,
-        batch_size: int = tool_settings.WEB_CONTENT_CACHE_CLEANUP_BATCH_SIZE,
+            self,
+            *,
+            entry_repository: WebContentCacheEntryRepository,
+            interval_seconds: int = tool_settings.WEB_CONTENT_CACHE_CLEANUP_INTERVAL_SECONDS,
+            retention_seconds: int = tool_settings.WEB_CONTENT_CACHE_INACTIVE_RETENTION_SECONDS,
+            batch_size: int = tool_settings.WEB_CONTENT_CACHE_CLEANUP_BATCH_SIZE,
     ) -> None:
         self._entry_repository = entry_repository
         self._interval_seconds = max(1, int(interval_seconds))

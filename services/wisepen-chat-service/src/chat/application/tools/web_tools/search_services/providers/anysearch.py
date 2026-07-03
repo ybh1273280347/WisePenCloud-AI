@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ._search_provider_utils.coerce import as_dict_tuple, as_str, as_str_or_none, as_str_tuple
+from ._search_provider_utils.search_result import dedupe_by_url, is_valid_result
 from .models import (
     ProviderSearchHttpRequest,
     ProviderSearchRequest,
@@ -11,8 +13,6 @@ from .models import (
     SearchPreview,
     SearchProviderName,
 )
-from ._search_provider_utils.coerce import as_dict_tuple, as_str, as_str_or_none, as_str_tuple
-from ._search_provider_utils.search_result import dedupe_by_url, is_valid_result
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,10 +40,10 @@ class AnySearchRequest(ProviderSearchRequest):
 
 
 def map_anysearch_response(
-    data: dict[str, Any],
-    *,
-    query: str,
-    max_results: int,
+        data: dict[str, Any],
+        *,
+        query: str,
+        max_results: int,
 ) -> ProviderSearchResponse:
     """把 AnySearch 响应归一化为 provider 搜索响应。"""
     payload = data.get("data") if isinstance(data.get("data"), dict) else data
@@ -62,8 +62,8 @@ def map_anysearch_response(
 
 
 def _map_anysearch_item(
-    *,
-    item: dict[str, Any],
+        *,
+        item: dict[str, Any],
 ) -> ProviderSearchResult | None:
     """归一化 AnySearch 单条结果。"""
     title = as_str(item.get("title"))

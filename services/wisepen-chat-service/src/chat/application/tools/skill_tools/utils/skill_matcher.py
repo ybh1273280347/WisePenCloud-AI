@@ -38,7 +38,7 @@ class DefaultSkillMatcher(SkillMatcher):
         if not on_demand_skill_ids:
             return []
 
-        skill_meta_list:List[SkillMeta] = []
+        skill_meta_list: List[SkillMeta] = []
         try:
             skill_meta_list = await self._ai_asset_client.list_published_skills_meta(on_demand_skill_ids)
         except Exception as e:
@@ -46,4 +46,3 @@ class DefaultSkillMatcher(SkillMatcher):
 
         top_k = max(1, skill_match_top_k or settings.SKILL_MATCH_TOP_K)
         return skill_meta_list[:top_k]
-

@@ -12,7 +12,6 @@ from chat.application.rag.answerability.models import (
 from chat.application.utils.llm_clients import QueryClient, build_query_client
 from chat.core.config.app_settings import settings
 
-
 SOFT_GATE_SYSTEM_PROMPT = """\
 <system_prompt>
   <role>
@@ -107,8 +106,8 @@ class AnswerabilitySoftGate:
         self._client = client or build_query_client(model=settings.QUERY_MODEL)
 
     async def evaluate(
-        self,
-        answerability_input: RagAnswerabilityInput,
+            self,
+            answerability_input: RagAnswerabilityInput,
     ) -> RagAnswerabilityWarning:
         try:
             response = await self._client.aquery(
@@ -201,7 +200,7 @@ def _dedupe_warning_reasons(values: list[Any]) -> tuple[RagAnswerabilityWarningR
 
 
 def _infer_answerability_level(
-    warnings: tuple[RagAnswerabilityWarningReason, ...],
+        warnings: tuple[RagAnswerabilityWarningReason, ...],
 ) -> RagAnswerabilityLevel:
     """根据 warning 集合推断 answerability_level。
 

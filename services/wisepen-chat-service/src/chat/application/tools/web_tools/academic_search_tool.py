@@ -85,12 +85,12 @@ class AcademicSearchTool:
     )
 
     def __init__(
-        self,
-        *,
-        service: AcademicSearchService,
-        custom_source_factory: WebSearchCustomSourceFactory,
-        candidate_repository: WebSearchCandidateRepository,
-        candidate_ttl_seconds: int = 3600,
+            self,
+            *,
+            service: AcademicSearchService,
+            custom_source_factory: WebSearchCustomSourceFactory,
+            candidate_repository: WebSearchCandidateRepository,
+            candidate_ttl_seconds: int = 3600,
     ) -> None:
         self._service = service
         self._custom_source_factory = custom_source_factory
@@ -141,9 +141,9 @@ class AcademicSearchTool:
         search_config: WebSearchRuntimeConfig = context["search_config"]
 
         if (
-            search_config.search_mode != WebSearchMode.CUSTOM
-            or not search_config.provider.supports_academic_search
-            or not search_config.supports_academic
+                search_config.search_mode != WebSearchMode.CUSTOM
+                or not search_config.provider.supports_academic_search
+                or not search_config.supports_academic
         ):
             # academic_search 仅支持当前具备学术能力的 custom 搜索源，且必须开启学术开关
             raise ToolExecutionError(

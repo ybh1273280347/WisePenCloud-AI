@@ -23,11 +23,11 @@ class ToolRunFileStoreGcScheduler:
     )
 
     def __init__(
-        self,
-        *,
-        store: ToolRunFileStore,
-        interval_seconds: int = 10 * 60,
-        initial_delay_seconds: int = 60,
+            self,
+            *,
+            store: ToolRunFileStore,
+            interval_seconds: int = 10 * 60,
+            initial_delay_seconds: int = 60,
     ) -> None:
         """初始化 GC 调度器。
 

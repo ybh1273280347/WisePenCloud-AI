@@ -44,11 +44,11 @@ class ChunkExtraIndexer:
         self.name = "chunk_extra_indexer"
 
     def index(
-        self,
-        *,
-        document: ChunkDocument,
-        units: tuple[TextUnit, ...],
-        chunks: tuple[Chunk, ...],
+            self,
+            *,
+            document: ChunkDocument,
+            units: tuple[TextUnit, ...],
+            chunks: tuple[Chunk, ...],
     ) -> tuple[ChunkIndex, ...]:
         """基于最终 chunk 构建额外语义索引。"""
         indexes: list[ChunkIndex] = []
@@ -62,10 +62,10 @@ class ChunkExtraIndexer:
     # 然后找到与该范围重叠的所有 chunk。
 
     def _build_section_indexes(
-        self,
-        document: ChunkDocument,
-        units: tuple[TextUnit, ...],
-        chunks: tuple[Chunk, ...],
+            self,
+            document: ChunkDocument,
+            units: tuple[TextUnit, ...],
+            chunks: tuple[Chunk, ...],
     ) -> list[ChunkIndex]:
         headings = [u for u in units if u.unit_type == UnitType.HEADING and u.section_path]
         if not headings:
@@ -100,10 +100,10 @@ class ChunkExtraIndexer:
     # 然后找到与该范围重叠的所有 chunk。
 
     def _build_page_indexes(
-        self,
-        document: ChunkDocument,
-        units: tuple[TextUnit, ...],
-        chunks: tuple[Chunk, ...],
+            self,
+            document: ChunkDocument,
+            units: tuple[TextUnit, ...],
+            chunks: tuple[Chunk, ...],
     ) -> list[ChunkIndex]:
         page_units = [u for u in units if u.unit_type == UnitType.PAGE_MARKER]
         if not page_units:
@@ -138,9 +138,9 @@ class ChunkExtraIndexer:
     # - IMAGE unit → 从 alt 文本提取图号（如 "Figure 2: caption"）
 
     def _build_anchor_indexes(
-        self,
-        units: tuple[TextUnit, ...],
-        chunks: tuple[Chunk, ...],
+            self,
+            units: tuple[TextUnit, ...],
+            chunks: tuple[Chunk, ...],
     ) -> list[ChunkIndex]:
         indexes: list[ChunkIndex] = []
 
@@ -206,9 +206,9 @@ class ChunkExtraIndexer:
 # -- utils -----------------------------------------------------------------
 
 def _chunks_covering_range(
-    chunks: tuple[Chunk, ...],
-    start: int | None,
-    end: int | None,
+        chunks: tuple[Chunk, ...],
+        start: int | None,
+        end: int | None,
 ) -> list[Chunk]:
     """找到与 [start, end) 有重叠的 chunk。
 

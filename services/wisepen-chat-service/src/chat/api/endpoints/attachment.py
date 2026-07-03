@@ -1,16 +1,9 @@
 import uuid
-from typing import List
 from datetime import datetime, timezone
+from typing import List
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends
-
-from chat.domain.entities import ResourceAttachmentRef, TemporaryAttachmentRef
-from chat.domain.repositories import SessionRepository
-from chat.service_client import FileStorageClient, ResourceClient
-from common.core.domain import R
-from common.logger import info, warning
-from common.security import SecurityContextHolder, require_login
 
 from chat.api.schemas.attachment import (
     AddResourceAttachmentsRequest,
@@ -19,6 +12,12 @@ from chat.api.schemas.attachment import (
     InitUploadResponse,
 )
 from chat.container import Container
+from chat.domain.entities import ResourceAttachmentRef, TemporaryAttachmentRef
+from chat.domain.repositories import SessionRepository
+from chat.service_client import FileStorageClient, ResourceClient
+from common.core.domain import R
+from common.logger import info, warning
+from common.security import SecurityContextHolder, require_login
 
 router = APIRouter(tags=["attachment"])
 
@@ -26,10 +25,10 @@ router = APIRouter(tags=["attachment"])
 @router.post("/initUploadTemporaryAttachment", response_model=R[InitUploadResponse])
 @inject
 async def init_temp_attachment_upload(
-    req: InitUploadRequest,
-    user_id: str = Depends(require_login),
-    session_repo: SessionRepository = Depends(Provide[Container.session_repo]),
-    file_storage_client: FileStorageClient = Depends(Provide[Container.file_storage_client])
+        req: InitUploadRequest,
+        user_id: str = Depends(require_login),
+        session_repo: SessionRepository = Depends(Provide[Container.session_repo]),
+        file_storage_client: FileStorageClient = Depends(Provide[Container.file_storage_client])
 ):
     biz_path = f"{user_id}/{req.session_id}"
 
@@ -70,10 +69,10 @@ async def init_temp_attachment_upload(
 @router.post("/addResourceAttachments", response_model=R[List[str]], status_code=200)
 @inject
 async def add_resource_attachments(
-    req: AddResourceAttachmentsRequest,
-    user_id: str = Depends(require_login),
-    session_repo: SessionRepository = Depends(Provide[Container.session_repo]),
-    resource_client: ResourceClient = Depends(Provide[Container.resource_client]),
+        req: AddResourceAttachmentsRequest,
+        user_id: str = Depends(require_login),
+        session_repo: SessionRepository = Depends(Provide[Container.session_repo]),
+        resource_client: ResourceClient = Depends(Provide[Container.resource_client]),
 ):
     session = await session_repo.get_session_for_user(req.session_id, user_id)
     attachment_ids = []
@@ -119,14 +118,16 @@ async def add_resource_attachments(
 @router.post("/deleteAttachment", response_model=R)
 @inject
 async def delete_attachment(
-    req: DeleteAttachmentRequest,
-    user_id: str = Depends(require_login),
-    session_repo: SessionRepository = Depends(Provide[Container.session_repo]),
-    file_storage_client: FileStorageClient = Depends(Provide[Container.file_storage_client])
+        req: DeleteAttachmentRequest,
+        user_id: str = Depends(require_login),
+        session_repo: SessionRepository = Depends(Provide[Container.session_repo]),
+        file_storage_client: FileStorageClient = Depends(Provide[Container.file_storage_client])
 ):
     session = await session_repo.get_session_for_user(req.session_id, user_id)
-    matched_temporary_attachment_ref = next((a for a in session.temporary_attachment_refs if a.attachment_id == req.attachment_id and not a.deleted), None)
-    matched_resource_attachment_ref = next((a for a in session.resource_attachment_refs if a.attachment_id == req.attachment_id and not a.deleted), None)
+    matched_temporary_attachment_ref = next(
+        (a for a in session.temporary_attachment_refs if a.attachment_id == req.attachment_id and not a.deleted), None)
+    matched_resource_attachment_ref = next(
+        (a for a in session.resource_attachment_refs if a.attachment_id == req.attachment_id and not a.deleted), None)
 
     if matched_temporary_attachment_ref is None and matched_resource_attachment_ref is None:
         warning("attachment delete skipped", user_id=user_id, attachment_id=req.attachment_id)

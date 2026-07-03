@@ -15,9 +15,9 @@ class MongoModelRepository(ModelRepository):
     """Model / ModelProviderMapping / Provider 的 MongoDB 仓储实现。user_id=None 表示 SYSTEM，否则表示 USER。"""
 
     async def get_model(
-        self,
-        model_id: PydanticObjectId,
-        user_id: Optional[str] = None,
+            self,
+            model_id: PydanticObjectId,
+            user_id: Optional[str] = None,
     ) -> Model:
         model = await Model.find_one(
             Model.id == model_id,
@@ -30,8 +30,8 @@ class MongoModelRepository(ModelRepository):
         return model
 
     async def list_models_and_mappings(
-        self,
-        user_id: Optional[str] = None,
+            self,
+            user_id: Optional[str] = None,
     ) -> List[ModelInfo]:
         models = await Model.find(
             Model.scope == self._scope_for(user_id),
@@ -47,9 +47,9 @@ class MongoModelRepository(ModelRepository):
         ]
 
     async def _list_mappings_for_model(
-        self,
-        model: Model,
-        user_id: Optional[str],
+            self,
+            model: Model,
+            user_id: Optional[str],
     ) -> List[ModelProviderMapping]:
         return await ModelProviderMapping.find(
             ModelProviderMapping.model_id == model.id,
@@ -57,9 +57,9 @@ class MongoModelRepository(ModelRepository):
         ).sort("-is_active", "-is_preferred", "+priority", "+created_at").to_list()
 
     async def list_models_by_provider_id(
-        self,
-        provider_id: PydanticObjectId,
-        user_id: Optional[str] = None,
+            self,
+            provider_id: PydanticObjectId,
+            user_id: Optional[str] = None,
     ) -> List[ModelInfo]:
         mappings = await ModelProviderMapping.find(
             ModelProviderMapping.provider_id == provider_id,
@@ -79,9 +79,9 @@ class MongoModelRepository(ModelRepository):
         return result
 
     async def create_model(
-        self,
-        model: Model,
-        user_id: Optional[str] = None,
+            self,
+            model: Model,
+            user_id: Optional[str] = None,
     ) -> Model:
         now = datetime.now(timezone.utc)
 
@@ -99,10 +99,10 @@ class MongoModelRepository(ModelRepository):
         return model
 
     async def update_model(
-        self,
-        model_id: PydanticObjectId,
-        updates: dict[str, Any],
-        user_id: Optional[str] = None,
+            self,
+            model_id: PydanticObjectId,
+            updates: dict[str, Any],
+            user_id: Optional[str] = None,
     ) -> Model:
         model = await self.get_model(model_id, user_id)
 
@@ -139,9 +139,9 @@ class MongoModelRepository(ModelRepository):
         return model
 
     async def delete_model(
-        self,
-        model_id: PydanticObjectId,
-        user_id: Optional[str] = None,
+            self,
+            model_id: PydanticObjectId,
+            user_id: Optional[str] = None,
     ) -> None:
         model = await self.get_model(model_id, user_id)
 
@@ -156,14 +156,14 @@ class MongoModelRepository(ModelRepository):
         await model.delete()
 
     async def bind_model_to_provider(
-        self,
-        model_id: PydanticObjectId,
-        provider_id: PydanticObjectId,
-        provider_model_name: str,
-        user_id: Optional[str] = None,
-        *,
-        is_preferred: bool = True,
-        is_active: bool = True,
+            self,
+            model_id: PydanticObjectId,
+            provider_id: PydanticObjectId,
+            provider_model_name: str,
+            user_id: Optional[str] = None,
+            *,
+            is_preferred: bool = True,
+            is_active: bool = True,
     ) -> ModelProviderMapping:
         model = await self.get_model(model_id, user_id)
 
@@ -198,8 +198,8 @@ class MongoModelRepository(ModelRepository):
             )
 
             try:
-                if is_preferred: # 如果设为首选
-                    await self._clear_preferred_mappings(model_id, user_id, now) # 移除其他首选项
+                if is_preferred:  # 如果设为首选
+                    await self._clear_preferred_mappings(model_id, user_id, now)  # 移除其他首选项
                 await mapping.insert()
             except DuplicateKeyError:
                 raise ServiceException(ChatErrorCode.MODEL_MAPPING_ALREADY_EXISTS)
@@ -210,8 +210,8 @@ class MongoModelRepository(ModelRepository):
         mapping.updated_at = now
 
         try:
-            if is_preferred == True and mapping.is_preferred == False: # 如果设为首选且此前不是首选
-                await self._clear_preferred_mappings(model_id, user_id, now) # 移除其他首选项
+            if is_preferred == True and mapping.is_preferred == False:  # 如果设为首选且此前不是首选
+                await self._clear_preferred_mappings(model_id, user_id, now)  # 移除其他首选项
 
             mapping.is_preferred = is_preferred
             mapping.is_active = is_active
@@ -222,10 +222,10 @@ class MongoModelRepository(ModelRepository):
         return mapping
 
     async def _clear_preferred_mappings(
-        self,
-        model_id: PydanticObjectId,
-        owner_user_id: Optional[str],
-        now: datetime,
+            self,
+            model_id: PydanticObjectId,
+            owner_user_id: Optional[str],
+            now: datetime,
     ) -> None:
         mappings = await ModelProviderMapping.find(
             ModelProviderMapping.model_id == model_id,
@@ -239,10 +239,10 @@ class MongoModelRepository(ModelRepository):
             await mapping.save()
 
     async def unbind_model_from_provider(
-        self,
-        model_id: PydanticObjectId,
-        provider_id: PydanticObjectId,
-        user_id: Optional[str] = None,
+            self,
+            model_id: PydanticObjectId,
+            provider_id: PydanticObjectId,
+            user_id: Optional[str] = None,
     ) -> None:
         await self.get_model(model_id, user_id)
 
@@ -261,9 +261,9 @@ class MongoModelRepository(ModelRepository):
             await self._promote_next_preferred_mapping(model_id, user_id)
 
     async def _promote_next_preferred_mapping(
-        self,
-        model_id: PydanticObjectId,
-        owner_user_id: Optional[str],
+            self,
+            model_id: PydanticObjectId,
+            owner_user_id: Optional[str],
     ) -> None:
         mappings = await ModelProviderMapping.find(
             ModelProviderMapping.model_id == model_id,
@@ -280,12 +280,12 @@ class MongoModelRepository(ModelRepository):
         await mapping.save()
 
     async def resolve_model_for_chat(
-        self,
-        model_id: PydanticObjectId,
-        user_id: Optional[str] = None,
-        provider_id: Optional[PydanticObjectId] = None,
-        scope: Optional[ModelScope] = None,
-        runtime_options: Optional[dict[str, Any]] = None
+            self,
+            model_id: PydanticObjectId,
+            user_id: Optional[str] = None,
+            provider_id: Optional[PydanticObjectId] = None,
+            scope: Optional[ModelScope] = None,
+            runtime_options: Optional[dict[str, Any]] = None
     ) -> ModelRequestInfo:
         runtime_options = runtime_options or {}
         model = await self._find_chat_model(model_id, user_id, scope)
@@ -324,10 +324,10 @@ class MongoModelRepository(ModelRepository):
         return ModelRequestInfo(model=model, mapping=mapping, provider=provider, runtime_options=runtime_options)
 
     async def _find_chat_model(
-        self,
-        model_id: PydanticObjectId,
-        user_id: Optional[str],
-        scope: Optional[ModelScope],
+            self,
+            model_id: PydanticObjectId,
+            user_id: Optional[str],
+            scope: Optional[ModelScope],
     ) -> Optional[Model]:
         if scope is not None:
             owner_user_id = user_id if scope == ModelScope.USER else None

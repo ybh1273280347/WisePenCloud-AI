@@ -29,12 +29,12 @@ class MathSolveTool:
     __slots__ = ("_definition", "_name", "_solver")
 
     def __init__(
-        self,
-        *,
-        name: str,
-        description: str,
-        parameters_schema: dict[str, Any],
-        solver: MathSolver
+            self,
+            *,
+            name: str,
+            description: str,
+            parameters_schema: dict[str, Any],
+            solver: MathSolver
     ) -> None:
         self._name = name
         self._solver = solver

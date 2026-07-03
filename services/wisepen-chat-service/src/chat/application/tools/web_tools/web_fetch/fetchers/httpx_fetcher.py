@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from chat.application.tools.utils.url_fetcher import (
+from chat.application.tools.utils.url import (
     UrlFetcherError,
     UrlFetcherHttpError,
     UrlFetcherNetworkError,
@@ -24,10 +24,10 @@ class HttpxFetcher:
     __slots__ = ("_http", "_max_response_bytes")
 
     def __init__(
-        self,
-        *,
-        http_client: httpx.AsyncClient,
-        max_response_bytes: int = 52_428_800,
+            self,
+            *,
+            http_client: httpx.AsyncClient,
+            max_response_bytes: int = 52_428_800,
     ) -> None:
         self._http = http_client
         self._max_response_bytes = max_response_bytes

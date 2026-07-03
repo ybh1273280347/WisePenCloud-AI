@@ -1,14 +1,14 @@
 ﻿import asyncio
 from typing import List, Dict, Any, Optional
+
 from mem0 import Memory
 
+from chat.core.config.app_settings import settings
+from chat.domain.entities import ChatMessage, Role
 from chat.domain.error_codes import ChatErrorCode
+from chat.domain.interfaces import MemoryProvider
 from common.core.exceptions import ServiceException
 from common.logger import debug, warn
-
-from chat.domain.entities import ChatMessage, Role
-from chat.domain.interfaces import MemoryProvider
-from chat.core.config.app_settings import settings
 
 
 class Mem0Adapter(MemoryProvider):
@@ -47,7 +47,7 @@ class Mem0Adapter(MemoryProvider):
                 },
             },
         }
-        
+
         try:
             debug("mem0 client initializing.")
             self.client = Memory.from_config(self._config)
@@ -138,4 +138,3 @@ class Mem0Adapter(MemoryProvider):
             self.client.delete_all(user_id=user_id)
 
         await asyncio.to_thread(_sync_delete_all)
-

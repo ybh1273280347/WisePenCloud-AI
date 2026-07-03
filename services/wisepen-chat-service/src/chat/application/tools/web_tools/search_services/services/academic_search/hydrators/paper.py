@@ -17,20 +17,20 @@ class PaperHydrator:
     __slots__ = ("_base_url", "_client")
 
     def __init__(
-        self,
-        *,
-        http_client: httpx.AsyncClient,
-        base_url: str,
+            self,
+            *,
+            http_client: httpx.AsyncClient,
+            base_url: str,
     ) -> None:
         self._client = http_client
         self._base_url = base_url.rstrip("/")
 
     async def hydrate(
-        self,
-        *,
-        api_key: str | None = None,
-        url: str | None = None,
-        title: str | None = None,
+            self,
+            *,
+            api_key: str | None = None,
+            url: str | None = None,
+            title: str | None = None,
     ) -> HydratedPaper:
         # 水合策略：URL 优先（精确匹配），URL 失败时回退到 title 模糊匹配
         if not api_key:
@@ -120,7 +120,7 @@ class PaperHydrator:
             item
             for item in results
             if isinstance(item, dict)
-            and _normalize_title(str(item.get("display_name") or item.get("title") or "")) == normalized_title
+               and _normalize_title(str(item.get("display_name") or item.get("title") or "")) == normalized_title
         ]
         if not matched:
             return HydratedPaper(failure_reason=OpenAlexFailureReason.TITLE_NOT_MATCHED)

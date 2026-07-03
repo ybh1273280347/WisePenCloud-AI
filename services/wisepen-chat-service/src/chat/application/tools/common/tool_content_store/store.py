@@ -49,23 +49,23 @@ class ToolContentStore:
     __slots__ = ("_repository", "_chunking_engine")
 
     def __init__(
-        self,
-        *,
-        repository: ToolContentRepository,
-        chunking_engine: ChunkingEngine | None = None,
+            self,
+            *,
+            repository: ToolContentRepository,
+            chunking_engine: ChunkingEngine | None = None,
     ) -> None:
         self._repository = repository
         self._chunking_engine = chunking_engine or _DEFAULT_CHUNKING_ENGINE
 
     async def put(
-        self,
-        *,
-        session_id: str,
-        text: str,
-        content_type: str = "text/markdown",
-        metadata: Metadata | None = None,
-        chunking_pipeline_name: str | None = None,
-        chunked: bool = True,
+            self,
+            *,
+            session_id: str,
+            text: str,
+            content_type: str = "text/markdown",
+            metadata: Metadata | None = None,
+            chunking_pipeline_name: str | None = None,
+            chunked: bool = True,
     ) -> ToolContentReceipt | None:
         """写入内容并返回 receipt；空文本或超长返回 None。"""
         normalized_text = text.strip()
@@ -142,10 +142,10 @@ class ToolContentStore:
         return stored
 
     async def canonicalize_content_id(
-        self,
-        *,
-        content_id: str,
-        session_id: str,
+            self,
+            *,
+            content_id: str,
+            session_id: str,
     ) -> tuple[str, str | None]:
         """将重定向 receipt 解析为可读的 canonical content_id。"""
         stored = await self.get(content_id=content_id, session_id=session_id)
@@ -170,9 +170,9 @@ class ToolContentStore:
 # ---------------------------------------------------------------------------
 
 def _to_tool_chunk(
-    chunk: Chunk,
-    *,
-    extra_index_view: dict[str, object] | None,
+        chunk: Chunk,
+        *,
+        extra_index_view: dict[str, object] | None,
 ) -> ToolContentChunk:
     section_path = (
         cast(tuple[str, ...] | None, extra_index_view.get("section_path"))

@@ -19,10 +19,10 @@ class FouGetDdgSearcher:
         self._ddg = ddg_searcher
 
     async def search_web(
-        self,
-        *,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            query: str,
+            max_results: int,
     ) -> ProviderSearchResponse:
         # 1. 优先 fourget
         try:
@@ -51,9 +51,9 @@ class FouGetDdgSearcher:
         return ddg_response
 
     async def search_academic(
-        self,
-        *,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            query: str,
+            max_results: int,
     ) -> ProviderSearchResponse:
         raise SearchProviderError("4get+ddg does not support academic search.")

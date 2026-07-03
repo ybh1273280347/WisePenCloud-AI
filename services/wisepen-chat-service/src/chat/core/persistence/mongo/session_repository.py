@@ -1,12 +1,12 @@
-from typing import Optional, List, Tuple
 from datetime import datetime, timezone
+from typing import Optional, List, Tuple
 
 from beanie import PydanticObjectId
 
-from common.core.exceptions import ServiceException
-from chat.domain.repositories import SessionRepository
 from chat.domain.entities import ChatSession, ResourceAttachmentRef, TemporaryAttachmentRef
 from chat.domain.error_codes import ChatErrorCode
+from chat.domain.repositories import SessionRepository
+from common.core.exceptions import ServiceException
 
 
 class MongoSessionRepository(SessionRepository):
@@ -31,7 +31,8 @@ class MongoSessionRepository(SessionRepository):
             raise ServiceException(ChatErrorCode.SESSION_NOT_FOUND)
         return session
 
-    async def get_session_attachments(self, session_id: str, user_id: str) -> Tuple[Optional[List[TemporaryAttachmentRef]], Optional[List[ResourceAttachmentRef]]]:
+    async def get_session_attachments(self, session_id: str, user_id: str) -> Tuple[
+        Optional[List[TemporaryAttachmentRef]], Optional[List[ResourceAttachmentRef]]]:
         session = await self.get_session_for_user(session_id, user_id)
         temporary_refs = [ref for ref in session.temporary_attachment_refs if not ref.deleted]
         resource_attachments = [ref for ref in session.resource_attachment_refs if not ref.deleted]
@@ -42,9 +43,9 @@ class MongoSessionRepository(SessionRepository):
         query = ChatSession.find(ChatSession.user_id == user_id)
         total = await query.count()
         items = await query.sort(
-            "-is_pinned",    
-            "-pinned_at",      
-            "-updated_at"      
+            "-is_pinned",
+            "-pinned_at",
+            "-updated_at"
         ).skip((page - 1) * size).limit(size).to_list()
         return items, total
 
@@ -69,17 +70,17 @@ class MongoSessionRepository(SessionRepository):
     async def set_session_pinned(self, session_id: str, user_id: str, is_pinned: bool) -> ChatSession:
         session = await self._safe_get_session(session_id, user_id)
         session.is_pinned = is_pinned
-        session.pinned_at = datetime.now(timezone.utc) if is_pinned else None   # 取消置顶时，置顶时间设为 None
+        session.pinned_at = datetime.now(timezone.utc) if is_pinned else None  # 取消置顶时，置顶时间设为 None
         session.updated_at = datetime.now(timezone.utc)
         await session.save()
         return session
 
     async def set_session_agent(
-        self,
-        session_id: str,
-        user_id: str,
-        agent_id: str | None,
-        agent_version: int | None,
+            self,
+            session_id: str,
+            user_id: str,
+            agent_id: str | None,
+            agent_version: int | None,
     ) -> ChatSession:
         session = await self._safe_get_session(session_id, user_id)
         session.agent_id = agent_id

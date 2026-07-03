@@ -176,8 +176,8 @@ class CreateSkillTool:
     """从结构化标题树创建并发布新的 Skill 文档。"""
 
     def __init__(
-        self,
-        skill_publisher: SkillPublisher,
+            self,
+            skill_publisher: SkillPublisher,
     ) -> None:
         self._skill_publisher = skill_publisher
         self._definition = ToolDefinition(

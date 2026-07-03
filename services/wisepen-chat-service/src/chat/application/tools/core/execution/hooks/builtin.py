@@ -16,11 +16,11 @@ class RequiredContextCheck(ToolPreflightHook):
     name = "required_context"
 
     async def check(
-        self,
-        invocation: ToolInvocation,
-        policy: ToolPolicy,
-        parameters_schema: ToolParametersSchema,
-        context: dict[str, Any],
+            self,
+            invocation: ToolInvocation,
+            policy: ToolPolicy,
+            parameters_schema: ToolParametersSchema,
+            context: dict[str, Any],
     ) -> ToolPreflightResult:
         if missing := [key for key in policy.required_context_keys if key not in context]:
             return ToolPreflightResult(
@@ -42,11 +42,11 @@ class JsonSchemaCheck(ToolPreflightHook):
     name = "json_schema"
 
     async def check(
-        self,
-        invocation: ToolInvocation,
-        policy: ToolPolicy,
-        parameters_schema: ToolParametersSchema,
-        context: dict[str, Any],
+            self,
+            invocation: ToolInvocation,
+            policy: ToolPolicy,
+            parameters_schema: ToolParametersSchema,
+            context: dict[str, Any],
     ) -> ToolPreflightResult:
         validator = Draft202012Validator(parameters_schema.raw)
 
@@ -57,12 +57,6 @@ class JsonSchemaCheck(ToolPreflightHook):
                 invocation.tool_call_arguments,
                 path=(),
             )
-
-
-
-
-
-
 
             if blank_path is None:
                 return ToolPreflightResult(ok=True)
@@ -86,11 +80,11 @@ class ExactlyOneOfCheck(ToolPreflightHook):
     name = "exactly_one_of"
 
     async def check(
-        self,
-        invocation: ToolInvocation,
-        policy: ToolPolicy,
-        parameters_schema: ToolParametersSchema,
-        context: dict[str, Any],
+            self,
+            invocation: ToolInvocation,
+            policy: ToolPolicy,
+            parameters_schema: ToolParametersSchema,
+            context: dict[str, Any],
     ) -> ToolPreflightResult:
         for rule in parameters_schema.exactly_one_of:
             matched_group = _matched_exactly_one_group(rule, invocation.tool_call_arguments)
@@ -111,8 +105,8 @@ def _format_error(error: ValidationError, tool_name: str) -> str:
 
 
 def _matched_exactly_one_group(
-    rule: ToolExactlyOneOf,
-    arguments: dict[str, Any],
+        rule: ToolExactlyOneOf,
+        arguments: dict[str, Any],
 ) -> tuple[str, ...] | None:
     argument_keys = set(arguments)
     matched_group: tuple[str, ...] | None = None
@@ -140,10 +134,10 @@ def _format_exactly_one_of_error(rule: ToolExactlyOneOf, tool_name: str) -> str:
 
 
 def _blank_min_length_string_path_at(
-    schema: dict[str, Any],
-    value: Any,
-    *,
-    path: tuple[str, ...]=(),
+        schema: dict[str, Any],
+        value: Any,
+        *,
+        path: tuple[str, ...] = (),
 ) -> str | None:
     schema_type = schema.get("type")
 
@@ -151,10 +145,10 @@ def _blank_min_length_string_path_at(
         min_length = schema.get("minLength")
         # jsonschema 的 minLength 按原始长度计算，"   " 仍会通过，这里补上工具参数语义里的非空白约束。
         if (
-            isinstance(min_length, int)
-            and min_length >= 1
-            and isinstance(value, str)
-            and not value.strip()
+                isinstance(min_length, int)
+                and min_length >= 1
+                and isinstance(value, str)
+                and not value.strip()
         ):
             return _format_schema_path(path)
         return None

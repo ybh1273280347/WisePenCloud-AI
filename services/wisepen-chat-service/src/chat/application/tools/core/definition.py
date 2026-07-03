@@ -147,24 +147,28 @@ class ToolLLMSpec:
     description: str
     parameters_schema: ToolParametersSchema
 
+
 @dataclass(frozen=True)
 class ToolPolicy:
     """工具策略"""
-    expose_by_default: bool = False # 是否默认暴露给模型
+    expose_by_default: bool = False  # 是否默认暴露给模型
 
-    timeout_seconds: float | None = None # 超时时间
-    timeout_strategy: ToolTimeoutStrategy = ToolTimeoutStrategy.CANCEL_TASK # 超时后策略
+    timeout_seconds: float | None = None  # 超时时间
+    timeout_strategy: ToolTimeoutStrategy = ToolTimeoutStrategy.CANCEL_TASK  # 超时后策略
 
-    persist_output: bool = False # 是否持久化输出 (如果不持久化则需要生成占位符)
-    persisted_output_placeholder_factory: Callable[[dict, Any], str | None] = lambda tool_call_arguments, output: None # 持久化输出的占位生成器
-    cache_chunked: bool = True # cacheable_texts 入库时是否生成 chunks/index
+    persist_output: bool = False  # 是否持久化输出 (如果不持久化则需要生成占位符)
+    persisted_output_placeholder_factory: Callable[[dict, Any], str | None] = lambda tool_call_arguments,
+                                                                                     output: None  # 持久化输出的占位生成器
 
-    risk_level: ToolRiskLevel = ToolRiskLevel.LOW # 风险级别
 
-    required_context_keys: tuple[str, ...] = () # 需要的上下文Key
+cache_chunked: bool = True  # cacheable_texts 入库时是否生成 chunks/index
 
-    max_output_chars: int | None = None # 输出最大字符数（超过后截断）
-    allow_parallel: bool = False # 允许并行
+risk_level: ToolRiskLevel = ToolRiskLevel.LOW  # 风险级别
+
+required_context_keys: tuple[str, ...] = ()  # 需要的上下文Key
+
+max_output_chars: int | None = None  # 输出最大字符数（超过后截断）
+allow_parallel: bool = False  # 允许并行
 
 
 @dataclass(frozen=True)

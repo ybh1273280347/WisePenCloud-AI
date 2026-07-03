@@ -411,12 +411,12 @@ answerability_warning
 
 ## 9. Gate 分工总结
 
-| 层级 | 位置 | 是否中断 | 职责 |
-|---|---|---:|---|
-| Hard Gate | 主召回 topK 后 | 是 | 极端失败直接拒答 |
-| Soft Gate | Hard Gate 后 | 否 | 给 warning，并触发 Neo4j Enhancement |
-| Neo4j Enhancement | Soft Gate 触发后 | 否 | 尝试补强 direct evidence |
-| Main Model | Context Builder 后 | 最终表达 | 完整答、部分答、澄清或拒答 |
+| 层级                | 位置                | 是否中断 | 职责                              |
+|-------------------|-------------------|-----:|---------------------------------|
+| Hard Gate         | 主召回 topK 后        |    是 | 极端失败直接拒答                        |
+| Soft Gate         | Hard Gate 后       |    否 | 给 warning，并触发 Neo4j Enhancement |
+| Neo4j Enhancement | Soft Gate 触发后     |    否 | 尝试补强 direct evidence            |
+| Main Model        | Context Builder 后 | 最终表达 | 完整答、部分答、澄清或拒答                   |
 
 ---
 

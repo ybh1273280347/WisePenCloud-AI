@@ -10,6 +10,13 @@ import httpx
 
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.errors import tool_file_error_reason
+from chat.application.tools.common.web_content_cache import (
+    WebContentCacheEntryRepository,
+    WebContentCacheValueRepository,
+)
+from chat.application.tools.common.web_content_cache.refresh_queue import (
+    WebContentCacheRefreshTaskPublisher,
+)
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExactlyOneOf,
@@ -33,19 +40,14 @@ from chat.application.tools.document_tools.document_parse.models import Document
 from chat.application.tools.document_tools.document_parse.service import DocumentParseService
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.batching import batched
-from chat.application.tools.common.web_content_cache.refresh_queue import (
-    WebContentCacheRefreshTaskPublisher,
-)
-from chat.application.tools.common.web_content_cache import (
-    WebContentCacheEntryRepository,
-    WebContentCacheValueRepository,
-)
-from chat.application.tools.utils.url_fetcher import (
+from chat.application.tools.utils.url import (
     FetchedUrl,
     UrlFetcherError,
     UrlFetcherUnsupportedUrlError,
+    UrlSecurityError,
     fetch_url,
     filename_from_url,
+    validate_public_http_url,
 )
 
 MAX_DOCUMENT_PARSE_FILE_REFS = 64
@@ -77,15 +79,15 @@ class DocumentParseTool:
     )
 
     def __init__(
-        self,
-        *,
-        file_store: ToolRunFileStore,
-        parse_service: DocumentParseService,
-        content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
-        content_cache_value_repository: WebContentCacheValueRepository | None = None,
-        refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
-        url_download_http_client: httpx.AsyncClient | None = None,
-        max_download_bytes: int = 52_428_800,
+            self,
+            *,
+            file_store: ToolRunFileStore,
+            parse_service: DocumentParseService,
+            content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
+            content_cache_value_repository: WebContentCacheValueRepository | None = None,
+            refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
+            url_download_http_client: httpx.AsyncClient | None = None,
+            max_download_bytes: int = 52_428_800,
     ) -> None:
         self._file_store = file_store
         self._parse_service = parse_service
@@ -186,11 +188,11 @@ class DocumentParseTool:
         return self._definition
 
     async def refresh_stale_parse_cache(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        file_ref: str,
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            file_ref: str,
     ) -> None:
         await self._cache.refresh_stale_parse_cache(
             user_id=user_id,
@@ -245,11 +247,11 @@ class DocumentParseTool:
         )
 
     async def _parse_file_ref_batches(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        file_refs: tuple[str, ...],
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            file_refs: tuple[str, ...],
     ) -> list[tuple[DocumentParseToolItem, str | None]]:
         semaphore = asyncio.Semaphore(DOCUMENT_PARSE_CONCURRENCY)
         results: list[tuple[DocumentParseToolItem, str | None]] = []
@@ -267,11 +269,11 @@ class DocumentParseTool:
         return results
 
     async def _parse_direct_url_batches(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        direct_urls: tuple[str, ...],
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            direct_urls: tuple[str, ...],
     ) -> list[tuple[DocumentParseToolItem, str | None]]:
         semaphore = asyncio.Semaphore(DOCUMENT_PARSE_CONCURRENCY)
         results: list[tuple[DocumentParseToolItem, str | None]] = []
@@ -289,12 +291,12 @@ class DocumentParseTool:
         return results
 
     async def _parse_one(
-        self,
-        *,
-        semaphore: asyncio.Semaphore,
-        user_id: str,
-        session_id: str,
-        file_ref: str,
+            self,
+            *,
+            semaphore: asyncio.Semaphore,
+            user_id: str,
+            session_id: str,
+            file_ref: str,
     ) -> tuple[DocumentParseToolItem, str | None]:
         """解析单个文件引用；异常转换为单项失败。"""
         async with semaphore:
@@ -364,12 +366,12 @@ class DocumentParseTool:
                 )
 
     async def _parse_direct_url(
-        self,
-        *,
-        semaphore: asyncio.Semaphore,
-        user_id: str,
-        session_id: str,
-        direct_url: str,
+            self,
+            *,
+            semaphore: asyncio.Semaphore,
+            user_id: str,
+            session_id: str,
+            direct_url: str,
     ) -> tuple[DocumentParseToolItem, str | None]:
         """下载明显文件直链并复用 tfile 解析链路。"""
         if self._url_download_http_client is None:
@@ -383,12 +385,14 @@ class DocumentParseTool:
             )
 
         url = direct_url.strip()
-        if not url.startswith(("http://", "https://")):
+        try:
+            url = validate_public_http_url(url)
+        except UrlSecurityError as e:
             return (
                 DocumentParseToolItem(
                     source=direct_url,
                     status="failed",
-                    reason="invalid_direct_url",
+                    reason=f"invalid_direct_url:{e}",
                 ),
                 None,
             )
@@ -432,7 +436,7 @@ class DocumentParseTool:
                 producer="document_parse",
                 path=raw.file_path,
                 filename=filename_from_url(raw.final_url or raw.source_url)
-                or f"download.{raw.file_label or 'bin'}",
+                         or f"download.{raw.file_label or 'bin'}",
                 content_type=raw.content_type,
                 ref_prefix="web_public",
                 metadata=metadata,

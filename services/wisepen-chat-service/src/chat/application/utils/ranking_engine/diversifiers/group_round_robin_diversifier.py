@@ -33,9 +33,9 @@ class GroupRoundRobinDiversifier:
         self.name = "group_round_robin_diversifier"
 
     def diversify(
-        self,
-        *,
-        ranked: tuple[RankedCandidate, ...],
+            self,
+            *,
+            ranked: tuple[RankedCandidate, ...],
     ) -> tuple[RankedCandidate, ...]:
 
         if not ranked:
@@ -101,5 +101,3 @@ class GroupRoundRobinDiversifier:
             # 未知 group 默认每个候选单独成组，避免无 group 的候选互相挤压。
             return f"{self.config.unknown_group_prefix}:{candidate.candidate_id}"
         return self.config.unknown_group_prefix
-
-

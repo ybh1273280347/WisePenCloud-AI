@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from typing import Any
 
+from ._search_provider_utils.coerce import as_str, as_str_or_none
+from ._search_provider_utils.search_result import dedupe_by_url, is_valid_result
 from .models import (
     ProviderSearchResponse,
     ProviderSearchResult,
     SearchPreview,
     SearchProviderName,
 )
-from ._search_provider_utils.coerce import as_str, as_str_or_none
-from ._search_provider_utils.search_result import dedupe_by_url, is_valid_result
 
 
 def map_ddgs_response(
-    items: list[dict[str, Any]],
-    *,
-    query: str,
-    max_results: int,
+        items: list[dict[str, Any]],
+        *,
+        query: str,
+        max_results: int,
 ) -> ProviderSearchResponse:
     """把 ddgs 原始结果列表归一化为 provider 搜索响应。
 
@@ -36,8 +36,8 @@ def map_ddgs_response(
 
 
 def _map_ddgs_item(
-    *,
-    item: dict[str, Any],
+        *,
+        item: dict[str, Any],
 ) -> ProviderSearchResult | None:
     """归一化 ddgs 单条结果。"""
     title = as_str(item.get("title"))

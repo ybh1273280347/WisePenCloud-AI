@@ -4,13 +4,13 @@
 
 ### 核心流程（纯函数层，无外部依赖）
 
-| 模块 | 状态 | 说明 |
-|------|------|------|
-| `models.py` | done | `SkillSection` / `SkillFile` / `SkillScript` / `CreateSkillRequest` Pydantic 模型 |
-| `serializer.py` | done | `serialize_skill_markdown`（YAML frontmatter + Markdown body）、`serialize_skill_file_markdown`（无 frontmatter）、`package_skill`（zip 打包） |
-| `validator.py` | done | node_id 全树唯一、body 标题检查（markdown-it-py）、路径合法性 |
-| `skill_publisher.py` | done | `SkillPublisher` Protocol + `SkillPublishResult` dataclass |
-| `create_skill_tool.py` | done | `CreateSkillTool` 类，含完整 PARAMETERS_SCHEMA（含 $defs/SkillFile、SkillScript）、ToolPolicy、execute 流程 |
+| 模块                     | 状态   | 说明                                                                                                                                  |
+|------------------------|------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `models.py`            | done | `SkillSection` / `SkillFile` / `SkillScript` / `CreateSkillRequest` Pydantic 模型                                                     |
+| `serializer.py`        | done | `serialize_skill_markdown`（YAML frontmatter + Markdown body）、`serialize_skill_file_markdown`（无 frontmatter）、`package_skill`（zip 打包） |
+| `validator.py`         | done | node_id 全树唯一、body 标题检查（markdown-it-py）、路径合法性                                                                                        |
+| `skill_publisher.py`   | done | `SkillPublisher` Protocol + `SkillPublishResult` dataclass                                                                          |
+| `create_skill_tool.py` | done | `CreateSkillTool` 类，含完整 PARAMETERS_SCHEMA（含 $defs/SkillFile、SkillScript）、ToolPolicy、execute 流程                                      |
 
 ### Schema 扩展
 
@@ -54,6 +54,7 @@ metadata:
 ### 测试
 
 38 个测试全部通过，覆盖：
+
 - Schema 声明与 strict mode
 - node_id 全树唯一性（含跨文件）
 - body 标题检查（ATX / Setext / code block 不误判）
@@ -71,6 +72,7 @@ metadata:
 **位置**：`skill_publisher.py` 中新增实现类（如 `AIAssetServiceSkillPublisher`）
 
 **待明确**：
+
 - Java ai-asset-service 的 Skill 上传 API 端点、请求格式
 - zip 包是直接上传还是先解压再逐文件上传
 - 认证方式（token / 内部签名 / 服务间调用）
@@ -83,6 +85,7 @@ metadata:
 **位置**：`create_skill_tool.py` 的 `execute` 方法中，步骤 2 和步骤 3 之间
 
 **待明确**：
+
 - 冲突检查通过 `AIAssetClient` 还是 `available_skills` 索引查询
 - 平台内置 Skill 的保留字列表来源
 - 并发创建同一 skill_id 的原子性保证机制
@@ -94,6 +97,7 @@ metadata:
 **位置**：`create_skill_tool.py` 的 `execute` 方法中，步骤 4 之后
 
 **待明确**：
+
 - 索引存储位置（MongoDB / Redis / 内存）
 - 索引写入与 OSS 上传的事务/补偿机制
 - 索引刷新方式（实时 / 定时 / 事件驱动）
@@ -105,6 +109,7 @@ metadata:
 **位置**：`skill_tools/__init__.py` 或工具注册入口
 
 **待明确**：
+
 - `CreateSkillTool` 的依赖注入方式（SkillPublisher 实例从哪里来）
 - 是否需要 `AllowedSkillIdCheck` 或其他权限检查
 
@@ -115,6 +120,7 @@ metadata:
 **位置**：`tests/create_skill/` 目录
 
 **待明确**：
+
 - SkillPublisher 实际实现后需要端到端测试
 - available_skills 索引写入后的查询验证
 

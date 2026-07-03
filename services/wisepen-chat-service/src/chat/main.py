@@ -1,10 +1,12 @@
 ﻿# 屏蔽 websockets.legacy 第三方弃用提示
 import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"websockets\.legacy",)
+
+warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"websockets\.legacy", )
 
 from common.logger import setup_logging_intercept, info, error
 from common.observability import setup_observability
 from chat.core.config.bootstrap_settings import bootstrap_settings
+
 # 在任何其他 import 之前完成日志桥接与 OTel SDK 初始化。
 # LOG_LEVEL 和服务名来自 bootstrap_settings（.env），无需等待 Nacos
 setup_logging_intercept(bootstrap_settings.LOG_LEVEL)
@@ -39,7 +41,6 @@ from chat.api.endpoints import web_search as web_search_endpoints
 from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping
 from chat.domain.entities.web_search_credential import WebSearchCredential
 
-
 # 避免 HTTP 代理拦截内部中间件请求。
 no_proxy = ",".join(filter(None, [
     os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or "",
@@ -47,6 +48,7 @@ no_proxy = ",".join(filter(None, [
 ]))
 os.environ["no_proxy"] = no_proxy
 os.environ["NO_PROXY"] = no_proxy
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -74,7 +76,7 @@ async def lifespan(app: FastAPI):
         await nacos_client_manager.register_instance()
     except Exception as e:
         error("nacos instance register failed.", exc=e)
-    
+
     # 启动 Kafka Producer
     kafka_producer = container.kafka_producer()
     await kafka_producer.start()
@@ -120,6 +122,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         error("nacos instance deregister failed.", exc=e)
 
+
 container.wire(
     modules=[
         attachment_endpoints,
@@ -160,5 +163,3 @@ if __name__ == "__main__":
         reload=False,
         workers=1,
     )
-
-

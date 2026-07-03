@@ -1,12 +1,14 @@
 # Ranking Engine
 
-Ranking Engine 是工具层共用的排序小框架。它的目标不是展示复杂算法，而是让业务工具把“候选怎么排”从工具代码里拆出来，便于 review、替换和排错。
+Ranking Engine 是工具层共用的排序小框架。它的目标不是展示复杂算法，而是让业务工具把“候选怎么排”从工具代码里拆出来，便于
+review、替换和排错。
 
 读这份文档时请抓住一个边界：Ranking Engine 只排序，不读取 Redis，不解析 content_id，不格式化 tool output，也不决定业务流程。
 
 内置 engine 通过 `registry.py` 显式注册并维护单例，不做懒加载或懒导入。
 
-当前内置两个中文 tokenizer：`JiebaRankingTokenizer` 和 `ThuLacRankingTokenizer`。`registry.py` 里现有 `read.ranked_expand` engine 默认绑定 `ThuLacRankingTokenizer`，不再叠加本地 THUOCL 领域词保护逻辑。
+当前内置两个中文 tokenizer：`JiebaRankingTokenizer` 和 `ThuLacRankingTokenizer`。`registry.py` 里现有 `read.ranked_expand`
+engine 默认绑定 `ThuLacRankingTokenizer`，不再叠加本地 THUOCL 领域词保护逻辑。
 
 ## 什么时候用
 
@@ -84,14 +86,14 @@ result = RankingEngine(pipeline=pipeline).rank(
 
 `RankCandidate` 是业务和排序框架之间最重要的接口。
 
-| 字段 | 什么时候填 | 注意 |
-| --- | --- | --- |
-| `candidate_id` | 永远必填 | 同一次请求内必须唯一 |
-| `text` | 全文 BM25、reranker、MMR 需要主文本时 | 不要把字段文本重复拼进去造成二次计算 |
-| `fields` | 字段化 BM25 或关键词硬过滤 | key 应该表达真实语义，如 `title`、`snippet`、`section`、`anchor` |
-| `prior_rank` | 上游已有排序时 | 越小越靠前，`None` 会被 PriorRankScorer 跳过 |
-| `group_key` | 需要多样性控制时 | web 用 domain，文档 chunk 用 document/content id |
-| `metadata` | 回填业务信息 | Ranking Engine 不应该依赖模糊 metadata 做核心排序 |
+| 字段             | 什么时候填                       | 注意                                                  |
+|----------------|-----------------------------|-----------------------------------------------------|
+| `candidate_id` | 永远必填                        | 同一次请求内必须唯一                                          |
+| `text`         | 全文 BM25、reranker、MMR 需要主文本时 | 不要把字段文本重复拼进去造成二次计算                                  |
+| `fields`       | 字段化 BM25 或关键词硬过滤            | key 应该表达真实语义，如 `title`、`snippet`、`section`、`anchor` |
+| `prior_rank`   | 上游已有排序时                     | 越小越靠前，`None` 会被 PriorRankScorer 跳过                  |
+| `group_key`    | 需要多样性控制时                    | web 用 domain，文档 chunk 用 document/content id         |
+| `metadata`     | 回填业务信息                      | Ranking Engine 不应该依赖模糊 metadata 做核心排序               |
 
 常见坑：
 
@@ -103,33 +105,33 @@ result = RankingEngine(pipeline=pipeline).rank(
 
 ### Scorers
 
-| 组件 | 用途 | 必要输入 |
-| --- | --- | --- |
-| `BM25Scorer` | 对 `candidate.text` 做 BM25 | `text` 非空更有意义 |
-| `FieldedBM25Scorer` | 对配置中的 `fields` 分别做 BM25 | `candidate.fields` 中存在对应 key |
-| `PriorRankScorer` | 把上游原始排名转成信号 | `prior_rank` |
-| `DenseVectorScorer` | query/candidate embedding 余弦相似度 | `metadata["embedding"]` |
-| `` | 读取上游检索系统已经产出的原始排序信号 | `metadata["raw_score_signals"]` |
+| 组件                  | 用途                              | 必要输入                            |
+|---------------------|---------------------------------|---------------------------------|
+| `BM25Scorer`        | 对 `candidate.text` 做 BM25       | `text` 非空更有意义                   |
+| `FieldedBM25Scorer` | 对配置中的 `fields` 分别做 BM25         | `candidate.fields` 中存在对应 key    |
+| `PriorRankScorer`   | 把上游原始排名转成信号                     | `prior_rank`                    |
+| `DenseVectorScorer` | query/candidate embedding 余弦相似度 | `metadata["embedding"]`         |
+| ``                  | 读取上游检索系统已经产出的原始排序信号             | `metadata["raw_score_signals"]` |
 
 ### Filters
 
-| 组件 | 用途 | 必要输入 |
-| --- | --- | --- |
+| 组件              | 用途                                      | 必要输入                                        |
+|-----------------|-----------------------------------------|---------------------------------------------|
 | `KeywordFilter` | query metadata 中关键词精确命中硬过滤，先于 scorer 执行 | `query.metadata["keywords"]` 必须是 list/tuple |
 
 ### Fusion
 
-| 组件 | 用途 |
-| --- | --- |
+| 组件                  | 用途                                           |
+|---------------------|----------------------------------------------|
 | `WeightedRrfFusion` | 推荐默认融合。按 `signal.weight / (k + rank)` 聚合多路信号 |
 
 ### Rerankers
 
-| 组件 | 用途 | 注意 |
-| --- | --- | --- |
+| 组件                     | 用途                                    | 注意                     |
+|------------------------|---------------------------------------|------------------------|
 | `CrossEncoderReranker` | sentence-transformers CrossEncoder 精排 | 会加载模型，测试应注入 fake model |
-| `BgeReranker` | FlagEmbedding reranker 精排 | 会加载模型，测试应注入 fake model |
-| `ZeroEntropyReranker` | LLM rerank | 需要候选主文本可靠 |
+| `BgeReranker`          | FlagEmbedding reranker 精排             | 会加载模型，测试应注入 fake model |
+| `ZeroEntropyReranker`  | LLM rerank                            | 需要候选主文本可靠              |
 
 Reranker 协议是 async。只要 pipeline 带 reranker，就必须调用：
 
@@ -141,11 +143,11 @@ await RankingEngine(pipeline=pipeline).rank_async(request)
 
 ### Diversifiers
 
-| 组件 | 用途 |
-| --- | --- |
-| `MmrDiversifier` | relevance 和文本相似度之间做 MMR 折中 |
-| `GroupRoundRobinDiversifier` | 按 group 轮转，避免同组霸榜 |
-| `MaxMinDiversifier` | 最大化结果之间的差异 |
+| 组件                           | 用途                         |
+|------------------------------|----------------------------|
+| `MmrDiversifier`             | relevance 和文本相似度之间做 MMR 折中 |
+| `GroupRoundRobinDiversifier` | 按 group 轮转，避免同组霸榜          |
+| `MaxMinDiversifier`          | 最大化结果之间的差异                 |
 
 ## 组件装配建议
 
@@ -166,7 +168,8 @@ BM25Scorer(text)
 + WeightedRrfFusion
 ```
 
-这里保留两个 scorer 是为了避免把 chunk 正文和结构字段混成一个字段集。`BM25Scorer` 算正文，`FieldedBM25Scorer` 算 section/anchor，不会重复计算 section。
+这里保留两个 scorer 是为了避免把 chunk 正文和结构字段混成一个字段集。`BM25Scorer` 算正文，`FieldedBM25Scorer` 算
+section/anchor，不会重复计算 section。
 
 ### 已经有 embedding 的候选
 

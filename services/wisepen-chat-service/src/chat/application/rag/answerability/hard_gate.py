@@ -7,7 +7,6 @@ from chat.application.rag.answerability.models import (
     RagHardGateStatus,
 )
 
-
 # 硬门控的绝对分数下限。低于该值意味着即使排名第一的候选也几乎不可信，
 # 直接拒答可以避免把噪声证据交给主模型。
 ABSOLUTE_MIN_SCORE_THRESHOLD = 0.3
@@ -23,9 +22,9 @@ class AnswerabilityHardGate:
     __slots__ = ("_absolute_min_score_threshold",)
 
     def __init__(
-        self,
-        *,
-        absolute_min_score_threshold: float = ABSOLUTE_MIN_SCORE_THRESHOLD,
+            self,
+            *,
+            absolute_min_score_threshold: float = ABSOLUTE_MIN_SCORE_THRESHOLD,
     ) -> None:
         self._absolute_min_score_threshold = absolute_min_score_threshold
 
@@ -39,8 +38,8 @@ class AnswerabilityHardGate:
 
         # 所有候选分数都低于绝对下限：证据整体不可信，不再进入 Soft Gate 和主模型。
         if all(
-            item.score < self._absolute_min_score_threshold
-            for item in answerability_input.ranked
+                item.score < self._absolute_min_score_threshold
+                for item in answerability_input.ranked
         ):
             return RagHardGateDecision(
                 status=RagHardGateStatus.REJECTED,

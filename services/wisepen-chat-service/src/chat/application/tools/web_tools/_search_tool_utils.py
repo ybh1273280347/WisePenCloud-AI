@@ -11,11 +11,11 @@ from chat.application.tools.web_tools.search_services.services.candidates import
 
 
 async def select_recommended_ids(
-    *,
-    search_query: str,
-    candidates: tuple[WebSearchCandidate, ...],
-    max_recommended_candidates: int,
-    fallback_candidates_count: int,
+        *,
+        search_query: str,
+        candidates: tuple[WebSearchCandidate, ...],
+        max_recommended_candidates: int,
+        fallback_candidates_count: int,
 ) -> tuple[str, ...]:
     if not candidates:
         return ()
@@ -38,11 +38,11 @@ async def select_recommended_ids(
 
 
 async def store_candidate_mappings(
-    *,
-    repository: WebSearchCandidateRepository,
-    ttl_seconds: int,
-    user_id: str,
-    candidates: tuple[WebSearchCandidate, ...],
+        *,
+        repository: WebSearchCandidateRepository,
+        ttl_seconds: int,
+        user_id: str,
+        candidates: tuple[WebSearchCandidate, ...],
 ) -> None:
     # 持久化 search_ref → URL 映射，供后续 web_fetch 溯源使用
     for mapping in build_candidate_mappings(candidates, user_id=user_id):

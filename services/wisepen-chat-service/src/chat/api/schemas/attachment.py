@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
 from typing import List
+
+from pydantic import BaseModel, Field
 
 
 class InitUploadRequest(BaseModel):
@@ -19,9 +20,11 @@ class InitUploadResponse(BaseModel):
     put_url: str = Field(..., description="OSS 预签名上传 URL")
     callback_header: str = Field(default="", description="OSS 回调 header")
 
+
 class AddResourceAttachmentsRequest(BaseModel):
     session_id: str = Field(..., description="会话 ID")
     resource_ids: List[str] = Field(..., min_length=1, description="要绑定的资源 ID 列表")
+
 
 class DeleteAttachmentRequest(BaseModel):
     session_id: str = Field(..., description="会话 ID")

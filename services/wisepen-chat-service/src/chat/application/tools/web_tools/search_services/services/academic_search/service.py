@@ -21,21 +21,21 @@ class AcademicSearchService:
     __slots__ = ("_paper_hydrator", "_platform_searchers")
 
     def __init__(
-        self,
-        *,
-        platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
-        paper_hydrator: PaperHydrator,
+            self,
+            *,
+            platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
+            paper_hydrator: PaperHydrator,
     ) -> None:
         self._platform_searchers = dict(platform_searchers)
         self._paper_hydrator = paper_hydrator
 
     async def search(
-        self,
-        *,
-        query: str,
-        max_results: int = 10,
-        custom_source: WebSearchCustomSource | None = None,
-        platform_provider: SearchProviderName = SearchProviderName.FOUGET_DDG,
+            self,
+            *,
+            query: str,
+            max_results: int = 10,
+            custom_source: WebSearchCustomSource | None = None,
+            platform_provider: SearchProviderName = SearchProviderName.FOUGET_DDG,
     ) -> WebSearchResult:
         return await execute_provider_search(
             query=query,
@@ -49,10 +49,10 @@ class AcademicSearchService:
         )
 
     async def hydrate_candidates(
-        self,
-        *,
-        candidates: tuple[WebSearchCandidate, ...],
-        openalex_api_key: str | None,
+            self,
+            *,
+            candidates: tuple[WebSearchCandidate, ...],
+            openalex_api_key: str | None,
     ) -> tuple[AcademicHydrationOutcome, ...]:
         """按既定边界对候选做 OpenAlex 水合，抓取 URL 始终保留搜索源结果。"""
         outcomes: list[AcademicHydrationOutcome] = []

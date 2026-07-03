@@ -7,14 +7,16 @@ from .file_type_detect import (
     detect_file_type_from_bytes,
     detect_mime_type,
 )
-from .url_fetcher import (
+from .url import (
     FetchedUrl,
     UrlFetcherError,
     UrlFetcherHttpError,
     UrlFetcherNetworkError,
     UrlFetcherUnsupportedUrlError,
+    UrlSecurityError,
     fetch_url,
     filename_from_url,
+    validate_public_http_url,
 )
 
 __all__ = [
@@ -24,10 +26,12 @@ __all__ = [
     "UrlFetcherHttpError",
     "UrlFetcherNetworkError",
     "UrlFetcherUnsupportedUrlError",
+    "UrlSecurityError",
     "batched",
     "detect_file_type",
     "detect_file_type_from_bytes",
     "detect_mime_type",
     "fetch_url",
     "filename_from_url",
+    "validate_public_http_url",
 ]

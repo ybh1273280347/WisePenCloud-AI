@@ -31,10 +31,10 @@ _HTML_FINGERPRINT_RE = re.compile(
 
 
 def judge_quality(
-    *,
-    raw: RawFetchOutput,
-    cleaned: CleanedOutput,
-    min_text_length: int = 200,
+        *,
+        raw: RawFetchOutput,
+        cleaned: CleanedOutput,
+        min_text_length: int = 200,
 ) -> FetchQuality:
     # 1. raw_html 为空
     if not raw.raw_html or not raw.raw_html.strip():

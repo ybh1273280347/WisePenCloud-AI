@@ -120,10 +120,10 @@ class RankingEngine:
 
     @staticmethod
     def _build_initial_ranked(
-        *,
-        request: RankRequest,
-        pipeline: RankingPipeline,
-        candidates: tuple[RankCandidate, ...],
+            *,
+            request: RankRequest,
+            pipeline: RankingPipeline,
+            candidates: tuple[RankCandidate, ...],
     ) -> tuple[RankedCandidate, ...]:
         """构造进入 reranker/diversifier 前的初始排序。"""
         if not pipeline.scorers:
@@ -156,9 +156,9 @@ class RankingEngine:
 
     @staticmethod
     def _apply_filters(
-        *,
-        request: RankRequest,
-        pipeline: RankingPipeline,
+            *,
+            request: RankRequest,
+            pipeline: RankingPipeline,
     ) -> tuple[RankCandidate, ...]:
         """按 pipeline 声明顺序应用硬过滤器。"""
         candidates = request.candidates
@@ -173,10 +173,10 @@ class RankingEngine:
 
     @staticmethod
     def _collect_signals(
-        *,
-        request: RankRequest,
-        pipeline: RankingPipeline,
-        candidates: tuple[RankCandidate, ...],
+            *,
+            request: RankRequest,
+            pipeline: RankingPipeline,
+            candidates: tuple[RankCandidate, ...],
     ) -> tuple[ScoreSignal, ...]:
         """收集所有 scorer 产出的排序信号。"""
         signals: list[ScoreSignal] = []
@@ -193,7 +193,7 @@ class RankingEngine:
 
     @staticmethod
     def _assign_rank(
-        ranked: tuple[RankedCandidate, ...],
+            ranked: tuple[RankedCandidate, ...],
     ) -> tuple[RankedCandidate, ...]:
         """重新分配连续 rank。"""
         return tuple(

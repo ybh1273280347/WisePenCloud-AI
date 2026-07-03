@@ -19,6 +19,7 @@ from chat.application.tools.core.tool_return import (
 )
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.batching import batched
+from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
@@ -76,10 +77,10 @@ class WebFetchTool:
     __slots__ = ("_candidate_repository", "_definition", "_service")
 
     def __init__(
-        self,
-        *,
-        service: FetchCoordinator,
-        candidate_repository: WebSearchCandidateRepository,
+            self,
+            *,
+            service: FetchCoordinator,
+            candidate_repository: WebSearchCandidateRepository,
     ) -> None:
         self._service = service
         self._candidate_repository = candidate_repository
@@ -145,13 +146,14 @@ class WebFetchTool:
         if "urls" in kwargs:
             for u in kwargs["urls"]:
                 url = u.strip()
-                if not url.startswith(("http://", "https://")):
+                try:
+                    urls.append(validate_public_http_url(url))
+                except UrlSecurityError as exc:
                     raise ToolExecutionError(
                         reason="invalid_url",
-                        detail_reason="each url must be a full http(s) URL.",
+                        detail_reason=str(exc),
                         retryable=False,
-                    )
-                urls.append(url)
+                    ) from exc
         else:
             search_refs = tuple(item.strip() for item in kwargs["search_refs"])
             urls, source_scope = await self._resolve_search_urls(
@@ -242,10 +244,10 @@ class WebFetchTool:
         )
 
     async def _resolve_search_urls(
-        self,
-        *,
-        user_id: str,
-        search_refs: tuple[str, ...],
+            self,
+            *,
+            user_id: str,
+            search_refs: tuple[str, ...],
     ) -> tuple[list[str], str]:
         """将检索引用换算为实际抓取的真实 URL 路径。"""
         urls: list[str] = []
@@ -262,7 +264,14 @@ class WebFetchTool:
                     detail_reason="search_refs must come from a prior web_search result for this user.",
                     retryable=False,
                 )
-            urls.append(mapping.url)
+            try:
+                urls.append(validate_public_http_url(mapping.url))
+            except UrlSecurityError as exc:
+                raise ToolExecutionError(
+                    reason="invalid_search_ref_url",
+                    detail_reason=str(exc),
+                    retryable=False,
+                ) from exc
             if source_scope is None:
                 source_scope = mapping.source_scope
             elif source_scope != mapping.source_scope:
@@ -276,12 +285,12 @@ class WebFetchTool:
         return urls, source_scope or "web_public"
 
     async def _fetch_batched(
-        self,
-        *,
-        urls: tuple[str, ...],
-        user_id: str,
-        session_id: str,
-        source_scope: str,
+            self,
+            *,
+            urls: tuple[str, ...],
+            user_id: str,
+            session_id: str,
+            source_scope: str,
     ) -> WebFetchBatchResult:
         items = []
         failed = []

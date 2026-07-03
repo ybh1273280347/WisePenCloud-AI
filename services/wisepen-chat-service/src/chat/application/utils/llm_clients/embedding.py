@@ -24,15 +24,15 @@ class EmbeddingClient:
     """统一 embedding 客户端，不绑定具体 SDK 类型。"""
 
     def __init__(
-        self,
-        model: str,
-        *,
-        api_base: str | None = None,
-        api_key: str | None = None,
-        timeout: float | int | None = None,
-        dimensions: int | None = None,
-        encoding_format: str | None = "float",
-        **default_kwargs: Any,
+            self,
+            model: str,
+            *,
+            api_base: str | None = None,
+            api_key: str | None = None,
+            timeout: float | int | None = None,
+            dimensions: int | None = None,
+            encoding_format: str | None = "float",
+            **default_kwargs: Any,
     ) -> None:
         self.model = model
         self.dimensions = dimensions
@@ -51,13 +51,13 @@ class EmbeddingClient:
         self._sync_client = OpenAI(**client_kwargs)
 
     async def aembed(
-        self,
-        input: EmbeddingInput,
-        *,
-        model: str | None = None,
-        dimensions: int | None = None,
-        encoding_format: str | None = None,
-        **kwargs: Any,
+            self,
+            input: EmbeddingInput,
+            *,
+            model: str | None = None,
+            dimensions: int | None = None,
+            encoding_format: str | None = None,
+            **kwargs: Any,
     ) -> EmbeddingResult:
         response = await self._async_client.embeddings.create(
             **self._build_kwargs(
@@ -71,13 +71,13 @@ class EmbeddingClient:
         return self._parse_response(response)
 
     def embed(
-        self,
-        input: EmbeddingInput,
-        *,
-        model: str | None = None,
-        dimensions: int | None = None,
-        encoding_format: str | None = None,
-        **kwargs: Any,
+            self,
+            input: EmbeddingInput,
+            *,
+            model: str | None = None,
+            dimensions: int | None = None,
+            encoding_format: str | None = None,
+            **kwargs: Any,
     ) -> EmbeddingResult:
         response = self._sync_client.embeddings.create(
             **self._build_kwargs(
@@ -91,13 +91,13 @@ class EmbeddingClient:
         return self._parse_response(response)
 
     def _build_kwargs(
-        self,
-        *,
-        model: str | None,
-        input: EmbeddingInput,
-        dimensions: int | None,
-        encoding_format: str | None,
-        extra_kwargs: dict[str, Any],
+            self,
+            *,
+            model: str | None,
+            input: EmbeddingInput,
+            dimensions: int | None,
+            encoding_format: str | None,
+            extra_kwargs: dict[str, Any],
     ) -> dict[str, Any]:
         kw: dict[str, Any] = {
             "model": model or self.model,

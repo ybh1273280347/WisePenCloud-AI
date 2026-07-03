@@ -20,10 +20,10 @@ def _format_reason(reason: str, suffix: str | None) -> str:
 
 
 def assign_ranks(
-    items: tuple[RankedCandidate, ...],
-    *,
-    metadata_by_candidate_id: Mapping[str, dict[str, object]] | None = None,
-    reason_suffix: str | None = None,
+        items: tuple[RankedCandidate, ...],
+        *,
+        metadata_by_candidate_id: Mapping[str, dict[str, object]] | None = None,
+        reason_suffix: str | None = None,
 ) -> tuple[RankedCandidate, ...]:
     """重新分配连续 rank，并可按 candidate_id 追加 metadata/reason。"""
     metadata_by_candidate_id = metadata_by_candidate_id or {}

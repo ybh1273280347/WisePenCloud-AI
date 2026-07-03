@@ -21,6 +21,7 @@ from chat.application.tools.web_tools.web_fetch.models import (  # noqa: E402
     WebFetchBatchResult,
     WebFetchResult,
 )
+from chat.application.tools.core import ToolExecutionError  # noqa: E402
 from chat.application.tools.web_tools.web_fetch_tool import WebFetchTool  # noqa: E402
 
 
@@ -63,7 +64,7 @@ async def test_web_fetch_visible_result_hides_internal_fetch_metadata() -> None:
 
     result = await tool.execute(
         {"user_id": "u1", "session_id": "s1"},
-        urls=["https://example.test/page"],
+        urls=["https://example.com/page"],
     )
 
     assert result.visible_result["items"] == (
@@ -84,3 +85,19 @@ async def test_web_fetch_visible_result_hides_internal_fetch_metadata() -> None:
         assert "content_type" not in item
         assert "source_scope" not in item
     assert result.cacheable_texts == ("# Example Page",)
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_rejects_unsafe_direct_url() -> None:
+    tool = WebFetchTool(
+        service=_FakeFetchService(),
+        candidate_repository=_UnusedCandidateRepository(),
+    )
+
+    with pytest.raises(ToolExecutionError) as exc_info:
+        await tool.execute(
+            {"user_id": "u1", "session_id": "s1"},
+            urls=["http://127.0.0.1/admin"],
+        )
+
+    assert exc_info.value.reason == "invalid_url"

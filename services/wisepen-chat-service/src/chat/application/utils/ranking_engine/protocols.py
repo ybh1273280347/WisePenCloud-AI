@@ -20,10 +20,10 @@ class Filter(Protocol):
     name: str  # 过滤器名称
 
     def filter(
-        self,
-        *,
-        query: RankQuery,
-        candidates: tuple[RankCandidate, ...],
+            self,
+            *,
+            query: RankQuery,
+            candidates: tuple[RankCandidate, ...],
     ) -> tuple[RankCandidate, ...]:
         """返回满足硬约束的候选集合。"""
         ...
@@ -42,10 +42,10 @@ class Scorer(Protocol):
     name: str  # 打分器名称
 
     def score(
-        self,
-        *,
-        query: RankQuery,
-        candidates: tuple[RankCandidate, ...],
+            self,
+            *,
+            query: RankQuery,
+            candidates: tuple[RankCandidate, ...],
     ) -> tuple[ScoreSignal, ...]:
         """计算候选排序信号。"""
         ...
@@ -63,10 +63,10 @@ class Fusion(Protocol):
     name: str  # 融合器名称
 
     def fuse(
-        self,
-        *,
-        candidates: tuple[RankCandidate, ...],
-        signals: tuple[ScoreSignal, ...],
+            self,
+            *,
+            candidates: tuple[RankCandidate, ...],
+            signals: tuple[ScoreSignal, ...],
     ) -> tuple[RankedCandidate, ...]:
         """融合多路排序信号，生成初始排序结果。"""
         ...
@@ -82,10 +82,10 @@ class Reranker(Protocol):
     name: str  # 重排器名称
 
     async def rerank(
-        self,
-        *,
-        query: RankQuery,
-        ranked: tuple[RankedCandidate, ...],
+            self,
+            *,
+            query: RankQuery,
+            ranked: tuple[RankedCandidate, ...],
     ) -> tuple[RankedCandidate, ...]:
         """对已有排序结果进行二次重排。"""
         ...
@@ -103,9 +103,9 @@ class Diversifier(Protocol):
     name: str  # 多样性控制器名称
 
     def diversify(
-        self,
-        *,
-        ranked: tuple[RankedCandidate, ...],
+            self,
+            *,
+            ranked: tuple[RankedCandidate, ...],
     ) -> tuple[RankedCandidate, ...]:
         """对已有排序结果进行多样性控制。"""
         ...

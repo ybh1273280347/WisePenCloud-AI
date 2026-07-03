@@ -28,6 +28,8 @@
 | `max_depth` | `integer` | 可选，种子页深度为 0。 |
 | `same_domain` | `boolean` | 可选，默认 `true`。除非用户明确要求跨域，否则保持默认。 |
 
+`seed_url` 会先经过 `tools/utils/url/security.validate_public_http_url` 校验。该校验只判断 URL 本身是否适合作为外部抓取目标，不做页面内容阻断。
+
 ## 内部运行机制
 
 ```text

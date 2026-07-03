@@ -13,19 +13,19 @@ class WebContentCacheEntryRepository(Protocol):
     """Redis 侧：缓存索引读写与刷新锁。"""
 
     async def get_entry(
-        self,
-        *,
-        user_id: str,
-        url: str,
-        cache_mode: WebContentCacheMode | str,
+            self,
+            *,
+            user_id: str,
+            url: str,
+            cache_mode: WebContentCacheMode | str,
     ) -> WebContentCacheEntry | None:
         ...
 
     async def get_readable_entry(
-        self,
-        *,
-        user_id: str,
-        url: str,
+            self,
+            *,
+            user_id: str,
+            url: str,
     ) -> WebContentCacheEntry | None:
         ...
 
@@ -33,19 +33,19 @@ class WebContentCacheEntryRepository(Protocol):
         ...
 
     async def delete_entry(
-        self,
-        *,
-        user_id: str,
-        url: str,
-        cache_mode: WebContentCacheMode | str,
+            self,
+            *,
+            user_id: str,
+            url: str,
+            cache_mode: WebContentCacheMode | str,
     ) -> None:
         ...
 
     async def try_acquire_refresh_lock(
-        self,
-        *,
-        key: str,
-        ttl_seconds: int,
+            self,
+            *,
+            key: str,
+            ttl_seconds: int,
     ) -> bool:
         ...
 

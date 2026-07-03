@@ -16,10 +16,10 @@ class TokenCounter:
             return max(1, len(text))
 
     async def count_messages(
-        self,
-        messages: List[ChatMessage],
-        model_name: str = "gpt-4o",
-        tools: Optional[List[Dict[str, Any]]] = None,
+            self,
+            messages: List[ChatMessage],
+            model_name: str = "gpt-4o",
+            tools: Optional[List[Dict[str, Any]]] = None,
     ) -> int:
         try:
             result = await litellm.acount_tokens(
@@ -45,7 +45,8 @@ class TokenCounter:
         formatted_messages = []
         for message in messages:
             if message.role == Role.ASSISTANT:
-                payload = {"role": message.role.value, "content": message.content, "reasoning": message.reasoning_content}
+                payload = {"role": message.role.value, "content": message.content,
+                           "reasoning": message.reasoning_content}
                 if message.tool_calls:
                     payload["tool_calls"] = []
                     for tool_call in message.tool_calls:

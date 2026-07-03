@@ -17,4 +17,3 @@ class HotContextRepository(ABC):
     async def load_messages(self, session_id: str, messages: List[ChatMessage]) -> None:
         """将历史消息批量写入 Redis，用于缓存过期或异常后的热缓存回填。"""
         pass
-

@@ -8,11 +8,11 @@ class MemoryProvider(ABC):
 
     @abstractmethod
     async def search(
-        self,
-        user_id: str,
-        query: str,
-        limit: int = 5,
-        score_threshold: Optional[float] = None,
+            self,
+            user_id: str,
+            query: str,
+            limit: int = 5,
+            score_threshold: Optional[float] = None,
     ) -> List[str]:
         """根据语义相似度检索相关事实。score_threshold 不为 None 时按分数过滤，忽略 limit"""
         pass

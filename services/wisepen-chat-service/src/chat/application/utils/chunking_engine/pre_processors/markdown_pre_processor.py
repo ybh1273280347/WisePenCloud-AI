@@ -35,7 +35,7 @@ def _inject_heading_paths(text: str) -> str:
             continue
 
         if token.type == "heading_open":
-            h_level = int(token.tag[1])          # "h2" → 2
+            h_level = int(token.tag[1])  # "h2" → 2
             title = tokens[i + 1].content if i + 1 < len(tokens) else ""
             heading_stack = [(lvl, t) for lvl, t in heading_stack if lvl < h_level]
             heading_stack.append((h_level, title))

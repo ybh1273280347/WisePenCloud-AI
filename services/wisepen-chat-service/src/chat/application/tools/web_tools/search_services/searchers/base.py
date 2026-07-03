@@ -17,17 +17,17 @@ class ProviderSearcher(Protocol):
     """
 
     async def search_web(
-        self,
-        *,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            query: str,
+            max_results: int,
     ) -> ProviderSearchResponse: ...
 
     async def search_academic(
-        self,
-        *,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            query: str,
+            max_results: int,
     ) -> ProviderSearchResponse: ...
 
 
@@ -65,11 +65,11 @@ class BaseProviderSearcher:
     response_mapper: SearchResponseMapper
 
     def __init__(
-        self,
-        *,
-        http_client: httpx.AsyncClient,
-        config: SearchProviderConfig,
-        headers: Mapping[str, str] | None = None,
+            self,
+            *,
+            http_client: httpx.AsyncClient,
+            config: SearchProviderConfig,
+            headers: Mapping[str, str] | None = None,
     ) -> None:
         if not config.base_url.strip():
             raise ValueError(f"{self.provider} base_url is required.")
@@ -78,10 +78,10 @@ class BaseProviderSearcher:
         self._headers = dict(headers or {})
 
     async def search_web(
-        self,
-        *,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            query: str,
+            max_results: int,
     ) -> ProviderSearchResponse:
         request = self.request_class(
             query=query,
@@ -94,19 +94,19 @@ class BaseProviderSearcher:
         )
 
     async def search_academic(
-        self,
-        *,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            query: str,
+            max_results: int,
     ) -> ProviderSearchResponse:
         raise SearchProviderError(f"{self.provider} does not support academic search.")
 
     async def _execute_request(
-        self,
-        *,
-        request: ProviderSearchRequest,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            request: ProviderSearchRequest,
+            query: str,
+            max_results: int,
     ) -> ProviderSearchResponse:
         http_request = request.to_http_request()
         data = await self._request_json(
@@ -127,12 +127,12 @@ class BaseProviderSearcher:
         )
 
     async def _request_json(
-        self,
-        *,
-        method: str,
-        url: str,
-        params: dict[str, object] | None,
-        json: dict[str, object] | None,
+            self,
+            *,
+            method: str,
+            url: str,
+            params: dict[str, object] | None,
+            json: dict[str, object] | None,
     ) -> dict[str, Any]:
         request: dict[str, Any] = {}
         if self._headers:

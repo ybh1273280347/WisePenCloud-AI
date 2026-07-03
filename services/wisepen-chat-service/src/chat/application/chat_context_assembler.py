@@ -2,12 +2,12 @@
 from dataclasses import field, dataclass
 from typing import Any, Dict, List, Optional
 
-from common.logger import error, warn
-
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role, ChatSession, TemporaryAttachmentRef, ResourceAttachmentRef
 from chat.domain.entities.skill import SkillMeta
 from chat.domain.repositories import MessageRepository, HotContextRepository, SessionRepository
+from common.logger import error, warn
+
 
 @dataclass
 class WindowedMessages:
@@ -19,14 +19,15 @@ class WindowedMessages:
         # 会话历史
         return self.messages_compress_candidates + self.messages_keep
 
+
 class ChatContextAssembler:
     """负责短期上下文的全生命周期管理：Redis 热缓存读取与降级回填、上下文裁剪、Prompt 组装"""
 
     def __init__(
-        self,
-        message_repo: MessageRepository,
-        session_repo: SessionRepository,
-        hot_context_repo: HotContextRepository,
+            self,
+            message_repo: MessageRepository,
+            session_repo: SessionRepository,
+            hot_context_repo: HotContextRepository,
     ):
         self.message_repo = message_repo
         self.session_repo = session_repo
@@ -71,11 +72,11 @@ class ChatContextAssembler:
             return None
 
     async def build_windowed_messages(
-        self,
-        chat_history_record_messages: List[ChatMessage],
-        prompt_budget_tokens: int,
-        high_watermark_ratio: Optional[float] = None,
-        low_watermark_ratio: Optional[float] = None,
+            self,
+            chat_history_record_messages: List[ChatMessage],
+            prompt_budget_tokens: int,
+            high_watermark_ratio: Optional[float] = None,
+            low_watermark_ratio: Optional[float] = None,
     ) -> WindowedMessages:
         """
         从后往前累加Token，构建不超过高水位预算的动态滑动窗口。若超过高水位，则触发摘要。
@@ -97,23 +98,23 @@ class ChatContextAssembler:
                 windowed_messages.messages_compress_candidates.insert(0, msg)  # 超出低水位，进入 messages_compress_candidates
 
         # 当整体 Token 超过高水位时，触发需要压缩的标志
-        windowed_messages.needs_compression = contents_token_count >= high_budget # 由于高水位线（如 80%）预留了安全 Buffer，即便把它们全发给模型，也不会触发 Token 溢出报错
+        windowed_messages.needs_compression = contents_token_count >= high_budget  # 由于高水位线（如 80%）预留了安全 Buffer，即便把它们全发给模型，也不会触发 Token 溢出报错
 
         return windowed_messages
 
     def assemble_prompt(
-        self,
-        session_id: str,
-        user_query: str,
-        system_prompt: str,
-        session_summary: Optional[str],
-        history_messages: List[ChatMessage],
-        relevant_facts: List[str],
-        frontend_states: Optional[List[Dict[str, Any]]] = None,
-        available_skills: Optional[List[SkillMeta]] = None,
-        temp_attachments: Optional[List[TemporaryAttachmentRef]] = None,
-        resource_attachments: Optional[List[ResourceAttachmentRef]] = None,
-        user_defined_attachment_ids: Optional[List[str]] = None,
+            self,
+            session_id: str,
+            user_query: str,
+            system_prompt: str,
+            session_summary: Optional[str],
+            history_messages: List[ChatMessage],
+            relevant_facts: List[str],
+            frontend_states: Optional[List[Dict[str, Any]]] = None,
+            available_skills: Optional[List[SkillMeta]] = None,
+            temp_attachments: Optional[List[TemporaryAttachmentRef]] = None,
+            resource_attachments: Optional[List[ResourceAttachmentRef]] = None,
+            user_defined_attachment_ids: Optional[List[str]] = None,
     ) -> List[ChatMessage]:
         """组装最终发往 LLM 的消息列表"""
 
@@ -165,8 +166,9 @@ class ChatContextAssembler:
 
         # 前端上下文
         # 从 states 里筛选出 没有被禁用、并且 有 value 值 的元素
-        active_frontend_states = [state for state in (frontend_states or []) if not state.get("disabled", False) and state.get("value")]
-        if active_frontend_states: # 若存在这样的元素
+        active_frontend_states = [state for state in (frontend_states or []) if
+                                  not state.get("disabled", False) and state.get("value")]
+        if active_frontend_states:  # 若存在这样的元素
             context_blocks['user_frontend_context'] = {}
             for state in active_frontend_states:
                 context_blocks['user_frontend_context'][state["key"]] = state["value"]
@@ -212,5 +214,3 @@ class ChatContextAssembler:
         ))
 
         return messages
-
-

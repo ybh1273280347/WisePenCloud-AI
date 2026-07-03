@@ -22,10 +22,10 @@ class DefaultAgentResolver:
 
 class CompositeAgentResolver:
     def __init__(
-        self,
-        *,
-        primary: AgentResolver | None = None,
-        fallback: AgentResolver | None = None,
+            self,
+            *,
+            primary: AgentResolver | None = None,
+            fallback: AgentResolver | None = None,
     ) -> None:
         self._primary = primary
         self._fallback = fallback or DefaultAgentResolver()
@@ -40,4 +40,3 @@ class CompositeAgentResolver:
                 error("agent primary resolver failed.", agent_id=agent_id, e=e)
 
         return await self._fallback.resolve(agent_id)
-

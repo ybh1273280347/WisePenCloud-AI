@@ -19,11 +19,11 @@ class FieldedBM25ScorerConfig:
 
     field_weights: dict[str, float] = field(
         default_factory=lambda: {
-            "title": 3.0,    # 标题命中通常最重要
+            "title": 3.0,  # 标题命中通常最重要
             "heading": 2.0,  # 章节标题次之
             "summary": 1.5,  # 摘要比正文更集中
         }
-    )  
+    )
 
     signal_prefix: str = "bm25"
     min_score: float = 0.0
@@ -39,20 +39,20 @@ class FieldedBM25Scorer:
     __slots__ = ("tokenizer", "config", "name")
 
     def __init__(
-        self,
-        *,
-        tokenizer: RankingTokenizer,
-        config: FieldedBM25ScorerConfig | None = None,
+            self,
+            *,
+            tokenizer: RankingTokenizer,
+            config: FieldedBM25ScorerConfig | None = None,
     ) -> None:
         self.tokenizer = tokenizer
         self.config = config or FieldedBM25ScorerConfig()
         self.name = "fielded_bm25_scorer"
 
     def score(
-        self,
-        *,
-        query: RankQuery,
-        candidates: tuple[RankCandidate, ...],
+            self,
+            *,
+            query: RankQuery,
+            candidates: tuple[RankCandidate, ...],
     ) -> tuple[ScoreSignal, ...]:
         if not candidates:
             return ()
@@ -109,9 +109,9 @@ class FieldedBM25Scorer:
                     score = float(scores[qi][ri - 1])
                     current = best.get(candidate.candidate_id)
                     if (
-                        current is None
-                        or score > current[0]
-                        or (score == current[0] and ri < current[1])
+                            current is None
+                            or score > current[0]
+                            or (score == current[0] and ri < current[1])
                     ):
                         # 多 query 命中同一候选同一字段时，只保留该字段下最高 BM25 分和对应 rank。
                         best[candidate.candidate_id] = (score, ri)
@@ -146,4 +146,3 @@ class FieldedBM25Scorer:
                 ),
             )
         )
-

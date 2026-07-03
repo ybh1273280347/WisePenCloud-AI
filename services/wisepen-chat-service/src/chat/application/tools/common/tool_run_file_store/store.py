@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from chat.application.tools.tool_settings import tool_settings
+from ._tool_run_file_store_utils import sanitize_tool_file_name
 from .errors import (
     InvalidToolFileRefError,
     ToolFileNotFoundError,
@@ -24,7 +25,6 @@ from .models import (
     ToolFileRefRecord,
     ToolRunFileCleanupResult,
 )
-from ._tool_run_file_store_utils import sanitize_tool_file_name
 
 DEFAULT_TOOL_RUN_FILE_ROOT = Path(tempfile.gettempdir()) / "wisepen-tool-run-files"
 DEFAULT_TOOL_RUN_FILE_REF_TTL_SECONDS = tool_settings.TOOL_RUN_FILE_REF_TTL_SECONDS
@@ -73,13 +73,13 @@ class ToolRunFileStore:
     )
 
     def __init__(
-        self,
-        *,
-        repository: ToolRunFileRepository,
-        root_dir: str | Path = DEFAULT_TOOL_RUN_FILE_ROOT,
-        ref_ttl_seconds: int = DEFAULT_TOOL_RUN_FILE_REF_TTL_SECONDS,
-        cleanup_grace_seconds: int = DEFAULT_TOOL_RUN_FILE_CLEANUP_GRACE_SECONDS,
-        max_file_size_bytes: int | None = DEFAULT_TOOL_RUN_FILE_MAX_BYTES,
+            self,
+            *,
+            repository: ToolRunFileRepository,
+            root_dir: str | Path = DEFAULT_TOOL_RUN_FILE_ROOT,
+            ref_ttl_seconds: int = DEFAULT_TOOL_RUN_FILE_REF_TTL_SECONDS,
+            cleanup_grace_seconds: int = DEFAULT_TOOL_RUN_FILE_CLEANUP_GRACE_SECONDS,
+            max_file_size_bytes: int | None = DEFAULT_TOOL_RUN_FILE_MAX_BYTES,
     ) -> None:
         self._repository = repository
         self._root_dir = Path(root_dir)
@@ -88,12 +88,12 @@ class ToolRunFileStore:
         self._max_file_size_bytes = max_file_size_bytes
 
     def create_staging_dir(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        producer: str,
-        run_id: str | None = None,
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            producer: str,
+            run_id: str | None = None,
     ) -> Path:
         """为单次工具运行创建隔离的暂存目录。
 
@@ -117,24 +117,24 @@ class ToolRunFileStore:
         safe_run = _safe_component(run_id or uuid.uuid4().hex[:16], fallback="run")
 
         staging_dir = (
-            root / safe_user / safe_session / "staging" / safe_producer / safe_run
+                root / safe_user / safe_session / "staging" / safe_producer / safe_run
         ).resolve(strict=False)
         _ensure_within_root(staging_dir, root)
         staging_dir.mkdir(parents=True, exist_ok=True)
         return staging_dir
 
     async def publish_file(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        producer: str,
-        path: str | Path,
-        filename: str | None = None,
-        content_type: str | None = None,
-        ttl_seconds: int | None = None,
-        metadata: dict[str, object] | None = None,
-        ref_prefix: str | None = None,
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            producer: str,
+            path: str | Path,
+            filename: str | None = None,
+            content_type: str | None = None,
+            ttl_seconds: int | None = None,
+            metadata: dict[str, object] | None = None,
+            ref_prefix: str | None = None,
     ) -> ToolFileRefRecord:
         """发布工具产出的本地文件，返回不透明的 tfile_* 引用。
 
@@ -167,12 +167,12 @@ class ToolRunFileStore:
         root = self._ensure_root()
         # 内容寻址路径：sha256 前两字节作为一级分桶目录（仿 Git objects 布局）
         object_path = (
-            root
-            / _safe_component(user_id, fallback="user")
-            / _safe_component(session_id, fallback="session")
-            / "objects"
-            / sha256[:2]
-            / f"{sha256}{safe_suffix}"
+                root
+                / _safe_component(user_id, fallback="user")
+                / _safe_component(session_id, fallback="session")
+                / "objects"
+                / sha256[:2]
+                / f"{sha256}{safe_suffix}"
         ).resolve(strict=False)
         _ensure_within_root(object_path, root)
 
@@ -202,17 +202,17 @@ class ToolRunFileStore:
         return record
 
     async def publish_bytes(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        producer: str,
-        filename: str,
-        content: bytes,
-        content_type: str | None = None,
-        ttl_seconds: int | None = None,
-        metadata: dict[str, object] | None = None,
-        ref_prefix: str | None = None,
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            producer: str,
+            filename: str,
+            content: bytes,
+            content_type: str | None = None,
+            ttl_seconds: int | None = None,
+            metadata: dict[str, object] | None = None,
+            ref_prefix: str | None = None,
     ) -> ToolFileRefRecord:
         """发布工具已经持有的 bytes 内容，返回不透明的 tfile_* 引用。
 
@@ -265,11 +265,11 @@ class ToolRunFileStore:
         return record
 
     async def resolve_ref(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        ref_id: str,
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            ref_id: str,
     ) -> ResolvedToolFile:
         """将 tfile_* 引用解析为已验证的本地文件路径。
 

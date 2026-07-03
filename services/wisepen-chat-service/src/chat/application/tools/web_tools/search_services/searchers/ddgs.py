@@ -19,10 +19,10 @@ class DdgSearcher:
         self._proxy = proxy or None
 
     async def search_web(
-        self,
-        *,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            query: str,
+            max_results: int,
     ) -> ProviderSearchResponse:
         ddg = DDGS(proxy=self._proxy) if self._proxy else DDGS()
         items = await asyncio.to_thread(ddg.text, query, max_results=max_results)
@@ -33,9 +33,9 @@ class DdgSearcher:
         )
 
     async def search_academic(
-        self,
-        *,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            query: str,
+            max_results: int,
     ) -> ProviderSearchResponse:
         raise SearchProviderError("DDG does not support academic search.")

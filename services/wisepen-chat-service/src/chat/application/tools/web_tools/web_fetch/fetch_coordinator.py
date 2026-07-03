@@ -7,25 +7,25 @@ from pathlib import Path
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.errors import ToolRunFileStoreError
 from chat.application.tools.common.web_content_cache import (
-    WebContentCacheEntryRepository,
-    WebContentCacheValueRepository,
-)
-from chat.application.tools.common.web_content_cache import (
     HtmlCacheWrite,
     NonHtmlCacheStubWrite,
     WebContentCacheService,
+)
+from chat.application.tools.common.web_content_cache import (
+    WebContentCacheEntryRepository,
+    WebContentCacheValueRepository,
 )
 from chat.application.tools.common.web_content_cache.refresh_queue import (
     WEB_FETCH_REFRESH_JOB,
     WebContentCacheRefreshTaskPublisher,
 )
-from chat.application.tools.utils.url_fetcher import filename_from_url
+from chat.application.tools.utils.url import filename_from_url
 from common.logger import info, warn
+from ._web_fetch_utils import judge_quality
 from .cleaners.base import BaseCleaner
 from .errors import UrlFetchError
 from .fetchers import WebFetcher
 from .models import RawFetchOutput, WebFetchBatchResult, WebFetchFailure, WebFetchResult
-from ._web_fetch_utils import judge_quality
 
 _PRODUCER_NAME = "web_fetch"
 _REFRESH_LOCK_TTL_SECONDS = 300
@@ -48,17 +48,17 @@ class FetchCoordinator:
     )
 
     def __init__(
-        self,
-        *,
-        httpx_fetcher: WebFetcher,
-        scrapling_fetcher: WebFetcher,
-        cleaner: BaseCleaner,
-        file_store: ToolRunFileStore,
-        content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
-        content_cache_value_repository: WebContentCacheValueRepository | None = None,
-        refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
-        min_text_length: int = 200,
-        batch_concurrency: int = 5,
+            self,
+            *,
+            httpx_fetcher: WebFetcher,
+            scrapling_fetcher: WebFetcher,
+            cleaner: BaseCleaner,
+            file_store: ToolRunFileStore,
+            content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
+            content_cache_value_repository: WebContentCacheValueRepository | None = None,
+            refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
+            min_text_length: int = 200,
+            batch_concurrency: int = 5,
     ) -> None:
         self._httpx_fetcher = httpx_fetcher
         self._scrapling_fetcher = scrapling_fetcher
@@ -76,12 +76,12 @@ class FetchCoordinator:
         self._batch_concurrency = batch_concurrency
 
     async def fetch_one(
-        self,
-        url: str,
-        *,
-        user_id: str,
-        session_id: str,
-        source_scope: str = "web_public",
+            self,
+            url: str,
+            *,
+            user_id: str,
+            session_id: str,
+            source_scope: str = "web_public",
     ) -> WebFetchResult:
         """抓取单个 URL。
 
@@ -104,7 +104,6 @@ class FetchCoordinator:
             url=url,
             user_id=user_id,
             session_id=session_id,
-            source_scope=source_scope,
         )
         if cached_result is not None:
             return cached_result
@@ -183,12 +182,12 @@ class FetchCoordinator:
         return result
 
     async def fetch_many(
-        self,
-        urls: list[str],
-        *,
-        user_id: str,
-        session_id: str,
-        source_scope: str = "web_public",
+            self,
+            urls: list[str],
+            *,
+            user_id: str,
+            session_id: str,
+            source_scope: str = "web_public",
     ) -> WebFetchBatchResult:
         """批量抓取 URL。
 
@@ -232,13 +231,13 @@ class FetchCoordinator:
         )
 
     async def _handle_non_html_file(
-        self,
-        *,
-        raw: RawFetchOutput,
-        user_id: str,
-        session_id: str,
-        source_scope: str,
-        warnings: list[str],
+            self,
+            *,
+            raw: RawFetchOutput,
+            user_id: str,
+            session_id: str,
+            source_scope: str,
+            warnings: list[str],
     ) -> WebFetchResult:
         """移交非 HTML 文件到 ToolRunFileStore，返回带 file_ref 的结果。"""
         file_path = raw.file_path
@@ -246,8 +245,8 @@ class FetchCoordinator:
 
         try:
             filename = (
-                filename_from_url(raw.final_url or raw.source_url)
-                or f"download.{raw.file_label or 'bin'}"
+                    filename_from_url(raw.final_url or raw.source_url)
+                    or f"download.{raw.file_label or 'bin'}"
             )
             cache_doc_id = await self._write_non_html_cache_stub(
                 user_id=user_id,
@@ -299,12 +298,11 @@ class FetchCoordinator:
                 Path(file_path).unlink(missing_ok=True)
 
     async def _read_cached_result(
-        self,
-        *,
-        url: str,
-        user_id: str,
-        session_id: str,
-        source_scope: str,
+            self,
+            *,
+            url: str,
+            user_id: str,
+            session_id: str,
     ) -> WebFetchResult | None:
         cached = await self._content_cache_service.read_markdown_page(
             url=url,
@@ -333,11 +331,11 @@ class FetchCoordinator:
         )
 
     async def refresh_stale_url(
-        self,
-        *,
-        url: str,
-        user_id: str,
-        source_scope: str,
+            self,
+            *,
+            url: str,
+            user_id: str,
+            source_scope: str,
     ) -> None:
         try:
             raw = await self._httpx_fetcher.fetch(url)
@@ -387,13 +385,13 @@ class FetchCoordinator:
             warn("网页抓取 stale 后台刷新失败", url=url, e=exc)
 
     async def _write_html_cache(
-        self,
-        *,
-        url: str,
-        user_id: str,
-        source_scope: str,
-        raw: RawFetchOutput,
-        result: WebFetchResult,
+            self,
+            *,
+            url: str,
+            user_id: str,
+            source_scope: str,
+            raw: RawFetchOutput,
+            result: WebFetchResult,
     ) -> None:
         """写入 HTML 清洗结果缓存；写失败不影响本次抓取结果。"""
         await self._content_cache_service.write_html_markdown(
@@ -415,11 +413,11 @@ class FetchCoordinator:
         )
 
     async def _write_non_html_cache_stub(
-        self,
-        *,
-        user_id: str,
-        source_scope: str,
-        raw: RawFetchOutput,
+            self,
+            *,
+            user_id: str,
+            source_scope: str,
+            raw: RawFetchOutput,
     ) -> str | None:
         return await self._content_cache_service.write_non_html_stub(
             NonHtmlCacheStubWrite(

@@ -39,15 +39,15 @@ class WebSearchResult:
 
 
 async def execute_provider_search(
-    *,
-    query: str,
-    custom_source: WebSearchCustomSource | None,
-    platform_provider: SearchProviderName,
-    platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
-    search_once: Callable[
-        [ProviderSearcher],
-        Awaitable[ProviderSearchResponse],
-    ],
+        *,
+        query: str,
+        custom_source: WebSearchCustomSource | None,
+        platform_provider: SearchProviderName,
+        platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
+        search_once: Callable[
+            [ProviderSearcher],
+            Awaitable[ProviderSearchResponse],
+        ],
 ) -> WebSearchResult:
     """执行单次 provider 搜索，并统一翻译 platform/custom 异常语义。"""
     if custom_source is not None and not custom_source.api_key.strip():
@@ -126,8 +126,8 @@ async def execute_provider_search(
 
 
 def _get_platform_searcher(
-    platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
-    provider: SearchProviderName,
+        platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
+        provider: SearchProviderName,
 ) -> ProviderSearcher:
     try:
         return platform_searchers[provider]
@@ -136,8 +136,8 @@ def _get_platform_searcher(
 
 
 def _to_custom_credential_error(
-    provider: SearchProviderName,
-    exc: SearchProviderCredentialError,
+        provider: SearchProviderName,
+        exc: SearchProviderCredentialError,
 ) -> WebSearchCustomError:
     """将底层 provider 抛出的原生凭证异常映射为用户可理解的异常。"""
     text = str(exc).lower()

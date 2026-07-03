@@ -22,11 +22,11 @@ if TYPE_CHECKING:
 
 class ToolExecutor:
     def __init__(
-        self,
-        tool_scope: ToolScope,
-        *,
-        output_renderer: ToolOutputRenderer,
-        output_cache: ToolOutputCache,
+            self,
+            tool_scope: ToolScope,
+            *,
+            output_renderer: ToolOutputRenderer,
+            output_cache: ToolOutputCache,
     ) -> None:
         self._tool_scope = tool_scope
         self._output_renderer = output_renderer

@@ -36,18 +36,18 @@ class KeywordFilter:
     __slots__ = ("config", "name")
 
     def __init__(
-        self,
-        *,
-        config: KeywordFilterConfig | None = None,
+            self,
+            *,
+            config: KeywordFilterConfig | None = None,
     ) -> None:
         self.config = config or KeywordFilterConfig()
         self.name = "keyword_filter"
 
     def filter(
-        self,
-        *,
-        query: RankQuery,
-        candidates: tuple[RankCandidate, ...],
+            self,
+            *,
+            query: RankQuery,
+            candidates: tuple[RankCandidate, ...],
     ) -> tuple[RankCandidate, ...]:
         if not candidates:
             return ()
@@ -86,10 +86,10 @@ class KeywordFilter:
         return tuple(normalized_keywords)
 
     def _matches_required_keywords(
-        self,
-        *,
-        candidate: RankCandidate,
-        keywords: tuple[str, ...],
+            self,
+            *,
+            candidate: RankCandidate,
+            keywords: tuple[str, ...],
     ) -> bool:
         matched_keywords = set[str]()
 

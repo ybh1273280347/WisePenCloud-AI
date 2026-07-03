@@ -22,7 +22,8 @@ class ToolInvocation:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def tool_call_parse(accumulators: dict[int, ToolCallMessageAccumulator], *, query_loop_iteration: int | None = None) -> list[ToolInvocation]:
+def tool_call_parse(accumulators: dict[int, ToolCallMessageAccumulator], *, query_loop_iteration: int | None = None) -> \
+        list[ToolInvocation]:
     invocations: list[ToolInvocation] = []
     for idx in sorted(accumulators.keys()):
         acc = accumulators[idx]
@@ -45,4 +46,3 @@ def tool_call_parse(accumulators: dict[int, ToolCallMessageAccumulator], *, quer
             )
         )
     return invocations
-

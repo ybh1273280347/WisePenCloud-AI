@@ -37,9 +37,9 @@ class RagEvidenceRankingService:
     __slots__ = ("_ranking_engine",)
 
     def __init__(
-        self,
-        *,
-        ranking_engine: RankingEngine | None = None,
+            self,
+            *,
+            ranking_engine: RankingEngine | None = None,
     ) -> None:
         self._ranking_engine = ranking_engine or get_ranking_engine("rag.knowledge_search")
 
@@ -61,7 +61,7 @@ class RagEvidenceRankingService:
 
     @staticmethod
     def _build_rank_candidates(
-        chunks: tuple[ScoredChunk, ...],
+            chunks: tuple[ScoredChunk, ...],
     ) -> tuple[RankCandidate, ...]:
         """把 ScoredChunk 去重后转成 RankingEngine 需要的 RankCandidate。
 

@@ -32,20 +32,20 @@ class BM25Scorer:
     __slots__ = ("tokenizer", "config", "name")
 
     def __init__(
-        self,
-        *,
-        tokenizer: RankingTokenizer,
-        config: BM25ScorerConfig | None = None,
+            self,
+            *,
+            tokenizer: RankingTokenizer,
+            config: BM25ScorerConfig | None = None,
     ) -> None:
         self.tokenizer = tokenizer
         self.config = config or BM25ScorerConfig()
         self.name = "bm25_scorer"
 
     def score(
-        self,
-        *,
-        query: RankQuery,
-        candidates: tuple[RankCandidate, ...],
+            self,
+            *,
+            query: RankQuery,
+            candidates: tuple[RankCandidate, ...],
     ) -> tuple[ScoreSignal, ...]:
         if not candidates:
             return ()

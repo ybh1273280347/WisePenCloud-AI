@@ -84,9 +84,10 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 
 ## 可插拔组件
 
-- `tools/utils/url_fetcher.HttpxFetcher`：常规 HTTP 下载，可实验 header、重试、MIME 探测和最大响应字节。
+- `tools/utils/url/fetcher.fetch_url`：常规 HTTP 下载，可实验 header、重试、MIME 探测和最大响应字节。
+- `tools/utils/url/security.validate_public_http_url`：URL 安全性校验，只校验 URL 本身，不做页面内容阻断。
 - `ScraplingFetcher`：动态/反爬 fallback，可替换为 Playwright 类 browser fetcher。
-- `TrafilaturaCleaner`：HTML 正文抽取，可替换 cleaner 或 renderer。
+- `TrafilaturaCleaner`：web_fetch 内部 HTML 正文抽取，可替换 cleaner。
 - `judge_quality`：降级判断阈值，可按站点类型或内容长度实验。
 - `WebContentCacheService`：统一 URL 缓存门面，可扩展 ETag、Last-Modified、缓存分层。
 - `RedisWebContentCacheEntryRepository` / `MongoWebContentCacheValueRepository`：缓存 active 索引和正文持久化实现。

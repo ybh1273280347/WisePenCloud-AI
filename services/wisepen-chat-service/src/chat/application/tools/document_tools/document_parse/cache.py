@@ -9,20 +9,19 @@ from chat.application.tools.common.web_content_cache import (
     WebContentCacheMode,
     WebContentCacheService,
 )
-from chat.application.tools.common.web_content_cache.refresh_queue import (
-    DOCUMENT_PARSE_REFRESH_JOB,
-    WebContentCacheRefreshTaskPublisher,
-)
 from chat.application.tools.common.web_content_cache import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
 )
+from chat.application.tools.common.web_content_cache.refresh_queue import (
+    DOCUMENT_PARSE_REFRESH_JOB,
+    WebContentCacheRefreshTaskPublisher,
+)
 from chat.application.tools.document_tools.document_parse.models import DocumentParseRequest
 from chat.application.tools.document_tools.document_parse.service import DocumentParseService
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.utils.url_fetcher import FetchedUrl
+from chat.application.tools.utils.url import FetchedUrl
 from common.logger import warn
-
 
 _DOCUMENT_PARSE_CACHE_PARSER_VERSION = "document_parse:v1"
 _REFRESH_LOCK_TTL_SECONDS = tool_settings.DOCUMENT_PARSE_REFRESH_LOCK_TTL_SECONDS
@@ -39,13 +38,13 @@ class DocumentParseCache:
     __slots__ = ("_content_cache_service", "_file_store", "_parse_service")
 
     def __init__(
-        self,
-        *,
-        file_store: ToolRunFileStore,
-        parse_service: DocumentParseService,
-        content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
-        content_cache_value_repository: WebContentCacheValueRepository | None = None,
-        refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
+            self,
+            *,
+            file_store: ToolRunFileStore,
+            parse_service: DocumentParseService,
+            content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
+            content_cache_value_repository: WebContentCacheValueRepository | None = None,
+            refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
     ) -> None:
         self._file_store = file_store
         self._parse_service = parse_service
@@ -56,10 +55,10 @@ class DocumentParseCache:
         )
 
     async def write_direct_url_cache_stub(
-        self,
-        *,
-        user_id: str,
-        raw: FetchedUrl,
+            self,
+            *,
+            user_id: str,
+            raw: FetchedUrl,
     ) -> str | None:
         return await self._content_cache_service.write_non_html_stub(
             NonHtmlCacheStubWrite(
@@ -76,10 +75,10 @@ class DocumentParseCache:
         )
 
     async def read_parsed_web_cache(
-        self,
-        *,
-        user_id: str,
-        metadata: dict[str, object],
+            self,
+            *,
+            user_id: str,
+            metadata: dict[str, object],
     ) -> ParsedCacheHit | None:
         cached = await self._content_cache_service.read_markdown_by_metadata(
             user_id=user_id,
@@ -96,13 +95,13 @@ class DocumentParseCache:
         )
 
     async def schedule_stale_parse_refresh(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        file_ref: str,
-        metadata: dict[str, object],
-        cache_mode: WebContentCacheMode,
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            file_ref: str,
+            metadata: dict[str, object],
+            cache_mode: WebContentCacheMode,
     ) -> None:
         source_url = string_metadata(metadata, "source_url")
         source_scope = source_scope_from_metadata(metadata)
@@ -144,11 +143,11 @@ class DocumentParseCache:
             )
 
     async def refresh_stale_parse_cache(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        file_ref: str,
+            self,
+            *,
+            user_id: str,
+            session_id: str,
+            file_ref: str,
     ) -> None:
         try:
             resolved = await self._file_store.resolve_ref(
@@ -181,12 +180,12 @@ class DocumentParseCache:
             )
 
     async def write_parsed_web_cache(
-        self,
-        *,
-        user_id: str,
-        metadata: dict[str, object],
-        content_type: str | None,
-        markdown: str,
+            self,
+            *,
+            user_id: str,
+            metadata: dict[str, object],
+            content_type: str | None,
+            markdown: str,
     ) -> None:
         source_url = string_metadata(metadata, "source_url")
         source_scope = source_scope_from_metadata(metadata)
@@ -222,11 +221,11 @@ def string_metadata(metadata: dict[str, object], key: str) -> str | None:
 
 
 def direct_url_metadata(
-    *,
-    url: str,
-    final_url: str | None,
-    content_type: str | None,
-    cache_doc_id: str | None = None,
+        *,
+        url: str,
+        final_url: str | None,
+        content_type: str | None,
+        cache_doc_id: str | None = None,
 ) -> dict[str, object]:
     metadata: dict[str, object] = {
         "source_kind": "web_fetch",

@@ -10,7 +10,8 @@ class ToolScope:
     def __init__(self, *, tools: dict[str, Tool], context: dict[str, Any] | None) -> None:
         self._tools = dict(tools)
         self._context = dict(context or {})
-        self._schemas: list[dict[str, Any]] = [schema_renderer(tool.definition.llm_spec) for tool in self._tools.values()]
+        self._schemas: list[dict[str, Any]] = [schema_renderer(tool.definition.llm_spec) for tool in
+                                               self._tools.values()]
 
     def schemas(self) -> list[dict[str, Any]]:
         return list(self._schemas)
@@ -24,6 +25,7 @@ class ToolScope:
 
     def __len__(self) -> int:
         return len(self._tools)
+
 
 class ToolRegistry:
     """全局工具注册表，负责派生请求级工具视图"""
@@ -46,12 +48,12 @@ class ToolRegistry:
         return [schema_renderer(tool.definition.llm_spec) for tool in self._tools.values()]
 
     def derive(
-        self,
-        *,
-        tool_context: dict[str, Any] | None = None,
-        expose_tool_name_set: set[str] | None = None,
-        allow_tool_name_set: set[str] | None = None,
-        deny_tool_name_set: set[str] | None = None,
+            self,
+            *,
+            tool_context: dict[str, Any] | None = None,
+            expose_tool_name_set: set[str] | None = None,
+            allow_tool_name_set: set[str] | None = None,
+            deny_tool_name_set: set[str] | None = None,
     ) -> ToolScope:
         expose_tool_name_set = expose_tool_name_set or set()
         deny_tool_name_set = deny_tool_name_set or set()

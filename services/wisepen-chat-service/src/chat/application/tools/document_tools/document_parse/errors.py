@@ -5,10 +5,10 @@ class DocumentParseError(Exception):
     """文档解析异常基类，携带原始异常。"""
 
     def __init__(
-        self,
-        message: str,
-        *,
-        cause: BaseException | None = None,
+            self,
+            message: str,
+            *,
+            cause: BaseException | None = None,
     ) -> None:
         super().__init__(message)
         self.cause = cause

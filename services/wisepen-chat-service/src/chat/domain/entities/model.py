@@ -9,7 +9,8 @@ from pymongo import ASCENDING, DESCENDING, IndexModel
 
 class ModelScope(str, Enum):
     SYSTEM = "SYSTEM"  # 平台内置模型
-    USER = "USER"      # 用户自定义模型
+    USER = "USER"  # 用户自定义模型
+
 
 class ModelType(IntEnum):
     CUSTOM_MODEL = 0
@@ -70,6 +71,7 @@ class Model(Document):
             ),
         ]
 
+
 class ModelProviderMapping(Document):
     """
     模型-供应商映射
@@ -112,4 +114,3 @@ class ModelProviderMapping(Document):
                 name="uniq_mapping_one_active_preferred_per_model_owner",
             ),
         ]
-

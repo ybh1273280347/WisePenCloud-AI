@@ -17,6 +17,7 @@ from chat.application.tools.core.tool_return import (
     ToolReturn,
 )
 from chat.application.tools.tool_settings import tool_settings
+from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
 from chat.application.tools.web_tools.web_fetch import WebCrawler
 from chat.application.tools.web_tools.web_fetch.errors import UrlFetchError
 from common.logger import warn
@@ -142,12 +143,14 @@ class WebCrawlTool:
         max_depth = kwargs.get("max_depth") or DEFAULT_MAX_DEPTH
         same_domain = kwargs.get("same_domain") if kwargs.get("same_domain") is not None else True
 
-        if not seed_url.startswith(("http://", "https://")):
+        try:
+            seed_url = validate_public_http_url(seed_url)
+        except UrlSecurityError as exc:
             raise ToolExecutionError(
                 reason="invalid_seed_url",
-                detail_reason="seed_url must be a full http(s) URL.",
+                detail_reason=str(exc),
                 retryable=False,
-            )
+            ) from exc
 
         # 2. 调度异步批量递归爬虫服务
         try:

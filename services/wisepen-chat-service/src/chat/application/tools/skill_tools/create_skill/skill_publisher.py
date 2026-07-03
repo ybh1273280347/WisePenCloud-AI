@@ -22,13 +22,13 @@ class SkillPublishResult:
 @runtime_checkable
 class SkillPublisher(Protocol):
     async def publish(
-        self,
-        *,
-        skill_id: str,
-        title: str,
-        trigger_description: str,
-        description: str,
-        assets: list[SkillAssetFile],
+            self,
+            *,
+            skill_id: str,
+            title: str,
+            trigger_description: str,
+            description: str,
+            assets: list[SkillAssetFile],
     ) -> SkillPublishResult:
         ...
 
@@ -48,13 +48,13 @@ class AIAssetSkillPublisher:
         self._ai_asset_client = ai_asset_client
 
     async def publish(
-        self,
-        *,
-        skill_id: str,
-        title: str,
-        trigger_description: str,
-        description: str,
-        assets: list[SkillAssetFile],
+            self,
+            *,
+            skill_id: str,
+            title: str,
+            trigger_description: str,
+            description: str,
+            assets: list[SkillAssetFile],
     ) -> SkillPublishResult:
         """发布 Skill 的主入口方法。
 

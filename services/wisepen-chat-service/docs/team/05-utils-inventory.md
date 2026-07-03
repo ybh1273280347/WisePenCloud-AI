@@ -116,43 +116,36 @@
 - `detect_mime_type(file_path) -> str`
 - `FileType(label, mime_type)`
 
-## URL 抓取器
+## URL 工具
 
-路径：`src/chat/application/tools/utils/url_fetcher.py`
+路径：`src/chat/application/tools/utils/url/`
 
-用途：工具层共享的 URL 抓取能力。HTML 返回文本，非 HTML 写入短期临时文件，供 `web_fetch`、`document_parse` 直链下载和 `image_ocr` 图片 URL 读取复用。
+用途：工具层共享的 URL 能力。文件名提取、URL 抓取和 URL 安全校验分开放置，供 `web_fetch`、`web_crawl`、`document_parse` 直链下载和 `image_ocr` 图片 URL 读取复用。
 
 现有入口：
 
-- `HttpxFetcher`
-- `RawFetchOutput`
-- `BaseFetcher`
-- `UrlFetchError` / `UrlFetchNetworkError` / `UrlFetchHttpError` / `UrlFetchUnsupportedUrlError`
-- `decode_bytes`
-- `filename_from_url`
+- `filename.filename_from_url`
+- `fetcher.fetch_url`
+- `fetcher.FetchedUrl`
+- `fetcher.UrlFetcherError` / `UrlFetcherNetworkError` / `UrlFetcherHttpError` / `UrlFetcherUnsupportedUrlError`
+- `security.validate_public_http_url`
+- `security.UrlSecurityError`
 
 ## Markdown 渲染器
 
 路径：`src/chat/application/tools/utils/markdown_renderer/`
 
-用途：把 HTML 渲染成适合模型阅读、缓存和分块的 Markdown。
+用途：把已确定的 HTML 片段按 HTML 语法树确定性渲染成适合模型阅读、缓存和分块的 Markdown。这里不处理特定业务或站点清洗逻辑，不做网页正文抽取、反爬判断、页面阻断、导航去噪或内容质量判断；这些策略属于具体工具自己的 cleaner。
 
 现有入口：
 
-- `FragmentMarkdownRenderer`
-- `WebPageMarkdownRenderer`
+- `html2markdown.HtmlToMarkdownRenderer`
 
-### FragmentMarkdownRenderer
+### HtmlToMarkdownRenderer
 
-将 HTML 片段直接转 Markdown，并可移除 `script`、`style`、`noscript`、`template`、`svg`、`canvas` 等噪声标签。
+将 HTML 片段直接转 Markdown，并可移除 `script`、`style`、`noscript`、`template`、`svg`、`canvas` 等语法树节点。它只做确定性的语法树到 Markdown 渲染，不调用 trafilatura 这类网页正文抽取器，也不承载 web page 专用清洗策略。
 
 适用场景：OCR 或外部服务返回的局部 HTML 表格/片段。
-
-### WebPageMarkdownRenderer
-
-基于 `trafilatura.extract` 提取网页主体并输出 Markdown。
-
-适用场景：后续 web fetch / web reader 工具。它只负责 HTML 到正文 Markdown，不负责下载网页、URL 安全校验或工具返回缓存。
 
 ## 快速定位
 
@@ -164,9 +157,11 @@
 | 需要对候选排序、融合、多样性控制 | `ranking_engine` |
 | 需要轻量调用模型或 embedding | `llm_clients` |
 | 需要识别本地文件类型 | `detect_file_type` / `detect_mime_type` |
-| 需要抓取 URL 并区分 HTML 与文件 | `tools/utils/url_fetcher.HttpxFetcher` |
-| 需要 HTML 片段转 Markdown | `FragmentMarkdownRenderer` |
-| 需要网页主体抽取成 Markdown | `WebPageMarkdownRenderer` |
+| 需要抓取 URL 并区分 HTML 与文件 | `tools/utils/url/fetcher.fetch_url` |
+| 需要提取 URL 文件名 | `tools/utils/url/filename.filename_from_url` |
+| 需要校验外部 URL 是否安全 | `tools/utils/url/security.validate_public_http_url` |
+| 需要 HTML 片段转 Markdown | `markdown_renderer/html2markdown.HtmlToMarkdownRenderer` |
+| 需要网页主体抽取成 Markdown | `web_tools/web_fetch/cleaners/TrafilaturaCleaner` |
 | 需要复用外部 URL 抓取、HTML 清洗或文件解析结果 | `src/chat/application/tools/common/web_content_cache/`，不要混入 `ToolContentStore` |
 
 ## 文档入口

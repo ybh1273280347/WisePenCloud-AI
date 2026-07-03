@@ -40,7 +40,7 @@ class ValidSkillAssetPathCheck(ToolPreflightHook):
                                        message=f"Skill '{skill_id}' not found.")
 
         # Manifest path 校验
-        path_to_object_key = {asset.path : asset.object_key for asset in skill.assets_manifest}
+        path_to_object_key = {asset.path: asset.object_key for asset in skill.assets_manifest}
         if path not in path_to_object_key:
             return ToolPreflightResult(ok=False,
                                        message=f"Asset path '{path}' is not declared for skill '{skill_id}'.")
@@ -53,6 +53,7 @@ class ValidSkillAssetPathCheck(ToolPreflightHook):
             else:
                 return ToolPreflightResult(ok=True, metadata={"skill_asset_object_key": skill_asset_object_key})
 
+
 class LoadSkillAssetTool:
     """
     按 skill_id + 相对路径懒加载 Skill Bundle 内的某个资产（reference / template / 示例等）
@@ -61,11 +62,11 @@ class LoadSkillAssetTool:
     """
 
     def __init__(
-        self,
-        file_loader: FileLoader,
-        ai_asset_client: AIAssetClient,
-        resource_client: ResourceClient,
-        max_output_chars: int,
+            self,
+            file_loader: FileLoader,
+            ai_asset_client: AIAssetClient,
+            resource_client: ResourceClient,
+            max_output_chars: int,
     ) -> None:
         self._file_loader = file_loader
         parameters_schema: Dict[str, Any] = {
@@ -102,7 +103,8 @@ class LoadSkillAssetTool:
                 timeout_seconds=tool_settings.LOAD_SKILL_ASSET_TOOL_TIMEOUT_SECONDS,
                 max_output_chars=max_output_chars,
             ),
-            preflight_hooks=(AllowedSkillIdCheck(), SkillPermissionCheck(resource_client), ValidSkillAssetPathCheck(ai_asset_client)),
+            preflight_hooks=(AllowedSkillIdCheck(), SkillPermissionCheck(resource_client),
+                             ValidSkillAssetPathCheck(ai_asset_client)),
         )
 
     @property

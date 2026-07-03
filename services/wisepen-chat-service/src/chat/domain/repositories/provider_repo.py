@@ -19,10 +19,10 @@ class ProviderRepository(ABC):
 
     @abstractmethod
     async def update_provider(
-        self,
-        provider_id: PydanticObjectId,
-        updates: dict[str, Any],
-        user_id: Optional[str] = None,
+            self,
+            provider_id: PydanticObjectId,
+            updates: dict[str, Any],
+            user_id: Optional[str] = None,
     ) -> Provider: pass
 
     @abstractmethod
@@ -30,10 +30,10 @@ class ProviderRepository(ABC):
 
     @abstractmethod
     async def increment_usage(
-        self,
-        provider_id: PydanticObjectId,
-        user_id: Optional[str],
-        token_usage: int,
-        billable_token_usage: int = 0,
+            self,
+            provider_id: PydanticObjectId,
+            user_id: Optional[str],
+            token_usage: int,
+            billable_token_usage: int = 0,
     ) -> None:
         pass

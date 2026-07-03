@@ -4,7 +4,8 @@
 
 WisePen RAG 主链路采用 **Qdrant 主召回 + WisePen RankingEngine 重排** 的设计。
 
-主链路只负责稳定地产生可引用、可回源、可重排的 `direct_evidence`。Neo4j 不参与主 topK 的竞争，图增强结果单独进入 `graph_evidence` 或 `ontology_hints`。
+主链路只负责稳定地产生可引用、可回源、可重排的 `direct_evidence`。Neo4j 不参与主 topK 的竞争，图增强结果单独进入
+`graph_evidence` 或 `ontology_hints`。
 
 核心结构：
 

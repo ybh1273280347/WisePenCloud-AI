@@ -8,6 +8,7 @@ from chat.application.tools.core.llm.renderer import RenderToolResult
 if TYPE_CHECKING:
     from chat.application.tools.core.definition import ToolOutput
 
+
 @dataclass
 class ToolExecutionError(Exception):
     reason: str
@@ -18,6 +19,7 @@ class ToolExecutionError(Exception):
     def __post_init__(self) -> None:
         super().__init__(self.detail_reason or self.reason)
 
+
 @dataclass(frozen=True)
 class ToolExecutionResult:
     tool_invocation: ToolInvocation
@@ -25,6 +27,7 @@ class ToolExecutionResult:
     started_at: datetime
     finished_at: datetime
     tool_execution_error: ToolExecutionError | None = None
+
 
 @dataclass(frozen=True)
 class ToolBatchResult:

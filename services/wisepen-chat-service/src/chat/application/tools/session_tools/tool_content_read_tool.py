@@ -150,9 +150,9 @@ class ToolContentReadTool:
     __slots__ = ("_service", "_definition")
 
     def __init__(
-        self,
-        *,
-        content_store: ToolContentStore,
+            self,
+            *,
+            content_store: ToolContentStore,
     ) -> None:
         self._service = ToolContentReadService(store=content_store)
         self._definition = ToolDefinition(

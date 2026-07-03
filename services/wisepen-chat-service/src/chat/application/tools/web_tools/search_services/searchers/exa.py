@@ -13,10 +13,10 @@ class ExaSearcher(BaseProviderSearcher):
     response_mapper = staticmethod(map_exa_response)
 
     def __init__(
-        self,
-        *,
-        http_client: httpx.AsyncClient,
-        config: SearchProviderConfig,
+            self,
+            *,
+            http_client: httpx.AsyncClient,
+            config: SearchProviderConfig,
     ) -> None:
         if not config.api_key:
             raise SearchProviderCredentialError("Exa API key is required.")
@@ -26,10 +26,10 @@ class ExaSearcher(BaseProviderSearcher):
         super().__init__(http_client=http_client, config=config, headers=headers)
 
     async def search_academic(
-        self,
-        *,
-        query: str,
-        max_results: int,
+            self,
+            *,
+            query: str,
+            max_results: int,
     ):
         request = ExaSearchRequest(
             query=query,

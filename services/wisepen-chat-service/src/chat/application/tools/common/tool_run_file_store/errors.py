@@ -19,9 +19,9 @@ class ToolFileWriteError(ToolRunFileStoreError):
 
 
 def tool_file_error_reason(
-    error: BaseException,
-    *,
-    default: str = "file_ref_unavailable",
+        error: BaseException,
+        *,
+        default: str = "file_ref_unavailable",
 ) -> str:
     """Map ToolRunFileStore errors to stable tool-visible reason codes."""
     if isinstance(error, InvalidToolFileRefError):

@@ -15,10 +15,10 @@ class ArqWebContentCacheRefreshTaskPublisher(WebContentCacheRefreshTaskPublisher
     __slots__ = ("_pool", "_queue_name", "_redis_settings")
 
     def __init__(
-        self,
-        *,
-        redis_url: str,
-        queue_name: str = "wisepen:web_content_cache:refresh",
+            self,
+            *,
+            redis_url: str,
+            queue_name: str = "wisepen:web_content_cache:refresh",
     ) -> None:
         self._redis_settings = RedisSettings.from_dsn(redis_url)
         self._queue_name = queue_name

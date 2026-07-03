@@ -24,23 +24,23 @@ class QueryClient:
     """面向工具性小模型任务的统一查询客户端。"""
 
     def __init__(
-        self,
-        model: str,
-        *,
-        api_base: str,
-        api_key: str,
+            self,
+            model: str,
+            *,
+            api_base: str,
+            api_key: str,
     ) -> None:
         self.model = model
         self._async_client = AsyncOpenAI(base_url=api_base, api_key=api_key)
         self._sync_client = OpenAI(base_url=api_base, api_key=api_key)
 
     async def aquery(
-        self,
-        prompt: str,
-        *,
-        system_prompt: str | None = None,
-        messages: list[Message] | None = None,
-        max_tokens: int | None = None,
+            self,
+            prompt: str,
+            *,
+            system_prompt: str | None = None,
+            messages: list[Message] | None = None,
+            max_tokens: int | None = None,
     ) -> QueryResult:
         response = await self._async_client.chat.completions.create(
             model=self.model,
@@ -54,12 +54,12 @@ class QueryClient:
         return self._parse_response(response)
 
     def query(
-        self,
-        prompt: str,
-        *,
-        system_prompt: str | None = None,
-        messages: list[Message] | None = None,
-        max_tokens: int | None = None,
+            self,
+            prompt: str,
+            *,
+            system_prompt: str | None = None,
+            messages: list[Message] | None = None,
+            max_tokens: int | None = None,
     ) -> QueryResult:
         """同步查询入口，用于少量非 async 调用场景。"""
         response = self._sync_client.chat.completions.create(
@@ -75,10 +75,10 @@ class QueryClient:
 
     @staticmethod
     def _build_messages(
-        *,
-        prompt: str,
-        system_prompt: str | None,
-        messages: list[Message] | None,
+            *,
+            prompt: str,
+            system_prompt: str | None,
+            messages: list[Message] | None,
     ) -> list[Message]:
         result: list[Message] = []
         if system_prompt:

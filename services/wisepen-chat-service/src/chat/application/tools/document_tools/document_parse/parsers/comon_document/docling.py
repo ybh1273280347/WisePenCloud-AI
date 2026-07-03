@@ -6,7 +6,9 @@ from typing import Any
 from docling.document_converter import DocumentConverter
 from docling_core.types.doc import ImageRefMode
 
-from chat.application.tools.document_tools.document_parse.errors import DocumentParserError
+from chat.application.tools.document_tools.document_parse.errors import (
+    DocumentParserError,
+)
 from chat.application.tools.document_tools.document_parse.models import (
     DocumentParseRequest,
     DocumentParseResult,

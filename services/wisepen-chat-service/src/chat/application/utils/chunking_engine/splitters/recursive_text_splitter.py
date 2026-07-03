@@ -19,14 +19,15 @@ class RecursiveTextSplitterConfig:
     chunk_size: int = 4000  # 目标 chunk 字符数
     chunk_overlap: int = 100  # 相邻 chunk 重叠字符数，保证上下文连续性
     separators: tuple[str, ...] = ("\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", "")
+
     # 切分优先级：双换行 > 单换行 > 中文句号 > 英文句号 > 空格 > 逐字符
 
     @classmethod
     def for_markdown(
-        cls,
-        *,
-        chunk_size: int = 4000,
-        chunk_overlap: int = 100,
+            cls,
+            *,
+            chunk_size: int = 4000,
+            chunk_overlap: int = 100,
     ) -> RecursiveTextSplitterConfig:
         """Markdown 专用分隔符配置，优先按标题切分。"""
         return cls(
@@ -55,9 +56,9 @@ class RecursiveTextSplitter:
         )
 
     def split(
-        self,
-        *,
-        document: ChunkDocument,
+            self,
+            *,
+            document: ChunkDocument,
     ) -> tuple[TextUnit, ...]:
         """将文本按递归分隔符切分为 TextUnit 列表。"""
         text = document.text

@@ -4,14 +4,13 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 import dashscope
 
 from chat.domain.entities import ChatMessage, Role
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.entities.provider import ProviderType
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
 from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMUsage
-from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
-
 from .utils import json_object, read_provider_value, without_none
 
 
@@ -48,23 +47,23 @@ class QwenAdapter(LLMProvider):
         }
 
     async def stream_chat_completion(
-        self,
-        messages: List[ChatMessage],
-        model_request: ModelRequestInfo,
-        tools: Optional[List[Dict[str, Any]]] = None,
+            self,
+            messages: List[ChatMessage],
+            model_request: ModelRequestInfo,
+            tools: Optional[List[Dict[str, Any]]] = None,
     ) -> AsyncGenerator[LLMStreamEvent, None]:
         # 内部消息投影为 Qwen / DashScope message 格式
-        qwen_messages = self._qwen_messages_formatter(messages) # 消息
+        qwen_messages = self._qwen_messages_formatter(messages)  # 消息
 
         # 设置请求参数
-        request_kwargs:dict[str, Any] = {
-            "api_key": model_request.api_key, # 鉴权密钥
-            "model": model_request.model_name, # 模型名
-            "messages": qwen_messages, # 消息
+        request_kwargs: dict[str, Any] = {
+            "api_key": model_request.api_key,  # 鉴权密钥
+            "model": model_request.model_name,  # 模型名
+            "messages": qwen_messages,  # 消息
             "result_format": "message",
             "stream": True,
             "incremental_output": True,
-            "tools": tools, # Qwen function calling 使用 OpenAI-compatible tools schema，无需转换
+            "tools": tools,  # Qwen function calling 使用 OpenAI-compatible tools schema，无需转换
             **model_request.runtime_options
         }
 
@@ -80,7 +79,8 @@ class QwenAdapter(LLMProvider):
                 status_code = read_provider_value(response, "status_code")
                 if status_code and int(status_code) >= 400:
                     message = read_provider_value(response, "message", "DashScope request failed")
-                    raise ServiceException(ChatErrorCode.LLM_GENERATION_FAILED, custom_msg=f"Qwen Provider Error: {message}")
+                    raise ServiceException(ChatErrorCode.LLM_GENERATION_FAILED,
+                                           custom_msg=f"Qwen Provider Error: {message}")
 
                 output = read_provider_value(response, "output", {}) or {}
 
@@ -96,12 +96,13 @@ class QwenAdapter(LLMProvider):
                 reasoning = read_provider_value(message, "reasoning_content")
                 if reasoning:
                     reasoning_text += reasoning
-                    yield LLMStreamEvent(type=LLMEventType.REASONING_DELTA, delta=reasoning) # 传递 LLMStreamEvent REASONING_DELTA
+                    yield LLMStreamEvent(type=LLMEventType.REASONING_DELTA,
+                                         delta=reasoning)  # 传递 LLMStreamEvent REASONING_DELTA
                 # 文本增量
                 content = read_provider_value(message, "content")
                 if content:
                     assistant_text += content
-                    yield LLMStreamEvent(type=LLMEventType.TEXT_DELTA, delta=content) # 传递 LLMStreamEvent TEXT_DELTA
+                    yield LLMStreamEvent(type=LLMEventType.TEXT_DELTA, delta=content)  # 传递 LLMStreamEvent TEXT_DELTA
 
                 # 当 message.tool_calls 出现时,function.arguments 已经是一个可解析的完整 JSON 字符串
                 # https://help.aliyun.com/zh/model-studio/qwen-api-via-dashscope
@@ -122,11 +123,11 @@ class QwenAdapter(LLMProvider):
             raise ServiceException(ChatErrorCode.LLM_GENERATION_FAILED, custom_msg=f"Qwen Provider Error: {e}")
 
         # 计费
-        if token_usage: # 传递 LLMStreamEvent USAGE
+        if token_usage:  # 传递 LLMStreamEvent USAGE
             yield LLMStreamEvent(type=LLMEventType.USAGE, usage=LLMUsage(output_tokens=token_usage))
 
         # 解析工具调用
-        if tool_calls: # 传递 LLMStreamEvent TOOL_CALLS
+        if tool_calls:  # 传递 LLMStreamEvent TOOL_CALLS
             yield LLMStreamEvent(type=LLMEventType.TOOL_CALLS, tool_calls=tool_calls)
 
         # 保存 Qwen 原生 assistant message，供下一轮协议回放

@@ -12,12 +12,12 @@ class LLMProviderResolver:
     """
 
     def __init__(
-        self,
-        qwen_adapter: LLMProvider,
-        openai_adapter: LLMProvider,
-        anthropic_adapter: LLMProvider,
-        gemini_adapter: LLMProvider,
-        litellm_adapter: LLMProvider,
+            self,
+            qwen_adapter: LLMProvider,
+            openai_adapter: LLMProvider,
+            anthropic_adapter: LLMProvider,
+            gemini_adapter: LLMProvider,
+            litellm_adapter: LLMProvider,
     ):
         self._qwen_adapter = qwen_adapter
         self._openai_adapter = openai_adapter

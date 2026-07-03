@@ -8,7 +8,6 @@ from chat.domain.entities.model import Model, ModelScope, ModelProviderMapping
 from chat.domain.entities.provider import Provider, ProviderType
 
 
-
 @dataclass(frozen=True)
 class ModelInfo:
     model: Model
@@ -77,6 +76,7 @@ class ModelRequestInfo:
     def with_runtime_options(self, runtime_options: dict[str, Any]) -> "ModelRequestInfo":
         return replace(self, runtime_options=runtime_options)
 
+
 class ModelRepository(ABC):
 
     @abstractmethod
@@ -86,17 +86,18 @@ class ModelRepository(ABC):
     async def list_models_and_mappings(self, user_id: Optional[str] = None) -> List[ModelInfo]: pass
 
     @abstractmethod
-    async def list_models_by_provider_id(self, provider_id: PydanticObjectId, user_id: Optional[str] = None) -> List[ModelInfo]: pass
+    async def list_models_by_provider_id(self, provider_id: PydanticObjectId, user_id: Optional[str] = None) -> List[
+        ModelInfo]: pass
 
     @abstractmethod
     async def create_model(self, model: Model, user_id: Optional[str] = None) -> Model: pass
 
     @abstractmethod
     async def update_model(
-        self,
-        model_id: PydanticObjectId,
-        updates: dict[str, Any],
-        user_id: Optional[str] = None,
+            self,
+            model_id: PydanticObjectId,
+            updates: dict[str, Any],
+            user_id: Optional[str] = None,
     ) -> Model: pass
 
     @abstractmethod
@@ -104,23 +105,23 @@ class ModelRepository(ABC):
 
     @abstractmethod
     async def bind_model_to_provider(
-        self,
-        model_id: PydanticObjectId,
-        provider_id: PydanticObjectId,
-        provider_model_name: str,
-        user_id: Optional[str] = None,
-        *,
-        is_preferred: bool = True,
-        is_active: bool = True,
+            self,
+            model_id: PydanticObjectId,
+            provider_id: PydanticObjectId,
+            provider_model_name: str,
+            user_id: Optional[str] = None,
+            *,
+            is_preferred: bool = True,
+            is_active: bool = True,
     ) -> ModelProviderMapping:
         pass
 
     @abstractmethod
     async def unbind_model_from_provider(
-        self,
-        model_id: PydanticObjectId,
-        provider_id: PydanticObjectId,
-        user_id: Optional[str] = None,
+            self,
+            model_id: PydanticObjectId,
+            provider_id: PydanticObjectId,
+            user_id: Optional[str] = None,
     ) -> None:
         pass
 
@@ -130,7 +131,7 @@ class ModelRepository(ABC):
             model_id: PydanticObjectId,
             user_id: Optional[str] = None,
             provider_id: Optional[PydanticObjectId] = None,
-            scope = None,
+            scope=None,
             runtime_options: Optional[dict[str, Any]] = None,
     ) -> ModelRequestInfo:
         pass

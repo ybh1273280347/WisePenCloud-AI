@@ -29,7 +29,7 @@ class RankingEngineRegistry:
                 pipeline=RankingPipeline(
                     name="read.ranked_expand",
                     scorers=(
-                        BM25Scorer(tokenizer=self._tokenizers["thulac"]),   # 全文打分
+                        BM25Scorer(tokenizer=self._tokenizers["thulac"]),  # 全文打分
                         FieldedBM25Scorer(  # section，achor 命中额外加分
                             tokenizer=self._tokenizers["thulac"],
                             config=FieldedBM25ScorerConfig(

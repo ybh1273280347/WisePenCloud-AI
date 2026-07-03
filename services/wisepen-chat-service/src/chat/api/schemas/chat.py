@@ -1,4 +1,5 @@
 from typing import Optional, List, Dict, Any, Set
+
 from pydantic import BaseModel, Field
 
 
@@ -15,5 +16,7 @@ class ChatRequest(BaseModel):
     user_defined_attachment_ids: Optional[List[str]] = Field(default=None, description="用户指定附件ID列表")
     user_defined_allow_tool_names: Optional[Set[str]] = Field(default=None, description="允许Tool的Name列表")
     user_defined_deny_tool_names: Optional[Set[str]] = Field(default=None, description="禁用Tool的Name列表")
-    user_defined_on_demand_skill_ids: Optional[Set[str]] = Field(default=None, description="用户指定给LLM自动选择的Skill资源ID列表")
-    user_defined_force_enabled_skill_ids: Optional[Set[str]] = Field(default=None, description="用户指定给LLM强制启用的Skill资源ID列表")
+    user_defined_on_demand_skill_ids: Optional[Set[str]] = Field(default=None,
+                                                                 description="用户指定给LLM自动选择的Skill资源ID列表")
+    user_defined_force_enabled_skill_ids: Optional[Set[str]] = Field(default=None,
+                                                                     description="用户指定给LLM强制启用的Skill资源ID列表")

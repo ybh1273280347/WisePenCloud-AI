@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-
 """Ranking Engine 词法排序用轻量停用词表。"""
-
 
 DEFAULT_STOPWORDS: frozenset[str] = frozenset(
     {

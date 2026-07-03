@@ -46,9 +46,9 @@ class RankingTokenizer:
     __slots__ = ("config", "stopwords")
 
     def __init__(
-        self,
-        config: RankingTokenizerConfig | None = None,
-        stopwords: frozenset[str] | None = None,
+            self,
+            config: RankingTokenizerConfig | None = None,
+            stopwords: frozenset[str] | None = None,
     ) -> None:
         self.config = config or RankingTokenizerConfig()
         # 默认使用内置通用停用词表；调用方可传入自定义停用词覆盖
@@ -119,9 +119,9 @@ class JiebaRankingTokenizer(RankingTokenizer):
     __slots__ = ("_jieba_tokenizer",)
 
     def __init__(
-        self,
-        config: RankingTokenizerConfig | None = None,
-        stopwords: frozenset[str] | None = None,
+            self,
+            config: RankingTokenizerConfig | None = None,
+            stopwords: frozenset[str] | None = None,
     ) -> None:
         super().__init__(config=config, stopwords=stopwords)
         # jieba.cut_for_search 在精确分词基础上补充粗粒度切分，
@@ -138,9 +138,9 @@ class ThuLacRankingTokenizer(RankingTokenizer):
     __slots__ = ("_thulac_tokenizer",)
 
     def __init__(
-        self,
-        config: RankingTokenizerConfig | None = None,
-        stopwords: frozenset[str] | None = None,
+            self,
+            config: RankingTokenizerConfig | None = None,
+            stopwords: frozenset[str] | None = None,
     ) -> None:
         super().__init__(config=config, stopwords=stopwords)
         # seg_only=True 表示只分词不标注词性，提高吞吐

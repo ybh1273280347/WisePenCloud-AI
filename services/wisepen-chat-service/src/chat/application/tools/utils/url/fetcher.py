@@ -2,19 +2,18 @@ from __future__ import annotations
 
 import contextlib
 import os
-import re
 import tempfile
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin
 
 import httpx
 
 from chat.application.tools.utils.file_type_detect import FileType, detect_file_type_from_bytes
-
-_URL_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
+from .filename import filename_from_url
+from .security import UrlSecurityError, validate_public_http_url
 
 _DEFAULT_FETCH_HEADERS = {
     "User-Agent": (
@@ -31,8 +30,9 @@ _DEFAULT_HTML_FETCH_HEADERS = {
     "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
 }
 
-_SNIFF_BUFFER_BYTES = 32_768  # 32 KiB，先读这么多字节再决定文件类型，避免整份下载完才发现不需要
-_STREAM_CHUNK_SIZE = 65_536   # 64 KiB
+_SNIFF_BUFFER_BYTES = 32_768
+_STREAM_CHUNK_SIZE = 65_536
+_MAX_REDIRECTS = 10
 
 
 class UrlFetcherError(RuntimeError):
@@ -56,7 +56,7 @@ class UrlFetcherHttpError(UrlFetcherError):
 
 
 class UrlFetcherUnsupportedUrlError(UrlFetcherError):
-    """不支持的 URL 协议或资源类型。"""
+    """不支持或不安全的 URL。"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,36 +79,25 @@ class FetchedUrl:
         return self.file_type.label
 
 
-def filename_from_url(url: str) -> str | None:
-    """从 URL 提取文件名，用于 fallback 文件类型检测或展示名。"""
-    try:
-        path = urlparse(url).path
-        name = Path(path).name
-        return name if name else None
-    except Exception:
-        return None
-
-
 async def fetch_url(
-    url: str,
-    *,
-    http_client: httpx.AsyncClient,
-    headers: Mapping[str, str] | None = None,
-    max_response_bytes: int = 52_428_800,
-    allow_html: bool = True,
+        url: str,
+        *,
+        http_client: httpx.AsyncClient,
+        headers: Mapping[str, str] | None = None,
+        max_response_bytes: int = 52_428_800,
+        allow_html: bool = True,
 ) -> FetchedUrl:
-    """抓取 http(s) URL，HTML 返回字节正文，非 HTML 写入临时文件。"""
+    """抓取公开 http(s) URL，HTML 返回字节正文，非 HTML 写入临时文件。"""
     try:
         async with _open_sniffed_url_response(
-            url,
-            http_client=http_client,
-            headers=headers or (
-                _DEFAULT_HTML_FETCH_HEADERS
-                if allow_html
-                else _DEFAULT_FETCH_HEADERS
-            ),
+                url,
+                http_client=http_client,
+                headers=headers or (
+                        _DEFAULT_HTML_FETCH_HEADERS
+                        if allow_html
+                        else _DEFAULT_FETCH_HEADERS
+                ),
         ) as response:
-            # sniff_buffer 已经计入总量，budget 是正文剩余部分还能读多少字节。
             budget = max_response_bytes - len(response.sniff_buffer)
             if budget < 0:
                 raise UrlFetcherNetworkError(
@@ -116,9 +105,6 @@ async def fetch_url(
                     reason=f"response exceeded max bytes {max_response_bytes}",
                 )
 
-            # file_type 是基于 sniff_buffer 内容嗅探的结果；content-type 头是服务端自报的类型。
-            # 两者任一显示 html 就按 html 处理，因为嗅探库可能对短 html 片段误判，
-            # 而 content-type 头本身也可能被服务端错误设置——取更保守的一方。
             content_type_prefix = (response.content_type or "").split(";", maxsplit=1)[0].strip().lower()
             is_html = response.file_type.label == "html" or content_type_prefix in {
                 "text/html",
@@ -182,63 +168,78 @@ class _SniffedUrlResponse:
 
 @asynccontextmanager
 async def _open_sniffed_url_response(
-    url: str,
-    *,
-    http_client: httpx.AsyncClient,
-    headers: Mapping[str, str] | None = None,
+        url: str,
+        *,
+        http_client: httpx.AsyncClient,
+        headers: Mapping[str, str] | None = None,
 ) -> AsyncGenerator[_SniffedUrlResponse, None]:
     """打开 http(s) 响应流并完成前缀嗅探，调用方负责消费剩余 stream。"""
-    if not _URL_SCHEME_RE.match(url.strip()):
-        raise UrlFetcherUnsupportedUrlError(
-            url=url,
-            reason="unsupported url scheme, only http/https allowed",
-        )
+    current_url = _validate_fetch_url(url)
+    redirects = 0
 
+    while True:
+        try:
+            async with http_client.stream(
+                    "GET",
+                    current_url,
+                    headers=dict(headers or _DEFAULT_FETCH_HEADERS),
+                    follow_redirects=False,
+            ) as response:
+                if 300 <= response.status_code < 400:
+                    redirects += 1
+                    if redirects > _MAX_REDIRECTS:
+                        raise UrlFetcherNetworkError(url=url, reason="too many redirects")
+                    location = response.headers.get("location")
+                    if not location:
+                        raise UrlFetcherHttpError(url=current_url, reason=f"http {response.status_code}")
+                    current_url = _validate_fetch_url(urljoin(str(response.url), location))
+                    continue
+
+                if response.status_code >= 400:
+                    raise UrlFetcherHttpError(url=current_url, reason=f"http {response.status_code}")
+
+                final_url = _validate_fetch_url(str(response.url))
+                stream = response.aiter_bytes(chunk_size=_STREAM_CHUNK_SIZE)
+                sniff_buffer = await _read_stream_prefix(stream, _SNIFF_BUFFER_BYTES)
+                yield _SniffedUrlResponse(
+                    final_url=final_url,
+                    status_code=response.status_code,
+                    content_type=response.headers.get("content-type"),
+                    headers=dict(response.headers),
+                    sniff_buffer=sniff_buffer,
+                    file_type=detect_file_type_from_bytes(
+                        sniff_buffer,
+                        fallback_name=filename_from_url(final_url),
+                    ),
+                    charset_encoding=response.charset_encoding,
+                    stream=stream,
+                )
+                return
+
+        except (UrlFetcherHttpError, UrlFetcherNetworkError, UrlFetcherUnsupportedUrlError):
+            raise
+        except httpx.TimeoutException as exc:
+            raise UrlFetcherNetworkError(url=current_url, reason=f"timeout: {exc}") from exc
+        except httpx.NetworkError as exc:
+            raise UrlFetcherNetworkError(url=current_url, reason=f"network: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise UrlFetcherNetworkError(url=current_url, reason=f"http: {exc}") from exc
+        except Exception as exc:
+            raise UrlFetcherNetworkError(url=current_url, reason=f"unexpected: {exc}") from exc
+
+
+def _validate_fetch_url(url: str) -> str:
     try:
-        async with http_client.stream(
-            "GET",
-            url,
-            headers=dict(headers or _DEFAULT_FETCH_HEADERS),
-            follow_redirects=True,
-        ) as response:
-            if response.status_code >= 400:
-                raise UrlFetcherHttpError(url=url, reason=f"http {response.status_code}")
-
-            final_url = str(response.url)
-            stream = response.aiter_bytes(chunk_size=_STREAM_CHUNK_SIZE)
-            # 先嗅探再决定后续走向：是 html 就整段读进内存，否则边读边落盘。
-            sniff_buffer = await _read_stream_prefix(stream, _SNIFF_BUFFER_BYTES)
-            yield _SniffedUrlResponse(
-                final_url=final_url,
-                status_code=response.status_code,
-                content_type=response.headers.get("content-type"),
-                headers=dict(response.headers),
-                sniff_buffer=sniff_buffer,
-                file_type=detect_file_type_from_bytes(
-                    sniff_buffer,
-                    fallback_name=filename_from_url(final_url),
-                ),
-                charset_encoding=response.charset_encoding,
-                stream=stream,
-            )
-
-    except (UrlFetcherHttpError, UrlFetcherNetworkError, UrlFetcherUnsupportedUrlError):
-        raise
-    except httpx.TimeoutException as exc:
-        raise UrlFetcherNetworkError(url=url, reason=f"timeout: {exc}") from exc
-    except httpx.NetworkError as exc:
-        raise UrlFetcherNetworkError(url=url, reason=f"network: {exc}") from exc
-    except httpx.HTTPError as exc:
-        raise UrlFetcherNetworkError(url=url, reason=f"http: {exc}") from exc
-    except Exception as exc:
-        raise UrlFetcherNetworkError(url=url, reason=f"unexpected: {exc}") from exc
+        return validate_public_http_url(url)
+    except UrlSecurityError as exc:
+        raise UrlFetcherUnsupportedUrlError(url=url, reason=str(exc)) from exc
 
 
 async def _write_stream_to_temp_file(
-    stream: AsyncIterator[bytes],
-    *,
-    initial_bytes: bytes = b"",
-    suffix: str | None = None,
+        stream: AsyncIterator[bytes],
+        *,
+        initial_bytes: bytes = b"",
+        suffix: str | None = None,
 ) -> str:
     fd, tmp_path = tempfile.mkstemp(prefix="tool_fetch_", suffix=f".{suffix}" if suffix else "")
     try:
@@ -247,18 +248,17 @@ async def _write_stream_to_temp_file(
             async for chunk in stream:
                 fh.write(chunk)
             fh.flush()
-            os.fsync(fh.fileno())  # 落盘后续可能被其它进程/协程读取，显式 fsync 避免只在页缓存里
+            os.fsync(fh.fileno())
         return tmp_path
     except BaseException:
-        # 写一半失败要清理临时文件，否则每次失败的抓取都会在磁盘上留下孤儿文件。
         with contextlib.suppress(OSError):
             Path(tmp_path).unlink(missing_ok=True)
         raise
 
 
 async def _read_stream_prefix(
-    stream: AsyncIterator[bytes],
-    max_bytes: int,
+        stream: AsyncIterator[bytes],
+        max_bytes: int,
 ) -> bytes:
     chunks: list[bytes] = []
     total = 0
@@ -267,14 +267,13 @@ async def _read_stream_prefix(
         total += len(chunk)
         if total >= max_bytes:
             break
-    # 最后一个 chunk 可能把 total 推过 max_bytes，切片截断到精确边界。
     return b"".join(chunks)[:max_bytes]
 
 
 async def _bounded_stream(
-    stream: AsyncIterator[bytes],
-    budget: int,
-    url: str,
+        stream: AsyncIterator[bytes],
+        budget: int,
+        url: str,
 ) -> AsyncGenerator[bytes, None]:
     """逐块转发并计数，超出 budget 立即抛错，避免超大响应被完整读入内存后才发现超限。"""
     remaining = budget

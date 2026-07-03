@@ -7,24 +7,24 @@ from urllib.parse import urljoin, urlparse
 
 from lxml import html as lxml_html
 
-from chat.application.tools.common.web_content_cache.refresh_queue import (
-    WEB_FETCH_REFRESH_JOB,
-    WebContentCacheRefreshTaskPublisher,
+from chat.application.tools.common.web_content_cache import (
+    HtmlCacheWrite,
+    WebContentCacheService,
 )
 from chat.application.tools.common.web_content_cache import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
 )
-from chat.application.tools.common.web_content_cache import (
-    HtmlCacheWrite,
-    WebContentCacheService,
+from chat.application.tools.common.web_content_cache.refresh_queue import (
+    WEB_FETCH_REFRESH_JOB,
+    WebContentCacheRefreshTaskPublisher,
 )
 from common.logger import info, warn
+from ._web_fetch_utils import judge_quality
 from .cleaners.base import BaseCleaner
 from .errors import UrlFetchError
 from .fetchers import WebFetcher
 from .models import RawFetchOutput, WebFetchResult
-from ._web_fetch_utils import judge_quality
 
 _REFRESH_LOCK_TTL_SECONDS = 300
 
@@ -61,16 +61,16 @@ class WebCrawler:
     )
 
     def __init__(
-        self,
-        *,
-        httpx_fetcher: WebFetcher,
-        scrapling_fetcher: WebFetcher,
-        cleaner: BaseCleaner,
-        content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
-        content_cache_value_repository: WebContentCacheValueRepository | None = None,
-        refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
-        min_text_length: int = 200,
-        concurrency: int = 5,
+            self,
+            *,
+            httpx_fetcher: WebFetcher,
+            scrapling_fetcher: WebFetcher,
+            cleaner: BaseCleaner,
+            content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
+            content_cache_value_repository: WebContentCacheValueRepository | None = None,
+            refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
+            min_text_length: int = 200,
+            concurrency: int = 5,
     ) -> None:
         self._httpx_fetcher = httpx_fetcher
         self._scrapling_fetcher = scrapling_fetcher
@@ -84,15 +84,15 @@ class WebCrawler:
         self._concurrency = concurrency
 
     async def crawl(
-        self,
-        seed_url: str,
-        *,
-        user_id: str,
-        session_id: str,
-        source_scope: str = "web_public",
-        max_pages: int = 100,
-        max_depth: int = 3,
-        same_domain: bool = True,
+            self,
+            seed_url: str,
+            *,
+            user_id: str,
+            session_id: str,
+            source_scope: str = "web_public",
+            max_pages: int = 100,
+            max_depth: int = 3,
+            same_domain: bool = True,
     ) -> list[WebFetchResult]:
         """BFS 递归爬取 seed_url。"""
         base_domain = urlparse(seed_url).netloc
@@ -149,13 +149,13 @@ class WebCrawler:
         return results
 
     async def _fetch_one_for_crawl(
-        self,
-        url: str,
-        *,
-        semaphore: asyncio.Semaphore,
-        user_id: str,
-        session_id: str,
-        source_scope: str,
+            self,
+            url: str,
+            *,
+            semaphore: asyncio.Semaphore,
+            user_id: str,
+            session_id: str,
+            source_scope: str,
     ) -> _CrawlPage | None:
         """单个 URL 抓取，httpx → scrapling fallback。"""
         async with semaphore:
@@ -224,12 +224,12 @@ class WebCrawler:
         )
 
     async def _read_cached_page(
-        self,
-        *,
-        url: str,
-        user_id: str,
-        session_id: str,
-        source_scope: str,
+            self,
+            *,
+            url: str,
+            user_id: str,
+            session_id: str,
+            source_scope: str,
     ) -> _CrawlPage | None:
         cached = await self._content_cache_service.read_markdown_page(
             url=url,
@@ -256,13 +256,13 @@ class WebCrawler:
         )
 
     async def _write_html_cache(
-        self,
-        *,
-        url: str,
-        user_id: str,
-        source_scope: str,
-        raw: RawFetchOutput,
-        result: WebFetchResult,
+            self,
+            *,
+            url: str,
+            user_id: str,
+            source_scope: str,
+            raw: RawFetchOutput,
+            result: WebFetchResult,
     ) -> None:
         await self._content_cache_service.write_html_markdown(
             HtmlCacheWrite(
@@ -284,10 +284,10 @@ class WebCrawler:
 
 
 def _extract_links(
-    raw_html: str,
-    base_url: str,
-    base_domain: str,
-    same_domain: bool,
+        raw_html: str,
+        base_url: str,
+        base_domain: str,
+        same_domain: bool,
 ) -> list[str]:
     """从 HTML 提取链接，去锚点、规范化、same_domain 过滤。返回去重结果。"""
     try:

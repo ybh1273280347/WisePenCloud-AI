@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from typing import Optional
 
+from chat.domain.entities import StorageRecord, UploadInitResponse
 from common.core.exceptions import RpcError
 from common.http.rpc_client import RpcClient
-from chat.domain.entities import StorageRecord, UploadInitResponse
 
 _DEFAULT_SERVICE_NAME = "wisepen-file-storage-service"
 _INIT_UPLOAD_URL_PATH = "/internal/storage/initUpload"
@@ -20,10 +20,10 @@ _DEFAULT_DOWNLOAD_DURATION_SECONDS = 900
 
 class FileStorageClient:
     def __init__(
-        self,
-        rpc: RpcClient,
-        *,
-        service_name: str = _DEFAULT_SERVICE_NAME,
+            self,
+            rpc: RpcClient,
+            *,
+            service_name: str = _DEFAULT_SERVICE_NAME,
     ) -> None:
         self._rpc = rpc
         self._service_name = service_name
@@ -33,14 +33,14 @@ class FileStorageClient:
         return self._service_name
 
     async def init_upload(
-        self,
-        *,
-        md5: str,
-        extension: str,
-        scene: str,
-        biz_path: str,
-        config_id: Optional[int],
-        expected_size: int,
+            self,
+            *,
+            md5: str,
+            extension: str,
+            scene: str,
+            biz_path: str,
+            config_id: Optional[int],
+            expected_size: int,
     ) -> UploadInitResponse:
         data = await self._rpc.post(
             self._service_name,
@@ -62,9 +62,9 @@ class FileStorageClient:
         return UploadInitResponse.from_response(data)
 
     async def get_download_url(
-        self,
-        object_key: str,
-        duration_seconds: int = _DEFAULT_DOWNLOAD_DURATION_SECONDS,
+            self,
+            object_key: str,
+            duration_seconds: int = _DEFAULT_DOWNLOAD_DURATION_SECONDS,
     ) -> str:
         data = await self._rpc.get(
             self._service_name,

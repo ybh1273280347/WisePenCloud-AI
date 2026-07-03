@@ -16,8 +16,8 @@ def read_variable_name(payload: dict[str, Any], default: str = "x") -> str:
 
 
 def read_variable_names(
-    payload: dict[str, Any],
-    default: tuple[str, ...] = ("x",),
+        payload: dict[str, Any],
+        default: tuple[str, ...] = ("x",),
 ) -> list[str]:
     raw = payload.get("variables") or list(default)
     names = [str(item) for item in raw]

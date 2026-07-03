@@ -1,4 +1,4 @@
-from .common import DoclingParser, MarkItDownParser
+from .comon_document import DoclingParser, MarkItDownParser
 from .specialized import PandasSpreadsheetParser, PdfParseStrategy
 
 __all__ = [

@@ -10,6 +10,7 @@ class SuggestedActionPriority(StrEnum):
     MEDIUM = "medium"
     LOW = "low"
 
+
 # 单个 Action 独立使用时的提示文案，与 SuggestedActions.notice 保持一致
 _STANDALONE_NOTICE = (
     "Suggested actions are optional hints. They identify tools and route-level "

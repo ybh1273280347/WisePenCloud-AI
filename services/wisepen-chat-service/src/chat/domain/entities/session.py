@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 from typing import List, Optional
+
 from beanie import Document
 from pydantic import BaseModel, Field
 from pymongo import IndexModel, ASCENDING, DESCENDING
+
 
 class AttachmentRef(BaseModel):
     """附件"""

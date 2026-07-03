@@ -21,15 +21,16 @@ from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.gc import (
     ToolRunFileStoreGcScheduler,
 )
+from chat.application.tools.common.web_content_cache.gc import WebContentCacheGcScheduler
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
 from chat.application.tools.document_tools.document_parse import DocumentParseService
+from chat.application.tools.document_tools.document_parse_tool import DocumentParseTool
+from chat.application.tools.document_tools.image_ocr_tool import ImageOcrTool
 from chat.application.tools.document_tools.ocr import (
     PaddleCloudClient,
     PaddleCloudConfig,
 )
-from chat.application.tools.document_tools.document_parse_tool import DocumentParseTool
-from chat.application.tools.document_tools.image_ocr_tool import ImageOcrTool
 from chat.application.tools.math_tools.calculus_solve_tool import CalculusSolveTool
 from chat.application.tools.math_tools.equation_solve_tool import EquationSolveTool
 from chat.application.tools.math_tools.expression_solve_tool import ExpressionSolveTool
@@ -48,7 +49,6 @@ from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillM
 from chat.application.tools.tool_output_cache import ToolOutputCache
 from chat.application.tools.tool_output_renderer import ToolOutputRenderer
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.utils.markdown_renderer import WebPageMarkdownRenderer
 from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
 from chat.application.tools.web_tools.search_services.custom_source_factory import (
     WebSearchCustomSourceFactory,
@@ -68,7 +68,6 @@ from chat.application.tools.web_tools.search_services.searchers import (
 from chat.application.tools.web_tools.search_services.services.academic_search import AcademicSearchService
 from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import PaperHydrator
 from chat.application.tools.web_tools.search_services.services.web_search.service import WebSearchService
-from chat.application.tools.common.web_content_cache.gc import WebContentCacheGcScheduler
 from chat.application.tools.web_tools.web_crawl_tool import WebCrawlTool
 from chat.application.tools.web_tools.web_fetch import (
     FetchCoordinator,
@@ -90,20 +89,20 @@ from chat.core.persistence.mongo.message_repository import MongoMessageRepositor
 from chat.core.persistence.mongo.model_repository import MongoModelRepository
 from chat.core.persistence.mongo.provider_repository import MongoProviderRepository
 from chat.core.persistence.mongo.session_repository import MongoSessionRepository
+from chat.core.persistence.mongo.web_content_cache_value_repository import (
+    MongoWebContentCacheValueRepository,
+)
 from chat.core.persistence.mongo.web_search_credential_repository import (
     MongoWebSearchCredentialRepository,
 )
 from chat.core.persistence.redis.hot_context import RedisHotContext
 from chat.core.persistence.redis.tool_content_repository import RedisToolContentRepository
 from chat.core.persistence.redis.tool_run_file_repository import RedisToolRunFileRepository
-from chat.core.persistence.redis.web_content_cache_refresh_queue import (
-    ArqWebContentCacheRefreshTaskPublisher,
-)
 from chat.core.persistence.redis.web_content_cache_entry_repository import (
     RedisWebContentCacheEntryRepository,
 )
-from chat.core.persistence.mongo.web_content_cache_value_repository import (
-    MongoWebContentCacheValueRepository,
+from chat.core.persistence.redis.web_content_cache_refresh_queue import (
+    ArqWebContentCacheRefreshTaskPublisher,
 )
 from chat.core.persistence.redis.web_search_candidate_repository import (
     RedisWebSearchCandidateRepository,
@@ -137,8 +136,8 @@ def _build_registry(tool_providers: List[providers.Provider]) -> ToolRegistry:
 
 
 def _build_paddle_ocr_client(
-    *,
-    http_client: httpx.AsyncClient,
+        *,
+        http_client: httpx.AsyncClient,
 ) -> PaddleCloudClient | None:
     if not settings.PADDLE_OCR_TOKEN:
         return None
@@ -157,8 +156,8 @@ def _build_paddle_ocr_client(
 
 
 def _build_platform_web_searchers(
-    *,
-    http_client: httpx.AsyncClient,
+        *,
+        http_client: httpx.AsyncClient,
 ) -> dict[SearchProviderName, ProviderSearcher]:
     provider_searchers: dict[SearchProviderName, ProviderSearcher] = {
         SearchProviderName.FOUGET_DDG: FouGetDdgSearcher(
@@ -401,9 +400,8 @@ class Container(containers.DeclarativeContainer):
     )
     web_fetch_cleaner = providers.Singleton(
         TrafilaturaCleaner,
-        renderer=providers.Singleton(WebPageMarkdownRenderer),
     )
-    web_crawl_service = providers.Singleton(
+    web_crawler = providers.Singleton(
         WebCrawler,
         httpx_fetcher=web_fetch_httpx_fetcher,
         scrapling_fetcher=web_fetch_scrapling_fetcher,
@@ -505,7 +503,7 @@ class Container(containers.DeclarativeContainer):
     )
     web_crawl_tool = providers.Singleton(
         WebCrawlTool,
-        crawler=web_crawl_service,
+        crawler=web_crawler,
     )
     web_fetch_tool = providers.Singleton(
         WebFetchTool,

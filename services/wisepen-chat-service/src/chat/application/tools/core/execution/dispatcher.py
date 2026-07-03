@@ -15,18 +15,18 @@ if TYPE_CHECKING:
 
 class ToolDispatcher:
     def __init__(
-        self,
-        *,
-        output_renderer: ToolOutputRenderer,
-        output_cache: ToolOutputCache,
+            self,
+            *,
+            output_renderer: ToolOutputRenderer,
+            output_cache: ToolOutputCache,
     ) -> None:
         self._output_renderer = output_renderer
         self._output_cache = output_cache
 
     async def dispatch(
-        self,
-        invocations: list[ToolInvocation],
-        tool_scope: ToolScope,
+            self,
+            invocations: list[ToolInvocation],
+            tool_scope: ToolScope,
     ) -> ToolBatchResult:
         executor = ToolExecutor(
             tool_scope,

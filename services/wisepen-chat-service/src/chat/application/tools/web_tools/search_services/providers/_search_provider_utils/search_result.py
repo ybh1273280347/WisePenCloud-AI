@@ -17,10 +17,10 @@ def is_valid_result(*, title: str, url: str) -> bool:
 
 
 def dedupe_by_url(
-    items: Iterable[Any],
-    *,
-    url_getter: Callable[[Any], str],
-    limit: int,
+        items: Iterable[Any],
+        *,
+        url_getter: Callable[[Any], str],
+        limit: int,
 ) -> tuple[Any, ...]:
     """按 URL 去重并截断，保留首次出现的条目。"""
     seen: set[str] = set()

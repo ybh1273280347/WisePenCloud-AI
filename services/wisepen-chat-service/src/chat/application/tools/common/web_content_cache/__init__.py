@@ -1,3 +1,4 @@
+from .cache_ttl import compute_ttl
 from .models import (
     WebContentCacheMode,
     WebContentCacheEntry,
@@ -14,7 +15,6 @@ from .repository import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
 )
-from .cache_ttl import compute_ttl
 from .service import (
     CachedMarkdownPage,
     HtmlCacheWrite,

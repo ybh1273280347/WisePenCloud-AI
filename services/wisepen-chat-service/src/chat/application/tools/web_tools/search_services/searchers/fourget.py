@@ -13,9 +13,9 @@ class FourGetSearcher(BaseProviderSearcher):
     response_mapper = staticmethod(map_fourget_response)
 
     def __init__(
-        self,
-        *,
-        http_client: httpx.AsyncClient,
-        config: SearchProviderConfig,
+            self,
+            *,
+            http_client: httpx.AsyncClient,
+            config: SearchProviderConfig,
     ) -> None:
         super().__init__(http_client=http_client, config=config)

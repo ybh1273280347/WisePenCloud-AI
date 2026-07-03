@@ -17,8 +17,6 @@ from chat.application.tools.skill_tools.utils.skill_matcher import SkillMatcher
 from chat.application.tools.web_tools.search_services.runtime_context import (
     WebSearchRuntimeContextResolver,
 )
-from common.logger import error
-
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
 from chat.domain.interfaces.llm import TextCompletionProvider
@@ -32,12 +30,14 @@ from chat.domain.repositories import (
 )
 from common.core.exceptions import ServiceException
 from common.kafka.producer import KafkaProducerClient
+from common.logger import error
 
 # Skill 工具默认不暴露；仅在本轮存在可展示 Skill 时整体解禁
 _SKILL_TOOL_NAMES = frozenset({"load_skill", "load_skill_asset"})
 # Session 工具默认不暴露；仅在本轮存在存在不可见的上下文历史时解禁（有summary）
 _SESSION_TOOL_NAMES = frozenset({"get_historical_chat_messages"})
 _ACADEMIC_TOOL_NAMES = frozenset({"academic_search"})
+
 
 class ChatTurnCoordinator:
     """
@@ -213,7 +213,7 @@ class ChatTurnCoordinator:
 
         if not tool_and_skill_policy.enable_use_tool:
             # 若不启用Tool，则allow_tool_name_set为空
-            allow_tool_name_set:Set[str] = set()
+            allow_tool_name_set: Set[str] = set()
         else:
             # 若用户指定了 user_defined_allow_tool_names，则覆盖 agent 预设的 allow_tool_names
             allow_tool_name_set = user_defined_allow_tool_names or tool_and_skill_policy.allow_tool_names or None
@@ -238,13 +238,13 @@ class ChatTurnCoordinator:
             user_query=user_query,
             system_prompt=agent_spec.system_prompt,  # 系统提示词
             session_summary=session_summary,  # 会话的历史摘要
-            history_messages=chat_history_record_messages, # 会话历史
-            relevant_facts=relevant_facts, # 长期记忆检索的事实
-            frontend_states=frontend_states, # 用户前端状态
-            available_skills=available_skills or None, # 可用技能
-            temp_attachments=temp_attachments, # 对话中的全部临时附件
-            resource_attachments=resource_attachments, # 对话中的全部资源附件
-            user_defined_attachment_ids=user_defined_attachment_ids, # 用户指定的附件
+            history_messages=chat_history_record_messages,  # 会话历史
+            relevant_facts=relevant_facts,  # 长期记忆检索的事实
+            frontend_states=frontend_states,  # 用户前端状态
+            available_skills=available_skills or None,  # 可用技能
+            temp_attachments=temp_attachments,  # 对话中的全部临时附件
+            resource_attachments=resource_attachments,  # 对话中的全部资源附件
+            user_defined_attachment_ids=user_defined_attachment_ids,  # 用户指定的附件
         )
 
         # 构造 chat_record_messages
@@ -266,15 +266,15 @@ class ChatTurnCoordinator:
         # 流式推理
         try:
             async for event in self._query_loop_runtime.stream_chat_with_tool_calling(
-                messages=messages_for_llm,
-                tool_scope=tool_scope,
-                session_id=session_id,
-                agent_max_iterations=agent_spec.agent_max_iterations,
-                model_info=resolved_model_info,
+                    messages=messages_for_llm,
+                    tool_scope=tool_scope,
+                    session_id=session_id,
+                    agent_max_iterations=agent_spec.agent_max_iterations,
+                    model_info=resolved_model_info,
             ):
                 # QueryLoopRuntime 产出的事件如果是 StepFinishEvent 额外处理消息累积
                 if isinstance(event, StepFinishEvent):
-                    token_usage += event.token_usage # 计费
+                    token_usage += event.token_usage  # 计费
                     if not event.is_finished:
                         # 向 chat_record_messages 追加中间消息（Tool Calls）
                         chat_record_messages.extend(event.intermediate_messages)

@@ -87,7 +87,7 @@ async def test_image_ocr_file_path_url_deletes_downloaded_temp_file(tmp_path: Pa
 
     result = await tool.execute(
         {"user_id": "u1", "session_id": "s1"},
-        file_path="https://example.test/download.png",
+        file_path="https://example.com/download.png",
     )
 
     assert result.visible_result["status"] == "success"
@@ -109,7 +109,7 @@ async def test_image_ocr_rejects_ambiguous_input(tmp_path: Path) -> None:
             tool_name="image_ocr",
             tool_call_arguments={
                 "file_ref": "tfile_image",
-                "file_path": "https://example.test/image.png",
+                "file_path": "https://example.com/image.png",
             },
         ),
         tool.definition.policy,
@@ -119,3 +119,20 @@ async def test_image_ocr_rejects_ambiguous_input(tmp_path: Path) -> None:
 
     assert result.ok is False
     assert result.message == "Provide exactly one of file_ref or file_path."
+
+
+@pytest.mark.asyncio
+async def test_image_ocr_rejects_unsafe_image_url(tmp_path: Path) -> None:
+    tool = ImageOcrTool(
+        file_store=_FakeFileStore(tmp_path / "unused.png"),
+        ocr_client=_FakeOcrClient(),
+        url_download_http_client=_mock_image_http_client(),
+    )
+
+    result = await tool.execute(
+        {"user_id": "u1", "session_id": "s1"},
+        file_path="http://127.0.0.1/image.png",
+    )
+
+    assert result.visible_result["status"] == "failed"
+    assert str(result.visible_result["reason"]).startswith("invalid_image_url:")

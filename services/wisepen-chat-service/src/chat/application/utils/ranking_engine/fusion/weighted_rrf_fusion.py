@@ -13,10 +13,10 @@ class WeightedRrfFusion:
         self.name = "weighted_rrf_fusion"
 
     def fuse(
-        self,
-        *,
-        candidates: tuple[RankCandidate, ...],
-        signals: tuple[ScoreSignal, ...],
+            self,
+            *,
+            candidates: tuple[RankCandidate, ...],
+            signals: tuple[ScoreSignal, ...],
     ) -> tuple[RankedCandidate, ...]:
         if not candidates:
             return ()

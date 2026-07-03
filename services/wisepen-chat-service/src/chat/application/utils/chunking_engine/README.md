@@ -1,6 +1,7 @@
 # Chunking Engine
 
-`ChunkingEngine` 把一段文本切成可读取、可检索、可定位的 chunks。它是 ToolContentStore 的下游基础设施之一，但不关心 Redis、不关心 content_id，也不关心模型输出格式。
+`ChunkingEngine` 把一段文本切成可读取、可检索、可定位的 chunks。它是 ToolContentStore 的下游基础设施之一，但不关心 Redis、不关心
+content_id，也不关心模型输出格式。
 
 这份文档只说明接手者最需要知道的事：怎么选 pipeline、输出里哪些字段可靠、不要依赖哪些内部细节。
 
@@ -35,12 +36,12 @@ ChunkDocument
 
 ## 推荐 Pipeline
 
-| Pipeline | 什么时候用 | 说明 |
-| --- | --- | --- |
-| `markdown` | Markdown、网页正文、document_parse Markdown | 默认首选，保留标题/表格/代码块等结构 |
-| `plain_text` | 无结构纯文本 | 没有 section/page/anchor 索引 |
-| `markdown_recursive` | Markdown 很长且结构块过大 | 会更偏字符递归切分 |
-| `nested_markdown` | 后续需要父子块召回 | 当前不要默认使用，除非明确需要嵌套语义 |
+| Pipeline             | 什么时候用                                 | 说明                        |
+|----------------------|---------------------------------------|---------------------------|
+| `markdown`           | Markdown、网页正文、document_parse Markdown | 默认首选，保留标题/表格/代码块等结构       |
+| `plain_text`         | 无结构纯文本                                | 没有 section/page/anchor 索引 |
+| `markdown_recursive` | Markdown 很长且结构块过大                     | 会更偏字符递归切分                 |
+| `nested_markdown`    | 后续需要父子块召回                             | 当前不要默认使用，除非明确需要嵌套语义       |
 
 ToolContentStore 默认规则：
 
@@ -75,11 +76,11 @@ ToolContentStore 会把这些字段收敛成更小的 `ToolContentChunk`：
 
 `ChunkExtraIndexer` 会产生额外索引：
 
-| kind | name 示例 | 用途 |
-| --- | --- | --- |
-| `SECTION` | `section:快速开始 > 安装` | 按章节筛选 |
-| `PAGE` | `page:3` | 按页码标签筛选 |
-| `ANCHOR` | `anchor:Table 1` | 按表格/图片/公式锚点标签筛选 |
+| kind      | name 示例             | 用途              |
+|-----------|---------------------|-----------------|
+| `SECTION` | `section:快速开始 > 安装` | 按章节筛选           |
+| `PAGE`    | `page:3`            | 按页码标签筛选         |
+| `ANCHOR`  | `anchor:Table 1`    | 按表格/图片/公式锚点标签筛选 |
 
 ToolContentRead 现在主要按 `entry.index_name`、`entry.index_kind` 和 `entry.chunk_indices` 使用索引，不依赖 `chunk_ids`。
 
@@ -93,7 +94,8 @@ ToolContentRead 现在主要按 `entry.index_name`、`entry.index_kind` 和 `ent
 - `content_hash`
 - `start_unit / end_unit`
 
-原因：上层读取窗口真正需要的是 content 内顺序、offset 和结构索引。把内部 ID/层级暴露到 ToolContentStore 会让模型和调用方误以为可以跨内容长期引用，实际并不稳定。
+原因：上层读取窗口真正需要的是 content 内顺序、offset 和结构索引。把内部 ID/层级暴露到 ToolContentStore
+会让模型和调用方误以为可以跨内容长期引用，实际并不稳定。
 
 ## Markdown 结构识别约定
 
@@ -114,7 +116,8 @@ Markdown pipeline 会识别：
 <!-- page 3 -->
 ```
 
-这个标记应由 document_parse 或预处理阶段注入，并独占一行。Markdown pipeline 会把 page marker 当作硬边界：chunk 不应跨页；单页过长时可以在页内拆成多个 chunk。`nested_markdown` 的子 chunk 会继承父 chunk 的页码 metadata。
+这个标记应由 document_parse 或预处理阶段注入，并独占一行。Markdown pipeline 会把 page marker 当作硬边界：chunk
+不应跨页；单页过长时可以在页内拆成多个 chunk。`nested_markdown` 的子 chunk 会继承父 chunk 的页码 metadata。
 
 ## 最小用法
 

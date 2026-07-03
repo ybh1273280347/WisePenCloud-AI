@@ -7,6 +7,7 @@ class StreamEvent:
 
     pass
 
+
 @dataclass(frozen=True)
 class ErrorEvent(StreamEvent):
     """错误事件"""

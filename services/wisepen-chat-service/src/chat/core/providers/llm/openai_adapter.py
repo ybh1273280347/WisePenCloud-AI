@@ -4,14 +4,13 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 from openai import AsyncOpenAI
 
 from chat.domain.entities import ChatMessage, Role
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.entities.provider import ProviderType
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
 from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMUsage
-from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
-
 from .utils import dump_provider_value, json_object, without_none
 
 
@@ -49,10 +48,10 @@ class OpenAIAdapter(LLMProvider):
         }
 
     async def stream_chat_completion(
-        self,
-        messages: List[ChatMessage],
-        model_request: ModelRequestInfo,
-        tools: Optional[List[Dict[str, Any]]] = None,
+            self,
+            messages: List[ChatMessage],
+            model_request: ModelRequestInfo,
+            tools: Optional[List[Dict[str, Any]]] = None,
     ) -> AsyncGenerator[LLMStreamEvent, None]:
         # 构造 SDK Client（指定 api_key 与 base_url）
         client_kwargs = {"api_key": model_request.api_key}
@@ -64,12 +63,12 @@ class OpenAIAdapter(LLMProvider):
         request_input, instructions, previous_response_id = self._openai_messages_formatter(messages)
 
         # 设置请求参数
-        request_kwargs:dict[str, Any] = {
-            "model": model_request.model_name, # 模型名
-            "input": request_input, # 消息
-            "instructions": instructions or None, # system prompt
-            "tools": self._openai_tools_formatter(tools), # 工具集
-            "previous_response_id": previous_response_id, # Responses API 续写 id
+        request_kwargs: dict[str, Any] = {
+            "model": model_request.model_name,  # 模型名
+            "input": request_input,  # 消息
+            "instructions": instructions or None,  # system prompt
+            "tools": self._openai_tools_formatter(tools),  # 工具集
+            "previous_response_id": previous_response_id,  # Responses API 续写 id
             "stream": True,
             **model_request.runtime_options
         }
@@ -83,33 +82,35 @@ class OpenAIAdapter(LLMProvider):
             # 流式调用
             async for event in stream:
                 event_type = getattr(event, "type", "")
-                if event_type == "response.created": # OpenAI 创建了一个 response，可用于下一轮 previous_response_id，尤其 tool calling 时
+                if event_type == "response.created":  # OpenAI 创建了一个 response，可用于下一轮 previous_response_id，尤其 tool calling 时
                     response = getattr(event, "response", None)
                     response_id = getattr(response, "id", None)
-                elif event_type == "response.output_item.added": # OpenAI 开始输出一个 item
+                elif event_type == "response.output_item.added":  # OpenAI 开始输出一个 item
                     current_item = dump_provider_value(getattr(event, "item", None)) or {}
-                elif event_type == "response.output_text.delta": # 文本增量
+                elif event_type == "response.output_text.delta":  # 文本增量
                     delta = getattr(event, "delta", None)
                     if delta:
-                        yield LLMStreamEvent(type=LLMEventType.TEXT_DELTA, delta=delta) # 传递 LLMStreamEvent TEXT_DELTA
-                elif event_type in {"response.reasoning_summary_text.delta", "response.reasoning_text.delta"}: # 思考增量
+                        yield LLMStreamEvent(type=LLMEventType.TEXT_DELTA, delta=delta)  # 传递 LLMStreamEvent TEXT_DELTA
+                elif event_type in {"response.reasoning_summary_text.delta", "response.reasoning_text.delta"}:  # 思考增量
                     delta = getattr(event, "delta", None)
                     if delta:
-                        yield LLMStreamEvent(type=LLMEventType.REASONING_DELTA, delta=delta) # 传递 LLMStreamEvent REASONING_DELTA
-                elif event_type == "response.function_call_arguments.delta" and current_item is not None: # 工具调用参数的增量
-                    current_item["arguments"] = (current_item.get("arguments") or "") + (getattr(event, "delta", "") or "")
-                elif event_type == "response.output_item.done": # 一个 output item 输出完成
+                        yield LLMStreamEvent(type=LLMEventType.REASONING_DELTA,
+                                             delta=delta)  # 传递 LLMStreamEvent REASONING_DELTA
+                elif event_type == "response.function_call_arguments.delta" and current_item is not None:  # 工具调用参数的增量
+                    current_item["arguments"] = (current_item.get("arguments") or "") + (
+                                getattr(event, "delta", "") or "")
+                elif event_type == "response.output_item.done":  # 一个 output item 输出完成
                     item = dump_provider_value(getattr(event, "item", None)) or current_item
                     if item:
                         # output_items 是整轮 OpenAI response 的原生输出集合，用于后续解析工具调用和作为 provider_payload
                         output_items.append(item)
                     current_item = None
-                elif event_type == "response.completed": # 整个 response 完成
+                elif event_type == "response.completed":  # 整个 response 完成
                     response = getattr(event, "response", None)
-                    response_id = getattr(response, "id", None) or response_id # 更新 response id，最终值覆盖或兜底
-                    usage = getattr(response, "usage", None) # 计费
+                    response_id = getattr(response, "id", None) or response_id  # 更新 response id，最终值覆盖或兜底
+                    usage = getattr(response, "usage", None)  # 计费
                     token_usage = int(getattr(usage, "total_tokens", 0) or 0) if usage else 0
-                    if token_usage: # 传递 LLMStreamEvent USAGE
+                    if token_usage:  # 传递 LLMStreamEvent USAGE
                         yield LLMStreamEvent(type=LLMEventType.USAGE, usage=LLMUsage(output_tokens=token_usage))
         except Exception as e:
             raise ServiceException(ChatErrorCode.LLM_GENERATION_FAILED, custom_msg=f"OpenAI Responses Error: {e}")
@@ -125,11 +126,12 @@ class OpenAIAdapter(LLMProvider):
                 name=item.get("name") or "",
                 arguments=json_object(item.get("arguments") or "{}")
             ))
-        if calls: # 传递 LLMStreamEvent TOOL_CALLS
+        if calls:  # 传递 LLMStreamEvent TOOL_CALLS
             yield LLMStreamEvent(type=LLMEventType.TOOL_CALLS, tool_calls=calls)
 
         # 保存 Responses 原生 output items 与 response_id，供下一轮协议回放
-        yield LLMStreamEvent(type=LLMEventType.STATE, provider_payload={"output": output_items, "response_id": response_id})
+        yield LLMStreamEvent(type=LLMEventType.STATE,
+                             provider_payload={"output": output_items, "response_id": response_id})
 
     @staticmethod
     def _openai_messages_formatter(messages: List[ChatMessage]) -> tuple[list[Any], str, str | None]:
@@ -148,8 +150,8 @@ class OpenAIAdapter(LLMProvider):
                 and messages[i].model_info.provider_type == ProviderType.OPENAI
                 and messages[i].provider_payload
                 and messages[i].provider_payload.get("response_id")
-            )
-        ), -1) # 从后往前找最近一条 provider_type == OPENAI 并且 response_id 存在的消息
+        )
+        ), -1)  # 从后往前找最近一条 provider_type == OPENAI 并且 response_id 存在的消息
 
         # 如果找到 response_id，优先构造 continuation input
         if last_response_index >= 0:
@@ -158,7 +160,8 @@ class OpenAIAdapter(LLMProvider):
                 # 如果最近一次 OpenAI assistant response 后面有工具结果，就不回放完整历史
                 # 只把工具结果作为 input，同时带上 previous_response_id
                 if msg.role == Role.TOOL:
-                    outputs.append({"type": "function_call_output", "call_id": msg.tool_call_id, "output": msg.content or ""})
+                    outputs.append(
+                        {"type": "function_call_output", "call_id": msg.tool_call_id, "output": msg.content or ""})
             if outputs:
                 return outputs, instructions, messages[last_response_index].provider_payload['response_id']
 

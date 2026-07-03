@@ -75,11 +75,11 @@ class ChunkExtraIndexer(Protocol):
     name: str  # 索引器名称
 
     def index(
-        self,
-        *,
-        document: ChunkDocument,
-        units: tuple[TextUnit, ...],
-        chunks: tuple[Chunk, ...],
+            self,
+            *,
+            document: ChunkDocument,
+            units: tuple[TextUnit, ...],
+            chunks: tuple[Chunk, ...],
     ) -> tuple[ChunkIndex, ...]:
         """基于最终 chunk 构建额外语义索引。"""
         ...

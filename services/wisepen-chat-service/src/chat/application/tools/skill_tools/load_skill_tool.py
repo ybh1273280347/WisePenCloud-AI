@@ -25,11 +25,11 @@ class LoadSkillTool:
     """
 
     def __init__(
-        self,
-        file_loader: FileLoader,
-        ai_asset_client: AIAssetClient,
-        resource_client: ResourceClient,
-        max_output_chars: int,
+            self,
+            file_loader: FileLoader,
+            ai_asset_client: AIAssetClient,
+            resource_client: ResourceClient,
+            max_output_chars: int,
     ) -> None:
         self._file_loader = file_loader
         self._ai_asset_client = ai_asset_client
@@ -103,7 +103,7 @@ class LoadSkillTool:
 
         return "\n".join(lines)
 
-    async def _load_skill_md(self, skill:Skill) -> str:
+    async def _load_skill_md(self, skill: Skill) -> str:
         skill_md_asset = next((asset for asset in skill.assets_manifest if asset.path == "/SKILL.md"), None)
 
         if not skill_md_asset:

@@ -47,11 +47,11 @@ class CacheTTL:
 # ---------------------------------------------------------------------------
 
 def compute_ttl(
-    *,
-    headers: dict[str, str],
-    now: datetime,
-    is_shared_cache: bool = False,
-    status_code: int = 200,
+        *,
+        headers: dict[str, str],
+        now: datetime,
+        is_shared_cache: bool = False,
+        status_code: int = 200,
 ) -> CacheTTL:
     """从 HTTP 响应头计算 soft/hard 过期时间。
 
@@ -96,7 +96,7 @@ def compute_ttl(
 
     # must-revalidate / no-cache / max-age=0：立即 stale
     if cc.must_revalidate or cc.no_cache is True or (
-        cc.max_age is not None and cc.max_age == 0
+            cc.max_age is not None and cc.max_age == 0
     ):
         effective_freshness = timedelta(0)
 

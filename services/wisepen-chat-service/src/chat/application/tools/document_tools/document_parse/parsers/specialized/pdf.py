@@ -18,7 +18,6 @@ from chat.application.tools.document_tools.document_parse.models import (
     DocumentParseResult,
 )
 
-
 _DOCLING_PDF_MARKDOWN_EXPORT_OPTIONS = {
     "image_mode": ImageRefMode.EMBEDDED,
     "traverse_pictures": True,
@@ -78,8 +77,8 @@ class PdfParseStrategy:
 
             if page_kind == "scanned":
                 if ocr_markdown := await self._parse_scanned_page_with_ocr(
-                    pdf_path=pdf_path,
-                    page_number=page_number,
+                        pdf_path=pdf_path,
+                        page_number=page_number,
                 ):
                     page_markdowns.append(ocr_markdown)
                     continue
@@ -89,8 +88,8 @@ class PdfParseStrategy:
                 continue
 
             if rendered := await self._parse_page_with_pymupdf4llm(
-                pdf_path=pdf_path,
-                page_number=page_number,
+                    pdf_path=pdf_path,
+                    page_number=page_number,
             ):
                 page_markdowns.append(self._with_page_marker(page_number, rendered))
 
@@ -109,27 +108,27 @@ class PdfParseStrategy:
         for page_number, page_kind in enumerate(page_kinds, start=1):
             if page_kind == "text":
                 if rendered := await self._parse_page_with_pymupdf4llm(
-                    pdf_path=pdf_path,
-                    page_number=page_number,
+                        pdf_path=pdf_path,
+                        page_number=page_number,
                 ):
                     page_markdowns.append(self._with_page_marker(page_number, rendered))
                     continue
                 if ocr_markdown := await self._parse_scanned_page_with_ocr(
-                    pdf_path=pdf_path,
-                    page_number=page_number,
+                        pdf_path=pdf_path,
+                        page_number=page_number,
                 ):
                     page_markdowns.append(ocr_markdown)
                 continue
 
             if ocr_markdown := await self._parse_scanned_page_with_ocr(
-                pdf_path=pdf_path,
-                page_number=page_number,
+                    pdf_path=pdf_path,
+                    page_number=page_number,
             ):
                 page_markdowns.append(ocr_markdown)
                 continue
             if rendered := await self._parse_page_with_pymupdf4llm(
-                pdf_path=pdf_path,
-                page_number=page_number,
+                    pdf_path=pdf_path,
+                    page_number=page_number,
             ):
                 page_markdowns.append(self._with_page_marker(page_number, rendered))
 
