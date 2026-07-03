@@ -47,7 +47,7 @@
 
 ## 已注册工具
 
-当前 `ToolRegistry` 注册 17 个工具：
+当前 `ToolRegistry` 注册 16 个工具：
 
 | 分组 | 工具 |
 | --- | --- |
@@ -55,7 +55,7 @@
 | math | `calculus_solver`、`linear_algebra_solver`、`equation_solver`、`stats_solver`、`expression_solver` |
 | session | `tool_content_read`、`tool_content_sequential_read`、`get_historical_chat_messages` |
 | web | `web_search`、`academic_search`、`web_fetch`、`web_crawl` |
-| skill | `load_skill`、`load_skill_asset`、`create_skill` |
+| skill | `load_skill`、`load_skill_asset` |
 
 ## Runtime 信封
 
@@ -306,7 +306,7 @@ SkillMatcher
   -> load_skill_asset
 ```
 
-Skill 工具的模型约束：只加载本轮允许 skill；asset path 必须来自 manifest；`create_skill` 当前注册但发布后端未接通时会失败。
+Skill 工具的模型约束：只加载本轮允许 skill；asset path 必须来自 manifest。Skill 创建后续通过 skill 工作流承载，不再作为 tool 暴露给模型。
 
 ### Math 工具
 
@@ -361,7 +361,6 @@ Math 工具的模型约束：不访问外部信息，不执行任意 Python，�
 | OCR provider | PaddleCloud OCR client | 扫描 PDF 页和 `image_ocr` 的 OCR provider 替换。 |
 | 内容分块 | Markdown/plain chunking pipeline | chunk 大小、结构索引、页面/锚点抽取策略。 |
 | 排序 | `RankingEngine` | 本地 embedding、cross-encoder、provider reranker、混合 BM25。 |
-| Skill 发布 | `SkillPublisher` protocol | 接入真实 ai-asset publisher、冲突检查、版本管理。 |
 
 ## 后续优化方向
 

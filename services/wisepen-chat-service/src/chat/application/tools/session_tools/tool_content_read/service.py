@@ -7,13 +7,11 @@ from chat.application.tools.common.tool_content_store.models import StoredToolCo
 from chat.application.tools.session_tools.tool_content_read.content_window_builder import ToolContentWindowBuilder
 from chat.application.tools.session_tools.tool_content_read.models import (
     ToolContentReadMatch,
-    ToolContentReadMode,
     ToolContentReadRequest,
     ToolContentReadResult,
     ToolContentSelector,
     ToolContentWindow,
 )
-from chat.application.tools.tool_settings import tool_settings
 from chat.application.utils.ranking_engine import (
     RankCandidate,
     RankQuery,
@@ -21,8 +19,6 @@ from chat.application.utils.ranking_engine import (
     RankingEngine,
 )
 from chat.application.utils.ranking_engine import get_ranking_engine
-
-MAX_REGEX_PATTERN_CHARS = tool_settings.TOOL_CONTENT_READ_MAX_REGEX_PATTERN_CHARS
 
 
 class _RegexLimitReached(Exception):
@@ -47,57 +43,47 @@ class ToolContentReadService:
         self._store = store
         self._ranking_engine = ranking_engine or get_ranking_engine("read.ranked_expand")
 
-    async def read(
+    async def read_ranked_expand(
             self,
             *,
             request: ToolContentReadRequest,
             session_id: str,
     ) -> ToolContentReadResult:
-        """检索主入口"""
-        self._validate_request(request)
-
-        stored_items: list[tuple[str, StoredToolContent]] = []
-        failed: list[ToolContentReadMatch] = []
-
-        # 批量加载文档，单项失败不中断流程
-        for content_id in request.content_ids:
-            loaded = await self._load_one(content_id=content_id, session_id=session_id)
-            if isinstance(loaded, ToolContentReadMatch):
-                failed.append(loaded)
-                continue
-            stored_items.append(loaded)
-
-        # 根据模式分发检索逻辑
-        if request.mode == ToolContentReadMode.RANKED_EXPAND:
-            matches = await self._read_ranked_expand_across_contents(
-                stored_items=tuple(stored_items),
-                request=request,
-            )
-        elif request.mode == ToolContentReadMode.REGEX_MATCH:
-            matches = self._read_regex_match_across_contents(
-                stored_items=tuple(stored_items),
-                request=request,
-            )
-        else:
-            raise ValueError(f"Unsupported read mode: {request.mode}")
+        """跨文档语义检索并展开窗口。"""
+        stored_items, failed = await self._load_contents(
+            content_ids=request.content_ids,
+            session_id=session_id,
+        )
+        matches = await self._read_ranked_expand_across_contents(
+            stored_items=stored_items,
+            request=request,
+        )
 
         return ToolContentReadResult(
             matches=matches,
-            failed=tuple(failed),
+            failed=failed,
         )
 
-    @staticmethod
-    def _validate_request(request: ToolContentReadRequest) -> None:
-        """校验请求参数合法性"""
-        if request.mode == ToolContentReadMode.RANKED_EXPAND and not (request.query or "").strip():
-            raise ValueError("ranked_expand requires query.")
+    async def read_regex_match(
+            self,
+            *,
+            request: ToolContentReadRequest,
+            session_id: str,
+    ) -> ToolContentReadResult:
+        """跨文档正则匹配并展开窗口。"""
+        stored_items, failed = await self._load_contents(
+            content_ids=request.content_ids,
+            session_id=session_id,
+        )
+        matches = self._read_regex_match_across_contents(
+            stored_items=stored_items,
+            request=request,
+        )
 
-        if request.mode == ToolContentReadMode.REGEX_MATCH:
-            pattern = request.pattern or ""
-            if not pattern:
-                raise ValueError("regex_match requires pattern.")
-            if len(pattern) > MAX_REGEX_PATTERN_CHARS:
-                raise ValueError(f"regex pattern is too long; max {MAX_REGEX_PATTERN_CHARS} chars.")
+        return ToolContentReadResult(
+            matches=matches,
+            failed=failed,
+        )
 
     async def load_stored_content(
             self,
@@ -174,6 +160,24 @@ class ToolContentReadService:
                 content_id=content_id,
                 reason=exc.__class__.__name__,
             )
+
+    async def _load_contents(
+            self,
+            *,
+            content_ids: tuple[str, ...],
+            session_id: str,
+    ) -> tuple[tuple[tuple[str, StoredToolContent], ...], tuple[ToolContentReadMatch, ...]]:
+        stored_items: list[tuple[str, StoredToolContent]] = []
+        failed: list[ToolContentReadMatch] = []
+
+        for content_id in content_ids:
+            loaded = await self._load_one(content_id=content_id, session_id=session_id)
+            if isinstance(loaded, ToolContentReadMatch):
+                failed.append(loaded)
+                continue
+            stored_items.append(loaded)
+
+        return tuple(stored_items), tuple(failed)
 
     async def _read_ranked_expand_across_contents(
             self,

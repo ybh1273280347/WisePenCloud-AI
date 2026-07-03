@@ -72,7 +72,6 @@
 
 - [load_skill](skill/load_skill.md)
 - [load_skill_asset](skill/load_skill_asset.md)
-- [create_skill](skill/create_skill.md)
 
 ### web
 

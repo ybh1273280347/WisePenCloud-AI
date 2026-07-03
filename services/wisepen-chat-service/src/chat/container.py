@@ -43,8 +43,7 @@ from chat.application.tools.session_tools.tool_content_read_tool import ToolCont
 from chat.application.tools.session_tools.tool_content_sequential_read_tool import (
     ToolContentSequentialReadTool,
 )
-from chat.application.tools.skill_tools import CreateSkillTool, LoadSkillAssetTool, LoadSkillTool
-from chat.application.tools.skill_tools.create_skill.skill_publisher import AIAssetSkillPublisher
+from chat.application.tools.skill_tools import LoadSkillAssetTool, LoadSkillTool
 from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillMatcher
 from chat.application.tools.tool_output_cache import ToolOutputCache
 from chat.application.tools.tool_output_renderer import ToolOutputRenderer
@@ -437,12 +436,6 @@ class Container(containers.DeclarativeContainer):
         paper_hydrator=openalex_paper_hydrator,
     )
 
-    # --- Skill 组件 ---
-    skill_publisher = providers.Singleton(
-        AIAssetSkillPublisher,
-        ai_asset_client=ai_asset_client,
-    )
-
     # ==================================================================
     # Tool 本身：最终注册到 ToolRegistry 的工具实例
     # ==================================================================
@@ -526,11 +519,6 @@ class Container(containers.DeclarativeContainer):
         file_loader=oss_file_loader,
         max_output_chars=settings.TOOL_RESULT_MAX_CHARS,
     )
-    create_skill_tool = providers.Singleton(
-        CreateSkillTool,
-        skill_publisher=skill_publisher,
-    )
-
     # --- Tool Registry ---
     tool_providers = providers.List(
         document_parse_tool,
@@ -549,7 +537,6 @@ class Container(containers.DeclarativeContainer):
         search_history_tool,
         load_skill_tool,
         load_skill_asset_tool,
-        create_skill_tool,
     )
     tool_registry = providers.Singleton(
         _build_registry,

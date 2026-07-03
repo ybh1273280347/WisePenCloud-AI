@@ -5,6 +5,7 @@ from typing import Any
 from chat.application.tools.common.tool_content_store import ToolContentStore
 from chat.application.tools.core import (
     ToolDefinition,
+    ToolExactlyOneOf,
     ToolExecutionError,
     ToolLLMSpec,
     ToolParametersSchema,
@@ -24,6 +25,7 @@ from chat.application.utils.chunking_engine import UnitType
 
 _UNIT_TYPE_ENUM = [unit_type.value for unit_type in UnitType]
 DEFAULT_MAX_MATCHES = tool_settings.TOOL_CONTENT_READ_DEFAULT_MAX_MATCHES
+MAX_REGEX_PATTERN_CHARS = tool_settings.TOOL_CONTENT_READ_MAX_REGEX_PATTERN_CHARS
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -179,7 +181,15 @@ class ToolContentReadTool:
                     "  - Returns globally ordered matches across content_ids, each carrying its content_id and readable window.\n"
                     "  - This tool reads existing cnt_* content and never creates another content receipt.\n"
                 ),
-                parameters_schema=ToolParametersSchema(PARAMETERS_SCHEMA),
+                parameters_schema=ToolParametersSchema(
+                    PARAMETERS_SCHEMA,
+                    exactly_one_of=(
+                        ToolExactlyOneOf(
+                            groups=(("query",), ("pattern",)),
+                            message="Provide exactly one of query or pattern.",
+                        ),
+                    ),
+                ),
             ),
             policy=ToolPolicy(
                 expose_by_default=True,
@@ -207,13 +217,48 @@ class ToolContentReadTool:
                 chunk_indices=tuple(int(value) for value in (selector_payload.get("chunk_indices") or ())),
                 include_unknown=bool(selector_payload.get("include_unknown", False)),
             )
+            mode = ToolContentReadMode(str(kwargs["mode"]))
+            query = str(kwargs.get("query") or "").strip()
+            pattern = str(kwargs.get("pattern") or "")
+            if mode == ToolContentReadMode.RANKED_EXPAND and not query:
+                raise ToolExecutionError(
+                    reason="missing_query",
+                    detail_reason="query is required when mode is ranked_expand.",
+                    retryable=False,
+                )
+            if mode == ToolContentReadMode.REGEX_MATCH:
+                if not pattern:
+                    raise ToolExecutionError(
+                        reason="missing_pattern",
+                        detail_reason="pattern is required when mode is regex_match.",
+                        retryable=False,
+                    )
+                if len(pattern) > MAX_REGEX_PATTERN_CHARS:
+                    raise ToolExecutionError(
+                        reason="regex_pattern_too_long",
+                        detail_reason=f"regex pattern is too long; max {MAX_REGEX_PATTERN_CHARS} chars.",
+                        retryable=False,
+                    )
+            if mode == ToolContentReadMode.RANKED_EXPAND and pattern:
+                raise ToolExecutionError(
+                    reason="mode_argument_mismatch",
+                    detail_reason="ranked_expand requires query, not pattern.",
+                    retryable=False,
+                )
+            if mode == ToolContentReadMode.REGEX_MATCH and query:
+                raise ToolExecutionError(
+                    reason="mode_argument_mismatch",
+                    detail_reason="regex_match requires pattern, not query.",
+                    retryable=False,
+                )
+
             request = ToolContentReadRequest(
                 content_ids=tuple(str(value) for value in kwargs["content_ids"]),
-                mode=ToolContentReadMode(str(kwargs["mode"])),
+                mode=mode,
                 selector=selector,
-                query=kwargs.get("query"),
+                query=query or None,
                 top_k=int(kwargs.get("top_k") or 5),
-                pattern=kwargs.get("pattern"),
+                pattern=pattern or None,
                 max_matches=int(kwargs.get("max_matches") or DEFAULT_MAX_MATCHES),
                 merge_before=int(kwargs.get("merge_before") or 0),
                 merge_after=int(kwargs.get("merge_after") or 0),
@@ -223,20 +268,27 @@ class ToolContentReadTool:
             all_matches = []
             all_failed = []
             for batch_content_ids in batched(request.content_ids, batch_size=batch_size):
-                batch_result = await self._service.read(
-                    request=ToolContentReadRequest(
-                        content_ids=batch_content_ids,
-                        mode=request.mode,
-                        selector=request.selector,
-                        query=request.query,
-                        top_k=request.top_k,
-                        pattern=request.pattern,
-                        max_matches=request.max_matches,
-                        merge_before=request.merge_before,
-                        merge_after=request.merge_after,
-                    ),
-                    session_id=session_id,
+                batch_request = ToolContentReadRequest(
+                    content_ids=batch_content_ids,
+                    mode=request.mode,
+                    selector=request.selector,
+                    query=request.query,
+                    top_k=request.top_k,
+                    pattern=request.pattern,
+                    max_matches=request.max_matches,
+                    merge_before=request.merge_before,
+                    merge_after=request.merge_after,
                 )
+                if request.mode == ToolContentReadMode.RANKED_EXPAND:
+                    batch_result = await self._service.read_ranked_expand(
+                        request=batch_request,
+                        session_id=session_id,
+                    )
+                else:
+                    batch_result = await self._service.read_regex_match(
+                        request=batch_request,
+                        session_id=session_id,
+                    )
                 all_matches.extend(batch_result.matches)
                 all_failed.extend(batch_result.failed)
 
