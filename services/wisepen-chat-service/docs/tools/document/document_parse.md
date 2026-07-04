@@ -69,11 +69,12 @@ document parse 读取缓存时不能在 public/private 域之间回退，避免�
 | 文件类型 | 策略 |
 | --- | --- |
 | PDF | 专职 PDF 策略，内部自行维护 PyMuPDF4LLM/OCR 兜底 |
-| XLSX | Pandas |
+| Excel XML（`.xlsx` / `.xlsm` / `.xltx` / `.xltm`） | Pandas + openpyxl |
+| CSV / TSV | Pandas `read_csv` |
 | 图片 | 不作为通用文档解析入口；模型看图后需要精确抽字时使用 `image_ocr` |
 | 其它普通文档 | Docling -> MarkItDown |
 
-`parsers/comon_document/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、XLSX。通用 Docling 不维护额外 `allowed_formats` 白名单。PDF、XLSX 等专用路径不追加通用 MarkItDown 兜底；专用解析器如果需要特殊兜底，应在自己的策略内部维护，避免专用行为反向污染通用解析链路。
+`parsers/comon_document/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、Excel XML 和 CSV/TSV。当前 spreadsheet 专用路径只覆盖 openpyxl 已支持的 Excel XML 系列，以及 pandas 原生 CSV/TSV；`.xls`、`.xlsb`、`.ods` 等格式需要引入对应 pandas engine 后再单独扩展。通用 Docling 不维护额外 `allowed_formats` 白名单。PDF、spreadsheet 等专用路径不追加通用 MarkItDown 兜底；专用解析器如果需要特殊兜底，应在自己的策略内部维护，避免专用行为反向污染通用解析链路。
 
 OCR provider 不属于 parser 树，统一放在 `document_tools/ocr/`。PDF 扫描页和 `image_ocr` 工具都复用这个辅助能力。
 

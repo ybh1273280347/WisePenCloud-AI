@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from chat.application.tools.document_tools.document_parse.models import (
@@ -10,8 +11,11 @@ from chat.application.tools.document_tools.document_parse.parsers.common_documen
     CommonDocumentParser,
 )
 from chat.application.tools.document_tools.document_parse.parsers.specialized import (
-    PandasSpreadsheetParser,
     PdfParseStrategy,
+)
+from chat.application.tools.document_tools.document_parse.parsers.specialized.spreadsheet import (
+    PandasSpreadsheetParser,
+    is_supported_spreadsheet_file,
 )
 from chat.application.tools.utils.file_type_detect import detect_file_type
 
@@ -28,15 +32,18 @@ class DocumentParseService:
 
     async def parse(self, request: DocumentParseRequest) -> DocumentParseResult:
         detected_type = detect_file_type(request.file_path)
-        mime_type = (request.mime_type or detected_type.mime_type).lower()
+        mime_type = (request.mime_type or detected_type.mime_type).split(";", maxsplit=1)[0].lower()
         label = detected_type.label
 
         if label == "pdf" or mime_type == "application/pdf":
             return await PdfParseStrategy(ocr_client=self._ocr_client).parse(request)
 
-        if label == "xlsx" or mime_type in {
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        }:
-            return await PandasSpreadsheetParser().parse(request)
+        if is_supported_spreadsheet_file(
+                file_path=request.file_path,
+                label=label,
+                mime_type=mime_type,
+        ):
+            parser_request = replace(request, mime_type=mime_type)
+            return await PandasSpreadsheetParser().parse(parser_request)
 
         return await CommonDocumentParser().parse(request)

@@ -6,6 +6,10 @@ import socket
 from collections.abc import Iterable, Sequence
 from urllib.parse import urlparse
 
+import dns.message
+import dns.query
+import dns.rdatatype
+
 
 class UrlSecurityError(ValueError):
     pass
@@ -163,14 +167,6 @@ def _is_all_fake_ips(values: Iterable[str]) -> bool:
 
 
 def _resolve_with_doh(hostname: str, *, doh_servers: Sequence[str]) -> tuple[str, ...]:
-    try:
-        # dnspython 是可选依赖；如果没有安装，则跳过 DoH 解析
-        import dns.message
-        import dns.query
-        import dns.rdatatype
-    except Exception:
-        return ()
-
     ips: list[str] = []
 
     # 依次尝试多个 DoH 服务

@@ -17,6 +17,7 @@ dependencies = [
     "nacos-sdk-python",   # Nacos 注册与配置客户端
     "pyyaml",             # YAML 配置解析
     "httpx",              # 异步 HTTP 客户端
+    "dnspython",          # DNS 解析与 DoH 查询
     "arq>=0.28.0",        # Redis 异步任务队列
     "tenacity",           # 强大的异常重试策略
 

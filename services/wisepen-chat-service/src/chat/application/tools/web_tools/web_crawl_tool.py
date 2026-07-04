@@ -12,7 +12,6 @@ from chat.application.tools.core import (
 )
 from chat.application.tools.core.tool_return import (
     SuggestedAction,
-    SuggestedActions,
     SuggestedActionPriority,
     ToolReturn,
 )
@@ -212,15 +211,11 @@ class WebCrawlTool:
                 "seed_url": seed_url,
                 "pages_crawled": len(results),
                 "pages": pages_summary,
-                "suggested_actions": SuggestedActions(
-                    suggested_actions=(
-                        SuggestedAction(
-                            tool_name="tool_content_read",
-                            mode="ranked_expand",
-                            reason="Search the crawled pages' markdown for answer-relevant windows.",
-                            priority=SuggestedActionPriority.HIGH,
-                        ),
-                    ),
+                "suggested_action": SuggestedAction(
+                    tool_name="tool_content_read",
+                    mode="ranked_expand",
+                    reason="Search the crawled pages' markdown for answer-relevant windows.",
+                    priority=SuggestedActionPriority.HIGH,
                 ),
             },
             cacheable_texts=cacheable_texts,
