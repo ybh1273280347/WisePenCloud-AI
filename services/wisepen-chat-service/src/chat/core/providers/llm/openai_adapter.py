@@ -98,7 +98,7 @@ class OpenAIAdapter(LLMProvider):
                                              delta=delta)  # 传递 LLMStreamEvent REASONING_DELTA
                 elif event_type == "response.function_call_arguments.delta" and current_item is not None:  # 工具调用参数的增量
                     current_item["arguments"] = (current_item.get("arguments") or "") + (
-                                getattr(event, "delta", "") or "")
+                            getattr(event, "delta", "") or "")
                 elif event_type == "response.output_item.done":  # 一个 output item 输出完成
                     item = dump_provider_value(getattr(event, "item", None)) or current_item
                     if item:

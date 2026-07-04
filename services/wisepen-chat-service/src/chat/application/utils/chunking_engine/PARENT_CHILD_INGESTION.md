@@ -1,4 +1,4 @@
-# 父子分块摄取指南（后续计划）
+   # 父子分块摄取指南（后续计划）
 
 本文档面向后续「父子双仓储」改造，说明如何从 `chunking_engine` 的 `parent_child_markdown` engine 产出中摄取父子 chunk。当前阶段仅
 chunking_engine 层面完成了父子区分与关系映射，存储层/检索层尚未拆分，本文档作为后续接手者的设计参考。
@@ -13,21 +13,22 @@ MarkdownSectionPathInjector → MarkdownBlockSplitter → SizeBoundedUnitPacker
 ```
 
 其中 `ChildChunkGenerator` 在 `ParentChildChunkFinalizer` 之前执行：先用父 chunk 的临时 ID 生成子 chunk 并建立
-`parent_chunk_id` 引用，再由 `ParentChildChunkFinalizer` 对父 chunk 做合并（heading-only + short-tails），通过 `remapped_ids`
+`parent_chunk_id` 引用，再由 `ParentChildChunkFinalizer` 对父 chunk 做合并（heading-only + short-tails），通过
+`remapped_ids`
 更新子 chunk 的 `parent_chunk_id`，最后统一为父子 chunk 生成最终 ID 和 `content_hash`。
 
 ### 1.1 父子区分维度
 
-| 维度                          | 父 chunk                                  | 子 chunk                               |
-|-----------------------------|------------------------------------------|---------------------------------------|
-| `role`                      | `ChunkRole.PARENT`                       | `ChunkRole.CHILD`                     |
-| `parent_chunk_id`           | `None`                                   | 指向父 chunk 的 `chunk_id`                |
-| `chunk_id` 格式               | `{prefix}:parent:{index}:{hash[:16]}`    | `{prefix}:child:{index}:{hash[:16]}`  |
-| `content_hash`              | SHA-256 of text                          | SHA-256 of text                       |
-| `chunk_index`               | 全局连续编号（与子 chunk 共享同一序号空间，不冲突）            | 全局连续编号                                |
-| `metadata["child_index"]`   | 无                                        | 子在父内的序号                               |
-| `metadata["child_count"]`   | 无                                        | 父被拆出的子 chunk 总数                       |
-| `start_offset / end_offset` | 相对原文                                     | 相对原文（已换算：父 offset + 子在父文本内 offset）    |
+| 维度                          | 父 chunk                               | 子 chunk                              |
+|-----------------------------|---------------------------------------|--------------------------------------|
+| `role`                      | `ChunkRole.PARENT`                    | `ChunkRole.CHILD`                    |
+| `parent_chunk_id`           | `None`                                | 指向父 chunk 的 `chunk_id`               |
+| `chunk_id` 格式               | `{prefix}:parent:{index}:{hash[:16]}` | `{prefix}:child:{index}:{hash[:16]}` |
+| `content_hash`              | SHA-256 of text                       | SHA-256 of text                      |
+| `chunk_index`               | 全局连续编号（与子 chunk 共享同一序号空间，不冲突）         | 全局连续编号                               |
+| `metadata["child_index"]`   | 无                                     | 子在父内的序号                              |
+| `metadata["child_count"]`   | 无                                     | 父被拆出的子 chunk 总数                      |
+| `start_offset / end_offset` | 相对原文                                  | 相对原文（已换算：父 offset + 子在父文本内 offset）   |
 
 ### 1.2 父子映射关系示例
 

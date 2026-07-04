@@ -11,11 +11,11 @@
 ```python
 RankingPipeline(
     name="...",
-    filters=(...),             # 可多个，先于 scorer 执行
-    scorers=(...),             # 可多个
-    fusion=WeightedRrfFusion(), # 必填，当前唯一推荐 fusion
-    reranker=None,             # 可选，最多一个，异步
-    diversifiers=(),           # 可多个，按声明顺序执行
+    filters=(...),  # 可多个，先于 scorer 执行
+    scorers=(...),  # 可多个
+    fusion=WeightedRrfFusion(),  # 必填，当前唯一推荐 fusion
+    reranker=None,  # 可选，最多一个，异步
+    diversifiers=(),  # 可多个，按声明顺序执行
 )
 ```
 
@@ -146,7 +146,7 @@ PriorRankScorer()
 
 `prior_rank=None` 的候选会跳过该信号。
 
-###   
+###    
 
 读取上游检索系统已经产出的原始排序信号，不重新计算 BM25 或向量分数。
 
@@ -317,7 +317,7 @@ result = await RankingEngine(pipeline=pipeline).rank_async(request)
 pipeline 支持多个 diversifier，按 tuple 声明顺序依次执行：
 
 ```python
-diversifiers=(
+diversifiers = (
     GroupRoundRobinDiversifier(),
     MmrDiversifier(tokenizer=tokenizer),
 )

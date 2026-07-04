@@ -218,13 +218,13 @@ Elastic 查询只返回候选范围：
 ```python
 class RagElasticRepository:
     async def strict_prefilter(
-        self,
-        *,
-        query: str,
-        resource_id: str,
-        corpus_version: str,
-        locator: EvidenceLocatorQuery | None = None,
-        limit: int = 1000,
+            self,
+            *,
+            query: str,
+            resource_id: str,
+            corpus_version: str,
+            locator: EvidenceLocatorQuery | None = None,
+            limit: int = 1000,
     ) -> tuple[str, ...]:
         elastic_filter = {
             "resource_id": resource_id,

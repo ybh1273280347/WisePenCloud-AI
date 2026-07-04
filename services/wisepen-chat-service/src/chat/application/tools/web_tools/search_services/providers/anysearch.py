@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ._search_provider_utils.coerce import as_dict_tuple, as_str, as_str_or_none, as_str_tuple
-from ._search_provider_utils.search_result import dedupe_by_url, is_valid_result
+from ._utils.coerce import as_dict_tuple, as_str, as_str_or_none, as_str_tuple
+from ._utils.search_result import dedupe_by_url, is_valid_result
 from .models import (
     ProviderSearchHttpRequest,
     ProviderSearchRequest,

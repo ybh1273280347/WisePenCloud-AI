@@ -17,14 +17,12 @@ from hishel._core.models import Response
 
 from chat.application.tools.tool_settings import tool_settings
 
-
 _DEFAULT_SOFT_TTL = timedelta(seconds=tool_settings.CACHE_DEFAULT_SOFT_TTL_SECONDS)
 _DEFAULT_HARD_TTL = timedelta(seconds=tool_settings.CACHE_DEFAULT_HARD_TTL_SECONDS)
 _DEFAULT_STALE_WINDOW = _DEFAULT_HARD_TTL - _DEFAULT_SOFT_TTL
 
 _MAX_SOFT_TTL = timedelta(seconds=tool_settings.CACHE_MAX_SOFT_TTL_SECONDS)
 _MAX_HARD_TTL = timedelta(seconds=tool_settings.CACHE_MAX_HARD_TTL_SECONDS)
-
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +32,6 @@ class CacheTTL:
     soft_expire_at: datetime
     hard_expire_at: datetime
     no_store: bool = False  # 当响应头含 no-store 时为 True
-
 
 
 def compute_ttl(
