@@ -4,13 +4,9 @@ from dataclasses import dataclass
 
 import httpx
 
-from .errors import (
-    WebSearchCustomApiKeyInvalid,
-    WebSearchCustomApiKeyMissing,
-)
-from .providers.models import SearchProviderName
-from .runtime_context import WebSearchRuntimeConfig
-from .searchers import (
+from chat.application.tools.web_tools.search_services.errors import WebSearchCustomApiKeyInvalid
+from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.searchers import (
     AnySearchSearcher,
     BaiduQianfanSearcher,
     BaseProviderSearcher,
@@ -18,12 +14,11 @@ from .searchers import (
     SearchProviderConfig,
     TavilySearcher,
 )
-from .services.search import WebSearchCustomSource
 
 
 @dataclass(frozen=True, slots=True)
-class WebSearchCustomSourceFactory:
-    """按已固化到 context 的运行期配置构造 custom 搜索源。"""
+class IntegrationSearcherFactory:
+    """构造可被 platform_member 和 custom 复用的第三方 provider adapter。"""
 
     http_client: httpx.AsyncClient
     exa_base_url: str
@@ -31,29 +26,18 @@ class WebSearchCustomSourceFactory:
     anysearch_base_url: str
     baidu_qianfan_base_url: str
 
-    def build(self, config: WebSearchRuntimeConfig) -> WebSearchCustomSource:
-        if not config.api_key:
-            raise WebSearchCustomApiKeyMissing(
-                provider=config.provider,
-                reason="不存在 api key",
-            )
-        provider_config = SearchProviderConfig(
-            base_url=self._base_url(config.provider),
-            api_key=config.api_key,
-            source_id=config.source_id,
-        )
-        searcher = self._provider_searcher(config.provider, provider_config)
-        return WebSearchCustomSource(
-            provider=config.provider,
-            searcher=searcher,
-            api_key=config.api_key,
-        )
-
-    def _provider_searcher(
+    def build(
             self,
+            *,
             provider: SearchProviderName,
-            config: SearchProviderConfig,
+            api_key: str,
+            source_id: str,
     ) -> BaseProviderSearcher:
+        config = SearchProviderConfig(
+            base_url=self._base_url(provider),
+            api_key=api_key,
+            source_id=source_id,
+        )
         if provider == SearchProviderName.EXA:
             return ExaSearcher(http_client=self.http_client, config=config)
         if provider == SearchProviderName.TAVILY:
@@ -64,7 +48,7 @@ class WebSearchCustomSourceFactory:
             return BaiduQianfanSearcher(http_client=self.http_client, config=config)
         raise WebSearchCustomApiKeyInvalid(
             provider=provider,
-            reason="该 provider 不支持 custom 搜索",
+            reason="该 provider 不支持 API key 搜索源",
         )
 
     def _base_url(self, provider: SearchProviderName) -> str:
@@ -78,5 +62,5 @@ class WebSearchCustomSourceFactory:
             return self.baidu_qianfan_base_url
         raise WebSearchCustomApiKeyInvalid(
             provider=provider,
-            reason="该 provider 不支持 custom 搜索",
+            reason="该 provider 不支持 API key 搜索源",
         )

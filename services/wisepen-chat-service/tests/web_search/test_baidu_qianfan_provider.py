@@ -28,7 +28,8 @@ web_search_credential_module = types.ModuleType("chat.domain.entities.web_search
 
 
 class _WebSearchCredentialSource(StrEnum):
-    PLATFORM = "platform"
+    PLATFORM_DEFAULT = "platform_default"
+    PLATFORM_MEMBER = "platform_member"
     CUSTOM = "custom"
 
 
@@ -41,12 +42,15 @@ from chat.application.tools.web_tools.search_services.providers.baidu_qianfan im
     map_baidu_qianfan_response,
 )
 from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
-from chat.application.tools.web_tools.search_services.custom_source_factory import WebSearchCustomSourceFactory
+from chat.application.tools.web_tools.search_services.factories.custom_source_factory import WebSearchCustomSourceFactory
+from chat.application.tools.web_tools.search_services.factories.integration_searcher_factory import (
+    IntegrationSearcherFactory,
+)
 from chat.application.tools.web_tools.search_services.runtime_context import (
-    WebSearchMode,
     WebSearchRuntimeConfig,
 )
-from chat.application.tools.web_tools.search_services.searchers.baidu_qianfan import BaiduQianfanSearcher
+from chat.application.tools.web_tools.search_services.sources import WebSearchSourceKind
+from chat.application.tools.web_tools.search_services.searchers import BaiduQianfanSearcher
 
 
 class _FakeHttpClient:
@@ -124,11 +128,13 @@ def test_baidu_qianfan_response_maps_web_references_only() -> None:
 
 def test_custom_source_factory_builds_baidu_qianfan_searcher() -> None:
     factory = WebSearchCustomSourceFactory(
-        http_client=_FakeHttpClient(),
-        exa_base_url="https://api.exa.ai",
-        tavily_base_url="https://api.tavily.com",
-        anysearch_base_url="https://api.anysearch.com",
-        baidu_qianfan_base_url="https://qianfan.baidubce.com",
+        integration_searcher_factory=IntegrationSearcherFactory(
+            http_client=_FakeHttpClient(),
+            exa_base_url="https://api.exa.ai",
+            tavily_base_url="https://api.tavily.com",
+            anysearch_base_url="https://api.anysearch.com",
+            baidu_qianfan_base_url="https://qianfan.baidubce.com",
+        ),
     )
 
     source = factory.build(
@@ -136,7 +142,7 @@ def test_custom_source_factory_builds_baidu_qianfan_searcher() -> None:
             user_id="user-1",
             session_id="session-1",
             search_config_id="custom:baidu_qianfan",
-            search_mode=WebSearchMode.CUSTOM,
+            source_kind=WebSearchSourceKind.CUSTOM,
             provider=SearchProviderName.BAIDU_QIANFAN,
             source_id="custom:baidu_qianfan:test",
             api_key="qianfan-key",

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
+from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse
+from chat.application.tools.web_tools.search_services.searchers.base import SearchProviderError
+from chat.application.tools.web_tools.search_services.searchers.platform.ddgs import DdgSearcher
+from chat.application.tools.web_tools.search_services.searchers.platform.fourget import FourGetSearcher
 from common.logger import warn
-from .base import SearchProviderError
-from .ddgs import DdgSearcher
-from .fourget import FourGetSearcher
-from ..providers.models import ProviderSearchResponse
 
 
-class FouGetDdgSearcher:
+class PlatformDefaultSearcher:
     """4get + DDG 组合搜索器：4get 优先，失败或空结果后降级到 DDG。
 
-    对外暴露为单一 provider FOUGET_DDG，内部自动处理降级，
-    调用方无需感知 fourget/ddg 的存在。
+    对外只暴露 platform_default，调用方无需感知 fourget/ddgs 的存在。
     """
 
     def __init__(self, *, fourget_searcher: FourGetSearcher, ddg_searcher: DdgSearcher) -> None:
@@ -24,31 +25,27 @@ class FouGetDdgSearcher:
             query: str,
             max_results: int,
     ) -> ProviderSearchResponse:
-        # 1. 优先 fourget
         try:
             response = await self._fourget.search_web(
                 query=query,
                 max_results=max_results,
             )
             if response.results:
-                return response
-            # fourget 返回空结果，降级到 ddg
+                return _as_platform_default_response(response)
         except SearchProviderError as exc:
-            # fourget 请求失败（网络/凭证/解析），降级到 ddg
             warn(
                 "web search provider fallback.",
                 from_provider="fourget",
-                to_provider="ddg",
+                to_provider="ddgs",
                 reason=exc.__class__.__name__,
-                audit_message="4get 搜索失败，已降级到 DDG 搜索。",
+                audit_message="4get 搜索失败，已降级到 DDGS 搜索。",
             )
 
-        # 2. 降级到 ddg，响应统一标记为 FOUGET_DDG
         ddg_response = await self._ddg.search_web(
             query=query,
             max_results=max_results,
         )
-        return ddg_response
+        return _as_platform_default_response(ddg_response)
 
     async def search_academic(
             self,
@@ -56,4 +53,12 @@ class FouGetDdgSearcher:
             query: str,
             max_results: int,
     ) -> ProviderSearchResponse:
-        raise SearchProviderError("4get+ddg does not support academic search.")
+        raise SearchProviderError("platform_default does not support academic search.")
+
+
+def _as_platform_default_response(response: ProviderSearchResponse) -> ProviderSearchResponse:
+    return replace(
+        response,
+        provider=None,
+        source_id="platform_default",
+    )

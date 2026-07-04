@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 from chat.application.tools.web_tools.search_services.candidate_store import WebSearchCandidateMapping
 from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse
-from chat.application.tools.web_tools.search_services.runtime_context import WebSearchMode, WebSearchRuntimeConfig
+from chat.application.tools.web_tools.search_services.runtime_context import WebSearchRuntimeConfig
+from chat.application.tools.web_tools.search_services.sources import WebSearchSourceKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +40,7 @@ def build_candidates(
             candidate_id=f"[{i}]",
             title=item.title,
             url=item.url,
-            source_scope="web_custom" if search_config.search_mode == WebSearchMode.CUSTOM else "web_public",
+            source_scope="web_custom" if search_config.source_kind == WebSearchSourceKind.CUSTOM else "web_public",
             overview=item.preview.overview,
             highlights=item.preview.highlights,
         )

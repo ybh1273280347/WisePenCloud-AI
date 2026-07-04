@@ -8,7 +8,6 @@ from chat.api.schemas.web_search import (
     SetActiveWebSearchCredentialRequest,
     WebSearchCredentialResponse,
 )
-from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
 from chat.container import Container
 from chat.core.persistence.mongo.web_search_credential_repository import (
     MongoWebSearchCredentialRepository,
@@ -30,7 +29,6 @@ def to_response(credential: WebSearchCredential) -> WebSearchCredentialResponse:
         user_id=credential.user_id,
         provider=credential.provider,
         source=credential.source,
-        is_member=credential.is_member,
         api_key_masked=credential.api_key_masked,
         api_key_fingerprint=credential.api_key_fingerprint,
         openalex_api_key_masked=credential.openalex_api_key_masked,
@@ -48,15 +46,17 @@ async def list_web_search_credentials(
         credential_repo: MongoWebSearchCredentialRepository = Depends(Provide[Container.web_search_credential_repo]),
 ):
     credentials = await credential_repo.list_user_credentials(user_id=user_id)
-    if not any(
-            item.source == WebSearchCredentialSource.PLATFORM
-            and item.provider in {SearchProviderName.FOUGET_DDG, SearchProviderName.EXA}
-            for item in credentials
-    ):
-        credentials = [
-            await credential_repo.init_platform_credential(user_id=user_id),
-            *credentials,
-        ]
+    existing_sources = {item.source for item in credentials}
+    platform_sources = (
+        WebSearchCredentialSource.PLATFORM_DEFAULT,
+        WebSearchCredentialSource.PLATFORM_MEMBER,
+    )
+    missing_platform_credentials = [
+        await credential_repo.init_platform_credential(user_id=user_id, source=source)
+        for source in platform_sources
+        if source not in existing_sources
+    ]
+    credentials = [*missing_platform_credentials, *credentials]
     return R.success(data=[to_response(item) for item in credentials])
 
 

@@ -4,13 +4,13 @@ import asyncio
 
 from ddgs import DDGS
 
-from .base import SearchProviderError
-from ..providers.ddgs import map_ddgs_response
-from ..providers.models import ProviderSearchResponse
+from chat.application.tools.web_tools.search_services.providers.ddgs import map_ddgs_response
+from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse
+from chat.application.tools.web_tools.search_services.searchers.base import SearchProviderError
 
 
 class DdgSearcher:
-    """DuckDuckGo 本地搜索器（ddgs 库同步调用，用 asyncio.to_thread 包装）。
+    """DDGS 本地搜索器（ddgs 库同步调用，用 asyncio.to_thread 包装）。
 
     作为 fourget 失败后的备用源，无需 API Key、无需 HTTP 服务。
     """
@@ -38,4 +38,4 @@ class DdgSearcher:
             query: str,
             max_results: int,
     ) -> ProviderSearchResponse:
-        raise SearchProviderError("DDG does not support academic search.")
+        raise SearchProviderError("DDGS does not support academic search.")

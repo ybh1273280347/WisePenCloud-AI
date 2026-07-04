@@ -7,8 +7,8 @@ from chat.application.tools.core.tool_return import (
     SuggestedActionPriority,
     ToolReturn,
 )
-from .hydrators import HydratedPaperAuthor
-from ..candidates import WebSearchCandidate
+from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import HydratedPaperAuthor
+from chat.application.tools.web_tools.search_services.services.candidates import WebSearchCandidate
 
 
 @dataclass(frozen=True, slots=True)

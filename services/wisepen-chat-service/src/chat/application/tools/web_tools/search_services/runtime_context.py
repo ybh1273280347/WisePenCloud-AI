@@ -2,18 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from chat.core.security import SecretCipherError
 from chat.domain.entities.web_search_credential import WebSearchCredentialSource
-from .providers.models import SearchProviderName
-
-
-class WebSearchMode(StrEnum):
-    """联网搜索运行模式：区分平台官方默认源与用户自定义 API 密钥源。"""
-    PLATFORM = "platform"
-    CUSTOM = "custom"
+from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.sources import WebSearchSourceKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,8 +16,8 @@ class WebSearchRuntimeConfig:
     user_id: str
     session_id: str
     search_config_id: str
-    search_mode: WebSearchMode
-    provider: SearchProviderName
+    source_kind: WebSearchSourceKind
+    provider: SearchProviderName | None
     source_id: str
     api_key: str | None = None
     openalex_api_key: str | None = None
@@ -43,7 +37,8 @@ class _CachedCredential:
 
 @dataclass(frozen=True, slots=True)
 class _PlatformProviderChoice:
-    provider: SearchProviderName
+    source_kind: WebSearchSourceKind
+    provider: SearchProviderName | None
     source_id: str
     api_key: str | None
 
@@ -51,7 +46,7 @@ class _PlatformProviderChoice:
 @runtime_checkable
 class WebSearchCredentialRecord(Protocol):
     """搜索凭证实体协议"""
-    provider: SearchProviderName
+    provider: SearchProviderName | None
     source: WebSearchCredentialSource | str
     api_key_ciphertext: str
     api_key_fingerprint: str
@@ -83,8 +78,8 @@ class WebSearchRuntimeContextResolver:
         "_credential_repository",
         "_cipher",
         "_decrypted_credentials",
-        "_platform_exa_enabled",
-        "_platform_exa_api_key",
+        "_platform_member_api_key",
+        "_platform_member_provider",
     )
 
     def __init__(
@@ -92,13 +87,13 @@ class WebSearchRuntimeContextResolver:
             *,
             credential_repository: WebSearchCredentialRuntimeRepository,
             cipher: WebSearchCredentialCipher,
-            platform_exa_enabled: bool = False,
-            platform_exa_api_key: str | None = None,
+            platform_member_provider: str | None = None,
+            platform_member_api_key: str | None = None,
     ) -> None:
         self._credential_repository = credential_repository
         self._cipher = cipher
-        self._platform_exa_enabled = platform_exa_enabled
-        self._platform_exa_api_key = (platform_exa_api_key or "").strip() or None
+        self._platform_member_provider = _parse_platform_member_provider(platform_member_provider)
+        self._platform_member_api_key = (platform_member_api_key or "").strip() or None
         self._decrypted_credentials: dict[
             tuple[str, str, SearchProviderName],
             _CachedCredential,
@@ -114,23 +109,28 @@ class WebSearchRuntimeContextResolver:
         credential = await self._credential_repository.get_active_custom_credential(user_id=user_id)
 
         # 1. 平台默认分流路径：无自定义凭证时直接短路返回
-        if credential is None:
+        if credential is None or credential.provider is None or not credential.provider.supports_custom_credential:
             platform_choice = await self._resolve_platform_provider(user_id=user_id)
             return WebSearchRuntimeConfig(
                 user_id=user_id,
                 session_id=session_id,
                 search_config_id=platform_choice.source_id,
-                search_mode=WebSearchMode.PLATFORM,
+                source_kind=platform_choice.source_kind,
                 provider=platform_choice.provider,
                 source_id=platform_choice.source_id,
                 api_key=platform_choice.api_key,
-                supports_academic=False,
+                supports_academic=(
+                    platform_choice.provider.supports_academic_search
+                    if platform_choice.provider is not None
+                    else False
+                ),
             )
 
         # 2. 自定义凭证路径：基于元数据特征生成唯一版本识别键
-        search_config_id = f"custom:{credential.provider.value}"
+        provider = credential.provider
+        search_config_id = f"custom:{provider.value}"
         version_key = _credential_version_key(credential)
-        cache_key = (user_id, search_config_id, credential.provider)
+        cache_key = (user_id, search_config_id, provider)
 
         cached = self._decrypted_credentials.get(cache_key)
 
@@ -143,8 +143,8 @@ class WebSearchRuntimeContextResolver:
                     user_id=user_id,
                     session_id=session_id,
                     search_config_id=search_config_id,
-                    search_mode=WebSearchMode.CUSTOM,
-                    provider=credential.provider,
+                    source_kind=WebSearchSourceKind.CUSTOM,
+                    provider=provider,
                     source_id=_custom_source_id(credential),
                     credential_fingerprint=credential.api_key_fingerprint,
                     credential_updated_at=_datetime_to_version(credential.updated_at),
@@ -169,8 +169,8 @@ class WebSearchRuntimeContextResolver:
             user_id=user_id,
             session_id=session_id,
             search_config_id=search_config_id,
-            search_mode=WebSearchMode.CUSTOM,
-            provider=credential.provider,
+            source_kind=WebSearchSourceKind.CUSTOM,
+            provider=provider,
             source_id=_custom_source_id(credential),
             api_key=cached.api_key,
             openalex_api_key=cached.openalex_api_key,
@@ -185,31 +185,26 @@ class WebSearchRuntimeContextResolver:
             *,
             user_id: str,
     ) -> _PlatformProviderChoice:
-        """平台级智能降级：评估配置矩阵，在高端引擎（Exa）与通用引擎（4get）间平滑调度。"""
+        """平台源解析：会员源只按配置路由，不与 provider 绑定。"""
         platform_credential = await self._credential_repository.get_platform_credential(user_id=user_id)
-        if platform_credential is None:
-            return _PlatformProviderChoice(
-                provider=SearchProviderName.FOUGET_DDG,
-                source_id="platform:4get_ddg",
-                api_key=None,
-            )
-
-        # 当并非指定 Exa 引擎、平台开关关闭或本地密钥为空时，强制强制退化至通用引擎
         if (
-                platform_credential.provider != SearchProviderName.EXA
-                or not self._platform_exa_enabled
-                or not self._platform_exa_api_key
+                platform_credential is not None
+                and platform_credential.source == WebSearchCredentialSource.PLATFORM_MEMBER
+                and self._platform_member_provider is not None
+                and self._platform_member_api_key
         ):
             return _PlatformProviderChoice(
-                provider=SearchProviderName.FOUGET_DDG,
-                source_id="platform:4get_ddg",
-                api_key=None,
+                source_kind=WebSearchSourceKind.PLATFORM_MEMBER,
+                provider=self._platform_member_provider,
+                source_id=f"platform_member:{self._platform_member_provider.value}",
+                api_key=self._platform_member_api_key,
             )
 
         return _PlatformProviderChoice(
-            provider=SearchProviderName.EXA,
-            source_id="platform:exa",
-            api_key=self._platform_exa_api_key,
+            source_kind=WebSearchSourceKind.PLATFORM_DEFAULT,
+            provider=None,
+            source_id="platform_default",
+            api_key=None,
         )
 
 
@@ -222,7 +217,7 @@ def _credential_version_key(credential: WebSearchCredentialRecord) -> str:
     )
     return "|".join((
         source_val,
-        credential.provider.value,
+        credential.provider.value if credential.provider is not None else "",
         _datetime_to_version(credential.updated_at) or "",
         credential.api_key_fingerprint,
         credential.openalex_api_key_fingerprint,
@@ -232,7 +227,19 @@ def _credential_version_key(credential: WebSearchCredentialRecord) -> str:
 def _custom_source_id(credential: WebSearchCredentialRecord) -> str:
     """安全混淆自定义源唯一标识码。"""
     fingerprint = credential.api_key_fingerprint[:16] if credential.api_key_fingerprint else "unknown"
-    return f"custom:{credential.provider.value}:{fingerprint}"
+    provider_value = credential.provider.value if credential.provider is not None else "unknown"
+    return f"custom:{provider_value}:{fingerprint}"
+
+
+def _parse_platform_member_provider(value: str | None) -> SearchProviderName | None:
+    normalized = (value or "").strip()
+    if not normalized:
+        return None
+    try:
+        provider = SearchProviderName(normalized)
+    except ValueError:
+        return None
+    return provider
 
 
 def _datetime_to_version(value: datetime | None) -> str | None:

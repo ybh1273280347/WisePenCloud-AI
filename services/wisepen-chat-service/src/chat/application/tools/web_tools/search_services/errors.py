@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
 
 
 class WebSearchError(RuntimeError):
@@ -10,7 +10,7 @@ class WebSearchError(RuntimeError):
 class WebSearchCustomError(WebSearchError):
     """custom 搜索源异常。"""
 
-    def __init__(self, *, provider: SearchProviderName, reason: str) -> None:
+    def __init__(self, *, provider: SearchProviderName | None, reason: str) -> None:
         super().__init__(f"{provider}: {reason}")
         self.provider = provider  # 出错的自定义搜索源
         self.reason = reason  # 可给 tool 门面或 API 层展示/记录的原因
@@ -22,7 +22,7 @@ class WebSearchCustomError(WebSearchError):
 class WebSearchProviderRuntimeError(WebSearchError):
     """已定位到 provider 的运行时异常。"""
 
-    def __init__(self, *, provider: SearchProviderName, reason: str) -> None:
+    def __init__(self, *, provider: SearchProviderName | None, reason: str) -> None:
         super().__init__(f"{provider}: {reason}")
         self.provider = provider  # 出错的搜索源
         self.reason = reason  # 可给 tool 门面或 API 层展示/记录的原因

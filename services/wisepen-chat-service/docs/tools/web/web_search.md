@@ -4,7 +4,7 @@
 
 实现入口：`src/chat/application/tools/web_tools/web_search_tool.py`
 
-`web_search` 只做显式单次网页候选发现。它不再做意图路由，不再做内部多跳搜索，不再自动生成下一跳 query。工具内部只保留候选排序小模型。
+`web_search` 只做显式单次网页候选发现。它不再做意图路由，不再做内部多跳搜索，不再自动生成下一跳 query。工具内部只保留候选选择小模型。
 
 ## 何时使用
 
@@ -33,7 +33,7 @@ question
   -> query
   -> provider web search
   -> candidate build
-  -> candidate ranking (title/url/overview/highlights only)
+  -> candidate selection (title/url/overview/highlights only)
   -> search_ref mapping
 ```
 
@@ -45,7 +45,13 @@ question
 
 ## 搜索源
 
-当前平台默认源仍是 4get/DDG，平台 Exa 只在平台配置打开时参与分流。用户自定义搜索凭证支持 Exa、Tavily、AnySearch、百度千帆 AI 搜索。
+当前搜索源分为三类：
+
+- `platform_default`：平台默认源，对外只暴露一个稳定标识；内部使用 4get，并在失败或空结果时降级到 DDGS。
+- `platform_member`：会员平台源，会员身份本身不绑定具体 provider；运行期按平台配置路由到 Exa、Tavily 等可复用 integration，并使用平台密钥。
+- `custom`：用户自定义源，使用用户上传的 API key，当前支持 Exa、Tavily、AnySearch、百度千帆 AI 搜索。
+
+`platform_member` 和 `custom` 可以复用同一个 provider searcher adapter，但 source class、密钥归属、错误语义和缓存域必须分开。
 
 百度千帆接入的是普通网页搜索源：请求 `POST /v2/ai_search/web_search`，从响应 `references` 中只映射 web 候选，不支持 `academic_search`。
 
@@ -87,8 +93,8 @@ question
 补充约束：
 
 - `supplier_answers` 和候选摘要仍可暴露给模型作为检索提示；若摘要已经足以回答用户问题，可以不继续调用 `web_fetch`。
-- 候选排序小模型不再读取 `supplier_answers`，只看候选自身字段。
-- 候选排序小模型每次输出 1 到 5 个候选编号，宁缺勿滥，不强制凑满 5 个。
+- 候选选择小模型不再读取 `supplier_answers`，只看候选自身字段。
+- 候选选择小模型每次输出 1 到 5 个候选编号，宁缺勿滥，不强制凑满 5 个。
 
 不再暴露任何 hydrate 工具建议。
 
@@ -101,8 +107,8 @@ question
 | Web search result builder | `search_services/services/web_search/result_builder.py` |
 | 共享搜索编排 | `search_services/services/search.py` |
 | 共享候选构建 | `search_services/services/candidates.py` |
-| LLM 候选排序 | `search_services/ranking.py` |
-| Custom 搜索源工厂 | `search_services/custom_source_factory.py` |
+| LLM 候选选择 | `search_services/candidate_selector.py` |
+| 搜索源工厂 | `search_services/factories/` |
 | 运行期配置解析 | `search_services/runtime_context.py` |
 | search_ref 映射缓存 | `search_services/candidate_store/` |
 | 搜索公共工具函数 | `web_tools/_search_tool_utils.py` |

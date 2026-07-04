@@ -65,7 +65,8 @@ web_search_credential_module = types.ModuleType("chat.domain.entities.web_search
 
 
 class _WebSearchCredentialSource(StrEnum):
-    PLATFORM = "platform"
+    PLATFORM_DEFAULT = "platform_default"
+    PLATFORM_MEMBER = "platform_member"
     CUSTOM = "custom"
 
 
@@ -83,9 +84,9 @@ from chat.application.tools.web_tools.search_services.providers.models import (
     SearchProviderName,
 )
 from chat.application.tools.web_tools.search_services.runtime_context import (
-    WebSearchMode,
     WebSearchRuntimeConfig,
 )
+from chat.application.tools.web_tools.search_services.sources import WebSearchSourceKind
 from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import (
     HydratedPaper,
     HydratedPaperAuthor,
@@ -121,14 +122,13 @@ class FakeWebSearchService:
         *,
         query: str,
         max_results: int = 10,
-        custom_source=None,
-        platform_provider: SearchProviderName = SearchProviderName.FOUGET_DDG,
+        source,
     ) -> WebSearchResult:
         self.calls.append((query, "web"))
         result = self._responses.pop(0)
         if not any(response.results for response in result.responses):
             raise WebSearchEmptyResult(
-                provider=platform_provider if custom_source is None else custom_source.provider,
+                provider=source.provider,
                 reason="搜索源成功响应但没有返回结果",
             )
         return result
@@ -138,14 +138,13 @@ class FakeWebSearchService:
         *,
         query: str,
         max_results: int = 10,
-        custom_source=None,
-        platform_provider: SearchProviderName = SearchProviderName.FOUGET_DDG,
+        source,
     ) -> WebSearchResult:
         self.calls.append((query, "academic"))
         result = self._responses.pop(0)
         if not any(response.results for response in result.responses):
             raise WebSearchEmptyResult(
-                provider=platform_provider if custom_source is None else custom_source.provider,
+                provider=source.provider,
                 reason="搜索源成功响应但没有返回结果",
             )
         return result
@@ -157,9 +156,22 @@ class FakeCustomSourceFactory:
 
     def build(self, config):
         return SimpleNamespace(
+            kind=WebSearchSourceKind.CUSTOM,
             provider=config.provider,
+            source_id=config.source_id,
             api_key=config.api_key,
             searcher=self.searcher,
+        )
+
+
+class FakePlatformSourceFactory:
+    def build(self, config):
+        return SimpleNamespace(
+            kind=config.source_kind,
+            provider=config.provider,
+            source_id=config.source_id,
+            api_key=config.api_key,
+            searcher=None,
         )
 
 
@@ -235,7 +247,7 @@ async def test_web_search_empty_result_does_not_run_fallback(monkeypatch: pytest
         return []
 
     monkeypatch.setattr(
-        "chat.application.tools.web_tools._search_tool_utils.rank_candidate_ids",
+        "chat.application.tools.web_tools._search_tool_utils.select_candidate_ids",
         _rank_candidates,
     )
 
@@ -248,6 +260,7 @@ async def test_web_search_empty_result_does_not_run_fallback(monkeypatch: pytest
     tool = WebSearchTool(
         service=service,
         custom_source_factory=FakeCustomSourceFactory(),
+        platform_source_factory=FakePlatformSourceFactory(),
         candidate_repository=repository,
     )
     with pytest.raises(ToolExecutionError) as exc_info:
@@ -258,10 +271,10 @@ async def test_web_search_empty_result_does_not_run_fallback(monkeypatch: pytest
                 "search_config": WebSearchRuntimeConfig(
                     user_id="user-1",
                     session_id="session-1",
-                    search_config_id="platform:4get_ddg",
-                    search_mode=WebSearchMode.PLATFORM,
-                    provider=SearchProviderName.FOUGET_DDG,
-                    source_id="platform:4get_ddg",
+                    search_config_id="platform_default",
+                    source_kind=WebSearchSourceKind.PLATFORM_DEFAULT,
+                    provider=None,
+                    source_id="platform_default",
                 ),
             },
             question="question",
@@ -279,7 +292,7 @@ async def test_academic_search_keeps_exa_url_after_openalex_hydration(monkeypatc
         return []
 
     monkeypatch.setattr(
-        "chat.application.tools.web_tools._search_tool_utils.rank_candidate_ids",
+        "chat.application.tools.web_tools._search_tool_utils.select_candidate_ids",
         _rank_candidates,
     )
 
@@ -323,12 +336,12 @@ async def test_academic_search_keeps_exa_url_after_openalex_hydration(monkeypatc
         )
     )
     academic_service = AcademicSearchService(
-        platform_searchers={},
         paper_hydrator=hydrator,
     )
     tool = AcademicSearchTool(
         service=academic_service,
         custom_source_factory=FakeCustomSourceFactory(searcher=provider_searcher),
+        platform_source_factory=FakePlatformSourceFactory(),
         candidate_repository=repository,
     )
 
@@ -340,7 +353,7 @@ async def test_academic_search_keeps_exa_url_after_openalex_hydration(monkeypatc
                 user_id="user-1",
                 session_id="session-1",
                 search_config_id="custom:exa",
-                search_mode=WebSearchMode.CUSTOM,
+                source_kind=WebSearchSourceKind.CUSTOM,
                 provider=SearchProviderName.EXA,
                 source_id="custom:exa:test",
                 api_key="exa-key",

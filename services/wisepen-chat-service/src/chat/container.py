@@ -53,18 +53,22 @@ from chat.application.tools.web_tools import (
     WebFetchTool,
     WebSearchTool,
 )
-from chat.application.tools.web_tools.search_services.custom_source_factory import (
+from chat.application.tools.web_tools.search_services.factories.custom_source_factory import (
     WebSearchCustomSourceFactory,
 )
-from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.factories.integration_searcher_factory import (
+    IntegrationSearcherFactory,
+)
+from chat.application.tools.web_tools.search_services.factories.platform_source_factory import (
+    WebSearchPlatformSourceFactory,
+)
 from chat.application.tools.web_tools.search_services.runtime_context import (
     WebSearchRuntimeContextResolver,
 )
 from chat.application.tools.web_tools.search_services.searchers import (
     DdgSearcher,
-    ExaSearcher,
-    FouGetDdgSearcher,
     FourGetSearcher,
+    PlatformDefaultSearcher,
     ProviderSearcher,
     SearchProviderConfig,
 )
@@ -155,32 +159,20 @@ def _build_paddle_ocr_client(
     )
 
 
-def _build_platform_web_searchers(
+def _build_platform_default_searcher(
         *,
         http_client: httpx.AsyncClient,
-) -> dict[SearchProviderName, ProviderSearcher]:
-    provider_searchers: dict[SearchProviderName, ProviderSearcher] = {
-        SearchProviderName.FOUGET_DDG: FouGetDdgSearcher(
-            fourget_searcher=FourGetSearcher(
-                http_client=http_client,
-                config=SearchProviderConfig(
-                    base_url=settings.WEB_SEARCH_FOURGET_BASE_URL,
-                    source_id="platform:4get_ddg",
-                ),
-            ),
-            ddg_searcher=DdgSearcher(),
-        ),
-    }
-    if settings.WEB_SEARCH_PLATFORM_EXA_ENABLED and settings.WEB_SEARCH_PLATFORM_EXA_API_KEY:
-        provider_searchers[SearchProviderName.EXA] = ExaSearcher(
+) -> ProviderSearcher:
+    return PlatformDefaultSearcher(
+        fourget_searcher=FourGetSearcher(
             http_client=http_client,
             config=SearchProviderConfig(
-                base_url=settings.WEB_SEARCH_EXA_BASE_URL,
-                api_key=settings.WEB_SEARCH_PLATFORM_EXA_API_KEY,
-                source_id="platform:exa",
+                base_url=settings.WEB_SEARCH_FOURGET_BASE_URL,
+                source_id="platform_default",
             ),
-        )
-    return provider_searchers
+        ),
+        ddg_searcher=DdgSearcher(),
+    )
 
 
 def _build_web_fetch_http_client() -> httpx.AsyncClient:
@@ -341,24 +333,33 @@ class Container(containers.DeclarativeContainer):
         timeout=httpx.Timeout(tool_settings.WEB_SEARCH_TIMEOUT_SECONDS),
         trust_env=False,
     )
-    platform_web_searchers = providers.Singleton(
-        _build_platform_web_searchers,
+    platform_default_searcher = providers.Singleton(
+        _build_platform_default_searcher,
         http_client=web_search_http_client,
     )
     web_search_runtime_context_resolver = providers.Singleton(
         WebSearchRuntimeContextResolver,
         credential_repository=web_search_credential_repo,
         cipher=secret_cipher,
-        platform_exa_enabled=settings.WEB_SEARCH_PLATFORM_EXA_ENABLED,
-        platform_exa_api_key=settings.WEB_SEARCH_PLATFORM_EXA_API_KEY,
+        platform_member_provider=settings.WEB_SEARCH_PLATFORM_MEMBER_PROVIDER,
+        platform_member_api_key=settings.WEB_SEARCH_PLATFORM_MEMBER_API_KEY,
     )
-    web_search_custom_source_factory = providers.Singleton(
-        WebSearchCustomSourceFactory,
+    web_search_integration_searcher_factory = providers.Singleton(
+        IntegrationSearcherFactory,
         http_client=web_search_http_client,
         exa_base_url=settings.WEB_SEARCH_EXA_BASE_URL,
         tavily_base_url=settings.WEB_SEARCH_TAVILY_BASE_URL,
         anysearch_base_url=settings.WEB_SEARCH_ANYSEARCH_BASE_URL,
         baidu_qianfan_base_url=settings.WEB_SEARCH_BAIDU_QIANFAN_BASE_URL,
+    )
+    web_search_custom_source_factory = providers.Singleton(
+        WebSearchCustomSourceFactory,
+        integration_searcher_factory=web_search_integration_searcher_factory,
+    )
+    web_search_platform_source_factory = providers.Singleton(
+        WebSearchPlatformSourceFactory,
+        platform_default_searcher=platform_default_searcher,
+        integration_searcher_factory=web_search_integration_searcher_factory,
     )
     web_search_candidate_repository = providers.Singleton(
         RedisWebSearchCandidateRepository,
@@ -366,7 +367,6 @@ class Container(containers.DeclarativeContainer):
     )
     web_search_service = providers.Singleton(
         WebSearchService,
-        platform_searchers=platform_web_searchers,
     )
 
     # --- Web Fetch / Crawl 组件 ---
@@ -435,7 +435,6 @@ class Container(containers.DeclarativeContainer):
     )
     academic_search_service = providers.Singleton(
         AcademicSearchService,
-        platform_searchers=platform_web_searchers,
         paper_hydrator=openalex_paper_hydrator,
     )
 
@@ -489,12 +488,14 @@ class Container(containers.DeclarativeContainer):
         WebSearchTool,
         service=web_search_service,
         custom_source_factory=web_search_custom_source_factory,
+        platform_source_factory=web_search_platform_source_factory,
         candidate_repository=web_search_candidate_repository,
     )
     academic_search_tool = providers.Singleton(
         AcademicSearchTool,
         service=academic_search_service,
         custom_source_factory=web_search_custom_source_factory,
+        platform_source_factory=web_search_platform_source_factory,
         candidate_repository=web_search_candidate_repository,
     )
     web_crawl_tool = providers.Singleton(

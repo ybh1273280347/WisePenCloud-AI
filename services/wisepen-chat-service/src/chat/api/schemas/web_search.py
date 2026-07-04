@@ -15,9 +15,8 @@ class CreateWebSearchCredentialRequest(BaseModel):
 
 class WebSearchCredentialResponse(BaseModel):
     user_id: str
-    provider: SearchProviderName
+    provider: SearchProviderName | None
     source: WebSearchCredentialSource
-    is_member: bool
     api_key_masked: str
     api_key_fingerprint: str
     openalex_api_key_masked: str
@@ -28,5 +27,5 @@ class WebSearchCredentialResponse(BaseModel):
 
 
 class SetActiveWebSearchCredentialRequest(BaseModel):
-    provider: SearchProviderName
     source: WebSearchCredentialSource
+    provider: SearchProviderName | None = None

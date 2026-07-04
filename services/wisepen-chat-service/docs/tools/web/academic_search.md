@@ -1,10 +1,10 @@
 # academic_search
 
-> 一句话：`academic_search` 是显式论文候选发现工具，默认隐藏，只有当前用户存在支持学术搜索的自定义凭证时才暴露。
+> 一句话：`academic_search` 是显式论文候选发现工具，默认隐藏，只有当前运行时搜索源支持学术搜索时才暴露。
 
 实现入口：`src/chat/application/tools/web_tools/academic_search_tool.py`
 
-`academic_search` 是显式论文候选发现工具。它独立于 `web_search`，默认隐藏，只有当前用户存在激活且支持学术搜索的自定义搜索凭证时才向模型暴露。当前实际支持的搜索源是 Exa。
+`academic_search` 是显式论文候选发现工具。它独立于 `web_search`，默认隐藏，只有当前运行时搜索源支持显式 academic search 时才向模型暴露。当前实际支持 academic capability 的 provider 是 Exa，但它既可以由 `custom` 源使用用户密钥调用，也可以由 `platform_member` 源使用平台密钥调用。
 
 ## 架构定位
 
@@ -23,7 +23,7 @@
 
 - 不适合一般网页搜索或新闻搜索。
 - 不适合直接读取论文正文。
-- 不适合把 Exa snippet 或 OpenAlex 水合字段当最终证据。
+- 不适合把 provider snippet 或 OpenAlex 水合字段当最终证据。
 
 ## 输入
 
@@ -37,8 +37,8 @@
 
 - `ToolPolicy.expose_by_default=False`
 - `ChatTurnCoordinator` 仅在 `search_config.supports_academic=True` 时把它加入 `expose_tool_name_set`
-- `supports_academic` 来自当前激活搜索凭证上的 `support_academic`
-- `support_academic` 由搜索源能力决定，而不是由通用 endpoint 路由决定；当前只有 Exa 会置为 `true`
+- `supports_academic` 来自运行时解析出的搜索源 capability
+- capability 由 provider 原生能力决定，而不是由通用 endpoint 路由决定；当前 Exa 会置为 `true`
 
 ## 内部流程
 
@@ -50,7 +50,7 @@ question
   -> candidate build
   -> optional OpenAlex hydration
   -> search_ref URL selection
-  -> candidate ranking (title/url/overview/highlights only)
+  -> candidate selection (title/url/overview/highlights only)
   -> search_ref mapping
 ```
 
@@ -66,7 +66,7 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 - `authors`
 - `institutions`
 
-不返回 OpenAlex 原始对象，不返回 `display_name`，标题始终以 Exa 结果为准。
+不返回 OpenAlex 原始对象，不返回 `display_name`，标题始终以搜索源结果为准。
 
 水合实现边界：
 
@@ -74,13 +74,13 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 - 学术搜索的单次 provider 调用和 OpenAlex 水合编排位于 `search_services/services/academic_search/service.py`
 - `url` 路径优先，命中失败后才回退到 `title`
 - `title` 路径只接受标准化后精确匹配且唯一的结果
-- URL 或 title 出现多结果时直接放弃水合，回退 Exa 结果
+- URL 或 title 出现多结果时直接放弃水合，回退搜索源结果
 
 ## URL 选择与缓存
 
-- 始终使用 Exa 返回的 URL 作为抓取 URL
+- 始终使用搜索源返回的 URL 作为抓取 URL
 - OpenAlex 水合只补充 DOI、年份、引用数、作者和机构，不覆盖 `search_ref -> url`
-- Exa URL 会写入现有 `search_ref -> url` 映射缓存
+- 搜索源 URL 会写入现有 `search_ref -> url` 映射缓存
 - 后续 `web_fetch(search_refs=[...])` 可直接消费该 `search_ref`
 - URL 不直接暴露给模型，模型只能通过 `search_ref` 交给 `web_fetch`
 
@@ -111,8 +111,8 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 | OpenAlex 水合 | `search_services/services/academic_search/hydrators/` |
 | 共享搜索编排 | `search_services/services/search.py` |
 | 共享候选构建 | `search_services/services/candidates.py` |
-| LLM 候选排序 | `search_services/ranking.py` |
-| Custom 搜索源工厂 | `search_services/custom_source_factory.py` |
+| LLM 候选选择 | `search_services/candidate_selector.py` |
+| 搜索源工厂 | `search_services/factories/` |
 | 运行期配置解析 | `search_services/runtime_context.py` |
 | search_ref 映射缓存 | `search_services/candidate_store/` |
 | 搜索公共工具函数 | `web_tools/_search_tool_utils.py` |

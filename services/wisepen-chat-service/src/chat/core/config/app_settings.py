@@ -91,8 +91,13 @@ class AppSettings(BaseModel):
     WEB_SEARCH_TAVILY_BASE_URL: str = "https://api.tavily.com"
     WEB_SEARCH_ANYSEARCH_BASE_URL: str = "https://api.anysearch.com"
     WEB_SEARCH_BAIDU_QIANFAN_BASE_URL: str = "https://qianfan.baidubce.com"
-    WEB_SEARCH_PLATFORM_EXA_ENABLED: bool = False  # 平台专属 Exa 分流开关
-    WEB_SEARCH_PLATFORM_EXA_API_KEY: str | None = "e4734bd6-3a94-458b-a90f-d5091aed436f"
+    WEB_SEARCH_PLATFORM_MEMBER_PROVIDER: Literal[
+        "exa",
+        "tavily",
+        "anysearch",
+        "baidu_qianfan",
+    ] | None = None  # 会员平台源当前路由到的 provider
+    WEB_SEARCH_PLATFORM_MEMBER_API_KEY: str | None = None  # 会员平台源使用的平台密钥
 
     # ── Third-Party Credentials (三方垂直领域鉴权) ─────────────────────
     OPENALEX_BASE_URL: str = "https://api.openalex.org"

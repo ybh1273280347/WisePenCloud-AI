@@ -8,7 +8,10 @@ from chat.application.tools.core.tool_return import (
     ToolReturn,
 )
 from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse
-from ..candidates import VisibleWebSearchCandidate, WebSearchCandidate
+from chat.application.tools.web_tools.search_services.services.candidates import (
+    VisibleWebSearchCandidate,
+    WebSearchCandidate,
+)
 
 
 def build_web_search_tool_return(

@@ -7,7 +7,6 @@ from enum import StrEnum
 class SearchProviderName(StrEnum):
     """Web search provider 标识。"""
 
-    FOUGET_DDG = "4get_ddg"
     EXA = "exa"
     TAVILY = "tavily"
     ANYSEARCH = "anysearch"
@@ -17,6 +16,16 @@ class SearchProviderName(StrEnum):
     def supports_academic_search(self) -> bool:
         """当前搜索源是否支持显式 academic_search。"""
         return self == SearchProviderName.EXA
+
+    @property
+    def supports_custom_credential(self) -> bool:
+        """是否允许用户上传自己的 API key。"""
+        return self in {
+            SearchProviderName.EXA,
+            SearchProviderName.TAVILY,
+            SearchProviderName.ANYSEARCH,
+            SearchProviderName.BAIDU_QIANFAN,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +67,7 @@ class ProviderSearchResponse:
     """供应商搜索响应的归一化包装。"""
 
     query: str  # 本次查询文本
-    provider: SearchProviderName  # 响应来源 provider
+    provider: SearchProviderName | None  # 响应来源 provider；platform_default 不暴露内部 provider
     results: tuple[ProviderSearchResult, ...] = ()  # 模型最终消费的结果列表
     answer: str | None = None  # 供应商对整个 query 的直答，仅作为检索提示
     source_id: str | None = None  # 来源标识，区分平台内置源和用户自定义源

@@ -1,32 +1,30 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-
-from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
-from chat.application.tools.web_tools.search_services.searchers import ProviderSearcher
-from .hydrators import (
+from chat.application.tools.web_tools.search_services.sources import WebSearchRuntimeSource
+from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import (
     OpenAlexFailureReason,
     PaperHydrator,
 )
-from .result_builder import (
+from chat.application.tools.web_tools.search_services.services.academic_search.result_builder import (
     AcademicHydrationOutcome,
 )
-from ..candidates import WebSearchCandidate
-from ..search import WebSearchCustomSource, WebSearchResult, execute_provider_search
+from chat.application.tools.web_tools.search_services.services.candidates import WebSearchCandidate
+from chat.application.tools.web_tools.search_services.services.search import (
+    WebSearchResult,
+    execute_provider_search,
+)
 
 
 class AcademicSearchService:
     """学术搜索 service：负责单次 academic provider 调用与 OpenAlex 水合。"""
 
-    __slots__ = ("_paper_hydrator", "_platform_searchers")
+    __slots__ = ("_paper_hydrator",)
 
     def __init__(
             self,
             *,
-            platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
             paper_hydrator: PaperHydrator,
     ) -> None:
-        self._platform_searchers = dict(platform_searchers)
         self._paper_hydrator = paper_hydrator
 
     async def search(
@@ -34,14 +32,11 @@ class AcademicSearchService:
             *,
             query: str,
             max_results: int = 10,
-            custom_source: WebSearchCustomSource | None = None,
-            platform_provider: SearchProviderName = SearchProviderName.FOUGET_DDG,
+            source: WebSearchRuntimeSource,
     ) -> WebSearchResult:
         return await execute_provider_search(
             query=query,
-            custom_source=custom_source,
-            platform_provider=platform_provider,
-            platform_searchers=self._platform_searchers,
+            source=source,
             search_once=lambda searcher: searcher.search_academic(
                 query=query,
                 max_results=max_results,

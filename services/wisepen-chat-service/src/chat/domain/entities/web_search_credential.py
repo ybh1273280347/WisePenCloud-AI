@@ -13,21 +13,24 @@ from chat.application.tools.web_tools.search_services.providers.models import Se
 class WebSearchCredentialSource(StrEnum):
     """Web search 凭证来源。"""
 
-    PLATFORM = "platform"
+    PLATFORM_DEFAULT = "platform_default"
+    PLATFORM_MEMBER = "platform_member"
     CUSTOM = "custom"
 
 
 class WebSearchCredential(Document):
     """用户 Web Search 凭证。
 
-    默认凭证表示用户走平台源，api_key 固定为空字符串；custom 凭证表示用户
-    使用自己的搜索源 key。custom key 落库时保存密文，脱敏值只用于 UI 展示。
+    platform_default/platform_member 只表示平台路由类型；custom 凭证表示用户
+    使用自己的 provider key。custom key 落库时保存密文，脱敏值只用于 UI 展示。
     """
 
     user_id: str = Field(..., description="归属用户 ID")
-    provider: SearchProviderName = Field(..., description="搜索源类型")
-    source: WebSearchCredentialSource = Field(default=WebSearchCredentialSource.PLATFORM, description="凭证来源")
-    is_member: bool = Field(default=False, description="是否为可使用平台付费搜索源的会员")
+    provider: SearchProviderName | None = Field(default=None, description="custom 搜索 provider；平台源为空")
+    source: WebSearchCredentialSource = Field(
+        default=WebSearchCredentialSource.PLATFORM_DEFAULT,
+        description="搜索源类型",
+    )
     api_key_ciphertext: str = Field(default="", description="加密后的 API key；平台默认凭证为空字符串")
     api_key_masked: str = Field(default="", description="脱敏后的 API key；只用于 UI 展示")
     api_key_fingerprint: str = Field(default="", description="API key 指纹，平台默认凭证为空字符串")

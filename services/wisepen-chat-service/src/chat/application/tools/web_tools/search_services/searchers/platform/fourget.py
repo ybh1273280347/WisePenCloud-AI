@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import httpx
 
-from .base import BaseProviderSearcher, SearchProviderConfig
-from ..providers.fourget import FourGetSearchRequest, map_fourget_response
-from ..providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.providers.fourget import (
+    FourGetSearchRequest,
+    map_fourget_response,
+)
+from chat.application.tools.web_tools.search_services.searchers.base import (
+    BaseProviderSearcher,
+    SearchProviderConfig,
+)
 
 
 class FourGetSearcher(BaseProviderSearcher):
-    provider = SearchProviderName.FOUGET_DDG
+    provider = None
     request_class = FourGetSearchRequest
     response_mapper = staticmethod(map_fourget_response)
 

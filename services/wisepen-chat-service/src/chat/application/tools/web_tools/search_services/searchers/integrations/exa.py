@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import httpx
 
-from .base import BaseProviderSearcher, SearchProviderConfig, SearchProviderCredentialError
-from ..providers.exa import ExaSearchRequest, map_exa_response
-from ..providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.providers.exa import ExaSearchRequest, map_exa_response
+from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.searchers.base import (
+    BaseProviderSearcher,
+    SearchProviderConfig,
+    SearchProviderCredentialError,
+)
 
 
 class ExaSearcher(BaseProviderSearcher):

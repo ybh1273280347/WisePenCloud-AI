@@ -3,7 +3,7 @@ from __future__ import annotations
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
-from chat.application.tools.web_tools.search_services.ranking import rank_candidate_ids
+from chat.application.tools.web_tools.search_services.candidate_selector import select_candidate_ids
 from chat.application.tools.web_tools.search_services.services.candidates import (
     WebSearchCandidate,
     build_candidate_mappings,
@@ -21,14 +21,14 @@ async def select_recommended_ids(
     if not candidates:
         return ()
 
-    # 用小模型对候选结果排序，挑选最相关的推荐给模型
-    ranked = await rank_candidate_ids(
+    # 用小模型挑选最值得后续关注的候选结果
+    selected = await select_candidate_ids(
         search_query=search_query,
         candidates_xml=_candidates_xml(candidates),
     )
-    if ranked:
+    if selected:
         valid_ids = {candidate.candidate_id for candidate in candidates}
-        filtered = tuple(candidate_id for candidate_id in ranked if candidate_id in valid_ids)[
+        filtered = tuple(candidate_id for candidate_id in selected if candidate_id in valid_ids)[
             :max_recommended_candidates
         ]
         if filtered:

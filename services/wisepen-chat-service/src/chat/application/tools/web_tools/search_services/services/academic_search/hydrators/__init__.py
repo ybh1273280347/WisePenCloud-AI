@@ -5,7 +5,7 @@ from .models import (
     HydratedPaperAuthor,
     OpenAlexFailureReason,
 )
-from .paper import PaperHydrator
+from .paper_hydrator import PaperHydrator
 
 __all__ = [
     "HydratedPaper",

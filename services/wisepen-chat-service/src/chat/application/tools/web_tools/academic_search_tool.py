@@ -19,7 +19,7 @@ from chat.application.tools.web_tools._search_tool_utils import (
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
-from chat.application.tools.web_tools.search_services.custom_source_factory import (
+from chat.application.tools.web_tools.search_services.factories.custom_source_factory import (
     WebSearchCustomSourceFactory,
 )
 from chat.application.tools.web_tools.search_services.errors import (
@@ -29,10 +29,13 @@ from chat.application.tools.web_tools.search_services.errors import (
     WebSearchError,
     WebSearchNetworkError,
 )
+from chat.application.tools.web_tools.search_services.factories.platform_source_factory import (
+    WebSearchPlatformSourceFactory,
+)
 from chat.application.tools.web_tools.search_services.runtime_context import (
-    WebSearchMode,
     WebSearchRuntimeConfig,
 )
+from chat.application.tools.web_tools.search_services.sources import WebSearchSourceKind
 from chat.application.tools.web_tools.search_services.services.academic_search import AcademicSearchService
 from chat.application.tools.web_tools.search_services.services.academic_search.result_builder import (
     build_academic_search_tool_return,
@@ -81,6 +84,7 @@ class AcademicSearchTool:
         "_candidate_ttl_seconds",
         "_custom_source_factory",
         "_definition",
+        "_platform_source_factory",
         "_service",
     )
 
@@ -89,18 +93,20 @@ class AcademicSearchTool:
             *,
             service: AcademicSearchService,
             custom_source_factory: WebSearchCustomSourceFactory,
+            platform_source_factory: WebSearchPlatformSourceFactory,
             candidate_repository: WebSearchCandidateRepository,
             candidate_ttl_seconds: int = 3600,
     ) -> None:
         self._service = service
         self._custom_source_factory = custom_source_factory
+        self._platform_source_factory = platform_source_factory
         self._candidate_repository = candidate_repository
         self._candidate_ttl_seconds = candidate_ttl_seconds
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="academic_search",
                 description=(
-                    "Search academic web results with Exa scholar and return explicit paper candidates.\n"
+                    "Search academic web results with the active academic-capable source and return explicit paper candidates.\n"
                     "\n"
                     "WHEN TO TRIGGER:\n"
                     "  - MUST trigger when the user explicitly wants papers, citations, literature, venues, or research evidence.\n"
@@ -112,7 +118,7 @@ class AcademicSearchTool:
                     "EXECUTION RULES:\n"
                     "  - Execute exactly one explicit query per tool call.\n"
                     "  - If the query returns no results, stop and report failure; rewrite the query yourself before calling academic_search again.\n"
-                    "  - The tool may optionally hydrate Exa results with OpenAlex if the user configured an OpenAlex key.\n"
+                    "  - The tool may optionally hydrate search results with OpenAlex if the user configured an OpenAlex key.\n"
                     "  - The tool uses a small internal model only to rank returned candidates.\n"
                     "\n"
                     "OUTPUT RULES:\n"
@@ -141,31 +147,32 @@ class AcademicSearchTool:
         search_config: WebSearchRuntimeConfig = context["search_config"]
 
         if (
-                search_config.search_mode != WebSearchMode.CUSTOM
+                search_config.provider is None
                 or not search_config.provider.supports_academic_search
                 or not search_config.supports_academic
         ):
-            # academic_search 仅支持当前具备学术能力的 custom 搜索源，且必须开启学术开关
             raise ToolExecutionError(
                 reason="academic_search_unavailable",
-                detail_reason="academic_search requires an active custom academic-capable credential.",
+                detail_reason="academic_search requires an active academic-capable search source.",
                 retryable=False,
             )
 
         try:
-            if not search_config.is_valid:
-                # custom 凭证在运行时被禁用（如过期/吊销）
-                raise WebSearchCustomApiKeyInvalid(
-                    provider=search_config.provider,
-                    reason=search_config.error_message or "custom 搜索配置不可用",
-                )
-            custom_source = self._custom_source_factory.build(search_config)
+            if search_config.source_kind == WebSearchSourceKind.CUSTOM:
+                if not search_config.is_valid:
+                    raise WebSearchCustomApiKeyInvalid(
+                        provider=search_config.provider,
+                        reason=search_config.error_message or "custom 搜索配置不可用",
+                    )
+                source = self._custom_source_factory.build(search_config)
+            else:
+                source = self._platform_source_factory.build(search_config)
+
             # 执行单次学术查询；空结果交给模型改写 query 后重新调用。
             result = await self._service.search(
                 query=query,
                 max_results=max(1, min(max_results, MAX_ACADEMIC_SEARCH_RESULTS)),
-                custom_source=custom_source,
-                platform_provider=search_config.provider,
+                source=source,
             )
             base_candidates = build_candidates(result.responses, search_config=search_config)
             if not base_candidates:
@@ -186,14 +193,12 @@ class AcademicSearchTool:
                 candidates=final_candidates,
             )
         except WebSearchCustomApiKeyMissing as exc:
-            # 学术搜索依赖 Exa custom 凭证，未配置时不可重试
             raise ToolExecutionError(
                 reason="academic_search_api_key_missing",
                 detail_reason=str(exc),
                 retryable=False,
             ) from exc
         except WebSearchCustomApiKeyInvalid as exc:
-            # Exa 凭证格式错误或已过期
             raise ToolExecutionError(
                 reason="academic_search_api_key_invalid",
                 detail_reason=str(exc),

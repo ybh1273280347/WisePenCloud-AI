@@ -33,15 +33,18 @@
 
 ```
 search_services/
-    ranking.py                  # LLM 候选排序（search 工具族共享，非 service 专属）
+    candidate_selector.py       # LLM 候选选择（search 工具族共享，非 service 专属）
     errors.py                   # 异常体系
     runtime_context.py          # 运行期配置解析
-    custom_source_factory.py    # Custom 搜索源工厂
+    sources.py                  # 运行时搜索源类型（platform_default / platform_member / custom）
+    factories/                  # 搜索源与 integration searcher 工厂
     providers/                  # Provider 定义（枚举、请求/响应模型）
-    searchers/                  # Searcher 实现（DDG、Exa、Tavily 等）
+    searchers/
+        platform/               # 平台默认源内部实现（4get / DDGS / fallback）
+        integrations/           # 可被 platform_member 和 custom 复用的 provider adapter
     candidate_store/            # search_ref → URL 映射缓存
     services/
-        search.py               # 共享搜索编排：execute_provider_search、WebSearchResult、WebSearchCustomSource
+        search.py               # 共享搜索编排：execute_provider_search、WebSearchResult
         candidates.py           # 共享候选构建：WebSearchCandidate、build_candidates、build_candidate_mappings
         web_search/
             service.py          # WebSearchService
@@ -54,11 +57,13 @@ search_services/
 
 分层逻辑：
 
-- `services/search.py`：平台/custom 异常翻译、provider 选择、search_once 委托 —— 两个 service 共用。
+- `services/search.py`：source 异常翻译、search_once 委托 —— 两个 service 共用。
 - `services/candidates.py`：候选对象构建与映射 —— 两个 service 共用。
 - `services/web_search/` 和 `services/academic_search/`：各自的 service 编排和 result builder，互不依赖。
-- `ranking.py`：放在顶层，因为它是跨 service 的 LLM 排序能力，不属于任何单个 service。
-- `custom_source_factory.py`：独立于 service，由 tool 层调用构造 `WebSearchCustomSource`。
+- `candidate_selector.py`：放在顶层，因为它是跨 service 的 LLM 候选选择能力，不属于任何单个 service。
+- `factories/custom_source_factory.py`：只构造用户自定义源，读取用户 API key。
+- `factories/platform_source_factory.py`：只构造平台源；`platform_default` 使用 4get/DDGS fallback，`platform_member` 使用平台 API key 调用 integration provider。
+- `factories/integration_searcher_factory.py`：只负责构造 Exa、Tavily、AnySearch、百度千帆等可复用 provider adapter。
 
 ## 一、如何新增一个普通搜索源
 
@@ -66,10 +71,11 @@ search_services/
 
 ### 第一步：确认接入类型
 
-1. **平台内置源**：只由服务端配置，用户不能上传自己的 API key。
-2. **custom 源**：用户可以上传自己的 API key，运行时通过凭证切换。
+1. **platform_default 源**：平台默认源，对外只暴露 `platform_default`，内部 4get / DDGS 细节不进入运行时配置。
+2. **platform_member 源**：会员平台源，会员身份不绑定 provider；运行时按平台配置路由到某个 integration provider，并使用平台密钥。
+3. **custom 源**：用户可以上传自己的 API key，运行时通过凭证切换。
 
-不要一开始就把两条路都接上。先明确它是平台源、custom 源，还是两者都支持。
+不要一开始就把多条 source 路径都接上。先明确它是 platform_default 内部实现、platform_member 可配置 provider、custom provider，还是 platform_member/custom 都可复用的 integration。
 
 ### 第二步：给 provider 枚举加新值
 
@@ -104,15 +110,21 @@ search_services/
 
 入口：`src/chat/container.py`
 
-平台源需要：
+platform_default 源需要：
 
-- 在 `_build_platform_web_searchers()` 里加入 provider 实例。
+- 在 `searchers/platform/` 内部调整默认源实现。
+- 对外标识保持 `platform_default`，不要暴露 4get / DDGS 细节。
+
+platform_member 源需要：
+
+- 在 `IntegrationSearcherFactory` 支持该 provider。
+- 通过 `WEB_SEARCH_PLATFORM_MEMBER_PROVIDER` 和 `WEB_SEARCH_PLATFORM_MEMBER_API_KEY` 配置路由与平台密钥。
 - 如果需要配置项，补 `app_settings.py`。
 
 custom 源需要：
 
-- 在 `WebSearchCustomSourceFactory._provider_searcher()` 里加分支。
-- 在 `WebSearchCustomSourceFactory._base_url()` 里加 base_url 分支。
+- 在 `IntegrationSearcherFactory` 支持该 provider。
+- 确认 `SearchProviderName.supports_custom_credential=True`。
 - 如需配置项，补 `app_settings.py`。
 
 ### 第六步：确认凭证侧是否允许这个 provider
@@ -161,17 +173,18 @@ custom 源需要：
 
 - 运行时 `search_config.supports_academic`。
 - `supports_academic` 来自当前激活搜索凭证上的 `support_academic`。
-- `support_academic` 由搜索源能力决定，而不是由通用 endpoint 路由决定；当前只有 Exa 会置为 `true`。
+- `supports_academic` 由运行时 source 的 provider capability 决定，而不是由通用 endpoint 路由决定；当前 Exa 会置为 `true`。
 
 如果这是 custom provider：
 
 - `MongoWebSearchCredentialRepository.upsert_custom_credential()` 会按 `provider.supports_academic_search` 自动写入 `support_academic`。
 - 只要 provider capability 打开，custom 凭证链路会自动跟上。
 
-如果未来要让平台源也支持 academic：
+如果这是 platform_member provider：
 
-- 需要单独评估 `WebSearchRuntimeContextResolver` 和 tool 暴露策略。
-- 目前默认 academic 还是走 custom 搜索源。
+- `WebSearchRuntimeContextResolver` 会按平台配置解析 provider capability。
+- 只要 platform_member 路由到支持 academic 的 provider，`academic_search` 可暴露。
+- 会员身份本身不等于 academic capability。
 
 ### 第四步：不要碰 OpenAlex 判断边界
 
@@ -285,7 +298,7 @@ result builder 根据专用搜索类型定义自己的可见字段（如新闻�
 
 - 默认隐藏（`expose_by_default=False`）。
 - `ChatTurnCoordinator` 按 capability 和凭证决定是否暴露。
-- 内部流程：query → service → candidate build → ranking → search_ref mapping。
+- 内部流程：query → service → candidate build → candidate selection → search_ref mapping。
 - 复用 `_search_tool_utils.py` 中的 `search_with_fallback`、`select_recommended_ids`、`store_candidate_mappings`。
 
 ### 第五步：接入容器
@@ -335,7 +348,7 @@ result builder 根据专用搜索类型定义自己的可见字段（如新闻�
 | --- | --- |
 | Provider 枚举与能力 | `search_services/providers/models.py` |
 | Provider 适配 | `search_services/providers/` |
-| Searcher 实现 | `search_services/searchers/` |
+| Searcher 实现 | `search_services/searchers/platform/`、`search_services/searchers/integrations/` |
 | 共享搜索编排 | `search_services/services/search.py` |
 | 共享候选构建 | `search_services/services/candidates.py` |
 | Web search service | `search_services/services/web_search/service.py` |
@@ -343,8 +356,8 @@ result builder 根据专用搜索类型定义自己的可见字段（如新闻�
 | Academic search service | `search_services/services/academic_search/service.py` |
 | Academic search result builder | `search_services/services/academic_search/result_builder.py` |
 | OpenAlex 水合 | `search_services/services/academic_search/hydrators/` |
-| LLM 候选排序 | `search_services/ranking.py` |
-| Custom 搜索源工厂 | `search_services/custom_source_factory.py` |
+| LLM 候选选择 | `search_services/candidate_selector.py` |
+| 搜索源工厂 | `search_services/factories/` |
 | 运行期配置解析 | `search_services/runtime_context.py` |
 | 异常体系 | `search_services/errors.py` |
 | search_ref 映射缓存 | `search_services/candidate_store/` |
@@ -356,9 +369,9 @@ result builder 根据专用搜索类型定义自己的可见字段（如新闻�
 
 ## 七、当前普通搜索源接入状态
 
-- 平台默认：4get/DDG。
-- 平台可选：Exa，受平台 Exa 开关和平台 key 控制。
-- Custom：Exa、Tavily、AnySearch、百度千帆。
+- 平台默认：`platform_default`，内部使用 4get / DDGS fallback，不暴露细节。
+- 平台会员：`platform_member`，按配置路由到 Exa、Tavily 等 integration provider，使用平台 key。
+- Custom：Exa、Tavily、AnySearch、百度千帆，使用用户 key。
 
 百度千帆当前只作为普通网页搜索源接入 `web_search`，请求百度千帆 AI 搜索 `POST /v2/ai_search/web_search`，响应只映射 `references` 中的 web 候选。它不打开 `supports_academic_search`，也不影响 `academic_search` 的 Exa/OpenAlex 边界。
 

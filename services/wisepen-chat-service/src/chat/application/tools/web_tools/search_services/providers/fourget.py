@@ -11,7 +11,6 @@ from .models import (
     ProviderSearchResponse,
     ProviderSearchResult,
     SearchPreview,
-    SearchProviderName,
 )
 
 
@@ -58,7 +57,7 @@ def map_fourget_response(
     results = dedupe_by_url(items, url_getter=lambda item: item.url, limit=max_results)
     return ProviderSearchResponse(
         query=query,
-        provider=SearchProviderName.FOUGET_DDG,
+        provider=None,
         results=results,
         answer=answer,
     )

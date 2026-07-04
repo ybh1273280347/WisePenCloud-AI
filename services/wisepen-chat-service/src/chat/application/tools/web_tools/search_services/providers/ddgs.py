@@ -8,7 +8,6 @@ from .models import (
     ProviderSearchResponse,
     ProviderSearchResult,
     SearchPreview,
-    SearchProviderName,
 )
 
 
@@ -30,7 +29,7 @@ def map_ddgs_response(
     results = dedupe_by_url(results, url_getter=lambda r: r.url, limit=max_results)
     return ProviderSearchResponse(
         query=query,
-        provider=SearchProviderName.FOUGET_DDG,
+        provider=None,
         results=results,
     )
 

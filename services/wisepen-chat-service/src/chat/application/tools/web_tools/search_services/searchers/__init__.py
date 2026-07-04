@@ -1,5 +1,3 @@
-from .anysearch import AnySearchSearcher
-from .baidu_qianfan import BaiduQianfanSearcher
 from .base import (
     BaseProviderSearcher,
     ProviderSearcher,
@@ -8,11 +6,13 @@ from .base import (
     SearchProviderError,
     SearchProviderNetworkError,
 )
-from .ddgs import DdgSearcher
-from .exa import ExaSearcher
-from .fouget_ddg import FouGetDdgSearcher
-from .fourget import FourGetSearcher
-from .tavily import TavilySearcher
+from .integrations.anysearch import AnySearchSearcher
+from .integrations.baidu_qianfan import BaiduQianfanSearcher
+from .integrations.exa import ExaSearcher
+from .integrations.tavily import TavilySearcher
+from .platform.default import PlatformDefaultSearcher
+from .platform.ddgs import DdgSearcher
+from .platform.fourget import FourGetSearcher
 
 __all__ = [
     "AnySearchSearcher",
@@ -20,8 +20,8 @@ __all__ = [
     "BaseProviderSearcher",
     "DdgSearcher",
     "ExaSearcher",
-    "FouGetDdgSearcher",
     "FourGetSearcher",
+    "PlatformDefaultSearcher",
     "ProviderSearcher",
     "SearchProviderConfig",
     "SearchProviderCredentialError",

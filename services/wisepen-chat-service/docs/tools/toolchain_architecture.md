@@ -350,7 +350,7 @@ Math 工具的模型约束：不访问外部信息，不执行任意 Python，�
 
 | 层 | 当前组件 | 可替换实验方向 |
 | --- | --- | --- |
-| 搜索 provider | 4get/DDG、Exa、自定义 Exa/Tavily/AnySearch/百度千帆 | provider 扩展、custom provider 扩展、provider capability 扩展（如 academic search）。 |
+| 搜索 source/provider | `platform_default`（内部 4get/DDGS）、`platform_member`（平台 key + 可配置 integration provider）、`custom`（用户 key + Exa/Tavily/AnySearch/百度千帆） | provider capability 扩展、platform_member 路由配置、custom provider 扩展（如 academic search）。 |
 | 搜索内部小模型 | candidate ranker（仅看 candidate 文本，不看 supplier answer） | 提示词调优、JSON 解析容错、候选重排模型替换。 |
 | URL fetcher | `tools/utils/url/fetcher.fetch_url` -> `ScraplingFetcher` fallback | 新增 Playwright/browser fetcher、反爬策略、质量判断阈值实验。 |
 | URL safety | `tools/utils/url/security.validate_public_http_url` | 只做 URL 安全性校验；不做页面内容阻断。 |

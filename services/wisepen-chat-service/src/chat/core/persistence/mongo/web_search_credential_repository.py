@@ -19,7 +19,7 @@ class MongoWebSearchCredentialRepository:
     """Web search 用户凭证 MongoDB 仓储。
 
     数据模型：每个 (user_id, source, provider) 是独立、稳定的文档。
-    - PLATFORM 下 FOUGET_DDG 和 EXA 各自一条文档，会员切换通过 is_active 切换文档。
+    - PLATFORM_DEFAULT 和 PLATFORM_MEMBER 是平台路由类型，不绑定具体 provider。
     - CUSTOM 下每个 provider 各自一条文档。
     运行期通过 is_active 字段保证同一 user 仅一条凭证为激活态。
     """
@@ -35,18 +35,18 @@ class MongoWebSearchCredentialRepository:
             self,
             *,
             user_id: str,
+            source: WebSearchCredentialSource = WebSearchCredentialSource.PLATFORM_DEFAULT,
     ) -> WebSearchCredential:
-        """确保默认 FOUGET_DDG 平台凭证存在，用于设置面板首次展示兜底。"""
-        has_active_custom = await WebSearchCredential.find_one(
+        """确保平台路由凭证存在，用于设置面板首次展示兜底。"""
+        has_active_credential = await WebSearchCredential.find_one(
             WebSearchCredential.user_id == user_id,
-            WebSearchCredential.source == WebSearchCredentialSource.CUSTOM,
             WebSearchCredential.is_active == True,  # noqa: E712
         ) is not None
 
         return await self._get_or_create_platform_credential(
             user_id=user_id,
-            provider=SearchProviderName.FOUGET_DDG,
-            is_active_default=not has_active_custom,
+            source=source,
+            is_active_default=source == WebSearchCredentialSource.PLATFORM_DEFAULT and not has_active_credential,
         )
 
     async def upsert_custom_credential(
@@ -58,10 +58,10 @@ class MongoWebSearchCredentialRepository:
             openalex_api_key: str | None = None,
     ) -> WebSearchCredential:
         # 1. 前置业务策略校验
-        if provider == SearchProviderName.FOUGET_DDG:
+        if not provider.supports_custom_credential:
             raise ServiceException(
                 ChatErrorCode.WEB_SEARCH_CREDENTIAL_INVALID,
-                custom_msg="4get+ddg 是平台默认搜索源，不接受用户自定义 api_key",
+                custom_msg="该 provider 不接受用户自定义 api_key",
             )
 
         api_key = api_key.strip()
@@ -105,7 +105,6 @@ class MongoWebSearchCredentialRepository:
                 user_id=user_id,
                 provider=provider,
                 source=WebSearchCredentialSource.CUSTOM,
-                is_member=False,
                 api_key_ciphertext=api_key_ciphertext,
                 api_key_masked=self._mask_api_key(api_key),
                 api_key_fingerprint=self._fingerprint_api_key(api_key),
@@ -162,10 +161,13 @@ class MongoWebSearchCredentialRepository:
             *,
             user_id: str,
     ) -> WebSearchCredential | None:
-        """返回当前生效的 PLATFORM 凭证（可能是 FOUGET_DDG 或 EXA，取决于会员态）。"""
+        """返回当前生效的平台路由凭证。"""
         return await WebSearchCredential.find_one(
             WebSearchCredential.user_id == user_id,
-            WebSearchCredential.source == WebSearchCredentialSource.PLATFORM,
+            WebSearchCredential.source.in_([
+                WebSearchCredentialSource.PLATFORM_DEFAULT,
+                WebSearchCredentialSource.PLATFORM_MEMBER,
+            ]),
             WebSearchCredential.is_active == True,  # noqa: E712
         )
 
@@ -174,15 +176,23 @@ class MongoWebSearchCredentialRepository:
             *,
             user_id: str,
             source: WebSearchCredentialSource,
-            provider: SearchProviderName,
+            provider: SearchProviderName | None = None,
     ) -> WebSearchCredential:
-        if source == WebSearchCredentialSource.PLATFORM:
+        if source in {
+            WebSearchCredentialSource.PLATFORM_DEFAULT,
+            WebSearchCredentialSource.PLATFORM_MEMBER,
+        }:
             credential = await self._get_or_create_platform_credential(
                 user_id=user_id,
-                provider=provider,
+                source=source,
                 is_active_default=False,
             )
         else:
+            if provider is None:
+                raise ServiceException(
+                    ChatErrorCode.WEB_SEARCH_CREDENTIAL_INVALID,
+                    custom_msg="custom 搜索凭证 provider 必填",
+                )
             credential = await WebSearchCredential.find_one(
                 WebSearchCredential.user_id == user_id,
                 WebSearchCredential.source == WebSearchCredentialSource.CUSTOM,
@@ -251,18 +261,14 @@ class MongoWebSearchCredentialRepository:
             self,
             *,
             user_id: str,
-            provider: SearchProviderName,
+            source: WebSearchCredentialSource,
             is_active_default: bool,
     ) -> WebSearchCredential:
-        """按 provider 获取或创建 PLATFORM 凭证（不修改 active 态）。
-
-        每个 (user, PLATFORM, provider) 是独立、稳定的文档，
-        会员态切换通过切换 active 的文档实现，而不是原地改写 provider 字段。
-        """
+        """获取或创建平台路由凭证（不修改 active 态）。"""
         credential = await WebSearchCredential.find_one(
             WebSearchCredential.user_id == user_id,
-            WebSearchCredential.source == WebSearchCredentialSource.PLATFORM,
-            WebSearchCredential.provider == provider,
+            WebSearchCredential.source == source,
+            WebSearchCredential.provider == None,  # noqa: E711
         )
         if credential is not None:
             return credential
@@ -270,9 +276,8 @@ class MongoWebSearchCredentialRepository:
         now = datetime.now(timezone.utc)
         credential = WebSearchCredential(
             user_id=user_id,
-            provider=provider,
-            source=WebSearchCredentialSource.PLATFORM,
-            is_member=provider == SearchProviderName.EXA,
+            provider=None,
+            source=source,
             is_active=is_active_default,
             api_key_ciphertext="",
             api_key_masked="",
@@ -290,8 +295,8 @@ class MongoWebSearchCredentialRepository:
             # 高并发场景下，防止其他请求先一步插入导致冲突，此处进行降级兜底查询
             credential = await WebSearchCredential.find_one(
                 WebSearchCredential.user_id == user_id,
-                WebSearchCredential.source == WebSearchCredentialSource.PLATFORM,
-                WebSearchCredential.provider == provider,
+                WebSearchCredential.source == source,
+                WebSearchCredential.provider == None,  # noqa: E711
             )
             if credential is None:
                 raise

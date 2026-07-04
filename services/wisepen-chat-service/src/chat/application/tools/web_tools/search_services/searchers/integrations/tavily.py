@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import httpx
 
-from .base import BaseProviderSearcher, SearchProviderConfig, SearchProviderCredentialError
-from ..providers.models import SearchProviderName
-from ..providers.tavily import TavilySearchRequest, map_tavily_response
+from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
+from chat.application.tools.web_tools.search_services.providers.tavily import (
+    TavilySearchRequest,
+    map_tavily_response,
+)
+from chat.application.tools.web_tools.search_services.searchers.base import (
+    BaseProviderSearcher,
+    SearchProviderConfig,
+    SearchProviderCredentialError,
+)
 
 
 class TavilySearcher(BaseProviderSearcher):

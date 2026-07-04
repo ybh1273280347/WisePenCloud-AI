@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from chat.application.tools.web_tools.search_services.errors import (
@@ -18,16 +18,11 @@ from chat.application.tools.web_tools.search_services.searchers import (
     SearchProviderCredentialError,
     SearchProviderNetworkError,
 )
+from chat.application.tools.web_tools.search_services.sources import (
+    WebSearchRuntimeSource,
+    WebSearchSourceKind,
+)
 from common.logger import warn
-
-
-@dataclass(frozen=True, slots=True)
-class WebSearchCustomSource:
-    """由 runtime context 快照构造出的单次 custom 搜索源。"""
-
-    provider: SearchProviderName
-    searcher: ProviderSearcher
-    api_key: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,70 +36,64 @@ class WebSearchResult:
 async def execute_provider_search(
         *,
         query: str,
-        custom_source: WebSearchCustomSource | None,
-        platform_provider: SearchProviderName,
-        platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
+        source: WebSearchRuntimeSource,
         search_once: Callable[
             [ProviderSearcher],
             Awaitable[ProviderSearchResponse],
         ],
 ) -> WebSearchResult:
-    """执行单次 provider 搜索，并统一翻译 platform/custom 异常语义。"""
-    if custom_source is not None and not custom_source.api_key.strip():
+    """执行单次 provider 搜索，并统一翻译平台源和 custom 源异常语义。"""
+    if source.kind == WebSearchSourceKind.CUSTOM and not source.api_key.strip():
         raise WebSearchCustomApiKeyMissing(
-            provider=custom_source.provider,
+            provider=source.provider,
             reason="不存在 api key",
         )
 
-    provider = custom_source.provider if custom_source is not None else platform_provider
-    searcher = (
-        custom_source.searcher
-        if custom_source is not None
-        else _get_platform_searcher(platform_searchers, provider)
-    )
-
     try:
-        response = await search_once(searcher)
+        response = await search_once(source.searcher)
         if not response.results:
             raise WebSearchEmptyResult(
-                provider=provider,
+                provider=source.provider,
                 reason="搜索源成功响应但没有返回结果",
             )
         return WebSearchResult(query=query, responses=(response,))
 
     except SearchProviderCredentialError as exc:
-        if custom_source is None:
+        if source.kind != WebSearchSourceKind.CUSTOM:
             warn(
                 "search provider skipped.",
-                provider=provider,
+                provider=source.provider,
+                source_kind=source.kind,
                 reason=exc.__class__.__name__,
             )
             return WebSearchResult(query=query, responses=())
-        raise _to_custom_credential_error(provider, exc) from exc
+        raise _to_custom_credential_error(source.provider, exc) from exc
 
     except SearchProviderNetworkError as exc:
-        if custom_source is None:
+        if source.kind != WebSearchSourceKind.CUSTOM:
             warn(
                 "search provider skipped.",
-                provider=provider,
+                provider=source.provider,
+                source_kind=source.kind,
                 reason=exc.__class__.__name__,
             )
             return WebSearchResult(query=query, responses=())
         raise WebSearchNetworkError(
-            provider=provider,
+            provider=source.provider,
             reason="网络波动或连接失败",
         ) from exc
 
     except SearchProviderError as exc:
-        if custom_source is None:
+        if source.kind != WebSearchSourceKind.CUSTOM:
             warn(
                 "search provider skipped.",
-                provider=provider,
+                provider=source.provider,
+                source_kind=source.kind,
                 reason=exc.__class__.__name__,
             )
             return WebSearchResult(query=query, responses=())
         raise WebSearchInternalError(
-            provider=provider,
+            provider=source.provider,
             reason="内部服务错误",
         ) from exc
 
@@ -112,31 +101,22 @@ async def execute_provider_search(
         raise
 
     except Exception as exc:
-        if custom_source is None:
+        if source.kind != WebSearchSourceKind.CUSTOM:
             warn(
                 "search provider skipped.",
-                provider=provider,
+                provider=source.provider,
+                source_kind=source.kind,
                 reason=exc.__class__.__name__,
             )
             return WebSearchResult(query=query, responses=())
         raise WebSearchInternalError(
-            provider=provider,
+            provider=source.provider,
             reason="内部服务错误",
         ) from exc
 
 
-def _get_platform_searcher(
-        platform_searchers: Mapping[SearchProviderName, ProviderSearcher],
-        provider: SearchProviderName,
-) -> ProviderSearcher:
-    try:
-        return platform_searchers[provider]
-    except KeyError as exc:
-        raise SearchProviderError(f"缺少 provider searcher: {provider}") from exc
-
-
 def _to_custom_credential_error(
-        provider: SearchProviderName,
+        provider: SearchProviderName | None,
         exc: SearchProviderCredentialError,
 ) -> WebSearchCustomError:
     """将底层 provider 抛出的原生凭证异常映射为用户可理解的异常。"""

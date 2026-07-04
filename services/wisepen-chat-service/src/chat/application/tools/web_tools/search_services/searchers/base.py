@@ -6,14 +6,18 @@ from typing import Any, Protocol, runtime_checkable
 
 import httpx
 
-from ..providers.models import ProviderSearchRequest, ProviderSearchResponse, SearchProviderName
+from chat.application.tools.web_tools.search_services.providers.models import (
+    ProviderSearchRequest,
+    ProviderSearchResponse,
+    SearchProviderName,
+)
 
 
 @runtime_checkable
 class ProviderSearcher(Protocol):
     """Provider 搜索器协议：只要实现搜索方法即可被 service 直接调度。
 
-    BaseProviderSearcher、DdgSearcher、FouGetDdgSearcher 均满足此协议。
+    BaseProviderSearcher、DdgSearcher、PlatformDefaultSearcher 均满足此协议。
     """
 
     async def search_web(
@@ -60,7 +64,7 @@ class BaseProviderSearcher:
     provider 请求对象负责把自身转换为 HTTP 请求，避免 searcher 关心 payload 形态。
     """
 
-    provider: SearchProviderName
+    provider: SearchProviderName | None
     request_class: type
     response_mapper: SearchResponseMapper
 

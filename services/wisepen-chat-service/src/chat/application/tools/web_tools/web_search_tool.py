@@ -19,7 +19,7 @@ from chat.application.tools.web_tools._search_tool_utils import (
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
-from chat.application.tools.web_tools.search_services.custom_source_factory import (
+from chat.application.tools.web_tools.search_services.factories.custom_source_factory import (
     WebSearchCustomSourceFactory,
 )
 from chat.application.tools.web_tools.search_services.errors import (
@@ -29,9 +29,10 @@ from chat.application.tools.web_tools.search_services.errors import (
     WebSearchError,
     WebSearchNetworkError,
 )
-from chat.application.tools.web_tools.search_services.runtime_context import (
-    WebSearchMode,
+from chat.application.tools.web_tools.search_services.factories.platform_source_factory import (
+    WebSearchPlatformSourceFactory,
 )
+from chat.application.tools.web_tools.search_services.sources import WebSearchSourceKind
 from chat.application.tools.web_tools.search_services.services.candidates import build_candidates
 from chat.application.tools.web_tools.search_services.services.web_search.result_builder import (
     build_web_search_tool_return,
@@ -124,6 +125,7 @@ class WebSearchTool:
         "_candidate_ttl_seconds",
         "_custom_source_factory",
         "_definition",
+        "_platform_source_factory",
         "_service",
     )
 
@@ -132,11 +134,13 @@ class WebSearchTool:
             *,
             service: WebSearchService,
             custom_source_factory: WebSearchCustomSourceFactory,
+            platform_source_factory: WebSearchPlatformSourceFactory,
             candidate_repository: WebSearchCandidateRepository,
             candidate_ttl_seconds: int = 3600,
     ) -> None:
         self._service = service
         self._custom_source_factory = custom_source_factory
+        self._platform_source_factory = platform_source_factory
         self._candidate_repository = candidate_repository
         self._candidate_ttl_seconds = candidate_ttl_seconds
         self._definition = ToolDefinition(
@@ -168,23 +172,21 @@ class WebSearchTool:
         search_config = context["search_config"]
 
         try:
-            # 1. 动态凭证安全识别：平台模式无需自定义凭证，custom 模式需校验 API Key
-            if search_config.search_mode == WebSearchMode.PLATFORM:
-                custom_source = None
-            else:
+            if search_config.source_kind == WebSearchSourceKind.CUSTOM:
                 if not search_config.is_valid:
                     raise WebSearchCustomApiKeyInvalid(
                         provider=search_config.provider,
                         reason=search_config.error_message or "custom 搜索配置不可用",
                     )
-                custom_source = self._custom_source_factory.build(search_config)
+                source = self._custom_source_factory.build(search_config)
+            else:
+                source = self._platform_source_factory.build(search_config)
 
             # 2. 执行单次显式查询；空结果交给模型改写 query 后重新调用。
             result = await self._service.search(
                 query=query,
                 max_results=max(1, min(max_results, MAX_WEB_SEARCH_RESULTS)),
-                custom_source=custom_source,
-                platform_provider=search_config.provider,
+                source=source,
             )
             candidates = build_candidates(result.responses, search_config=search_config)
             if not candidates:
