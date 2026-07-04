@@ -6,7 +6,6 @@ from dataclasses import asdict, dataclass, is_dataclass
 from enum import Enum
 from re import fullmatch
 from typing import Any
-from xml.sax.saxutils import escape
 
 from dicttoxml import dicttoxml
 
@@ -17,6 +16,7 @@ from pydantic import BaseModel
 from chat.application.tools.core.execution.result import ToolExecutionResult
 from chat.application.tools.core.llm.renderer import RenderToolResult
 from chat.application.tools.core.tool_return import ToolReturn
+from chat.application.utils.xml_markup import xml_cdata, xml_text
 
 # --- XML 规范化配置 ---
 _DEFAULT_ROOT_TAG = "result"
@@ -152,7 +152,7 @@ def _regular_return_parts(*, root_tag: str, value: Any) -> tuple[dict[str, Any],
         return {}, f"<{root_tag}/>"
 
     text = ("true" if normalized else "false") if isinstance(normalized, bool) else str(normalized)
-    return {}, f"<{root_tag}>{escape(text)}</{root_tag}>"
+    return {}, f"<{root_tag}>{xml_text(text)}</{root_tag}>"
 
 
 def _normalize_mapping(value: Any) -> dict[str, Any]:
@@ -223,9 +223,9 @@ def _error_payload(tool_result: ToolExecutionResult) -> dict[str, Any]:
 def _render_contents(contents: tuple[str, ...]) -> str:
     """渲染富文本大字段内容块。单条免除冗余包装，多条使用 item 隔离。"""
     if len(contents) == 1:
-        return f"<contents>{_cdata(contents[0])}</contents>"
+        return f"<contents>{xml_cdata(contents[0])}</contents>"
 
-    items = "".join(f"<item>{_cdata(c)}</item>" for c in contents)
+    items = "".join(f"<item>{xml_cdata(c)}</item>" for c in contents)
     return f"<contents>{items}</contents>"
 
 
@@ -258,15 +258,6 @@ def _append_root_children(*, xml: str, root_tag: str, children: str) -> str:
         return f"<{root_tag}>{children}</{root_tag}>"
 
     return f"{xml[:index]}{children}{xml[index:]}"
-
-
-def _cdata(text: str) -> str:
-    """将高风险明文包裹为 XML CDATA 节。
-
-    内部若存在恶意或天然的 ']]>' 须执行截断重构，防止 XML 节点提前被迫关闭崩溃。
-    """
-    escaped_text = text.replace("]]>", "]]]]><![CDATA[>")
-    return f"<![CDATA[{escaped_text}]]>"
 
 
 def _validate_xml_tag(tag: str) -> str:

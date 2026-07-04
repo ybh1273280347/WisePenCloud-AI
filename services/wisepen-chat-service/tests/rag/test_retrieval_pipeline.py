@@ -43,9 +43,7 @@ sys.modules["chat.core.config.app_settings"] = config_module
 from chat.application.rag.answerability import (  # noqa: E402
     AnswerabilityHardGate,
     AnswerabilitySoftGate,
-    AnswerabilitySoftGateError,
     RagAnswerabilityInput,
-    RagAnswerabilityLevel,
     RagAnswerabilityWarningReason,
     RagHardGateReason,
 )
@@ -251,38 +249,37 @@ async def test_soft_gate_returns_warning_and_triggers_graph_enhancement() -> Non
         )
     )
 
-    assert warning.answerability_level == RagAnswerabilityLevel.PARTIAL
     assert warning.warnings == (RagAnswerabilityWarningReason.PARTIAL_COVERAGE,)
     assert warning.should_enhance_with_neo4j
 
 
 @pytest.mark.anyio
-async def test_soft_gate_rejects_inconsistent_level_and_warning_severity() -> None:
+async def test_soft_gate_filters_unknown_warning_reason() -> None:
     service = AnswerabilitySoftGate(client=_SoftGateClient(
         content=(
-            '{"answerability_level":"partial",'
-            '"warnings":["ENTITY_AMBIGUOUS"],'
-            '"guidance":"请先澄清实体。"}'
+            '{"warnings":["NOT_A_REAL_WARNING","PARTIAL_COVERAGE","PARTIAL_COVERAGE"],'
+            '"guidance":"只保留有效 warning。"}'
         )
     ))
 
-    with pytest.raises(AnswerabilitySoftGateError):
-        await service.evaluate(
-            RagAnswerabilityInput(
-                query="这里的 Apple 指哪个公司？",
-                retrieval_profile=RagRetrievalProfile.BALANCED.value,
-                ranked=(
-                    RankedCandidate(
-                        candidate=RankCandidate(
-                            candidate_id="chunk-ambiguous",
-                            text="Apple 在不同上下文中可能指公司或水果。",
-                        ),
-                        rank=1,
-                        score=0.51,
+    warning = await service.evaluate(
+        RagAnswerabilityInput(
+            query="这里的 Apple 指哪个公司？",
+            retrieval_profile=RagRetrievalProfile.BALANCED.value,
+            ranked=(
+                RankedCandidate(
+                    candidate=RankCandidate(
+                        candidate_id="chunk-ambiguous",
+                        text="Apple 在不同上下文中可能指公司或水果。",
                     ),
+                    rank=1,
+                    score=0.51,
                 ),
-            )
+            ),
         )
+    )
+
+    assert warning.warnings == (RagAnswerabilityWarningReason.PARTIAL_COVERAGE,)
 
 
 def _retrieved_hit(
@@ -303,8 +300,7 @@ def _retrieved_hit(
 class _SoftGateClient:
     def __init__(self, *, content: str | None = None) -> None:
         self._content = content or (
-            '{"answerability_level":"partial",'
-            '"warnings":["PARTIAL_COVERAGE"],'
+            '{"warnings":["PARTIAL_COVERAGE"],'
             '"guidance":"当前证据只覆盖部分接口，回答时说明范围限制。"}'
         )
 

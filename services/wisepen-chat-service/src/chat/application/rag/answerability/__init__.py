@@ -4,7 +4,6 @@ from .hard_gate import AnswerabilityHardGate
 from .models import (
     RagAnswerabilityDecision,
     RagAnswerabilityInput,
-    RagAnswerabilityLevel,
     RagAnswerabilityWarning,
     RagAnswerabilityWarningReason,
     RagHardGateDecision,
@@ -19,7 +18,6 @@ __all__ = [
     "AnswerabilitySoftGateError",
     "RagAnswerabilityDecision",
     "RagAnswerabilityInput",
-    "RagAnswerabilityLevel",
     "RagAnswerabilityWarning",
     "RagAnswerabilityWarningReason",
     "RagHardGateDecision",

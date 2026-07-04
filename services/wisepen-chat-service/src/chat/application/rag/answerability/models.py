@@ -20,15 +20,6 @@ class RagHardGateReason(StrEnum):
     TOPK_ALL_BELOW_ABSOLUTE_MIN_SCORE = "topk_all_below_absolute_min_score"
 
 
-class RagAnswerabilityLevel(StrEnum):
-    """Soft Gate 给主模型的证据质量等级。"""
-
-    GOOD = "good"
-    PARTIAL = "partial"
-    RISKY = "risky"
-    POOR = "poor"
-
-
 class RagAnswerabilityWarningReason(StrEnum):
     """Soft Gate 风险原因。"""
 
@@ -68,7 +59,6 @@ class RagHardGateDecision:
 class RagAnswerabilityWarning:
     """Soft Gate 输出给 Context Builder / 主模型的风险提示。"""
 
-    answerability_level: RagAnswerabilityLevel
     warnings: tuple[RagAnswerabilityWarningReason, ...] = ()
     guidance: str = ""  # 面向主模型的具体回答策略说明
 

@@ -48,7 +48,6 @@ user query
        - TOPK_ALL_BELOW_ABSOLUTE_MIN_SCORE
 
   -> Answerability Soft Gate
-       - answerability_level
        - warning reasons
        - answering guidance
 
@@ -173,12 +172,15 @@ reject = true
 
 ```yaml
 answerability_warning:
-  answerability_level: good | partial | risky | poor
   warnings:
     - LOW_DIRECTNESS
     - PARTIAL_COVERAGE
   guidance: "当前证据可能只能支持部分回答，不要过度推断。"
 ```
+
+`warnings` 是闭集，只允许使用下文列出的 warning reason。
+
+如果 Soft Gate 小模型输出未知 warning，服务端会静默过滤该值；未知值不作为有效 warning，不触发 Neo4j Enhancement，也不让 Soft Gate 失败。
 
 ---
 
@@ -189,7 +191,7 @@ answerability_warning:
 含义：
 
 ```text
-召回内容相关，但不是直接回答用户问题。
+证据需两步以上推理才能得出答案，或只提供背景信息，未包含答案所需的具体数值、实体或结论。
 ```
 
 影响：
@@ -210,7 +212,8 @@ Neo4j 尝试：
 含义：
 
 ```text
-direct evidence 只覆盖问题的一部分。
+问题包含多个明确子项，而 direct evidence 缺失任一子项。
+该 warning 优先于 LOW_DIRECTNESS。
 ```
 
 影响：
@@ -231,7 +234,7 @@ Neo4j 尝试：
 含义：
 
 ```text
-问题或召回内容中的实体指代可能不清晰。
+仅在同一证据内或跨证据间，同一字符串被用于指代两个不同且无法区分的实体时触发。
 ```
 
 影响：
@@ -252,7 +255,7 @@ Neo4j 尝试：
 含义：
 
 ```text
-召回内容主题相似，但语境可能不是用户问题所需语境。
+证据的时间、地域、假设前提或数据口径，与问题中明确限定的条件存在直接冲突或明确不符。
 ```
 
 影响：
@@ -352,7 +355,6 @@ ontology_hints:
     path_preview: list
 
 answerability_warning:
-  answerability_level: good | partial | risky | poor
   warnings: list
   guidance: string
 ```

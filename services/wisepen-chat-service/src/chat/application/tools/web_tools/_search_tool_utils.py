@@ -8,6 +8,7 @@ from chat.application.tools.web_tools.search_services.services.candidates import
     WebSearchCandidate,
     build_candidate_mappings,
 )
+from chat.application.utils.xml_markup import xml_attr, xml_cdata
 
 
 async def select_recommended_ids(
@@ -23,7 +24,7 @@ async def select_recommended_ids(
     # 用小模型对候选结果排序，挑选最相关的推荐给模型
     ranked = await rank_candidate_ids(
         search_query=search_query,
-        candidates_text=_candidates_text(candidates),
+        candidates_xml=_candidates_xml(candidates),
     )
     if ranked:
         valid_ids = {candidate.candidate_id for candidate in candidates}
@@ -49,18 +50,23 @@ async def store_candidate_mappings(
         await repository.set_mapping(mapping, ttl_seconds=ttl_seconds)
 
 
-def _candidates_text(candidates: tuple[WebSearchCandidate, ...]) -> str:
-    # 拼接候选摘要文本，供排序模型（ranker）消费
-    lines: list[str] = []
+def _candidates_xml(candidates: tuple[WebSearchCandidate, ...]) -> str:
+    blocks: list[str] = []
     for candidate in candidates:
         parts = [
-            f"id: {candidate.candidate_id}",
-            f"title: {candidate.title}",
-            f"url: {candidate.url}",
+            f"    <candidate id=\"{xml_attr(candidate.candidate_id)}\">",
+            f"      <title>{xml_cdata(candidate.title)}</title>",
+            f"      <url>{xml_cdata(candidate.url)}</url>",
         ]
         if candidate.overview:
-            parts.append(f"overview: {candidate.overview}")
+            parts.append(f"      <overview>{xml_cdata(candidate.overview)}</overview>")
         if candidate.highlights:
-            parts.append("highlights: " + " | ".join(candidate.highlights))
-        lines.append("\n".join(parts))
-    return "\n\n".join(lines)
+            parts.append("      <highlights>")
+            parts.extend(
+                f"        <highlight>{xml_cdata(highlight)}</highlight>"
+                for highlight in candidate.highlights
+            )
+            parts.append("      </highlights>")
+        parts.append("    </candidate>")
+        blocks.append("\n".join(parts))
+    return "\n".join(blocks)

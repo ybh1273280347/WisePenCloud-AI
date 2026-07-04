@@ -59,6 +59,58 @@ ToolScope disclosure
 9. **补测试**：至少覆盖 schema/模式校验、成功路径、单项失败、跨工具引用、缓存命中/未命中或权限边界。
 10. **验证启动与后台任务**：涉及 refresh queue 或 GC 时，说明是否由主进程自动启动，还是需要额外 worker。
 
+## 工具内部小模型提示词
+
+工具内部如需调用 `llm_clients.QueryClient` 做候选排序、证据风险判断、上下文索引等小模型任务，提示词按两层组织：
+
+- `system_prompt` 使用纯 Markdown 约束卡片，放角色、任务、输入语义、规则、输出格式和禁止项。
+- 运行期 `prompt` 使用 XML 包装动态参数和长文本；文本正文用 CDATA，属性值必须转义。
+- XML 片段统一使用 `chat.application.utils.xml_markup` 中的 `xml_cdata`、`xml_attr`、`xml_text`，不要在业务模块里复制私有 `_cdata` 或 `_xml_attr`。
+
+示例：
+
+```markdown
+# 角色
+
+你是搜索候选排序器。
+
+# 任务
+
+按查询相关性排序候选。
+
+# 输入
+
+运行期输入是 XML，`<candidate>` 的 `id` 是唯一候选编号。
+
+# 规则
+
+- 只能返回输入 XML 中存在的 id。
+
+# 输出格式
+
+只输出一个 JSON 对象，结构为 `{"ranked_ids":["[1]","[2]"]}`。
+
+# 禁止
+
+- 不要输出 Markdown 代码块、标题、列表或 JSON 外的任何文字。
+- 不要解释排序理由、评分依据或筛选过程。
+- `ranked_ids` 里不要重复同一个编号，也不要出现输入 XML 中不存在的 id。
+```
+
+```xml
+<candidate_ranker_input>
+  <search_query><![CDATA[...]]></search_query>
+  <candidates>
+    <candidate id="[1]">
+      <title><![CDATA[...]]></title>
+      <overview><![CDATA[...]]></overview>
+    </candidate>
+  </candidates>
+</candidate_ranker_input>
+```
+
+这条规则只约束“内部小模型输入”。工具对主模型的返回仍然走 `ToolOutputRenderer` / `ToolReturn` / `ToolOutputCache`，不得因此在工具返回路径里手写 XML。
+
 ## 输出设计流程
 
 先判断返回内容类型：

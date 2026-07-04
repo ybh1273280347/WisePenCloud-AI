@@ -544,16 +544,16 @@ Neo4j 对应处理：
 
 ```text
 LOW_DIRECTNESS:
-  尝试从 seed concept 找更直接的 relation evidence。
+  证据需两步以上推理，或只给背景、缺少答案所需具体值时，尝试从 seed concept 找更直接的 relation evidence。
 
 PARTIAL_COVERAGE:
-  沿相关概念补充 graph evidence。
+  问题有多个明确子项且证据缺失任一子项时，沿相关概念补充 graph evidence。
 
 ENTITY_AMBIGUOUS:
-  用 Mention / Concept 图辅助消歧。
+  同一字符串在证据内或证据间指代不同实体时，用 Mention / Concept 图辅助消歧。
 
 CONTEXT_MISMATCH:
-  检查 seed concept 与目标 concept 是否路径一致。
+  时间、地域、假设前提或数据口径与问题限定条件冲突时，检查 seed concept 与目标 concept 是否路径一致。
 
 EVIDENCE_CONFLICT:
   查找更多 relation evidence / concept path 辅助解释冲突。
