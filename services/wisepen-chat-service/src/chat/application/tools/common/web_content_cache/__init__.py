@@ -1,4 +1,8 @@
 from .cache_ttl import compute_ttl
+from .metadata import (
+    source_scope_from_metadata,
+    string_metadata,
+)
 from .models import (
     WebContentCacheMode,
     WebContentCacheEntry,
@@ -23,14 +27,6 @@ from .service import (
     WEB_CUSTOM_SOURCE_SCOPE,
     WEB_PUBLIC_SOURCE_SCOPE,
 )
-from .adapter import (
-    WebContentCacheAdapter,
-    WebContentCacheSourceRecord,
-)
-from .metadata import (
-    source_scope_from_metadata,
-    string_metadata,
-)
 
 __all__ = [
     "CachedMarkdownPage",
@@ -41,7 +37,6 @@ __all__ = [
     "WEB_FETCH_REFRESH_JOB",
     "WEB_CUSTOM_SOURCE_SCOPE",
     "WEB_PUBLIC_SOURCE_SCOPE",
-    "WebContentCacheAdapter",
     "WebContentCacheEntryRepository",
     "WebContentCacheMode",
     "WebContentCacheEntry",
@@ -49,7 +44,6 @@ __all__ = [
     "WebContentCacheRefreshJob",
     "WebContentCacheRefreshTaskPublisher",
     "WebContentCacheService",
-    "WebContentCacheSourceRecord",
     "WebContentCacheValueRepository",
     "WebContentCacheValue",
     "source_scope_from_metadata",

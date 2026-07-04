@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from chat.application.tools.common.web_content_cache import (
-    WebContentCacheAdapter,
+    HtmlCacheWrite,
+    NonHtmlCacheStubWrite,
     WebContentCacheEntryRepository,
-    WebContentCacheSourceRecord,
+    WebContentCacheService,
     WebContentCacheValueRepository,
 )
 from chat.application.tools.common.web_content_cache.refresh_queue import (
@@ -17,10 +18,10 @@ _PRODUCER_NAME = "web_fetch"
 _REFRESH_LOCK_TTL_SECONDS = 300
 
 
-class WebFetchCacheAdapter:
-    """web_fetch 对 URL 内容缓存的窄适配层。"""
+class WebFetchCache:
+    """web_fetch 的 URL 内容缓存边界。"""
 
-    __slots__ = ("_cleaner_name", "_content_cache_adapter")
+    __slots__ = ("_cleaner_name", "_content_cache_service")
 
     def __init__(
             self,
@@ -31,7 +32,7 @@ class WebFetchCacheAdapter:
             refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
     ) -> None:
         self._cleaner_name = cleaner_name
-        self._content_cache_adapter = WebContentCacheAdapter(
+        self._content_cache_service = WebContentCacheService(
             entry_repository=entry_repository,
             value_repository=value_repository,
             refresh_task_publisher=refresh_task_publisher,
@@ -44,7 +45,7 @@ class WebFetchCacheAdapter:
             user_id: str,
             session_id: str,
     ) -> WebFetchResult | None:
-        cached = await self._content_cache_adapter.read_markdown_page(
+        cached = await self._content_cache_service.read_markdown_page(
             url=url,
             user_id=user_id,
             session_id=session_id,
@@ -79,15 +80,22 @@ class WebFetchCacheAdapter:
             raw: RawFetchOutput,
             result: WebFetchResult,
     ) -> None:
-        await self._content_cache_adapter.write_html_markdown(
-            url=url,
-            user_id=user_id,
-            source_scope=source_scope,
-            record=_source_record(raw),
-            markdown=result.markdown,
-            title=result.title,
-            cleaner=self._cleaner_name,
-            producer=_PRODUCER_NAME,
+        await self._content_cache_service.write_html_markdown(
+            HtmlCacheWrite(
+                url=url,
+                user_id=user_id,
+                source_scope=source_scope,
+                final_url=raw.final_url,
+                status_code=raw.status_code,
+                content_type=raw.content_type,
+                raw_html=raw.raw_html,
+                markdown=result.markdown,
+                title=result.title,
+                headers=raw.headers,
+                fetcher=raw.fetcher,
+                cleaner=self._cleaner_name,
+                producer=_PRODUCER_NAME,
+            )
         )
 
     async def write_non_html_stub(
@@ -97,21 +105,16 @@ class WebFetchCacheAdapter:
             source_scope: str,
             raw: RawFetchOutput,
     ) -> str | None:
-        return await self._content_cache_adapter.write_non_html_stub(
-            user_id=user_id,
-            source_scope=source_scope,
-            record=_source_record(raw),
+        return await self._content_cache_service.write_non_html_stub(
+            NonHtmlCacheStubWrite(
+                user_id=user_id,
+                source_scope=source_scope,
+                source_url=raw.source_url,
+                final_url=raw.final_url,
+                status_code=raw.status_code,
+                content_type=raw.content_type,
+                headers=raw.headers,
+                fetcher=raw.fetcher,
+                file_label=raw.file_label,
+            )
         )
-
-
-def _source_record(raw: RawFetchOutput) -> WebContentCacheSourceRecord:
-    return WebContentCacheSourceRecord(
-        source_url=raw.source_url,
-        final_url=raw.final_url,
-        status_code=raw.status_code,
-        content_type=raw.content_type,
-        headers=raw.headers,
-        fetcher=raw.fetcher,
-        file_label=raw.file_label,
-        raw_html=raw.raw_html,
-    )

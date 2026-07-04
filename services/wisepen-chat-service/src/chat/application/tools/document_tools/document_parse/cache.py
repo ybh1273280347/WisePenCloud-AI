@@ -5,10 +5,10 @@ from dataclasses import dataclass
 
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.web_content_cache import (
-    WebContentCacheAdapter,
+    NonHtmlCacheStubWrite,
     WebContentCacheEntryRepository,
     WebContentCacheMode,
-    WebContentCacheSourceRecord,
+    WebContentCacheService,
     WebContentCacheValueRepository,
     source_scope_from_metadata,
     string_metadata,
@@ -35,7 +35,7 @@ class ParsedCacheHit:
 
 
 class DocumentParseCache:
-    __slots__ = ("_content_cache_adapter", "_file_store", "_parse_service")
+    __slots__ = ("_content_cache_service", "_file_store", "_parse_service")
 
     def __init__(
             self,
@@ -48,7 +48,7 @@ class DocumentParseCache:
     ) -> None:
         self._file_store = file_store
         self._parse_service = parse_service
-        self._content_cache_adapter = WebContentCacheAdapter(
+        self._content_cache_service = WebContentCacheService(
             entry_repository=content_cache_entry_repository,
             value_repository=content_cache_value_repository,
             refresh_task_publisher=refresh_task_publisher,
@@ -60,10 +60,10 @@ class DocumentParseCache:
             user_id: str,
             raw: FetchedUrl,
     ) -> str | None:
-        return await self._content_cache_adapter.write_non_html_stub(
-            user_id=user_id,
-            source_scope="web_public",
-            record=WebContentCacheSourceRecord(
+        return await self._content_cache_service.write_non_html_stub(
+            NonHtmlCacheStubWrite(
+                user_id=user_id,
+                source_scope="web_public",
                 source_url=raw.source_url,
                 final_url=raw.final_url,
                 status_code=raw.status_code,
@@ -80,7 +80,7 @@ class DocumentParseCache:
             user_id: str,
             metadata: dict[str, object],
     ) -> ParsedCacheHit | None:
-        cached = await self._content_cache_adapter.read_markdown_by_metadata(
+        cached = await self._content_cache_service.read_markdown_by_metadata(
             user_id=user_id,
             metadata=metadata,
             parser_version=_DOCUMENT_PARSE_CACHE_PARSER_VERSION,
@@ -109,7 +109,7 @@ class DocumentParseCache:
             return
 
         try:
-            await self._content_cache_adapter.schedule_stale_refresh(
+            await self._content_cache_service.schedule_stale_refresh(
                 url=source_url,
                 user_id=user_id,
                 session_id=session_id,
@@ -193,7 +193,7 @@ class DocumentParseCache:
             return
 
         try:
-            await self._content_cache_adapter.write_markdown_from_metadata(
+            await self._content_cache_service.write_markdown_from_metadata(
                 user_id=user_id,
                 metadata=metadata,
                 content_type=content_type,

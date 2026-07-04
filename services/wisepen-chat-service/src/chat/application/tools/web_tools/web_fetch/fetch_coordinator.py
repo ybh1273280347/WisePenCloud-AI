@@ -22,7 +22,7 @@ from .batch_scheduler import (
     FetchQueue,
     FetchSlot,
 )
-from .cache import WebFetchCacheAdapter
+from .cache import WebFetchCache
 from .cleaners.base import BaseCleaner
 from .errors import UrlFetchError, UrlFetchHttpError, UrlFetchUnsupportedUrlError
 from .fetchers import WebFetcher
@@ -66,7 +66,7 @@ class FetchCoordinator:
         self._scrapling_fetcher = scrapling_fetcher
         self._cleaner = cleaner
         self._file_store = file_store
-        self._cache = WebFetchCacheAdapter(
+        self._cache = WebFetchCache(
             cleaner_name=cleaner.name,
             entry_repository=content_cache_entry_repository,
             value_repository=content_cache_value_repository,

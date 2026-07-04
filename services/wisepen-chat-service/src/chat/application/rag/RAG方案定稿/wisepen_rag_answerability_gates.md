@@ -180,7 +180,8 @@ answerability_warning:
 
 `warnings` 是闭集，只允许使用下文列出的 warning reason。
 
-如果 Soft Gate 小模型输出未知 warning，服务端会静默过滤该值；未知值不作为有效 warning，不触发 Neo4j Enhancement，也不让 Soft Gate 失败。
+如果 Soft Gate 小模型输出未知 warning，服务端会静默过滤该值；未知值不作为有效 warning，不触发 Neo4j Enhancement，也不让 Soft
+Gate 失败。
 
 ---
 

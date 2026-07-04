@@ -1,4 +1,4 @@
-   # 父子分块摄取指南（后续计划）
+# 父子分块摄取指南（后续计划）
 
 本文档面向后续「父子双仓储」改造，说明如何从 `chunking_engine` 的 `parent_child_markdown` engine 产出中摄取父子 chunk。当前阶段仅
 chunking_engine 层面完成了父子区分与关系映射，存储层/检索层尚未拆分，本文档作为后续接手者的设计参考。
