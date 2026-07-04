@@ -1,5 +1,7 @@
-from chat.application.tools.skill_tools.load_skill_asset_tool import LoadSkillAssetTool
-from chat.application.tools.skill_tools.load_skill_tool import LoadSkillTool
+from __future__ import annotations
+
+from .load_skill_asset_tool import LoadSkillAssetTool
+from .load_skill_tool import LoadSkillTool
 
 __all__ = [
     "LoadSkillAssetTool",
