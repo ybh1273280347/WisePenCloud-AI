@@ -1,34 +1,35 @@
 from __future__ import annotations
 
-import asyncio
 import contextlib
 from pathlib import Path
 
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.errors import ToolRunFileStoreError
 from chat.application.tools.common.web_content_cache import (
-    HtmlCacheWrite,
-    NonHtmlCacheStubWrite,
-    WebContentCacheService,
-)
-from chat.application.tools.common.web_content_cache import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
 )
 from chat.application.tools.common.web_content_cache.refresh_queue import (
-    WEB_FETCH_REFRESH_JOB,
     WebContentCacheRefreshTaskPublisher,
 )
 from chat.application.tools.utils.url import filename_from_url
 from common.logger import info, warn
 from ._utils import judge_quality
+from .batch_scheduler import (
+    AdmitFallback,
+    FetchBatchScheduler,
+    FetchJob,
+    FetchQueue,
+    FetchSlot,
+)
+from .cache import WebFetchCacheAdapter
 from .cleaners.base import BaseCleaner
-from .errors import UrlFetchError
+from .errors import UrlFetchError, UrlFetchHttpError, UrlFetchUnsupportedUrlError
 from .fetchers import WebFetcher
 from .models import RawFetchOutput, WebFetchBatchResult, WebFetchFailure, WebFetchResult
 
 _PRODUCER_NAME = "web_fetch"
-_REFRESH_LOCK_TTL_SECONDS = 300
+_NOT_RETRYABLE_HTTP_STATUS_REASONS = {"http 404", "http 410"}
 
 
 class FetchCoordinator:
@@ -38,13 +39,12 @@ class FetchCoordinator:
         "_httpx_fetcher",
         "_scrapling_fetcher",
         "_cleaner",
-        "_content_cache_service",
-        "_content_cache_entry_repository",
-        "_content_cache_value_repository",
-        "_refresh_task_publisher",
+        "_cache",
         "_file_store",
         "_min_text_length",
         "_batch_concurrency",
+        "_scrapling_concurrency",
+        "_max_scrapling_fallbacks",
     )
 
     def __init__(
@@ -59,21 +59,23 @@ class FetchCoordinator:
             refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
             min_text_length: int = 200,
             batch_concurrency: int = 5,
+            scrapling_concurrency: int = 2,
+            max_scrapling_fallbacks: int = 6,
     ) -> None:
         self._httpx_fetcher = httpx_fetcher
         self._scrapling_fetcher = scrapling_fetcher
         self._cleaner = cleaner
         self._file_store = file_store
-        self._content_cache_entry_repository = content_cache_entry_repository
-        self._content_cache_value_repository = content_cache_value_repository
-        self._refresh_task_publisher = refresh_task_publisher
-        self._content_cache_service = WebContentCacheService(
+        self._cache = WebFetchCacheAdapter(
+            cleaner_name=cleaner.name,
             entry_repository=content_cache_entry_repository,
             value_repository=content_cache_value_repository,
             refresh_task_publisher=refresh_task_publisher,
         )
         self._min_text_length = min_text_length
-        self._batch_concurrency = batch_concurrency
+        self._batch_concurrency = max(1, int(batch_concurrency))
+        self._scrapling_concurrency = max(1, int(scrapling_concurrency))
+        self._max_scrapling_fallbacks = max(0, int(max_scrapling_fallbacks))
 
     async def fetch_one(
             self,
@@ -100,7 +102,7 @@ class FetchCoordinator:
         """
         info("网页抓取开始", url=url)
 
-        cached_result = await self._read_cached_result(
+        cached_result = await self._cache.read_result(
             url=url,
             user_id=user_id,
             session_id=session_id,
@@ -172,7 +174,7 @@ class FetchCoordinator:
             warnings=tuple(warnings),
         )
         if not quality.should_fallback:
-            await self._write_html_cache(
+            await self._cache.write_html_result(
                 url=url,
                 user_id=user_id,
                 source_scope=source_scope,
@@ -193,42 +195,225 @@ class FetchCoordinator:
 
         单个 URL 失败不阻塞其他，转为 WebFetchFailure 加入 failed 列表。
         """
-        semaphore = asyncio.Semaphore(self._batch_concurrency)
+        if not urls:
+            return WebFetchBatchResult()
 
-        async def _fetch_with_limit(u: str) -> WebFetchResult | WebFetchFailure:
-            async with semaphore:
-                try:
-                    return await self.fetch_one(
-                        u,
-                        user_id=user_id,
-                        session_id=session_id,
-                        source_scope=source_scope,
-                    )
-                except UrlFetchError as exc:
-                    return WebFetchFailure(
-                        url=u,
-                        reason=exc.reason,
-                    )
+        async def run_httpx_job(
+                job: FetchJob,
+                scrapling_queue: FetchQueue,
+                results: list[FetchSlot],
+                admit_fallback: AdmitFallback,
+        ) -> None:
+            await self._run_httpx_job(
+                job=job,
+                user_id=user_id,
+                session_id=session_id,
+                source_scope=source_scope,
+                results=results,
+                scrapling_queue=scrapling_queue,
+                admit_fallback=admit_fallback,
+            )
 
-        results = await asyncio.gather(*[_fetch_with_limit(u) for u in urls])
+        async def run_scrapling_job(job: FetchJob) -> WebFetchResult | WebFetchFailure:
+            return await self._run_scrapling_job(
+                job=job,
+                user_id=user_id,
+                session_id=session_id,
+                source_scope=source_scope,
+            )
 
-        items: list[WebFetchResult] = []
-        failed: list[WebFetchFailure] = []
-        for r in results:
-            if isinstance(r, WebFetchResult):
-                items.append(r)
-            else:
-                failed.append(r)
+        scheduler = FetchBatchScheduler(
+            httpx_concurrency=self._batch_concurrency,
+            scrapling_concurrency=self._scrapling_concurrency,
+            max_scrapling_fallbacks=self._max_scrapling_fallbacks,
+            fallback_admission=self._fallback_not_admitted_reason,
+            httpx_job_handler=run_httpx_job,
+            scrapling_job_handler=run_scrapling_job,
+        )
+        results = await scheduler.run(urls)
+
+        items = tuple(
+            result
+            for result in results
+            if isinstance(result, WebFetchResult)
+        )
+        failed = tuple(
+            result if isinstance(result, WebFetchFailure)
+            else WebFetchFailure(url=url, reason="batch_result_missing")
+            for url, result in zip(urls, results, strict=True)
+            if not isinstance(result, WebFetchResult)
+        )
 
         batch_warnings: list[str] = []
         if failed:
             batch_warnings.append(f"{len(failed)}/{len(urls)} urls failed")
 
         return WebFetchBatchResult(
-            items=tuple(items),
-            failed=tuple(failed),
+            items=items,
+            failed=failed,
             warnings=tuple(batch_warnings),
         )
+
+    async def _run_httpx_job(
+            self,
+            *,
+            job: FetchJob,
+            user_id: str,
+            session_id: str,
+            source_scope: str,
+            results: list[FetchSlot],
+            scrapling_queue: FetchQueue,
+            admit_fallback: AdmitFallback,
+    ) -> None:
+        try:
+            cached_result = await self._cache.read_result(
+                url=job.url,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            if cached_result is not None:
+                results[job.index] = cached_result
+                return
+
+            warnings: list[str] = []
+            try:
+                raw = await self._httpx_fetcher.fetch(job.url)
+            except UrlFetchError as exc:
+                not_admitted_reason = admit_fallback(exc)
+                if not_admitted_reason is not None:
+                    results[job.index] = WebFetchFailure(
+                        url=job.url,
+                        reason=f"fallback_not_admitted: {not_admitted_reason}",
+                    )
+                    return
+
+                warn("网页抓取 httpx 失败，投递到 scrapling 慢路径", url=job.url, reason=exc.reason)
+                warnings.append(f"httpx_fallback: {exc.reason}")
+                await scrapling_queue.put(FetchJob(index=job.index, url=job.url, warnings=tuple(warnings)))
+                return
+
+            if raw.file_path is not None:
+                results[job.index] = await self._handle_non_html_file(
+                    raw=raw,
+                    user_id=user_id,
+                    session_id=session_id,
+                    source_scope=source_scope,
+                    warnings=warnings,
+                )
+                return
+
+            cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.final_url or job.url)
+            quality = judge_quality(
+                raw=raw,
+                cleaned=cleaned,
+                min_text_length=self._min_text_length,
+            )
+
+            if quality.should_fallback:
+                not_admitted_reason = admit_fallback()
+                if not_admitted_reason is not None:
+                    results[job.index] = WebFetchFailure(
+                        url=job.url,
+                        reason=f"fallback_not_admitted: {not_admitted_reason}",
+                    )
+                    return
+
+                warn("网页抓取 httpx 内容质量不足，投递到 scrapling 慢路径", url=job.url, reason=quality.reason)
+                warnings.append(f"httpx_quality_fallback: {quality.reason}")
+                await scrapling_queue.put(FetchJob(index=job.index, url=job.url, warnings=tuple(warnings)))
+                return
+
+            result = WebFetchResult(
+                source_url=raw.source_url,
+                final_url=raw.final_url,
+                status_code=raw.status_code,
+                content_type=raw.content_type,
+                title=cleaned.title,
+                markdown=cleaned.markdown,
+            )
+            await self._cache.write_html_result(
+                url=job.url,
+                user_id=user_id,
+                source_scope=source_scope,
+                raw=raw,
+                result=result,
+            )
+            results[job.index] = result
+        except UrlFetchError as exc:
+            results[job.index] = WebFetchFailure(url=job.url, reason=exc.reason)
+        except Exception as exc:
+            warn("网页抓取 httpx worker 未预期失败", url=job.url, e=exc)
+            results[job.index] = WebFetchFailure(url=job.url, reason=f"unexpected_error: {exc}")
+
+    async def _run_scrapling_job(
+            self,
+            *,
+            job: FetchJob,
+            user_id: str,
+            session_id: str,
+            source_scope: str,
+    ) -> WebFetchResult | WebFetchFailure:
+        warnings = list(job.warnings)
+        try:
+            raw = await self._scrapling_fetcher.fetch(job.url)
+            if raw.file_path is not None:
+                return await self._handle_non_html_file(
+                    raw=raw,
+                    user_id=user_id,
+                    session_id=session_id,
+                    source_scope=source_scope,
+                    warnings=warnings,
+                )
+
+            cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.final_url or job.url)
+            quality = judge_quality(
+                raw=raw,
+                cleaned=cleaned,
+                min_text_length=self._min_text_length,
+            )
+            if quality.should_fallback:
+                warnings.append(f"content quality insufficient: {quality.reason}")
+
+            result = WebFetchResult(
+                source_url=raw.source_url,
+                final_url=raw.final_url,
+                status_code=raw.status_code,
+                content_type=raw.content_type,
+                title=cleaned.title,
+                markdown=cleaned.markdown,
+                warnings=tuple(warnings),
+            )
+            if not quality.should_fallback:
+                await self._cache.write_html_result(
+                    url=job.url,
+                    user_id=user_id,
+                    source_scope=source_scope,
+                    raw=raw,
+                    result=result,
+                )
+            return result
+        except UrlFetchError as exc:
+            return WebFetchFailure(url=job.url, reason=f"scrapling_failed: {exc.reason}")
+        except Exception as exc:
+            warn("网页抓取 scrapling worker 未预期失败", url=job.url, e=exc)
+            return WebFetchFailure(url=job.url, reason=f"scrapling_failed: {exc}")
+
+    def _fallback_not_admitted_reason(
+            self,
+            exc: UrlFetchError | None,
+            admitted_fallbacks: int,
+            fallback_limit: int,
+    ) -> str | None:
+        if isinstance(exc, UrlFetchUnsupportedUrlError):
+            return f"unsupported_url: {exc.reason}"
+
+        if isinstance(exc, UrlFetchHttpError) and exc.reason in _NOT_RETRYABLE_HTTP_STATUS_REASONS:
+            return f"http_status_not_retryable: {exc.reason}"
+
+        if admitted_fallbacks >= fallback_limit:
+            return "max_scrapling_fallbacks_reached"
+
+        return None
 
     async def _handle_non_html_file(
             self,
@@ -248,7 +433,7 @@ class FetchCoordinator:
                     filename_from_url(raw.final_url or raw.source_url)
                     or f"download.{raw.file_label or 'bin'}"
             )
-            cache_doc_id = await self._write_non_html_cache_stub(
+            cache_doc_id = await self._cache.write_non_html_stub(
                 user_id=user_id,
                 source_scope=source_scope,
                 raw=raw,
@@ -297,39 +482,6 @@ class FetchCoordinator:
             with contextlib.suppress(OSError):
                 Path(file_path).unlink(missing_ok=True)
 
-    async def _read_cached_result(
-            self,
-            *,
-            url: str,
-            user_id: str,
-            session_id: str,
-    ) -> WebFetchResult | None:
-        cached = await self._content_cache_service.read_markdown_page(
-            url=url,
-            user_id=user_id,
-            session_id=session_id,
-            refresh_job_prefix="web_fetch",
-            refresh_task_name=WEB_FETCH_REFRESH_JOB,
-            refresh_lock_ttl_seconds=_REFRESH_LOCK_TTL_SECONDS,
-        )
-        if cached is None:
-            return None
-
-        info(
-            "网页抓取命中缓存",
-            url=url,
-            cache_mode=cached.cache_mode.value,
-            stale=cached.stale,
-        )
-        return WebFetchResult(
-            source_url=cached.source_url,
-            final_url=cached.final_url,
-            status_code=cached.status_code,
-            content_type=cached.content_type,
-            title=cached.title,
-            markdown=cached.markdown,
-        )
-
     async def refresh_stale_url(
             self,
             *,
@@ -342,7 +494,7 @@ class FetchCoordinator:
             if raw.file_path is not None:
                 with contextlib.suppress(OSError):
                     Path(raw.file_path).unlink(missing_ok=True)
-                await self._write_non_html_cache_stub(
+                await self._cache.write_non_html_stub(
                     user_id=user_id,
                     source_scope=source_scope,
                     raw=raw,
@@ -367,7 +519,7 @@ class FetchCoordinator:
             if quality.should_fallback:
                 return
 
-            await self._write_html_cache(
+            await self._cache.write_html_result(
                 url=url,
                 user_id=user_id,
                 source_scope=source_scope,
@@ -383,52 +535,3 @@ class FetchCoordinator:
             )
         except Exception as exc:
             warn("网页抓取 stale 后台刷新失败", url=url, e=exc)
-
-    async def _write_html_cache(
-            self,
-            *,
-            url: str,
-            user_id: str,
-            source_scope: str,
-            raw: RawFetchOutput,
-            result: WebFetchResult,
-    ) -> None:
-        """写入 HTML 清洗结果缓存；写失败不影响本次抓取结果。"""
-        await self._content_cache_service.write_html_markdown(
-            HtmlCacheWrite(
-                url=url,
-                user_id=user_id,
-                source_scope=source_scope,
-                final_url=result.final_url,
-                status_code=result.status_code,
-                content_type=result.content_type,
-                raw_html=raw.raw_html,
-                markdown=result.markdown,
-                title=result.title,
-                headers=raw.headers,
-                fetcher=raw.fetcher,
-                cleaner=self._cleaner.name,
-                producer=_PRODUCER_NAME,
-            )
-        )
-
-    async def _write_non_html_cache_stub(
-            self,
-            *,
-            user_id: str,
-            source_scope: str,
-            raw: RawFetchOutput,
-    ) -> str | None:
-        return await self._content_cache_service.write_non_html_stub(
-            NonHtmlCacheStubWrite(
-                user_id=user_id,
-                source_scope=source_scope,
-                source_url=raw.source_url,
-                final_url=raw.final_url,
-                status_code=raw.status_code,
-                content_type=raw.content_type,
-                headers=raw.headers,
-                fetcher=raw.fetcher,
-                file_label=raw.file_label,
-            )
-        )

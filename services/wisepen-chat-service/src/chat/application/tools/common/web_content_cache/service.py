@@ -6,6 +6,7 @@ from hashlib import sha256
 
 from common.logger import info, warn
 from .cache_ttl import compute_ttl
+from .metadata import string_metadata
 from .models import (
     WebContentCacheEntry,
     WebContentCacheMode,
@@ -320,9 +321,9 @@ class WebContentCacheService:
         if entry_repository is None or value_repository is None:
             return None
 
-        source_kind = _string_metadata(metadata, "source_kind")
-        source_scope = _string_metadata(metadata, "source_scope")
-        source_url = _string_metadata(metadata, "source_url")
+        source_kind = string_metadata(metadata, "source_kind")
+        source_scope = string_metadata(metadata, "source_scope")
+        source_url = string_metadata(metadata, "source_url")
         if source_kind != "web_fetch" or source_scope is None or source_url is None:
             return None
 
@@ -379,16 +380,16 @@ class WebContentCacheService:
         if entry_repository is None or value_repository is None or not markdown:
             return None
 
-        source_kind = _string_metadata(metadata, "source_kind")
-        source_scope = _string_metadata(metadata, "source_scope")
-        source_url = _string_metadata(metadata, "source_url")
+        source_kind = string_metadata(metadata, "source_kind")
+        source_scope = string_metadata(metadata, "source_scope")
+        source_url = string_metadata(metadata, "source_url")
         if source_kind != "web_fetch" or source_scope is None or source_url is None:
             return None
 
         try:
             now = datetime.now(timezone.utc)
             mode = _cache_mode_for_source_scope(source_scope)
-            doc_id = _string_metadata(metadata, "source_cache_doc_id")
+            doc_id = string_metadata(metadata, "source_cache_doc_id")
             existing = await value_repository.get_value(doc_id=doc_id) if doc_id else None
             cache_control_header = None
             if existing is not None and isinstance(existing.metadata, dict):
@@ -403,7 +404,7 @@ class WebContentCacheService:
                 return None
 
             raw_html = existing.raw_html if existing is not None else None
-            final_url = _string_metadata(metadata, "final_url")
+            final_url = string_metadata(metadata, "final_url")
             content_hash_payload = f"{raw_html or ''}\n---markdown---\n{markdown}"
             value = WebContentCacheValue(
                 id=doc_id if existing is not None else None,
@@ -515,8 +516,3 @@ def _ensure_aware(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
-
-
-def _string_metadata(metadata: dict[str, object], key: str) -> str | None:
-    value = metadata.get(key)
-    return str(value) if isinstance(value, str) and value else None

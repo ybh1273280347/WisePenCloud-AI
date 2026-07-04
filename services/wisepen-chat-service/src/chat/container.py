@@ -423,6 +423,8 @@ class Container(containers.DeclarativeContainer):
         refresh_task_publisher=web_content_cache_refresh_task_publisher,
         min_text_length=tool_settings.WEB_FETCH_MIN_TEXT_LENGTH,
         batch_concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
+        scrapling_concurrency=tool_settings.WEB_FETCH_SCRAPLING_CONCURRENCY,
+        max_scrapling_fallbacks=tool_settings.WEB_FETCH_MAX_SCRAPLING_FALLBACKS,
     )
 
     # --- Hydrator 组件 ---

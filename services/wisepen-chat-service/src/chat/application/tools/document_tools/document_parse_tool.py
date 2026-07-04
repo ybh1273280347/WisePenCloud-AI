@@ -13,6 +13,8 @@ from chat.application.tools.common.tool_run_file_store.errors import tool_file_e
 from chat.application.tools.common.web_content_cache import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
+    source_scope_from_metadata,
+    string_metadata,
 )
 from chat.application.tools.common.web_content_cache.refresh_queue import (
     WebContentCacheRefreshTaskPublisher,
@@ -33,8 +35,6 @@ from chat.application.tools.core.tool_return import (
 from chat.application.tools.document_tools.document_parse.cache import (
     DocumentParseCache,
     direct_url_metadata,
-    source_scope_from_metadata,
-    string_metadata,
 )
 from chat.application.tools.document_tools.document_parse.models import DocumentParseRequest
 from chat.application.tools.document_tools.document_parse.service import DocumentParseService

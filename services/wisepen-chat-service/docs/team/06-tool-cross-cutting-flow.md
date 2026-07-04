@@ -140,6 +140,7 @@ unknown/search file URL -> web_fetch -> tfile_* -> document_parse -> URL cache +
 - 文件移交用 `tfile_*`，不传本地路径。
 - 大文本用 `cnt_*`，不反复抓取或解析。
 - URL 内容用 `web_content_cache`，不在工具内部另写缓存表。
+- `web_fetch` 的普通 HTTP 抓取和动态浏览器 fallback 必须使用独立并发资源池，避免慢 fallback 占用快路径槽位拖慢整批 URL。
 
 ## Background 行为
 

@@ -18,7 +18,6 @@ from chat.application.tools.core.tool_return import (
     ToolReturn,
 )
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.utils.batching import batched
 from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
@@ -30,7 +29,6 @@ from common.logger import warn
 
 # --- 全局常量定义 ---
 MAX_URLS = 64
-SERVICE_BATCH_SIZE = 8
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -43,7 +41,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
             "description": (
                 "Target URLs to fetch. Each MUST be a full http(s) URL. "
                 "Provide either urls or search_refs, not both. "
-                "Large sets are automatically split into internal batches."
+                "Large sets are handled by an internal scheduler."
             ),
         },
         "search_refs": {
@@ -54,7 +52,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
             "description": (
                 "Search refs returned by a prior web_search / academic_search in this session. "
                 "Provide either urls or search_refs, not both. "
-                "Large sets are automatically split into internal batches."
+                "Large sets are handled by an internal scheduler."
             ),
         },
     },
@@ -105,7 +103,7 @@ class WebFetchTool:
                     "  - Provide urls to fetch full http(s) URLs directly.\n"
                     "  - Provide search_refs to resolve refs from a prior web_search / academic_search result in this session.\n"
                     "  - Provide exactly one of urls or search_refs; providing both or neither is an error.\n"
-                    "  - Large sets are auto-batched internally.\n"
+                    "  - Large sets are handled by an internal scheduler with separate fast and fallback resource pools.\n"
                     "\n"
                     "OUTPUT RULES:\n"
                     "  - HTML page: returns title and cleaned markdown.\n"
@@ -166,7 +164,7 @@ class WebFetchTool:
         session_id = str(context["session_id"])
 
         try:
-            batch = await self._fetch_batched(
+            batch = await self._fetch_scheduled(
                 urls=tuple(urls),
                 user_id=user_id,
                 session_id=session_id,
@@ -284,7 +282,7 @@ class WebFetchTool:
 
         return urls, source_scope or "web_public"
 
-    async def _fetch_batched(
+    async def _fetch_scheduled(
             self,
             *,
             urls: tuple[str, ...],
@@ -292,21 +290,9 @@ class WebFetchTool:
             session_id: str,
             source_scope: str,
     ) -> WebFetchBatchResult:
-        items = []
-        failed = []
-        warnings: list[str] = []
-        for url_batch in batched(urls, batch_size=SERVICE_BATCH_SIZE):
-            batch = await self._service.fetch_many(
-                list(url_batch),
-                user_id=user_id,
-                session_id=session_id,
-                source_scope=source_scope,
-            )
-            items.extend(batch.items)
-            failed.extend(batch.failed)
-            warnings.extend(batch.warnings)
-        return WebFetchBatchResult(
-            items=tuple(items),
-            failed=tuple(failed),
-            warnings=tuple(warnings),
+        return await self._service.fetch_many(
+            list(urls),
+            user_id=user_id,
+            session_id=session_id,
+            source_scope=source_scope,
         )

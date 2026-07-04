@@ -29,6 +29,8 @@ class ToolSettings(BaseModel):
     DOCUMENT_PARSE_CONCURRENCY: int = 16  # 文档解析并发数
     DOCUMENT_PARSE_MAX_FILE_REFS: int = 16  # 单次文档解析最大服务批量
     WEB_FETCH_BATCH_CONCURRENCY: int = 16  # 网页批量抓取并发数
+    WEB_FETCH_SCRAPLING_CONCURRENCY: int = 3  # Scrapling 慢路径并发数
+    WEB_FETCH_MAX_SCRAPLING_FALLBACKS: int = 6  # 单次 web_fetch 最多允许进入 Scrapling 的 URL 数
     TOOL_CONTENT_READ_MAX_CONTENT_IDS: int = 16  # 单次读取最大内容 ID 数
     PADDLE_OCR_POLL_INTERVAL_SECONDS: float = 5.0  # PaddleOCR 轮询间隔
     PADDLE_OCR_MAX_POLL_ATTEMPTS: int = 60  # PaddleOCR 最大轮询次数
