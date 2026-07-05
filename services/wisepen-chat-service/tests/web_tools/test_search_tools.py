@@ -94,7 +94,7 @@ from chat.application.tools.web_tools.search_services.services.academic_search.h
 from chat.application.tools.web_tools.search_services.services.academic_search.service import (
     AcademicSearchService,
 )
-from chat.application.tools.web_tools.search_services.services.search import WebSearchResult
+from chat.application.tools.web_tools.search_services.services.search_executor import WebSearchResult
 from chat.application.tools.web_tools.web_search_tool import WebSearchTool
 
 

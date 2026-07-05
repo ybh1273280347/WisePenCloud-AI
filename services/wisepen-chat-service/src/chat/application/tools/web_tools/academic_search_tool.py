@@ -40,7 +40,7 @@ from chat.application.tools.web_tools.search_services.services.academic_search i
 from chat.application.tools.web_tools.search_services.services.academic_search.result_builder import (
     build_academic_search_tool_return,
 )
-from chat.application.tools.web_tools.search_services.services.candidates import build_candidates
+from chat.application.tools.web_tools.search_services.services.candidates_builder import build_candidates
 
 DEFAULT_ACADEMIC_SEARCH_RESULTS = tool_settings.WEB_SEARCH_DEFAULT_RESULTS
 MAX_ACADEMIC_SEARCH_RESULTS = tool_settings.WEB_SEARCH_MAX_RESULTS

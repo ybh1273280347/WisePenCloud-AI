@@ -8,8 +8,8 @@ from chat.application.tools.web_tools.search_services.services.academic_search.h
 from chat.application.tools.web_tools.search_services.services.academic_search.result_builder import (
     AcademicHydrationOutcome,
 )
-from chat.application.tools.web_tools.search_services.services.candidates import WebSearchCandidate
-from chat.application.tools.web_tools.search_services.services.search import (
+from chat.application.tools.web_tools.search_services.services.candidates_builder import WebSearchCandidate
+from chat.application.tools.web_tools.search_services.services.search_executor import (
     WebSearchResult,
     execute_provider_search,
 )

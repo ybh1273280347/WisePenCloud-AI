@@ -33,7 +33,7 @@ from chat.application.tools.web_tools.search_services.factories.platform_source_
     WebSearchPlatformSourceFactory,
 )
 from chat.application.tools.web_tools.search_services.sources import WebSearchSourceKind
-from chat.application.tools.web_tools.search_services.services.candidates import build_candidates
+from chat.application.tools.web_tools.search_services.services.candidates_builder import build_candidates
 from chat.application.tools.web_tools.search_services.services.web_search.result_builder import (
     build_web_search_tool_return,
 )
