@@ -12,7 +12,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
         "task": {
             "type": "string",
             "enum": ExpressionTask.values(),
-            "description": "Expression, combinatorics, or number theory task to execute.",
+            "description": f"Expression, combinatorics, or number theory task to execute. Must be one of: {', '.join(ExpressionTask.values())}.",
         },
         "expression": {
             "type": "string",
@@ -67,7 +67,7 @@ class ExpressionSolveTool(MathSolveTool):
             "  - The task is probability distributions or descriptive statistics — use stats_solver instead.\n"
             "\n"
             "INPUT RULES:\n"
-            "  - task MUST be one of: simplify, expand, factor, numeric, factorial, combinations, permutations, gcd, lcm, prime_factors.\n"
+            f"  - task MUST be one of: {', '.join(ExpressionTask.values())}.\n"
             "  - For simplify/expand/factor/numeric pass expression and (optionally) variables to whitelist parser symbols.\n"
             "  - For factorial pass n. For combinations/permutations pass n and k.\n"
             "  - For gcd/lcm pass integers array (min length 1).\n"

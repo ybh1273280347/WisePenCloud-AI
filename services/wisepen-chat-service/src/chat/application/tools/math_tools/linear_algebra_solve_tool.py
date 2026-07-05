@@ -14,7 +14,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
         "task": {
             "type": "string",
             "enum": LinearAlgebraTask.values(),
-            "description": "Linear algebra task to execute.",
+            "description": f"Linear algebra task to execute. Must be one of: {', '.join(LinearAlgebraTask.values())}.",
         },
         "matrix": {
             "type": "array",
@@ -60,7 +60,7 @@ class LinearAlgebraSolveTool(MathSolveTool):
             "  - The task is probability or descriptive statistics — use stats_solver instead.\n"
             "\n"
             "INPUT RULES:\n"
-            "  - task MUST be one of: determinant, trace, rank, inverse, rref, eigenvalues, linear_solve, multiply, svd, qr, null_space, matrix_power.\n"
+            f"  - task MUST be one of: {', '.join(LinearAlgebraTask.values())}.\n"
             "  - matrix is required for every task. Entries may be integers, numbers, or numeric strings.\n"
             "  - For linear_solve pass vector (right-hand side b). For multiply pass matrix_b.\n"
             "  - For matrix_power pass power (integer exponent, may be negative for inverse power).\n"

@@ -12,7 +12,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
         "task": {
             "type": "string",
             "enum": StatsTask.values(),
-            "description": "Statistics or probability task to execute.",
+            "description": f"Statistics or probability task to execute. Must be one of: {', '.join(StatsTask.values())}.",
         },
         "n": {
             "type": "integer",
@@ -122,7 +122,7 @@ class StatsSolveTool(MathSolveTool):
             "  - The task is simplifying or factoring an expression — use expression_solver instead.\n"
             "\n"
             "INPUT RULES:\n"
-            "  - task MUST be one of: binomial_prob, poisson_prob, normal_cdf, t_cdf, chi2_cdf, f_cdf, uniform_expectation_variance, descriptive_stats, linear_regression, correlation.\n"
+            f"  - task MUST be one of: {', '.join(StatsTask.values())}.\n"
             "  - For binomial_prob pass n, k, probability. For poisson_prob pass rate and k.\n"
             "  - For normal_cdf pass point, mean (default 0), std (default 1).\n"
             "  - For t_cdf/chi2_cdf pass point and df. For f_cdf pass point, dfn, dfd.\n"

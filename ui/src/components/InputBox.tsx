@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, ChevronDown, Paperclip, Plus, Search, Settings2, Sparkles, Square, SendHorizontal } from "lucide-react";
+import { ArrowUp, CheckCircle2, ChevronDown, Paperclip, Plus, Search, Settings2, Sparkles, Square } from "lucide-react";
 import { Button } from "./ui/button";
 import { IconButton } from "./ui/icon-button";
 import { Markdown } from "./ui/markdown";
@@ -313,13 +313,13 @@ export function InputBox({
                 <Button
                   aria-label={status === "streaming" ? "停止生成" : "发送消息"}
                   className={cn(
-                    "h-9 w-9 rounded-full border-0 p-0",
-                    status === "streaming" ? "bg-red-50 tokenizer-red-700 hover:bg-red-100" : "bg-gray-900 tokenizer-white hover:bg-gray-800",
+                    "h-9 w-9 rounded-full p-0",
+                    status === "streaming" ? "border-0 bg-red-50 text-red-700 hover:bg-red-100" : "border border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
                   )}
                   onClick={status === "streaming" ? onStop : onSubmit}
                   variant={status === "streaming" ? "danger" : "primary"}
                 >
-                  {status === "streaming" ? <Square className="h-4 w-4" /> : <SendHorizontal className="h-4 w-4 -rotate-45" />}
+                  {status === "streaming" ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
               </div>
             ) : null}
@@ -339,13 +339,13 @@ export function InputBox({
                 <Button
                   aria-label={status === "streaming" ? "停止生成" : "发送消息"}
                   className={cn(
-                    "h-10 w-10 rounded-full border-0 p-0",
-                    status === "streaming" ? "bg-red-50 tokenizer-red-700 hover:bg-red-100" : "bg-gray-900 tokenizer-white hover:bg-gray-800",
+                    "h-10 w-10 rounded-full p-0",
+                    status === "streaming" ? "border-0 bg-red-50 text-red-700 hover:bg-red-100" : "border border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
                   )}
                   onClick={status === "streaming" ? onStop : onSubmit}
                   variant={status === "streaming" ? "danger" : "primary"}
                 >
-                  {status === "streaming" ? <Square className="h-4 w-4" /> : <SendHorizontal className="h-4 w-4 -rotate-45" />}
+                  {status === "streaming" ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
               </div>
             </div>

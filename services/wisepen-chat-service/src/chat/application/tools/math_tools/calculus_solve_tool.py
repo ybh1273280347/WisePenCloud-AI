@@ -12,7 +12,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
         "task": {
             "type": "string",
             "enum": CalculusTask.values(),
-            "description": "Calculus task to execute.",
+            "description": f"Calculus task to execute. Must be one of: {', '.join(CalculusTask.values())}.",
         },
         "expression": {
             "type": "string",
@@ -107,7 +107,7 @@ class CalculusSolveTool(MathSolveTool):
             "  - The task is probability or descriptive statistics — use stats_solver instead.\n"
             "\n"
             "INPUT RULES:\n"
-            "  - task MUST be one of: differentiate, partial_differentiate, indefinite_integral, definite_integral, double_integral, limit, taylor_series, summation, solve_ode, laplace_transform.\n"
+            f"  - task MUST be one of: {', '.join(CalculusTask.values())}.\n"
             "  - expression is required for every task except solve_ode (which uses equation).\n"
             "  - variable defaults to x (or t for laplace_transform). Use variables to whitelist parser symbols.\n"
             "  - For definite_integral pass lower_bound and upper_bound. For double_integral also pass lower2/upper2 and variable2 (default y).\n"

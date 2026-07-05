@@ -7,7 +7,7 @@ from sympy.core.relational import Relational
 from sympy.parsing.sympy_parser import (
     convert_xor,
     implicit_multiplication_application,
-    parse_expr,
+    parse_expr as _sympy_parse_expr,
     standard_transformations,
 )
 
@@ -98,7 +98,7 @@ def parse_expr(
         local_dict.update(extra_locals)
 
     try:
-        return parse_expr(
+        return _sympy_parse_expr(
             expression,
             local_dict=local_dict,
             global_dict=_SAFE_GLOBALS,

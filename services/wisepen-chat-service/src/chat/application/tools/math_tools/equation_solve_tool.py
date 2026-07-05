@@ -12,7 +12,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
         "task": {
             "type": "string",
             "enum": EquationTask.values(),
-            "description": "Equation, inequality, root finding, or optimization task to execute.",
+            "description": f"Equation, inequality, root finding, or optimization task to execute. Must be one of: {', '.join(EquationTask.values())}.",
         },
         "expression": {
             "type": "string",
@@ -102,7 +102,7 @@ class EquationSolveTool(MathSolveTool):
             "  - The task is simplifying, expanding, factoring, or numerically evaluating an expression — use expression_solver instead.\n"
             "\n"
             "INPUT RULES:\n"
-            "  - task MUST be one of: solve_equation, solve_system, solve_inequality, numeric_root, numeric_minimize, constrained_minimize.\n"
+            f"  - task MUST be one of: {', '.join(EquationTask.values())}.\n"
             "  - For solve_equation pass equation and variable (default x).\n"
             "  - For solve_system pass equations array and variables array.\n"
             "  - For solve_inequality pass inequality and variable.\n"
