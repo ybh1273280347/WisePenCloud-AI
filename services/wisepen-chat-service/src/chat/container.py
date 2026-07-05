@@ -448,14 +448,12 @@ class Container(containers.DeclarativeContainer):
         content_cache_entry_repository=web_content_cache_entry_repository,
         content_cache_value_repository=web_content_cache_value_repository,
         url_download_http_client=web_fetch_http_client,
-        max_download_bytes=tool_settings.WEB_FETCH_MAX_RESPONSE_BYTES,
     )
     image_ocr_tool = providers.Singleton(
         ImageOcrTool,
         file_store=tool_run_file_store,
         ocr_client=paddle_ocr_client,
         url_download_http_client=web_fetch_http_client,
-        max_download_bytes=tool_settings.WEB_FETCH_MAX_RESPONSE_BYTES,
     )
 
     # --- Session Tools ---

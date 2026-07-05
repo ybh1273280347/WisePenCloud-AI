@@ -58,12 +58,11 @@ class ImageOcrTool:
             file_store: ToolRunFileStore,
             ocr_client: Any | None = None,
             url_download_http_client: httpx.AsyncClient | None = None,
-            max_download_bytes: int = 52_428_800,
     ) -> None:
         self._file_store = file_store
         self._ocr_client = ocr_client
         self._url_download_http_client = url_download_http_client
-        self._max_download_bytes = max_download_bytes
+        self._max_download_bytes = tool_settings.IMAGE_OCR_MAX_DOWNLOAD_BYTES
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="image_ocr",

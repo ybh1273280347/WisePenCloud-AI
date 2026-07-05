@@ -80,12 +80,11 @@ class DocumentParseTool:
             content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
             content_cache_value_repository: WebContentCacheValueRepository | None = None,
             url_download_http_client: httpx.AsyncClient | None = None,
-            max_download_bytes: int = 52_428_800,
     ) -> None:
         self._file_store = file_store
         self._parse_service = parse_service
         self._url_download_http_client = url_download_http_client
-        self._max_download_bytes = max_download_bytes
+        self._max_download_bytes = tool_settings.DOCUMENT_PARSE_MAX_DOWNLOAD_BYTES
         self._cache = DocumentParseCache(
             content_cache_entry_repository=content_cache_entry_repository,
             content_cache_value_repository=content_cache_value_repository,

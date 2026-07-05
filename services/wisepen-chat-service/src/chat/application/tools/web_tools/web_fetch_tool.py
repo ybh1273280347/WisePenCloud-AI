@@ -24,7 +24,6 @@ from chat.application.tools.web_tools.search_services.candidate_store.repository
 )
 from chat.application.tools.web_tools.web_fetch import FetchCoordinator
 from chat.application.tools.web_tools.web_fetch.errors import UrlFetchError
-from chat.application.tools.web_tools.web_fetch.models import WebFetchBatchResult
 from common.logger import warn
 
 # --- 全局常量定义 ---
@@ -164,8 +163,8 @@ class WebFetchTool:
         session_id = str(context["session_id"])
 
         try:
-            batch = await self._fetch_scheduled(
-                urls=tuple(urls),
+            batch = await self._service.fetch_many(
+                urls,
                 user_id=user_id,
                 session_id=session_id,
                 source_scope=source_scope,
@@ -282,17 +281,3 @@ class WebFetchTool:
 
         return urls, source_scope or "web_public"
 
-    async def _fetch_scheduled(
-            self,
-            *,
-            urls: tuple[str, ...],
-            user_id: str,
-            session_id: str,
-            source_scope: str,
-    ) -> WebFetchBatchResult:
-        return await self._service.fetch_many(
-            list(urls),
-            user_id=user_id,
-            session_id=session_id,
-            source_scope=source_scope,
-        )
