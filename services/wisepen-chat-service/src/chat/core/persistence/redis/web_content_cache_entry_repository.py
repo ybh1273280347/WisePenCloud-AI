@@ -12,6 +12,7 @@ from chat.application.tools.common.web_content_cache import (
     WebContentCacheEntry,
     WebContentCacheMode,
 )
+from chat.core.persistence.redis._utils import to_jsonable
 
 _ENTRY_KEY_PREFIX = "wisepen:web_content_cache:entry:"
 _REFRESH_LOCK_KEY_PREFIX = "wisepen:web_content_cache:refresh_lock:"
@@ -81,7 +82,7 @@ class RedisWebContentCacheEntryRepository:
     async def set_entry(self, entry: WebContentCacheEntry) -> None:
         canonical_url = entry.canonical_url.strip()
         payload = json.dumps(
-            _jsonable(
+            to_jsonable(
                 {
                     **asdict(entry),
                     "url_hash": self.url_hash(canonical_url),
@@ -149,24 +150,3 @@ def _redis_ttl_seconds(hard_expire_at: datetime) -> int:
 
     now = datetime.now(timezone.utc)
     return max(1, int((expires_at - now).total_seconds()))
-
-
-def _jsonable(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(key): _jsonable(item) for key, item in value.items()}
-
-    if isinstance(value, list | tuple):
-        return [_jsonable(item) for item in value]
-
-    if isinstance(value, datetime):
-        return value.isoformat()
-
-    if isinstance(value, WebContentCacheMode):
-        return value.value
-
-    try:
-        json.dumps(value)
-    except TypeError:
-        return str(value)
-
-    return value

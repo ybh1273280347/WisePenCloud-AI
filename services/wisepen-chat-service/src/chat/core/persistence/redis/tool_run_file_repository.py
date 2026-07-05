@@ -9,6 +9,7 @@ import redis.asyncio as redis
 
 from chat.application.tools.common.tool_run_file_store.models import ToolFileRefRecord
 from chat.application.tools.common.tool_run_file_store.store import ToolRunFileRepository
+from chat.core.persistence.redis._utils import to_jsonable
 
 # --- 全局命名空间配置 ---
 _REF_KEY_PREFIX = "wisepen:tool_file_ref:item:"
@@ -32,7 +33,7 @@ class RedisToolRunFileRepository(ToolRunFileRepository):
         )
 
         # 将 DataClass 预转为兼容日期等特殊类型的可序列化载荷
-        payload = json.dumps(_jsonable(asdict(record)), ensure_ascii=False)
+        payload = json.dumps(to_jsonable(asdict(record)), ensure_ascii=False)
 
         # 使用 Pipeline (transaction=True) 保证单体 KV 记录与会话集合添加的原子性
         async with self._redis.pipeline(transaction=True) as pipe:
@@ -81,24 +82,3 @@ class RedisToolRunFileRepository(ToolRunFileRepository):
     def _session_key(*, user_id: str, session_id: str) -> str:
         return f"{_SESSION_KEY_PREFIX}{user_id}:{session_id}"
 
-
-def _jsonable(value: Any) -> Any:
-    """将 dataclass 嵌套结构转换为 JSON 可序列化值。
-
-    递归处理复杂的嵌套字典、列表，并将 datetime 对象标准化为 ISO 8601 字符串。
-    """
-    if isinstance(value, dict):
-        return {str(key): _jsonable(item) for key, item in value.items()}
-
-    if isinstance(value, list | tuple):
-        return [_jsonable(item) for item in value]
-
-    if isinstance(value, datetime):
-        return value.isoformat()
-
-    try:
-        json.dumps(value)
-    except TypeError:
-        return str(value)
-
-    return value

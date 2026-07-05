@@ -13,6 +13,7 @@ from chat.application.tools.common.tool_content_store.models import (
     ToolContentIndex,
     ToolContentIndexEntry,
 )
+from chat.core.persistence.redis._utils import to_jsonable
 
 # --- 全局命名空间配置 ---
 _CONTENT_KEY_PREFIX = "wisepen:tool_content:item:"
@@ -34,7 +35,7 @@ class RedisToolContentRepository(ToolContentRepository):
         session_key = self._session_key(stored.session_id)
 
         # 将结构化的 StoredToolContent 拍平为可序列化的 JSON 载荷
-        payload = json.dumps(_jsonable(asdict(stored)), ensure_ascii=False)
+        payload = json.dumps(to_jsonable(asdict(stored)), ensure_ascii=False)
 
         # 开启事务管线，保证单体 KV 和 Session 集合同时成功并保持生命周期一致
         async with self._redis.pipeline(transaction=True) as pipe:
@@ -115,26 +116,3 @@ class RedisToolContentRepository(ToolContentRepository):
     @staticmethod
     def _session_key(session_id: str) -> str:
         return f"{_SESSION_KEY_PREFIX}{session_id}"
-
-
-def _jsonable(value: Any) -> Any:
-    """递归转换为 JSON 可序列化值。
-
-    能够识别并降维字典、列表/元组，并能将高级对象（如 Enum 枚举类成员的 .value）
-    抽离成基本标量类型。
-    """
-    if isinstance(value, dict):
-        return {str(key): _jsonable(item) for key, item in value.items()}
-
-    if isinstance(value, list | tuple):
-        return [_jsonable(item) for item in value]
-
-    if hasattr(value, "value"):
-        return value.value
-
-    try:
-        json.dumps(value)
-    except TypeError:
-        return str(value)
-
-    return value
