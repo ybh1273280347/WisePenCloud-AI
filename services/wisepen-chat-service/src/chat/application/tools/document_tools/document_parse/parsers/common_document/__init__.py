@@ -1,6 +1,6 @@
-from .common_document import CommonDocumentParser
-from .docling import DoclingParser
-from .markitdown import MarkItDownParser
+from .common_document_parser import CommonDocumentParser
+from .docling_parser import DoclingParser
+from .markitdown_parser import MarkItDownParser
 
 __all__ = [
     "CommonDocumentParser",

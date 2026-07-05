@@ -1,9 +1,9 @@
 from .common_document import DoclingParser, MarkItDownParser
-from .specialized import PandasSpreadsheetParser, PdfParseStrategy
+from .specialized import PandasSpreadsheetParser, PdfParser
 
 __all__ = [
     "DoclingParser",
     "MarkItDownParser",
     "PandasSpreadsheetParser",
-    "PdfParseStrategy",
+    "PdfParser",
 ]

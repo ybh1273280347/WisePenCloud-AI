@@ -6,10 +6,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from chat.application.tools.document_tools.ocr import OcrPageResult
-from chat.application.tools.document_tools.document_parse.parsers.common_document.docling import (
+from chat.application.tools.document_tools.document_parse.parsers.common_document.docling_parser import (
     _export_docling_markdown,
 )
-from chat.application.tools.document_tools.document_parse.parsers.specialized.pdf import PdfParseStrategy
+from chat.application.tools.document_tools.document_parse.parsers.specialized.pdf_parser import PdfParser
 
 
 class _FakeDoclingDocument:
@@ -59,7 +59,7 @@ class _FakePdfPage:
 
 
 def test_pdf_page_classification_only_uses_empty_text() -> None:
-    parser = PdfParseStrategy()
+    parser = PdfParser()
 
     assert parser._classify_page(_FakePdfPage("caption near a large image")) == "text"
     assert parser._classify_page(_FakePdfPage("  \n  ")) == "scanned"
@@ -67,7 +67,7 @@ def test_pdf_page_classification_only_uses_empty_text() -> None:
 
 @pytest.mark.asyncio
 async def test_pdf_scanned_page_ocr_helper_adds_page_marker() -> None:
-    markdown = await PdfParseStrategy(ocr_client=_FakeOcrClient())._parse_scanned_page_with_ocr(
+    markdown = await PdfParser(ocr_client=_FakeOcrClient())._parse_scanned_page_with_ocr(
         pdf_path=Path("fake.pdf"),
         page_number=3,
     )
@@ -77,7 +77,7 @@ async def test_pdf_scanned_page_ocr_helper_adds_page_marker() -> None:
 
 @pytest.mark.asyncio
 async def test_pdf_scanned_page_ocr_helper_skips_without_client() -> None:
-    markdown = await PdfParseStrategy(ocr_client=None)._parse_scanned_page_with_ocr(
+    markdown = await PdfParser(ocr_client=None)._parse_scanned_page_with_ocr(
         pdf_path=Path("fake.pdf"),
         page_number=3,
     )
@@ -94,7 +94,7 @@ class _FakeDoclingPdfDocument:
         }[page_no]
 
 
-class _MixedPdfParseStrategy(PdfParseStrategy):
+class _MixedPdfParser(PdfParser):
     def _classify_pages(self, pdf_path: Path) -> list[str]:
         return ["text", "scanned", "text"]
 
@@ -105,7 +105,7 @@ class _MixedPdfParseStrategy(PdfParseStrategy):
 
 @pytest.mark.asyncio
 async def test_pdf_docling_main_path_mixes_page_level_ocr_and_text_fallback() -> None:
-    markdown = await _MixedPdfParseStrategy(ocr_client=_FakeOcrClient())._parse_with_docling_and_page_ocr(
+    markdown = await _MixedPdfParser(ocr_client=_FakeOcrClient())._parse_with_docling_and_page_ocr(
         pdf_path=Path("fake.pdf"),
         docling_document=_FakeDoclingPdfDocument(),
     )

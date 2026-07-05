@@ -11,9 +11,9 @@ from chat.application.tools.document_tools.document_parse.models import (
     DocumentParseResult,
 )
 from chat.application.tools.document_tools.document_parse.parsers.common_document import (
-    common_document as common_document_module,
+    common_document_parser as common_document_module,
 )
-from chat.application.tools.document_tools.document_parse.parsers.common_document.common_document import (
+from chat.application.tools.document_tools.document_parse.parsers.common_document.common_document_parser import (
     CommonDocumentParser,
 )
 from chat.application.tools.document_tools.document_parse import service as service_module

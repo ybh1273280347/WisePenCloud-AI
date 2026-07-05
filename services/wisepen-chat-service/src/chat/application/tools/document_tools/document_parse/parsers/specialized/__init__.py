@@ -1,7 +1,7 @@
-from .pdf import PdfParseStrategy
-from .spreadsheet import PandasSpreadsheetParser
+from .pdf_parser import PdfParser
+from .spreadsheet_parser import PandasSpreadsheetParser
 
 __all__ = [
+    "PdfParser",
     "PandasSpreadsheetParser",
-    "PdfParseStrategy",
 ]

@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from chat.application.tools.document_tools.document_parse.models import DocumentParseRequest
-from chat.application.tools.document_tools.document_parse.parsers.specialized.spreadsheet import (
+from chat.application.tools.document_tools.document_parse.parsers.specialized.spreadsheet_parser import (
     PandasSpreadsheetParser,
 )
 

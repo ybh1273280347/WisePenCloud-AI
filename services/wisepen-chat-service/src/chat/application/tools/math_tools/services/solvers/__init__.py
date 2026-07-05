@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from .calculus import CalculusSolver
-from .equation import EquationSolver
-from .expression import ExpressionSolver
-from .linear_algebra import LinearAlgebraSolver
-from .stats import StatsSolver
+from .calculus_solver import CalculusSolver
+from .equation_solver import EquationSolver
+from .expression_solver import ExpressionSolver
+from .linear_algebra_solver import LinearAlgebraSolver
+from .stats_solver import StatsSolver
 
 __all__ = [
     "CalculusSolver",

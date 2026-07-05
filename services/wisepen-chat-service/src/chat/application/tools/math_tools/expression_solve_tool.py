@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from chat.application.tools.math_tools.base_math_tool import MathSolveTool
-from chat.application.tools.math_tools.services.solvers.expression import ExpressionSolver
+from chat.application.tools.math_tools.services.solvers.expression_solver import ExpressionSolver
 from chat.application.tools.math_tools.services.tasks import ExpressionTask
 
 PARAMETERS_SCHEMA: dict[str, Any] = {

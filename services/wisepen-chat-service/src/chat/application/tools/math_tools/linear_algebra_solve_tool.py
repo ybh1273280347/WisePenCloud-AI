@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from chat.application.tools.math_tools.base_math_tool import MathSolveTool
-from chat.application.tools.math_tools.services.solvers.linear_algebra import LinearAlgebraSolver
+from chat.application.tools.math_tools.services.solvers.linear_algebra_solver import LinearAlgebraSolver
 from chat.application.tools.math_tools.services.tasks import LinearAlgebraTask
 
 _MATRIX_ENTRY_SCHEMA: dict[str, Any] = {"type": ["integer", "number", "string"]}

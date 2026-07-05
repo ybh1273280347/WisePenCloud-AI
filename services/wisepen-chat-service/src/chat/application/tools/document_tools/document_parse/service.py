@@ -3,17 +3,10 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from chat.application.tools.document_tools.document_parse.models import (
-    DocumentParseRequest,
-    DocumentParseResult,
-)
-from chat.application.tools.document_tools.document_parse.parsers.common_document import (
-    CommonDocumentParser,
-)
-from chat.application.tools.document_tools.document_parse.parsers.specialized import (
-    PdfParseStrategy,
-)
-from chat.application.tools.document_tools.document_parse.parsers.specialized.spreadsheet import (
+from .models import DocumentParseRequest, DocumentParseResult
+from .parsers.common_document import CommonDocumentParser
+from .parsers.specialized import PdfParser
+from .parsers.specialized.spreadsheet_parser import (
     PandasSpreadsheetParser,
     is_supported_spreadsheet_file,
 )
@@ -36,7 +29,7 @@ class DocumentParseService:
         label = detected_type.label
 
         if label == "pdf" or mime_type == "application/pdf":
-            return await PdfParseStrategy(ocr_client=self._ocr_client).parse(request)
+            return await PdfParser(ocr_client=self._ocr_client).parse(request)
 
         if is_supported_spreadsheet_file(
                 file_path=request.file_path,

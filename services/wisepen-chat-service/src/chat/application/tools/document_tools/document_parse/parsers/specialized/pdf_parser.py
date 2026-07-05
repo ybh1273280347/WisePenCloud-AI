@@ -24,8 +24,8 @@ _DOCLING_PDF_MARKDOWN_EXPORT_OPTIONS = {
 }
 
 
-class PdfParseStrategy:
-    """PDF 解析策略：Docling 解析结构，扫描页统一用 OCR 补全。"""
+class PdfParser:
+    """PDF 解析器：Docling 解析结构，扫描页统一用 OCR 补全。"""
 
     def __init__(
             self,

@@ -7,12 +7,8 @@ from chat.application.tools.document_tools.document_parse.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )
-from chat.application.tools.document_tools.document_parse.parsers.common_document.docling import (
-    DoclingParser,
-)
-from chat.application.tools.document_tools.document_parse.parsers.common_document.markitdown import (
-    MarkItDownParser,
-)
+from .docling_parser import DoclingParser
+from .markitdown_parser import MarkItDownParser
 
 
 class CommonDocumentParser:

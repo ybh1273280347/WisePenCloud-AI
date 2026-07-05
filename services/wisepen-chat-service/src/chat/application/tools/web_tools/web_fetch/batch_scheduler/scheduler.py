@@ -1,31 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 
-from .errors import UrlFetchError
-from .models import WebFetchFailure, WebFetchResult
-
-FetchOutcome = WebFetchResult | WebFetchFailure
-FetchSlot = FetchOutcome | None
-AdmitFallback = Callable[[UrlFetchError | None], str | None]
-FallbackAdmission = Callable[[UrlFetchError | None, int, int], str | None]
-
-
-@dataclass(frozen=True, slots=True)
-class FetchJob:
-    index: int
-    url: str
-    warnings: tuple[str, ...] = ()
-
-
-FetchQueue = asyncio.Queue[FetchJob]
-HttpxJobHandler = Callable[
-    [FetchJob, FetchQueue, list[FetchSlot], AdmitFallback],
-    Awaitable[None],
-]
-ScraplingJobHandler = Callable[[FetchJob], Awaitable[FetchOutcome]]
+from ..errors import UrlFetchError
+from .models import (
+    AdmitFallback,
+    FallbackAdmission,
+    FetchJob,
+    FetchSlot,
+    HttpxJobHandler,
+    ScraplingJobHandler,
+)
+from .workers import httpx_worker, scrapling_worker
 
 
 class FetchBatchScheduler:
@@ -89,20 +75,22 @@ class FetchBatchScheduler:
 
         httpx_workers = [
             asyncio.create_task(
-                self._httpx_worker(
+                httpx_worker(
                     httpx_queue=httpx_queue,
                     scrapling_queue=scrapling_queue,
                     results=results,
                     admit_fallback=admit_fallback,
+                    job_handler=self._httpx_job_handler,
                 )
             )
             for _ in range(min(self._httpx_concurrency, len(urls)))
         ]
         scrapling_workers = [
             asyncio.create_task(
-                self._scrapling_worker(
+                scrapling_worker(
                     scrapling_queue=scrapling_queue,
                     results=results,
+                    job_handler=self._scrapling_job_handler,
                 )
             )
             for _ in range(min(self._scrapling_concurrency, fallback_limit))
@@ -117,36 +105,3 @@ class FetchBatchScheduler:
             await asyncio.gather(*httpx_workers, *scrapling_workers, return_exceptions=True)
 
         return results
-
-    async def _httpx_worker(
-            self,
-            *,
-            httpx_queue: asyncio.Queue[FetchJob],
-            scrapling_queue: asyncio.Queue[FetchJob],
-            results: list[FetchSlot],
-            admit_fallback: AdmitFallback,
-    ) -> None:
-        while True:
-            job = await httpx_queue.get()
-            try:
-                await self._httpx_job_handler(
-                    job,
-                    scrapling_queue,
-                    results,
-                    admit_fallback,
-                )
-            finally:
-                httpx_queue.task_done()
-
-    async def _scrapling_worker(
-            self,
-            *,
-            scrapling_queue: asyncio.Queue[FetchJob],
-            results: list[FetchSlot],
-    ) -> None:
-        while True:
-            job = await scrapling_queue.get()
-            try:
-                results[job.index] = await self._scrapling_job_handler(job)
-            finally:
-                scrapling_queue.task_done()

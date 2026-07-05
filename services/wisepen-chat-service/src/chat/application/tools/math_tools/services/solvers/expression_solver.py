@@ -7,7 +7,7 @@ from typing import Any
 import sympy as sp
 
 from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.solvers._utils import (
+from chat.application.tools.math_tools.services._utils import (
     parse_expr,
     read_latex,
     read_variable_names,
