@@ -65,7 +65,7 @@ class Mem0Adapter(MemoryProvider):
     ) -> List[str]:
 
         def _sync_search():
-            raw_results = self.client.search(query, user_id=user_id, limit=limit)
+            raw_results = self.client.search(query, filters={"user_id": user_id}, top_k=limit)
             debug("mem0 raw search results returned.", query=query, user_id=user_id, raw_results=raw_results)
 
             # 兼容 Mem0 返回字典 {"results": [...]} 或直接返回列表的情况
@@ -111,7 +111,7 @@ class Mem0Adapter(MemoryProvider):
     async def get_all(self, user_id: str) -> List[Dict[str, Any]]:
 
         def _sync_get_all():
-            result = self.client.get_all(user_id=user_id)
+            result = self.client.get_all(filters={"user_id": user_id})
             # Mem0 返回格式: {"results": [...]} 或直接 list
             if isinstance(result, dict):
                 return result.get("results", [])
