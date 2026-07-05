@@ -40,6 +40,7 @@ from chat.api.endpoints import tool as tool_endpoints
 from chat.api.endpoints import web_search as web_search_endpoints
 from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping
 from chat.domain.entities.web_search_credential import WebSearchCredential
+from chat.domain.entities.web_content_cache import WebContentCacheValueDocument
 
 # 避免 HTTP 代理拦截内部中间件请求。
 no_proxy = ",".join(filter(None, [
@@ -67,6 +68,7 @@ async def lifespan(app: FastAPI):
             Model,
             ModelProviderMapping,
             WebSearchCredential,
+            WebContentCacheValueDocument,
         ],
     )
     info("beanie initialized.", db=settings.MONGODB_DB_NAME)

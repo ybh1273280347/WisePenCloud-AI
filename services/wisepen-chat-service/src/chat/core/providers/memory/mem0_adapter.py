@@ -78,7 +78,7 @@ class Mem0Adapter(MemoryProvider):
                 return []
             if score_threshold is not None:
                 # 按分数阈值过滤，忽略 limit 参数
-                return [r["memory"] for r in results if r.get("rerank_score") >= score_threshold]
+                return [r["memory"] for r in results if (r.get("rerank_score") or 0.0) >= score_threshold]
             return [r["memory"] for r in results]
 
         try:

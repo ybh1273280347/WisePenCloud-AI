@@ -12,14 +12,15 @@ from chat.application.tools.web_tools.search_services.services.candidates_builde
     VisibleWebSearchCandidate,
     WebSearchCandidate,
 )
-
+from chat.application.tools.web_tools.search_services.services.search_executor import (
+    WebSearchResult,
+)
 
 def build_web_search_tool_return(
-        result: Any,
+        result: WebSearchResult,
         *,
         candidates: tuple[WebSearchCandidate, ...],
         responses: tuple[ProviderSearchResponse, ...],
-        display_query: str | None = None,
         recommended_ids: tuple[str, ...] = (),
 ) -> ToolReturn:
     """组装 web_search 的可见返回。
@@ -41,7 +42,7 @@ def build_web_search_tool_return(
     )
 
     visible_result: dict[str, object] = {
-        "query": display_query or result.query,
+        "query": result.query,
         "candidates": tuple(
             VisibleWebSearchCandidate(
                 search_ref=candidate.search_ref,

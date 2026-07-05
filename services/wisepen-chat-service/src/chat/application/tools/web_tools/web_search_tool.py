@@ -256,6 +256,5 @@ class WebSearchTool:
             result,
             candidates=candidates,
             responses=result.responses,
-            display_query=question,
             recommended_ids=recommended_ids,
         )
