@@ -128,5 +128,5 @@ def _content_receipt_payload(receipt: ToolContentReceipt) -> dict[str, Any]:
     return {
         "content_id": receipt.content_id,
         "chunk_count": receipt.chunk_count,
-        "selectors": list(receipt.selectors),
+        "supported_selectors": list(receipt.supported_selectors),
     }

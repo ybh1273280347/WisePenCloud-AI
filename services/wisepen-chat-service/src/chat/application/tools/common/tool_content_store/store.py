@@ -122,7 +122,7 @@ class ToolContentStore:
         return ToolContentReceipt(
             content_id=stored.content_id,
             chunk_count=len(stored.chunks),
-            selectors=_selectors(stored),
+            supported_selectors=_selectors(stored),
         )
 
     async def get(self, *, content_id: str, session_id: str) -> StoredToolContent | None:
