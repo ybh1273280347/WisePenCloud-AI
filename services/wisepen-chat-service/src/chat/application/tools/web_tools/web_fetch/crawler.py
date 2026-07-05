@@ -8,26 +8,16 @@ from urllib.parse import urljoin, urlparse
 from lxml import html as lxml_html
 
 from chat.application.tools.common.web_content_cache import (
-    HtmlCacheWrite,
-    WebContentCacheService,
-)
-from chat.application.tools.common.web_content_cache import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
 )
-from chat.application.tools.common.web_content_cache.refresh_queue import (
-    WEB_FETCH_REFRESH_JOB,
-    WebContentCacheRefreshTaskPublisher,
-)
 from common.logger import info, warn
 from ._utils import judge_quality
+from .cache import WebFetchCache
 from .cleaners import BaseCleaner
 from .errors import UrlFetchError
 from .fetchers import WebFetcher
 from .models import RawFetchOutput, WebFetchResult
-
-_REFRESH_LOCK_TTL_SECONDS = 300
-
 
 @dataclass(frozen=True, slots=True)
 class _CrawlPage:
@@ -55,7 +45,7 @@ class WebCrawler:
         "_httpx_fetcher",
         "_scrapling_fetcher",
         "_cleaner",
-        "_content_cache_service",
+        "_cache",
         "_min_text_length",
         "_concurrency",
     )
@@ -68,17 +58,17 @@ class WebCrawler:
             cleaner: BaseCleaner,
             content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
             content_cache_value_repository: WebContentCacheValueRepository | None = None,
-            refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
             min_text_length: int = 200,
             concurrency: int = 5,
     ) -> None:
         self._httpx_fetcher = httpx_fetcher
         self._scrapling_fetcher = scrapling_fetcher
         self._cleaner = cleaner
-        self._content_cache_service = WebContentCacheService(
+        self._cache = WebFetchCache(
+            cleaner_name=cleaner.name,
             entry_repository=content_cache_entry_repository,
             value_repository=content_cache_value_repository,
-            refresh_task_publisher=refresh_task_publisher,
+            producer_name="web_crawl",
         )
         self._min_text_length = min_text_length
         self._concurrency = concurrency
@@ -120,7 +110,6 @@ class WebCrawler:
                     url,
                     semaphore=semaphore,
                     user_id=user_id,
-                    session_id=session_id,
                     source_scope=source_scope,
                 )
                 for url, _ in batch
@@ -154,19 +143,20 @@ class WebCrawler:
             *,
             semaphore: asyncio.Semaphore,
             user_id: str,
-            session_id: str,
             source_scope: str,
     ) -> _CrawlPage | None:
         """单个 URL 抓取，httpx → scrapling fallback。"""
         async with semaphore:
-            cached = await self._read_cached_page(
+            cached = await self._cache.read_page(
                 url=url,
                 user_id=user_id,
-                session_id=session_id,
-                source_scope=source_scope,
             )
             if cached is not None:
-                return cached
+                return _CrawlPage(
+                    result=cached.result,
+                    raw_html=cached.raw_html,
+                    should_cache=False,
+                )
 
             try:
                 raw = await self._httpx_fetcher.fetch(url)
@@ -196,7 +186,7 @@ class WebCrawler:
 
             page = self._build_page(raw)
             if page.should_cache:
-                await self._write_html_cache(
+                await self._cache.write_html_result(
                     url=url,
                     user_id=user_id,
                     source_scope=source_scope,
@@ -221,65 +211,6 @@ class WebCrawler:
             ),
             raw_html=raw.raw_html,
             should_cache=not quality.should_fallback,
-        )
-
-    async def _read_cached_page(
-            self,
-            *,
-            url: str,
-            user_id: str,
-            session_id: str,
-            source_scope: str,
-    ) -> _CrawlPage | None:
-        cached = await self._content_cache_service.read_markdown_page(
-            url=url,
-            user_id=user_id,
-            session_id=session_id,
-            refresh_job_prefix="web_crawl",
-            refresh_task_name=WEB_FETCH_REFRESH_JOB,
-            refresh_lock_ttl_seconds=_REFRESH_LOCK_TTL_SECONDS,
-        )
-        if cached is None:
-            return None
-
-        return _CrawlPage(
-            result=WebFetchResult(
-                source_url=cached.source_url,
-                final_url=cached.final_url,
-                status_code=cached.status_code,
-                content_type=cached.content_type,
-                title=cached.title,
-                markdown=cached.markdown,
-            ),
-            raw_html=cached.raw_html,
-            should_cache=False,
-        )
-
-    async def _write_html_cache(
-            self,
-            *,
-            url: str,
-            user_id: str,
-            source_scope: str,
-            raw: RawFetchOutput,
-            result: WebFetchResult,
-    ) -> None:
-        await self._content_cache_service.write_html_markdown(
-            HtmlCacheWrite(
-                url=url,
-                user_id=user_id,
-                source_scope=source_scope,
-                final_url=result.final_url,
-                status_code=result.status_code,
-                content_type=result.content_type,
-                raw_html=raw.raw_html,
-                markdown=result.markdown,
-                title=result.title,
-                headers=raw.headers,
-                fetcher=raw.fetcher,
-                cleaner=self._cleaner.name,
-                producer="web_crawl",
-            )
         )
 
 

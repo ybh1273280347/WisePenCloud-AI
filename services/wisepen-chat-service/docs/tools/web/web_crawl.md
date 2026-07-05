@@ -47,7 +47,7 @@ seed_url
 
 `WebCrawlService` 直接使用底层 fetcher，而不是调用 `FetchCoordinator.fetch_one`，因为 crawl 需要 raw HTML 来提取链接。非 HTML 文件会被跳过，不生成 `tfile_*`，因为 crawl 的目标是 HTML 页面集合。
 
-crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `web_content_cache`；命中时直接返回缓存 Markdown，并使用缓存中的 `raw_html` 继续抽取链接。未命中时执行物理抓取，清洗后的 Markdown 和 raw HTML 通过 `WebContentCacheService` 写回同一 URL 缓存路径。stale 命中会返回旧内容，并通过 Redis refresh lock + Arq refresh queue 安排后台刷新。
+crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `web_content_cache`；命中时直接返回缓存 Markdown，并使用缓存中的 `raw_html` 继续抽取链接。未命中或 Redis entry 过期时执行物理抓取，清洗后的 Markdown 和 raw HTML 通过 `WebContentCacheService` 写回同一 URL 缓存路径。
 
 这与 `web_fetch` 共享缓存服务，是正确行为：两者都是 HTML 页面内容获取工具，差异只在 frontier 策略（单页/批量 URL vs BFS crawl），不应维护两套 URL 缓存协议。
 
@@ -78,7 +78,7 @@ crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `we
 - fetcher 链：可实验 browser fetcher、站点限速、robots/域名策略。
 - link extractor：当前用 lxml 解析 `<a href>`，可扩展 sitemap、canonical、文档站导航解析。
 - cleaner：与 `web_fetch` 共用 cleaner，可替换正文抽取策略。
-- URL 缓存：与 `web_fetch` 共用 `WebContentCacheService`，可实验 TTL、刷新队列、raw HTML 保留策略。
+- URL 缓存：与 `web_fetch` 共用 `WebContentCacheService`，可实验 TTL、raw HTML 保留策略。
 - frontier 策略：当前 BFS，可实验优先级队列、路径 allowlist、URL 去重规范化。
 
 ## 后续优化

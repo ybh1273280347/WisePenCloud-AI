@@ -105,9 +105,6 @@ from chat.core.persistence.redis.tool_run_file_repository import RedisToolRunFil
 from chat.core.persistence.redis.web_content_cache_entry_repository import (
     RedisWebContentCacheEntryRepository,
 )
-from chat.core.persistence.redis.web_content_cache_refresh_queue import (
-    ArqWebContentCacheRefreshTaskPublisher,
-)
 from chat.core.persistence.redis.web_search_candidate_repository import (
     RedisWebSearchCandidateRepository,
 )
@@ -381,10 +378,6 @@ class Container(containers.DeclarativeContainer):
         WebContentCacheGcScheduler,
         entry_repository=web_content_cache_entry_repository,
     )
-    web_content_cache_refresh_task_publisher = providers.Singleton(
-        ArqWebContentCacheRefreshTaskPublisher,
-        redis_url=settings.REDIS_URL,
-    )
     web_fetch_http_client = providers.Singleton(
         _build_web_fetch_http_client,
     )
@@ -408,7 +401,6 @@ class Container(containers.DeclarativeContainer):
         cleaner=web_fetch_cleaner,
         content_cache_entry_repository=web_content_cache_entry_repository,
         content_cache_value_repository=web_content_cache_value_repository,
-        refresh_task_publisher=web_content_cache_refresh_task_publisher,
         min_text_length=tool_settings.WEB_FETCH_MIN_TEXT_LENGTH,
         concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
     )
@@ -420,7 +412,6 @@ class Container(containers.DeclarativeContainer):
         file_store=tool_run_file_store,
         content_cache_entry_repository=web_content_cache_entry_repository,
         content_cache_value_repository=web_content_cache_value_repository,
-        refresh_task_publisher=web_content_cache_refresh_task_publisher,
         min_text_length=tool_settings.WEB_FETCH_MIN_TEXT_LENGTH,
         batch_concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
         scrapling_concurrency=tool_settings.WEB_FETCH_SCRAPLING_CONCURRENCY,
@@ -456,7 +447,6 @@ class Container(containers.DeclarativeContainer):
         parse_service=document_parse_service,
         content_cache_entry_repository=web_content_cache_entry_repository,
         content_cache_value_repository=web_content_cache_value_repository,
-        refresh_task_publisher=web_content_cache_refresh_task_publisher,
         url_download_http_client=web_fetch_http_client,
         max_download_bytes=tool_settings.WEB_FETCH_MAX_RESPONSE_BYTES,
     )

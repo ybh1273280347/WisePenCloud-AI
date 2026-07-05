@@ -9,9 +9,6 @@ from chat.application.tools.common.web_content_cache import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
 )
-from chat.application.tools.common.web_content_cache.refresh_queue import (
-    WebContentCacheRefreshTaskPublisher,
-)
 from chat.application.tools.utils.url import filename_from_url
 from common.logger import info, warn
 from ._utils import judge_quality
@@ -56,7 +53,6 @@ class FetchCoordinator:
             file_store: ToolRunFileStore,
             content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
             content_cache_value_repository: WebContentCacheValueRepository | None = None,
-            refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
             min_text_length: int = 200,
             batch_concurrency: int = 5,
             scrapling_concurrency: int = 2,
@@ -70,7 +66,6 @@ class FetchCoordinator:
             cleaner_name=cleaner.name,
             entry_repository=content_cache_entry_repository,
             value_repository=content_cache_value_repository,
-            refresh_task_publisher=refresh_task_publisher,
         )
         self._min_text_length = min_text_length
         self._batch_concurrency = max(1, int(batch_concurrency))
@@ -105,7 +100,6 @@ class FetchCoordinator:
         cached_result = await self._cache.read_result(
             url=url,
             user_id=user_id,
-            session_id=session_id,
         )
         if cached_result is not None:
             return cached_result
@@ -269,7 +263,6 @@ class FetchCoordinator:
             cached_result = await self._cache.read_result(
                 url=job.url,
                 user_id=user_id,
-                session_id=session_id,
             )
             if cached_result is not None:
                 results[job.index] = cached_result
@@ -482,56 +475,3 @@ class FetchCoordinator:
             with contextlib.suppress(OSError):
                 Path(file_path).unlink(missing_ok=True)
 
-    async def refresh_stale_url(
-            self,
-            *,
-            url: str,
-            user_id: str,
-            source_scope: str,
-    ) -> None:
-        try:
-            raw = await self._httpx_fetcher.fetch(url)
-            if raw.file_path is not None:
-                with contextlib.suppress(OSError):
-                    Path(raw.file_path).unlink(missing_ok=True)
-                await self._cache.write_non_html_stub(
-                    user_id=user_id,
-                    source_scope=source_scope,
-                    raw=raw,
-                )
-                return
-
-            cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.final_url or url)
-            quality = judge_quality(
-                raw=raw,
-                cleaned=cleaned,
-                min_text_length=self._min_text_length,
-            )
-            if quality.should_fallback:
-                raw = await self._scrapling_fetcher.fetch(url)
-                cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.final_url or url)
-                quality = judge_quality(
-                    raw=raw,
-                    cleaned=cleaned,
-                    min_text_length=self._min_text_length,
-                )
-
-            if quality.should_fallback:
-                return
-
-            await self._cache.write_html_result(
-                url=url,
-                user_id=user_id,
-                source_scope=source_scope,
-                raw=raw,
-                result=WebFetchResult(
-                    source_url=raw.source_url,
-                    final_url=raw.final_url,
-                    status_code=raw.status_code,
-                    content_type=raw.content_type,
-                    title=cleaned.title,
-                    markdown=cleaned.markdown,
-                ),
-            )
-        except Exception as exc:
-            warn("网页抓取 stale 后台刷新失败", url=url, e=exc)

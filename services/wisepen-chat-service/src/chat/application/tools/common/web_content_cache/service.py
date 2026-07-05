@@ -12,11 +12,6 @@ from .models import (
     WebContentCacheMode,
     WebContentCacheValue,
 )
-from .refresh_queue import (
-    WEB_FETCH_REFRESH_JOB,
-    WebContentCacheRefreshJob,
-    WebContentCacheRefreshTaskPublisher,
-)
 from .repository import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
@@ -24,7 +19,6 @@ from .repository import (
 
 WEB_PUBLIC_SOURCE_SCOPE = "web_public"
 WEB_CUSTOM_SOURCE_SCOPE = "web_custom"
-DEFAULT_REFRESH_LOCK_TTL_SECONDS = 300
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +33,6 @@ class CachedMarkdownPage:
     markdown: str
     raw_html: str | None
     cache_mode: WebContentCacheMode
-    stale: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,32 +73,26 @@ class NonHtmlCacheStubWrite:
 
 
 class WebContentCacheService:
-    """URL 内容缓存门面，封装 HTML markdown 读写与 stale refresh 调度。"""
+    """URL 内容缓存门面，封装 HTML markdown 读写。"""
 
-    __slots__ = ("_entry_repository", "_value_repository", "_refresh_task_publisher")
+    __slots__ = ("_entry_repository", "_value_repository")
 
     def __init__(
             self,
             *,
             entry_repository: WebContentCacheEntryRepository | None,
             value_repository: WebContentCacheValueRepository | None,
-            refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
     ) -> None:
         self._entry_repository = entry_repository
         self._value_repository = value_repository
-        self._refresh_task_publisher = refresh_task_publisher
 
     async def read_markdown_page(
             self,
             *,
             url: str,
             user_id: str,
-            session_id: str,
-            refresh_job_prefix: str,
-            refresh_task_name: str = WEB_FETCH_REFRESH_JOB,
-            refresh_lock_ttl_seconds: int = DEFAULT_REFRESH_LOCK_TTL_SECONDS,
     ) -> CachedMarkdownPage | None:
-        """读取 URL markdown 缓存，stale 命中时返回旧内容并安排后台刷新。"""
+        """读取 URL markdown 缓存。"""
         entry_repository = self._entry_repository
         value_repository = self._value_repository
         if entry_repository is None or value_repository is None:
@@ -126,36 +113,16 @@ class WebContentCacheService:
                 if value is None or not value.markdown:
                     continue
 
-                hard_expire_at = _ensure_aware(entry.hard_expire_at)
-                if now > hard_expire_at:
+                expire_at = _ensure_aware(entry.expire_at)
+                if now > expire_at:
                     continue
 
                 title = value.metadata.get("title")
-                stale = now > _ensure_aware(entry.soft_expire_at)
-                if stale:
-                    refresh_source_scope = (
-                        WEB_CUSTOM_SOURCE_SCOPE
-                        if entry.cache_mode == WebContentCacheMode.PRIVATE
-                        else WEB_PUBLIC_SOURCE_SCOPE
-                    )
-                    await self.schedule_stale_refresh(
-                        url=url,
-                        user_id=user_id,
-                        session_id=session_id,
-                        source_scope=refresh_source_scope,
-                        cache_mode=entry.cache_mode,
-                        refresh_job_prefix=refresh_job_prefix,
-                        refresh_task_name=refresh_task_name,
-                        refresh_lock_ttl_seconds=refresh_lock_ttl_seconds,
-                    )
-
                 info(
                     "URL markdown 缓存命中",
                     url=url,
                     cache_mode=entry.cache_mode.value,
                     doc_id=entry.mongo_doc_id,
-                    stale=stale,
-                    producer=refresh_job_prefix,
                 )
                 return CachedMarkdownPage(
                     source_url=url,
@@ -166,7 +133,6 @@ class WebContentCacheService:
                     markdown=value.markdown,
                     raw_html=value.raw_html,
                     cache_mode=entry.cache_mode,
-                    stale=stale,
                 )
         except Exception as exc:
             warn("URL markdown 缓存读取失败，降级为实时获取", url=url, e=exc)
@@ -227,8 +193,7 @@ class WebContentCacheService:
                     canonical_url=canonical_url,
                     mongo_doc_id=doc_id,
                     cache_mode=mode,
-                    soft_expire_at=ttl.soft_expire_at,
-                    hard_expire_at=ttl.hard_expire_at,
+                    expire_at=ttl.expire_at,
                     etag=write.headers.get("etag"),
                     last_modified=write.headers.get("last-modified"),
                 )
@@ -296,8 +261,7 @@ class WebContentCacheService:
                     canonical_url=canonical_url,
                     mongo_doc_id=doc_id,
                     cache_mode=mode,
-                    soft_expire_at=ttl.soft_expire_at,
-                    hard_expire_at=ttl.hard_expire_at,
+                    expire_at=ttl.expire_at,
                     etag=write.headers.get("etag"),
                     last_modified=write.headers.get("last-modified"),
                 )
@@ -338,8 +302,8 @@ class WebContentCacheService:
             if entry is None:
                 return None
 
-            hard_expire_at = _ensure_aware(entry.hard_expire_at)
-            if now > hard_expire_at:
+            expire_at = _ensure_aware(entry.expire_at)
+            if now > expire_at:
                 return None
 
             value = await value_repository.get_value(doc_id=entry.mongo_doc_id)
@@ -358,7 +322,6 @@ class WebContentCacheService:
                 markdown=value.markdown,
                 raw_html=value.raw_html,
                 cache_mode=entry.cache_mode,
-                stale=now > _ensure_aware(entry.soft_expire_at),
             )
         except Exception as exc:
             warn("URL metadata markdown 缓存读取失败", source_url=source_url, e=exc)
@@ -437,8 +400,7 @@ class WebContentCacheService:
                     canonical_url=value.canonical_url,
                     mongo_doc_id=saved_doc_id,
                     cache_mode=mode,
-                    soft_expire_at=ttl.soft_expire_at,
-                    hard_expire_at=ttl.hard_expire_at,
+                    expire_at=ttl.expire_at,
                 )
             )
             info("URL parser markdown 已回写缓存", source_url=source_url, cache_mode=mode.value, doc_id=saved_doc_id)
@@ -446,64 +408,6 @@ class WebContentCacheService:
         except Exception as exc:
             warn("URL parser markdown 回写缓存失败", source_url=source_url, e=exc)
             return None
-
-    async def schedule_stale_refresh(
-            self,
-            *,
-            url: str,
-            user_id: str,
-            session_id: str,
-            source_scope: str,
-            cache_mode: WebContentCacheMode,
-            refresh_job_prefix: str,
-            payload: dict[str, object] | None = None,
-            refresh_identity_suffix: str | None = None,
-            refresh_task_name: str = WEB_FETCH_REFRESH_JOB,
-            refresh_lock_ttl_seconds: int = DEFAULT_REFRESH_LOCK_TTL_SECONDS,
-    ) -> None:
-        entry_repository = self._entry_repository
-        if entry_repository is None:
-            return
-
-        try:
-            lock_owner = "public" if cache_mode == WebContentCacheMode.PUBLIC else user_id
-            lock_suffix = f":{refresh_identity_suffix}" if refresh_identity_suffix else ""
-            lock_key = f"{refresh_job_prefix}:{cache_mode.value}:{lock_owner}:{url}{lock_suffix}"
-            if not await entry_repository.try_acquire_refresh_lock(
-                    key=lock_key,
-                    ttl_seconds=refresh_lock_ttl_seconds,
-            ):
-                return
-        except Exception as exc:
-            warn("URL 缓存 stale 刷新锁获取失败", url=url, e=exc)
-            return
-
-        if self._refresh_task_publisher is None:
-            return
-
-        url_hash = sha256(url.encode("utf-8")).hexdigest()
-        job_id = (
-            f"{refresh_job_prefix}:{cache_mode.value}:"
-            f"{'public' if cache_mode == WebContentCacheMode.PUBLIC else user_id}:"
-            f"{url_hash}{f':{refresh_identity_suffix}' if refresh_identity_suffix else ''}"
-        )
-        try:
-            await self._refresh_task_publisher.enqueue(
-                WebContentCacheRefreshJob(
-                    name=refresh_task_name,
-                    job_id=job_id,
-                    payload=payload
-                            or {
-                                "url": url,
-                                "user_id": user_id,
-                                "session_id": session_id,
-                                "source_scope": source_scope,
-                                "cache_mode": cache_mode.value,
-                            },
-                )
-            )
-        except Exception as exc:
-            warn("URL 缓存 stale 刷新任务入队失败", url=url, e=exc)
 
 
 def _cache_mode_for_source_scope(source_scope: str) -> WebContentCacheMode:

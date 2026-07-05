@@ -24,8 +24,7 @@ class WebContentCacheEntry:
     canonical_url: str
     mongo_doc_id: str
     cache_mode: WebContentCacheMode
-    soft_expire_at: datetime
-    hard_expire_at: datetime
+    expire_at: datetime
     etag: str | None = None
     last_modified: str | None = None
 

@@ -10,7 +10,7 @@ from .models import (
 
 
 class WebContentCacheEntryRepository(Protocol):
-    """Redis 侧：缓存索引读写与刷新锁。"""
+    """Redis 侧：缓存索引读写。"""
 
     async def get_entry(
             self,
@@ -39,14 +39,6 @@ class WebContentCacheEntryRepository(Protocol):
             url: str,
             cache_mode: WebContentCacheMode | str,
     ) -> None:
-        ...
-
-    async def try_acquire_refresh_lock(
-            self,
-            *,
-            key: str,
-            ttl_seconds: int,
-    ) -> bool:
         ...
 
 

@@ -52,7 +52,7 @@ URL 缓存编排已经收敛到工具公共切面：
 src/chat/application/tools/common/web_content_cache/
 ```
 
-其中 Redis entry 保存 active URL 索引、soft/hard TTL 和 refresh lock；Mongo value 保存 raw HTML、Markdown 与 metadata。stale 命中时，`web_fetch` 先返回旧 Markdown，再通过 Arq 队列触发 `refresh_web_fetch_cache` 后台刷新，不阻塞本次工具返回。
+其中 Redis entry 保存 active URL 索引和统一 TTL；Mongo value 保存 raw HTML、Markdown 与 metadata。Redis entry 未过期时命中缓存，过期后视为未命中并重新抓取。
 
 非 HTML 文件不会被 `web_fetch` 解析。它会：
 
@@ -91,7 +91,6 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 - `judge_quality`：降级判断阈值，可按站点类型或内容长度实验。
 - `WebContentCacheService`：统一 URL 缓存门面，可扩展 ETag、Last-Modified、缓存分层。
 - `RedisWebContentCacheEntryRepository` / `MongoWebContentCacheValueRepository`：缓存 active 索引和正文持久化实现。
-- `ArqWebContentCacheRefreshTaskPublisher`：stale 缓存后台刷新任务发布器。
 
 ## 后续优化
 

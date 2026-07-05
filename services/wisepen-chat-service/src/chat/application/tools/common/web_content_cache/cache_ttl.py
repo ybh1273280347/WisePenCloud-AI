@@ -1,11 +1,4 @@
-"""基于 HTTP 响应头与 hishel RFC 9111 逻辑的智能缓存 TTL 计算。
-
-将 HTTP 响应头中的 Cache-Control / Expires / Last-Modified 等信息
-映射到业务层的 soft_expire_at / hard_expire_at 双层 TTL 体系。
-
-- soft_expire_at：内容新鲜期，过期后触发 stale-while-revalidate
-- hard_expire_at：硬过期，过期后丢弃缓存
-"""
+"""基于 HTTP 响应头与 hishel RFC 9111 逻辑的缓存过期时间计算。"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,20 +10,15 @@ from hishel._core.models import Response
 
 from chat.application.tools.tool_settings import tool_settings
 
-_DEFAULT_SOFT_TTL = timedelta(seconds=tool_settings.CACHE_DEFAULT_SOFT_TTL_SECONDS)
-_DEFAULT_HARD_TTL = timedelta(seconds=tool_settings.CACHE_DEFAULT_HARD_TTL_SECONDS)
-_DEFAULT_STALE_WINDOW = _DEFAULT_HARD_TTL - _DEFAULT_SOFT_TTL
-
-_MAX_SOFT_TTL = timedelta(seconds=tool_settings.CACHE_MAX_SOFT_TTL_SECONDS)
-_MAX_HARD_TTL = timedelta(seconds=tool_settings.CACHE_MAX_HARD_TTL_SECONDS)
+_DEFAULT_TTL = timedelta(seconds=tool_settings.CACHE_DEFAULT_TTL_SECONDS)
+_MAX_TTL = timedelta(seconds=tool_settings.CACHE_MAX_TTL_SECONDS)
 
 
 @dataclass(frozen=True, slots=True)
 class CacheTTL:
-    """智能计算出的缓存过期时间对。"""
+    """智能计算出的缓存过期时间。"""
 
-    soft_expire_at: datetime
-    hard_expire_at: datetime
+    expire_at: datetime
     no_store: bool = False  # 当响应头含 no-store 时为 True
 
 
@@ -41,7 +29,7 @@ def compute_ttl(
         is_shared_cache: bool = False,
         status_code: int = 200,
 ) -> CacheTTL:
-    """从 HTTP 响应头计算 soft/hard 过期时间。
+    """从 HTTP 响应头计算缓存过期时间。
 
     Parameters
     ----------
@@ -57,15 +45,14 @@ def compute_ttl(
     Returns
     -------
     CacheTTL
-        含 soft_expire_at / hard_expire_at / no_store 的计算结果。
+        含 expire_at / no_store 的计算结果。
     """
     cc = parse_cache_control(headers.get("cache-control"))
 
     # no-store：不缓存，调用方应跳过写缓存
     if cc.no_store:
         return CacheTTL(
-            soft_expire_at=now,
-            hard_expire_at=now,
+            expire_at=now,
             no_store=True,
         )
 
@@ -76,34 +63,19 @@ def compute_ttl(
     )
     freshness_seconds = get_freshness_lifetime(hishel_response, is_shared_cache)
 
-    if freshness_seconds is not None and freshness_seconds >= 0:
-        effective_freshness = timedelta(seconds=freshness_seconds)
-    else:
-        # freshness_seconds 为 None（无法计算）或 -1（已过期 / 无效 Expires）
-        effective_freshness = timedelta(0)
+    ttl = (
+        timedelta(seconds=freshness_seconds)
+        if freshness_seconds is not None and freshness_seconds >= 0
+        else _DEFAULT_TTL
+    )
 
-    # must-revalidate / no-cache / max-age=0：立即 stale
+    # must-revalidate / no-cache / max-age=0：没有再验证能力时视为立即过期
     if cc.must_revalidate or cc.no_cache is True or (
             cc.max_age is not None and cc.max_age == 0
     ):
-        effective_freshness = timedelta(0)
-
-    # stale window：优先使用 stale-while-revalidate，否则用默认值
-    stale_window = (
-        timedelta(seconds=cc.stale_while_revalidate)
-        if cc.stale_while_revalidate is not None
-        else _DEFAULT_STALE_WINDOW
-    )
-
-    soft = now + min(effective_freshness, _MAX_SOFT_TTL)
-    hard = now + min(effective_freshness + stale_window, _MAX_HARD_TTL)
-
-    # hard 必须 > soft
-    if hard <= soft:
-        hard = soft + _DEFAULT_STALE_WINDOW
+        ttl = timedelta(0)
 
     return CacheTTL(
-        soft_expire_at=soft,
-        hard_expire_at=hard,
+        expire_at=now + min(ttl, _MAX_TTL),
         no_store=False,
     )

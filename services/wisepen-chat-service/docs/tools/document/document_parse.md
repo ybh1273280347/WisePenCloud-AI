@@ -40,7 +40,7 @@ src/chat/application/tools/common/web_content_cache/
 
 - `file_refs`：按 `tfile_*` metadata 中的 `source_kind/source_scope/source_url/source_cache_doc_id` 精确读取和回写 parsed Markdown。
 - `direct_urls`：先读 URL parsed cache；未命中时下载文件、写非 HTML 占位，再解析并回填。
-- stale parsed cache 命中时先返回旧 Markdown，再通过 Arq 队列触发 `refresh_document_parse_cache` 后台刷新。
+- Redis entry 未过期时命中 parsed Markdown 缓存；过期后视为未命中并重新下载或解析。
 
 document parse 读取缓存时不能在 public/private 域之间回退，避免自定义搜索源或用户私有 URL 结果串域。
 

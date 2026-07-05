@@ -218,10 +218,10 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 
 - `ToolOutputCache` 写 `cnt_*` 后，由 Redis TTL 自然过期。
 - `ToolRunFileStore` 生成 `tfile_*` 后，由主服务中的 `ToolRunFileStoreGcScheduler` 清理本地对象。
-- `web_content_cache` stale 命中后，刷新任务进入 Arq 队列，必须由 refresh worker 消费。
+- `web_content_cache` 的 Redis entry 按统一 TTL 自然过期，过期后视为未命中。
 - `web_content_cache` 的 Mongo 正文由主服务中的 `WebContentCacheGcScheduler` 定期清理；Redis entry 是 active 状态权威来源，GC 只删除不再 active 的 Mongo value。
 
-工具实现不得同步等待后台 refresh 或 GC 完成。
+工具实现不得同步等待后台 GC 完成。
 
 ## ToolPolicy.cache_chunked
 

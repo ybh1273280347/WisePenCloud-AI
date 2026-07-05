@@ -16,9 +16,6 @@ from chat.application.tools.common.web_content_cache import (
     source_scope_from_metadata,
     string_metadata,
 )
-from chat.application.tools.common.web_content_cache.refresh_queue import (
-    WebContentCacheRefreshTaskPublisher,
-)
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExactlyOneOf,
@@ -68,13 +65,10 @@ class DocumentParseTool:
 
     __slots__ = (
         "_cache",
-        "_content_cache_entry_repository",
-        "_content_cache_value_repository",
         "_definition",
         "_file_store",
         "_max_download_bytes",
         "_parse_service",
-        "_refresh_task_publisher",
         "_url_download_http_client",
     )
 
@@ -85,23 +79,16 @@ class DocumentParseTool:
             parse_service: DocumentParseService,
             content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
             content_cache_value_repository: WebContentCacheValueRepository | None = None,
-            refresh_task_publisher: WebContentCacheRefreshTaskPublisher | None = None,
             url_download_http_client: httpx.AsyncClient | None = None,
             max_download_bytes: int = 52_428_800,
     ) -> None:
         self._file_store = file_store
         self._parse_service = parse_service
-        self._content_cache_entry_repository = content_cache_entry_repository
-        self._content_cache_value_repository = content_cache_value_repository
-        self._refresh_task_publisher = refresh_task_publisher
         self._url_download_http_client = url_download_http_client
         self._max_download_bytes = max_download_bytes
         self._cache = DocumentParseCache(
-            file_store=file_store,
-            parse_service=parse_service,
             content_cache_entry_repository=content_cache_entry_repository,
             content_cache_value_repository=content_cache_value_repository,
-            refresh_task_publisher=refresh_task_publisher,
         )
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
@@ -186,19 +173,6 @@ class DocumentParseTool:
     def definition(self) -> ToolDefinition:
         """返回工具元定义。"""
         return self._definition
-
-    async def refresh_stale_parse_cache(
-            self,
-            *,
-            user_id: str,
-            session_id: str,
-            file_ref: str,
-    ) -> None:
-        await self._cache.refresh_stale_parse_cache(
-            user_id=user_id,
-            session_id=session_id,
-            file_ref=file_ref,
-        )
 
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
         """批量解析文件引用，单项失败不影响其它文件。"""
@@ -313,14 +287,6 @@ class DocumentParseTool:
                     metadata=resolved.metadata,
                 )
                 if cache_hit is not None:
-                    if cache_hit.stale:
-                        await self._cache.schedule_stale_parse_refresh(
-                            user_id=user_id,
-                            session_id=session_id,
-                            file_ref=file_ref,
-                            metadata=resolved.metadata,
-                            cache_mode=cache_hit.cache_mode,
-                        )
                     return (
                         DocumentParseToolItem(
                             source=file_ref,

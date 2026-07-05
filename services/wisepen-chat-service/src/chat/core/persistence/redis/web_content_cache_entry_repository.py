@@ -15,11 +15,10 @@ from chat.application.tools.common.web_content_cache import (
 from chat.core.persistence.redis._utils import to_jsonable
 
 _ENTRY_KEY_PREFIX = "wisepen:web_content_cache:entry:"
-_REFRESH_LOCK_KEY_PREFIX = "wisepen:web_content_cache:refresh_lock:"
 
 
 class RedisWebContentCacheEntryRepository:
-    """Redis 侧：URL 缓存索引读写与刷新锁。"""
+    """Redis 侧：URL 缓存索引读写。"""
 
     __slots__ = ("_redis",)
 
@@ -45,8 +44,7 @@ class RedisWebContentCacheEntryRepository:
             canonical_url=str(payload["canonical_url"]),
             mongo_doc_id=str(payload["mongo_doc_id"]),
             cache_mode=WebContentCacheMode(str(payload["cache_mode"])),
-            soft_expire_at=datetime.fromisoformat(str(payload["soft_expire_at"])),
-            hard_expire_at=datetime.fromisoformat(str(payload["hard_expire_at"])),
+            expire_at=datetime.fromisoformat(str(payload["expire_at"])),
             etag=(
                 str(payload["etag"])
                 if payload.get("etag") is not None
@@ -91,7 +89,7 @@ class RedisWebContentCacheEntryRepository:
             ),
             ensure_ascii=False,
         )
-        ttl_seconds = _redis_ttl_seconds(entry.hard_expire_at)
+        ttl_seconds = _redis_ttl_seconds(entry.expire_at)
         await self._redis.set(
             self._entry_key(
                 user_id=entry.user_id,
@@ -112,20 +110,6 @@ class RedisWebContentCacheEntryRepository:
         mode = WebContentCacheMode(cache_mode)
         await self._redis.delete(self._entry_key(user_id=user_id, url=url, cache_mode=mode))
 
-    async def try_acquire_refresh_lock(
-            self,
-            *,
-            key: str,
-            ttl_seconds: int,
-    ) -> bool:
-        locked = await self._redis.set(
-            f"{_REFRESH_LOCK_KEY_PREFIX}{self._hash(key)}",
-            "1",
-            ex=max(1, ttl_seconds),
-            nx=True,
-        )
-        return bool(locked)
-
     @classmethod
     def _entry_key(cls, *, user_id: str, url: str, cache_mode: WebContentCacheMode) -> str:
         url_hash = cls.url_hash(url)
@@ -143,8 +127,8 @@ class RedisWebContentCacheEntryRepository:
         return sha256(value.encode("utf-8")).hexdigest()
 
 
-def _redis_ttl_seconds(hard_expire_at: datetime) -> int:
-    expires_at = hard_expire_at
+def _redis_ttl_seconds(expire_at: datetime) -> int:
+    expires_at = expire_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 

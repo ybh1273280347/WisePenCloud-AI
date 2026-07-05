@@ -29,7 +29,7 @@
 | 触发边界 | 何时使用、何时禁止使用，尤其是与相邻工具的分工 |
 | 参数契约 | schema 能表达的规则，以及 execute/preflight 才能表达的互斥、权限、跨字段语义 |
 | 内部机制 | 真实调用链、fallback、缓存、排序、解析或外部 provider |
-| 统一切面 | 是否经过 `ToolReturn`、`ToolOutputCache`、`ToolContentStore`、`ToolRunFileStore`、`web_content_cache`、refresh worker 或 GC |
+| 统一切面 | 是否经过 `ToolReturn`、`ToolOutputCache`、`ToolContentStore`、`ToolRunFileStore`、`web_content_cache` 或 GC |
 | 协作链 | 上游工具产物如何传入，下游工具如何继续消费 |
 | 模型约束 | 模型不得伪造的引用、不得绕过的步骤、不得误用的预览/metadata |
 | 可插拔点 | provider、parser、fetcher、cleaner、ranking、chunking、publisher 等可替换实验边界 |

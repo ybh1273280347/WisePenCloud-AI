@@ -20,10 +20,10 @@ ToolScope disclosure
   -> ToolOutputCache
   -> ToolContentStore / ToolRunFileStore / web_content_cache
   -> RenderToolResult
-  -> optional session read / refresh worker / GC
+  -> optional session read / GC
 ```
 
-业务工具只负责业务核心：查询、抓取、解析、计算、读取或发布。认证、作用域、渲染、大文本托管、文件移交、URL 缓存、后台刷新和清理必须优先走统一切面。
+业务工具只负责业务核心：查询、抓取、解析、计算、读取或发布。认证、作用域、渲染、大文本托管、文件移交、URL 缓存和后台清理必须优先走统一切面。
 
 ## 统一切面清单
 
@@ -40,7 +40,6 @@ ToolScope disclosure
 | 内容存储 | `ToolContentStore` | 会话内短期文本存储、chunk/index、receipt。 | 不得把 `cnt_*` 当永久业务 ID。 |
 | 文件移交 | `ToolRunFileStore` | 工具间短期文件引用 `tfile_*`，按用户和会话隔离。 | 不得传本地路径、OSS key、base64 作为工具间文件协议。 |
 | URL 内容缓存 | `WebContentCacheService` + Redis entry repository + Mongo value repository | URL 到 HTML/文件占位/解析 Markdown 的缓存路径。 | web/document 不得维护第二套 URL cache。 |
-| 刷新队列 | `WebContentCacheRefreshTaskPublisher` + Arq worker | stale cache 后台刷新。 | 工具不得阻塞等待 stale refresh 完成。 |
 | Mongo 缓存 GC | `WebContentCacheGcScheduler` | 删除 Mongo 中不再 active 的正文缓存。 | 不得删除 Redis active entry；Redis TTL 是 active 权威索引。 |
 | Suggested actions | `SuggestedAction(s)` | 给模型提示下一步工具链。 | 不得把完整工具参数硬塞进建议动作。 |
 
@@ -57,7 +56,7 @@ ToolScope disclosure
 7. **注册 DI**：只有有生命周期、连接池、共享状态或 tool 实例才进 `container.py`。
 8. **补工具文档**：不仅写参数，还写内部机制、工具链协作、模型约束、可插拔点和优化方向。
 9. **补测试**：至少覆盖 schema/模式校验、成功路径、单项失败、跨工具引用、缓存命中/未命中或权限边界。
-10. **验证启动与后台任务**：涉及 refresh queue 或 GC 时，说明是否由主进程自动启动，还是需要额外 worker。
+10. **验证启动与后台任务**：涉及 GC 时，说明是否由主进程自动启动。
 
 ## 工具内部小模型提示词
 
@@ -144,12 +143,7 @@ unknown/search file URL -> web_fetch -> tfile_* -> document_parse -> URL cache +
 
 ## Background 行为
 
-后台行为分两类：
-
-- **主服务自动启动**：`ToolRunFileStoreGcScheduler`、`WebContentCacheGcScheduler` 随 `chat.main` lifespan 启动和停止。
-- **独立 worker**：web content stale refresh 使用 Arq worker，需要单独进程消费队列。
-
-启动脚本 `services/wisepen-chat-service/start-chat-service.ps1` 会同时启动主服务和刷新队列 worker。生产部署也必须保证这两个进程都存在，否则 stale refresh 任务会入队但不执行。
+后台 GC 随主服务自动启动：`ToolRunFileStoreGcScheduler`、`WebContentCacheGcScheduler` 随 `chat.main` lifespan 启动和停止。
 
 当前 URL cache 组件路径：
 
@@ -157,11 +151,9 @@ unknown/search file URL -> web_fetch -> tfile_* -> document_parse -> URL cache +
 src/chat/application/tools/common/web_content_cache/
 src/chat/core/persistence/redis/web_content_cache_entry_repository.py
 src/chat/core/persistence/mongo/web_content_cache_value_repository.py
-src/chat/core/persistence/redis/web_content_cache_refresh_queue.py
-src/chat/workers/web_content_cache_refresh_worker.py
 ```
 
-Redis entry 保存 active URL 索引、soft/hard TTL 和 refresh lock；Mongo value 保存正文；Arq worker 只消费 stale refresh job；GC 只删除不再 active 的 Mongo value。
+Redis entry 保存 active URL 索引和统一 TTL；Mongo value 保存正文；GC 只删除不再 active 的 Mongo value。
 
 ## Review 清单
 
@@ -174,6 +166,5 @@ Redis entry 保存 active URL 索引、soft/hard TTL 和 refresh lock；Mongo va
 | 重复缓存 | 是否把读取窗口再次缓存成新 `cnt_*`。 |
 | 文件协议 | 是否使用 `ToolRunFileStore` 传文件，而不是本地路径。 |
 | URL cache | web/document 是否复用 `web_content_cache`。 |
-| 刷新异步 | stale refresh 是否异步入队，未阻塞工具返回。 |
 | Mongo GC | Mongo cache GC 是否只删除不再 active 的 Mongo value，未删除 Redis entry。 |
 | 文档完整 | 文档是否写明 tool 链路、模型约束和可插拔点。 |

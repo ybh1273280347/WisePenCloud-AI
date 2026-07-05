@@ -36,10 +36,8 @@ class ToolSettings(BaseModel):
     PADDLE_OCR_MAX_POLL_ATTEMPTS: int = 60  # PaddleOCR 最大轮询次数
 
     # ── Storage, Cache & GC (高频运维：仓储、缓存与清理) ────────────────
-    CACHE_DEFAULT_SOFT_TTL_SECONDS: int = 1800  # 智能缓存默认软过期时间 (新鲜期 30min)
-    CACHE_DEFAULT_HARD_TTL_SECONDS: int = 7200  # 智能缓存默认硬过期时间 (2h)
-    CACHE_MAX_SOFT_TTL_SECONDS: int = 43200  # 智能缓存软过期上限时间 (12h)
-    CACHE_MAX_HARD_TTL_SECONDS: int = 86400  # 智能缓存硬过期上限时间 (24h)
+    CACHE_DEFAULT_TTL_SECONDS: int = 7200  # URL 内容缓存默认过期时间 (2h)
+    CACHE_MAX_TTL_SECONDS: int = 86400  # URL 内容缓存过期上限时间 (24h)
     WEB_CONTENT_CACHE_CLEANUP_INTERVAL_SECONDS: int = 259_200  # Mongo 缓存 GC 扫描周期 (3d)
     WEB_CONTENT_CACHE_INACTIVE_RETENTION_SECONDS: int = 604_800  # inactive Mongo 缓存保留期 (7d)
     WEB_CONTENT_CACHE_CLEANUP_BATCH_SIZE: int = 1_000  # 单次 Mongo 缓存 GC 最大扫描文档数
@@ -50,7 +48,6 @@ class ToolSettings(BaseModel):
     TOOL_RUN_FILE_REF_TTL_SECONDS: int = 21_600  # 运行时生成文件引用的默认 TTL (6h)
     TOOL_RUN_FILE_CLEANUP_GRACE_SECONDS: int = 600  # 后台 GC 清理过期文件的安全宽限期 (10min)
     TOOL_RUN_FILE_MAX_BYTES: int = 52_428_800  # 运行时单文件允许的最大单资产大小 (50 MiB)
-    DOCUMENT_PARSE_REFRESH_LOCK_TTL_SECONDS: int = 300  # 文档解析刷新锁 TTL
 
     # ── Web Search Behavior (网页搜索行为参数) ────────────────────────
     WEB_SEARCH_DEFAULT_RESULTS: int = 10  # 网页搜索默认返回结果数

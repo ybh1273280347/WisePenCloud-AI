@@ -44,7 +44,7 @@
 
 ### 统一切面
 
-- preflight、渲染、输出缓存、`ToolContentStore`、`ToolRunFileStore`、`web_content_cache`、刷新队列、GC 和 suggested actions 都不是单个工具的私有逻辑。
+- preflight、渲染、输出缓存、`ToolContentStore`、`ToolRunFileStore`、`web_content_cache`、GC 和 suggested actions 都不是单个工具的私有逻辑。
 - 工具实现前先确认这些切面能不能表达需求，再决定要不要写新业务代码。
 
 ### 文档迁移方案

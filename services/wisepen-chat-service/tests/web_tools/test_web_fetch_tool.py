@@ -6,16 +6,25 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+SERVICE_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(SERVICE_ROOT / "src"))
+sys.path.insert(0, str(SERVICE_ROOT.parent / "wisepen-common" / "src"))
+WEB_TOOLS_ROOT = SERVICE_ROOT / "src" / "chat" / "application" / "tools" / "web_tools"
 
-common_module = types.ModuleType("common")
 logger_module = types.ModuleType("common.logger")
 logger_module.warn = lambda *args, **kwargs: None
 logger_module.info = lambda *args, **kwargs: None
 logger_module.error = lambda *args, **kwargs: None
-common_module.logger = logger_module
-sys.modules.setdefault("common", common_module)
 sys.modules["common.logger"] = logger_module
+
+web_tools_module = types.ModuleType("chat.application.tools.web_tools")
+web_tools_module.__path__ = [str(WEB_TOOLS_ROOT)]
+sys.modules["chat.application.tools.web_tools"] = web_tools_module
+
+web_fetch_module = types.ModuleType("chat.application.tools.web_tools.web_fetch")
+web_fetch_module.__path__ = [str(WEB_TOOLS_ROOT / "web_fetch")]
+web_fetch_module.FetchCoordinator = object
+sys.modules["chat.application.tools.web_tools.web_fetch"] = web_fetch_module
 
 from chat.application.tools.web_tools.web_fetch.models import (  # noqa: E402
     WebFetchBatchResult,
