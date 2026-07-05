@@ -280,4 +280,3 @@ class WebFetchTool:
                 )
 
         return urls, source_scope or "web_public"
-

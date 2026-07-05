@@ -62,4 +62,3 @@ class PlatformDefaultSearcher:
             max_results: int,
     ) -> ProviderSearchResponse:
         raise SearchProviderError("platform_default does not support academic search.")
-

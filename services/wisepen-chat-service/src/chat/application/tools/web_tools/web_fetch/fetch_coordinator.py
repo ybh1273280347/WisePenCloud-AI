@@ -474,4 +474,3 @@ class FetchCoordinator:
             # 清理临时文件
             with contextlib.suppress(OSError):
                 Path(file_path).unlink(missing_ok=True)
-

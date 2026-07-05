@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from ..errors import UrlFetchError
 from .models import (
-    AdmitFallback,
     FallbackAdmission,
     FetchJob,
     FetchSlot,
@@ -12,6 +10,7 @@ from .models import (
     ScraplingJobHandler,
 )
 from .workers import httpx_worker, scrapling_worker
+from ..errors import UrlFetchError
 
 
 class FetchBatchScheduler:

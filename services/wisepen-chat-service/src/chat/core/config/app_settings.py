@@ -18,107 +18,107 @@ class AppSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # ── LLM Gateway (默认网关，主对话链路从 Provider 表动态获取) ────────
-    LLM_BASE_URL: str                                                   # 默认 LLM 网关 base URL
-    LLM_API_KEY: str                                                    # 默认 LLM 网关 API key
-    DEFAULT_MODEL_ID: str                                               # 默认主对话模型 ID
+    LLM_BASE_URL: str  # 默认 LLM 网关 base URL
+    LLM_API_KEY: str  # 默认 LLM 网关 API key
+    DEFAULT_MODEL_ID: str  # 默认主对话模型 ID
 
     # ── Tool-Use Small Models (工具性小模型调用栈) ───────────────────────
     # 以下模型专门服务于 application 层工具性轻量 LLM 调用：RAG answerability gate、
     # context indexing、web search ranking、工具内结构化推理等。
     # 它们必须与主对话模型、记忆模型、摘要模型隔离，禁止交叉复用。
-    QUERY_MODEL: str                                                    # 工具性轻量推理，低成本 + 快速响应
-    EMBEDDING_MODEL: str                                                # 向量索引，与 MEMORY_EMBEDDING_MODEL 隔离
-    EMBEDDING_DIMENSIONS: int                                           # 向量模型输出维度
+    QUERY_MODEL: str  # 工具性轻量推理，低成本 + 快速响应
+    EMBEDDING_MODEL: str  # 向量索引，与 MEMORY_EMBEDDING_MODEL 隔离
+    EMBEDDING_DIMENSIONS: int  # 向量模型输出维度
 
-    SUMMARY_MODEL: str                                                  # 仅用于长文本摘要，必须单独维护，禁止挪作小模型调用
+    SUMMARY_MODEL: str  # 仅用于长文本摘要，必须单独维护，禁止挪作小模型调用
 
     # ── Memory Models (长期记忆模型) ───────────────────────────────────
-    MEMORY_LLM_MODEL: str                                               # 记忆召回与总结所用 LLM
-    MEMORY_EMBEDDING_MODEL: str                                         # 记忆向量嵌入模型
-    MEMORY_RERANKER_ZE_MODEL: str                                       # 记忆重排模型
-    ZERO_ENTROPY_API_KEY: str                                           # ZeroEntropy 服务 API key
+    MEMORY_LLM_MODEL: str  # 记忆召回与总结所用 LLM
+    MEMORY_EMBEDDING_MODEL: str  # 记忆向量嵌入模型
+    MEMORY_RERANKER_ZE_MODEL: str  # 记忆重排模型
+    ZERO_ENTROPY_API_KEY: str  # ZeroEntropy 服务 API key
 
     # ── Reranker Models (重排模型) ─────────────────────────────────────
-    TOOL_CONTENT_RERANKER_ZE_MODEL: str                                 # ToolContentRead 重排模型
-    TOOL_CONTENT_RERANKER_ZE_TOP_N: int | None = None                   # ToolContentRead 重排返回 topN；None 表示不限制
-    EVIDENCE_RANKER_ZE_MODEL: str                                       # RAG 证据重排模型
-    EVIDENCE_RANKER_ZE_TOP_N: int | None = None                         # RAG 证据重排返回 topN；None 表示不限制
+    TOOL_CONTENT_RERANKER_ZE_MODEL: str  # ToolContentRead 重排模型
+    TOOL_CONTENT_RERANKER_ZE_TOP_N: int | None = None  # ToolContentRead 重排返回 topN；None 表示不限制
+    EVIDENCE_RANKER_ZE_MODEL: str  # RAG 证据重排模型
+    EVIDENCE_RANKER_ZE_TOP_N: int | None = None  # RAG 证据重排返回 topN；None 表示不限制
 
     # ── Security (安全与鉴权) ──────────────────────────────────────────
-    FROM_SOURCE_SECRET: str                                             # APISIX 网关请求来源 token
-    SECRET_ENCRYPTION_KEY: str                                          # Fernet 加密主密钥
+    FROM_SOURCE_SECRET: str  # APISIX 网关请求来源 token
+    SECRET_ENCRYPTION_KEY: str  # Fernet 加密主密钥
 
     # ── Message Queue (Kafka) ──────────────────────────────────────────
-    KAFKA_BOOTSTRAP_SERVERS: str                                        # Kafka 引导地址
+    KAFKA_BOOTSTRAP_SERVERS: str  # Kafka 引导地址
     KAFKA_TOKEN_CONSUMPTION_TOPIC: str = "wisepen-user-token-consumption-topic"  # Token 消费 topic
 
     # ── Storage (Redis / MongoDB / Qdrant) ─────────────────────────────
-    REDIS_URL: str                                                      # Redis 连接串
-    MONGODB_URL: str                                                    # MongoDB 连接串
-    MONGODB_DB_NAME: str                                                # MongoDB 数据库名
-    QDRANT_HOST: str                                                    # Qdrant 主机地址
-    QDRANT_PORT: int                                                    # Qdrant 端口
-    QDRANT_PASSWORD: str                                                # Qdrant 密码
-    ELASTIC_SEARCH_BASE_URL: str = ""                                   # Elasticsearch 基础 URL；空串表示未启用
-    ELASTIC_SEARCH_API_KEY: str = ""                                    # Elasticsearch API key；空串表示未启用
+    REDIS_URL: str  # Redis 连接串
+    MONGODB_URL: str  # MongoDB 连接串
+    MONGODB_DB_NAME: str  # MongoDB 数据库名
+    QDRANT_HOST: str  # Qdrant 主机地址
+    QDRANT_PORT: int  # Qdrant 端口
+    QDRANT_PASSWORD: str  # Qdrant 密码
+    ELASTIC_SEARCH_BASE_URL: str = ""  # Elasticsearch 基础 URL；空串表示未启用
+    ELASTIC_SEARCH_API_KEY: str = ""  # Elasticsearch API key；空串表示未启用
 
     # ── Context Window (模型上下文窗口预算) ────────────────────────────
-    CTX_TOKEN_LIMIT: int = 128000                                       # 上下文窗口大小，对齐 gpt-4o 128k
-    CTX_DEFAULT_OUTPUT_RESERVE_TOKENS: int = 4096                       # 模型输出预留 token 数
-    CTX_MIN_PROMPT_BUDGET_TOKENS: int = 1024                            # prompt budget 下限
+    CTX_TOKEN_LIMIT: int = 128000  # 上下文窗口大小，对齐 gpt-4o 128k
+    CTX_DEFAULT_OUTPUT_RESERVE_TOKENS: int = 4096  # 模型输出预留 token 数
+    CTX_MIN_PROMPT_BUDGET_TOKENS: int = 1024  # prompt budget 下限
 
     # ── Context Compression (上下文压缩水位线) ─────────────────────────
-    CTX_HIGH_WATERMARK_RATIO: float = 0.8                               # 高水位线：触发摘要压缩的 token 比例
-    CTX_LOW_WATERMARK_RATIO: float = 0.5                                # 低水位线：压缩后保留的最新明细比例
-    CTX_FALLBACK_HISTORY_LIMIT: int = 20                                # Redis 回填时从 MongoDB 拉取的历史消息上限
+    CTX_HIGH_WATERMARK_RATIO: float = 0.8  # 高水位线：触发摘要压缩的 token 比例
+    CTX_LOW_WATERMARK_RATIO: float = 0.5  # 低水位线：压缩后保留的最新明细比例
+    CTX_FALLBACK_HISTORY_LIMIT: int = 20  # Redis 回填时从 MongoDB 拉取的历史消息上限
 
     # ── Long-Term Memory (长期记忆召回) ────────────────────────────────
-    CTX_LONG_TERM_MEMORY_LIMIT: int = 10                                # 召回上限条目数
-    CTX_LONG_TERM_MEMORY_THRESHOLD: int = 0.6                           # 召回相似度阈值
+    CTX_LONG_TERM_MEMORY_LIMIT: int = 10  # 召回上限条目数
+    CTX_LONG_TERM_MEMORY_THRESHOLD: int = 0.6  # 召回相似度阈值
 
     # ── Agent Loop (ReAct 循环控制) ────────────────────────────────────
-    AGENT_MAX_ITERATIONS: int = 20                                      # 最大推理迭代次数
-    TOOL_RESULT_MAX_CHARS: int = 4000                                   # 工具返回内容截断上限 (~1000 token)
+    AGENT_MAX_ITERATIONS: int = 20  # 最大推理迭代次数
+    TOOL_RESULT_MAX_CHARS: int = 4000  # 工具返回内容截断上限 (~1000 token)
 
     # ── PaddleOCR Cloud (OCR 云端服务网关) ─────────────────────────────
-    PADDLE_OCR_TOKEN: str                                               # PaddleOCR 服务 token
-    PADDLE_OCR_API_URL: str                                             # PaddleOCR 服务 API URL
-    PADDLE_OCR_MODEL: str                                               # PaddleOCR 模型名
+    PADDLE_OCR_TOKEN: str  # PaddleOCR 服务 token
+    PADDLE_OCR_API_URL: str  # PaddleOCR 服务 API URL
+    PADDLE_OCR_MODEL: str  # PaddleOCR 模型名
 
     # ── Web Search Gateways (搜索引擎基础设施网关) ──────────────────────
-    WEB_SEARCH_FOURGET_BASE_URL: str = "http://127.0.0.1:8088"          # Fourget 搜索网关
-    WEB_SEARCH_EXA_BASE_URL: str = "https://api.exa.ai"                 # Exa 搜索网关
-    WEB_SEARCH_TAVILY_BASE_URL: str = "https://api.tavily.com"          # Tavily 搜索网关
-    WEB_SEARCH_ANYSEARCH_BASE_URL: str = "https://api.anysearch.com"    # AnySearch 搜索网关
+    WEB_SEARCH_FOURGET_BASE_URL: str = "http://127.0.0.1:8088"  # Fourget 搜索网关
+    WEB_SEARCH_EXA_BASE_URL: str = "https://api.exa.ai"  # Exa 搜索网关
+    WEB_SEARCH_TAVILY_BASE_URL: str = "https://api.tavily.com"  # Tavily 搜索网关
+    WEB_SEARCH_ANYSEARCH_BASE_URL: str = "https://api.anysearch.com"  # AnySearch 搜索网关
     WEB_SEARCH_BAIDU_QIANFAN_BASE_URL: str = "https://qianfan.baidubce.com"  # 百度千帆搜索网关
     WEB_SEARCH_PLATFORM_MEMBER_PROVIDER: Literal[
-        "exa",
-        "tavily",
-        "anysearch",
-        "baidu_qianfan",
-    ] | None = None                                                     # 会员平台源当前路由到的 provider；None 表示未启用
-    WEB_SEARCH_PLATFORM_MEMBER_API_KEY: str | None = None               # 会员平台源使用的平台密钥
+                                             "exa",
+                                             "tavily",
+                                             "anysearch",
+                                             "baidu_qianfan",
+                                         ] | None = None  # 会员平台源当前路由到的 provider；None 表示未启用
+    WEB_SEARCH_PLATFORM_MEMBER_API_KEY: str | None = None  # 会员平台源使用的平台密钥
 
     # ── Third-Party Credentials (三方垂直领域鉴权) ─────────────────────
-    OPENALEX_BASE_URL: str = "https://api.openalex.org"                 # OpenAlex API 基础 URL
-    OPENALEX_API_KEY: str                                               # OpenAlex API key
+    OPENALEX_BASE_URL: str = "https://api.openalex.org"  # OpenAlex API 基础 URL
+    OPENALEX_API_KEY: str  # OpenAlex API key
 
     # ── Skill (技能召回) ───────────────────────────────────────────────
-    SKILL_MATCH_TOP_K: int = 20                                         # 默认召回数量
+    SKILL_MATCH_TOP_K: int = 20  # 默认召回数量
 
     # ── RPC & Service Discovery (内部 RPC 与服务发现) ──────────────────
     RPC_LB_STRATEGY: Literal["weighted_random", "round_robin", "random"] = "weighted_random"  # 负载均衡策略
-    RPC_DEFAULT_TIMEOUT: float = 5.0                                    # 单次请求超时 (秒)
-    RPC_DEFAULT_RETRIES: int = 2                                        # 额外重试次数，真实请求 = retries + 1
-    SERVICE_DISCOVERY_CACHE_TTL_SECONDS: float = 30.0                   # 本地缓存兜底 TTL (秒)
+    RPC_DEFAULT_TIMEOUT: float = 5.0  # 单次请求超时 (秒)
+    RPC_DEFAULT_RETRIES: int = 2  # 额外重试次数，真实请求 = retries + 1
+    SERVICE_DISCOVERY_CACHE_TTL_SECONDS: float = 30.0  # 本地缓存兜底 TTL (秒)
 
     # ── OSS Cache (对象存储本地磁盘缓存) ───────────────────────────────
-    OSS_CACHE_DIR: str = "/var/oss_cache"                               # 本地缓存目录
-    OSS_CACHE_TTL_SECONDS: int = 6 * 3600                               # 缓存文件 TTL (6h)
-    OSS_CACHE_GC_INTERVAL_SECONDS: int = 30 * 60                        # GC 扫描周期 (30min)
+    OSS_CACHE_DIR: str = "/var/oss_cache"  # 本地缓存目录
+    OSS_CACHE_TTL_SECONDS: int = 6 * 3600  # 缓存文件 TTL (6h)
+    OSS_CACHE_GC_INTERVAL_SECONDS: int = 30 * 60  # GC 扫描周期 (30min)
 
     # ── Tool Run File Store (工具产出临时文件工作区) ────────────────────
-    TOOL_RUN_FILE_ROOT: str = "/tmp/wisepen-tool-run-files"             # 工作区根目录
+    TOOL_RUN_FILE_ROOT: str = "/tmp/wisepen-tool-run-files"  # 工作区根目录
     # 行为参数（TTL / 容量 / 宽限期）由 tool_settings.py 统一管控
 
 

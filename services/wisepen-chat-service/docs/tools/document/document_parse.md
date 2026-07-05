@@ -94,7 +94,7 @@ OCR provider 不属于 parser 树，统一放在 `document_tools/ocr/`。PDF 扫
 
 - OCR 不作为 document_parse 的全局兜底 parser。
 - 独立图片文字提取走平行工具 `image_ocr`，不作为 document_parse 的普通兜底。
-- PDF 扫描页 OCR 保留在 `PdfParseStrategy` 内部，以便和 Docling/PyMuPDF4LLM 文本页结果按原页序合并。
+- PDF 扫描页 OCR 保留在 `PdfParser` 内部，以便和 Docling/PyMuPDF4LLM 文本页结果按原页序合并。
 
 ### 开发环境提示
 

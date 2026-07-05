@@ -19,6 +19,7 @@ from .errors import UrlFetchError
 from .fetchers import WebFetcher
 from .models import RawFetchOutput, WebFetchResult
 
+
 @dataclass(frozen=True, slots=True)
 class _CrawlPage:
     result: WebFetchResult

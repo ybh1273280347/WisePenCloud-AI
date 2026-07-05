@@ -9,7 +9,6 @@ from chat.application.tools.common.web_content_cache import (
 )
 from chat.application.tools.web_tools.web_fetch.models import RawFetchOutput, WebFetchResult
 from common.logger import info
-
 from .models import CachedWebFetchPage
 
 _PRODUCER_NAME = "web_fetch"

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from chat.application.tools.web_tools.search_services.sources import WebSearchRuntimeSource
 from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import (
     OpenAlexFailureReason,
     PaperHydrator,
@@ -13,6 +12,7 @@ from chat.application.tools.web_tools.search_services.services.search_executor i
     WebSearchResult,
     execute_provider_search,
 )
+from chat.application.tools.web_tools.search_services.sources import WebSearchRuntimeSource
 
 
 class AcademicSearchService:

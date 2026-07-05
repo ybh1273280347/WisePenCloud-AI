@@ -10,8 +10,8 @@ from .integrations.anysearch import AnySearchSearcher
 from .integrations.baidu_qianfan import BaiduQianfanSearcher
 from .integrations.exa import ExaSearcher
 from .integrations.tavily import TavilySearcher
-from .platform.default import PlatformDefaultSearcher
 from .platform.ddgs import DdgSearcher
+from .platform.default import PlatformDefaultSearcher
 from .platform.fourget import FourGetSearcher
 
 __all__ = [

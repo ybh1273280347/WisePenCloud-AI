@@ -81,4 +81,3 @@ class RedisToolRunFileRepository(ToolRunFileRepository):
     @staticmethod
     def _session_key(*, user_id: str, session_id: str) -> str:
         return f"{_SESSION_KEY_PREFIX}{user_id}:{session_id}"
-

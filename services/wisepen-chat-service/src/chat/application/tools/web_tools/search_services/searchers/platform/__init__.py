@@ -1,5 +1,5 @@
-from .default import PlatformDefaultSearcher
 from .ddgs import DdgSearcher
+from .default import PlatformDefaultSearcher
 from .fourget import FourGetSearcher
 
 __all__ = [
