@@ -21,8 +21,10 @@ class FetchJob:
 
 
 FetchQueue = asyncio.Queue[FetchJob]
+
 HttpxJobHandler = Callable[
     [FetchJob, FetchQueue, list[FetchSlot], AdmitFallback],
     Awaitable[None],
 ]
+
 ScraplingJobHandler = Callable[[FetchJob], Awaitable[FetchOutcome]]
