@@ -31,7 +31,11 @@ class PlatformDefaultSearcher:
                 max_results=max_results,
             )
             if response.results:
-                return _as_platform_default_response(response)
+                return replace(
+                    response,
+                    provider=None,
+                    source_id="platform_default",
+                )
         except SearchProviderError as exc:
             warn(
                 "web search provider fallback.",
@@ -45,7 +49,11 @@ class PlatformDefaultSearcher:
             query=query,
             max_results=max_results,
         )
-        return _as_platform_default_response(ddg_response)
+        return replace(
+            ddg_response,
+            provider=None,
+            source_id="platform_default",
+        )
 
     async def search_academic(
             self,
@@ -55,10 +63,3 @@ class PlatformDefaultSearcher:
     ) -> ProviderSearchResponse:
         raise SearchProviderError("platform_default does not support academic search.")
 
-
-def _as_platform_default_response(response: ProviderSearchResponse) -> ProviderSearchResponse:
-    return replace(
-        response,
-        provider=None,
-        source_id="platform_default",
-    )

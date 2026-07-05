@@ -126,7 +126,8 @@ def render_tool_xml(
             children=children,
         )
 
-    return _prettify(xml)
+    root = etree.fromstring(xml.encode(), _XML_PARSER)
+    return etree.tostring(root, pretty_print=True, encoding="unicode")
 
 
 # ---------------------------------------------------------------------------
@@ -266,8 +267,3 @@ def _validate_xml_tag(tag: str) -> str:
         raise ValueError(f"Invalid XML root tag: {tag!r}")
     return tag
 
-
-def _prettify(xml: str) -> str:
-    """利用 lxml 解析树将杂乱的一线式 XML 格式化为携带标定缩进的模型易读版。"""
-    root = etree.fromstring(xml.encode(), _XML_PARSER)
-    return etree.tostring(root, pretty_print=True, encoding="unicode")
