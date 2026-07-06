@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from chat.application.tools.document_tools.document_parse.models import (
+from chat.application.tools.document_tools.document_parse.core.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )

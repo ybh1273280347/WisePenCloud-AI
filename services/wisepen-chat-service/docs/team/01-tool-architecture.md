@@ -193,6 +193,7 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 - web 来源的解析结果必须回写统一 URL 缓存路径。
 - 内部并发解析，单项失败返回 failed item。
 - 成功文件的 Markdown 进入 `ToolReturn.cacheable_texts`，由输出缓存切面分批生成多个 `cnt_*`。
+- 实现结构保持轻量：顶层 `document_parse_tool.py` 是工具门面；`document_parse/service.py` 负责解析路由；`document_parse/models.py`、`errors.py`、`cache.py` 放在该能力包顶层；`document_parse/parsers/` 下再区分 `common_document/` 和 `specialized/`。
 
 ### `image_ocr`
 
@@ -201,6 +202,7 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 - 只接受 `file_ref: tfile_*` 或 `file_path`，二者互斥。
 - `file_ref` 走 `ToolRunFileStore.resolve_ref(...)`；`file_path` 只接受用户直接给出的 URL/路径或可信上游路径。
 - OCR Markdown 进入 `ToolReturn.cacheable_texts`，不直接塞进 `visible_result`。
+- OCR provider 保持在 `document_tools/ocr/`，与 `document_parse/` 平行；它服务 PDF 扫描页 OCR 和独立 `image_ocr`，不放进 parser 树。
 
 ### `math_tools`
 

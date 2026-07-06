@@ -104,7 +104,8 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 - `fetch_services/cleaners/trafilatura_cleaner.py`：web_fetch 内部 HTML 正文抽取，可替换 cleaner。
 - `judge_quality`：降级判断阈值，可按站点类型或内容长度实验。
 - `WebContentCacheService`：统一 URL 缓存门面，可扩展 ETag、Last-Modified、缓存分层。
-- `RedisWebContentCacheEntryRepository` / `MongoWebContentCacheValueRepository`：缓存 active 索引和正文持久化实现。
+- `web_content_cache/core/protocols.py`：定义缓存 active 索引和正文存储协议。
+- `RedisWebContentCacheEntryRepository` / `MongoWebContentCacheValueRepository`：协议对应的 Redis/Mongo 持久化实现。
 
 ## 后续优化
 

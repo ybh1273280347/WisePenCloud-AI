@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from beanie import PydanticObjectId
 
-from chat.application.tools.common.web_content_cache import (
+from chat.application.tools.common.web_content_cache.core.models import (
     WebContentCacheValue,
 )
 from chat.domain.entities.web_content_cache import WebContentCacheValueDocument

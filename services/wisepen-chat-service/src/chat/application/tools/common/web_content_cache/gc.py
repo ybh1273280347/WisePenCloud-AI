@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from chat.application.tools.common.web_content_cache.models import (
+from chat.application.tools.common.web_content_cache.core.models import (
     WebContentCacheCleanupResult,
     WebContentCacheMode,
 )
-from chat.application.tools.common.web_content_cache.repository import (
+from chat.application.tools.common.web_content_cache.core.protocols import (
     WebContentCacheEntryRepository,
 )
 from chat.application.tools.tool_settings import tool_settings

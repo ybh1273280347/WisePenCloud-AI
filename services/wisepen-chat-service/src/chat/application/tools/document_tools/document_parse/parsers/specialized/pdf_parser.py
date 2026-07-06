@@ -12,8 +12,8 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMo
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.types.doc import ImageRefMode
 
-from chat.application.tools.document_tools.document_parse.errors import DocumentParserError
-from chat.application.tools.document_tools.document_parse.models import (
+from chat.application.tools.document_tools.document_parse.core.errors import DocumentParserError
+from chat.application.tools.document_tools.document_parse.core.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )

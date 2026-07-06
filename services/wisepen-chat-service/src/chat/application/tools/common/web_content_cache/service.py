@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 from hashlib import sha256
 
 from common.logger import info, warn
-from .cache_ttl import compute_ttl
-from .metadata import string_metadata
-from .models import (
+from ._utils.cache_ttl import compute_ttl
+from ._utils.metadata import string_metadata
+from .core.models import (
     WebContentCacheEntry,
     WebContentCacheMode,
     WebContentCacheValue,
 )
-from .repository import (
+from .core.protocols import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
 )

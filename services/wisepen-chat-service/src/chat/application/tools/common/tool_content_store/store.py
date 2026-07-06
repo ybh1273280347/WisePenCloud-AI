@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from typing import Protocol, cast
+from typing import cast
 
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.utils.chunking_engine import (
@@ -12,7 +12,7 @@ from chat.application.utils.chunking_engine import (
     IndexKind,
 )
 from chat.application.utils.chunking_engine.registry import get_chunking_engine
-from .models import (
+from .core.models import (
     Metadata,
     StoredToolContent,
     ToolContentChunk,
@@ -20,21 +20,10 @@ from .models import (
     ToolContentIndexEntry,
     ToolContentReceipt,
 )
+from .core.protocols import ToolContentRepository
 
 DEFAULT_TOOL_CONTENT_TTL_SECONDS = tool_settings.TOOL_CONTENT_DEFAULT_TTL_SECONDS
 DEFAULT_TOOL_CONTENT_MAX_CHARS = tool_settings.TOOL_CONTENT_MAX_CHARS
-
-
-class ToolContentRepository(Protocol):
-    """ToolContent 持久化仓储协议（接口），定义 put/get 两个核心操作。"""
-
-    async def put(self, stored: StoredToolContent) -> None:
-        """写入 ToolContent。"""
-        ...
-
-    async def get(self, content_id: str) -> StoredToolContent | None:
-        """按 content_id 读取 ToolContent，不存在则返回 None。"""
-        ...
 
 
 class ToolContentStore:

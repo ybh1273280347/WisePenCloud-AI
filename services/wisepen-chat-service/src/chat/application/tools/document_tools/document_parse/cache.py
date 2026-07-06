@@ -1,19 +1,27 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from chat.application.tools.common.web_content_cache import (
     NonHtmlCacheStubWrite,
     WebContentCacheEntryRepository,
     WebContentCacheService,
     WebContentCacheValueRepository,
+)
+from chat.application.tools.common.web_content_cache._utils.metadata import (
     source_scope_from_metadata,
     string_metadata,
 )
 from chat.application.tools.utils.url import FetchedUrl
 from common.logger import warn
 
-from .models import ParsedCacheHit
 
 _DOCUMENT_PARSE_CACHE_PARSER_VERSION = "document_parse:v1"
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedCacheHit:
+    markdown: str
 
 
 class DocumentParseCache:

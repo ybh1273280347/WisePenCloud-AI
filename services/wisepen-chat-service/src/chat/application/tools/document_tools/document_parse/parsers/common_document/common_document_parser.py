@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from chat.application.tools.document_tools.document_parse.errors import (
+from chat.application.tools.document_tools.document_parse.core.errors import (
     DocumentParseFailedError,
 )
-from chat.application.tools.document_tools.document_parse.models import (
+from chat.application.tools.document_tools.document_parse.core.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )

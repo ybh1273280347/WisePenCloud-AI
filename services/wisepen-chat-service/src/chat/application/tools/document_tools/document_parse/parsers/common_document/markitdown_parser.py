@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from markitdown import MarkItDown
 
-from chat.application.tools.document_tools.document_parse.errors import (
+from chat.application.tools.document_tools.document_parse.core.errors import (
     DocumentParserError,
 )
-from chat.application.tools.document_tools.document_parse.models import (
+from chat.application.tools.document_tools.document_parse.core.models import (
     DocumentParseRequest,
     DocumentParseResult,
 )

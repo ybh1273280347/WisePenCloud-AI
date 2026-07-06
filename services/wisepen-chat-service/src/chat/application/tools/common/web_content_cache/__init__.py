@@ -1,15 +1,10 @@
-from .cache_ttl import compute_ttl
-from .metadata import (
-    source_scope_from_metadata,
-    string_metadata,
-)
-from .models import (
+from .core.models import (
     WebContentCacheMode,
     WebContentCacheEntry,
     WebContentCacheValue,
     WebContentCacheCleanupResult,
 )
-from .repository import (
+from .core.protocols import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
 )
@@ -24,7 +19,6 @@ from .service import (
 
 __all__ = [
     "CachedMarkdownPage",
-    "compute_ttl",
     "HtmlCacheWrite",
     "NonHtmlCacheStubWrite",
     "WEB_CUSTOM_SOURCE_SCOPE",
@@ -36,6 +30,4 @@ __all__ = [
     "WebContentCacheService",
     "WebContentCacheValueRepository",
     "WebContentCacheValue",
-    "source_scope_from_metadata",
-    "string_metadata",
 ]

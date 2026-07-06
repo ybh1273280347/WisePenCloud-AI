@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from chat.application.tools.common.tool_content_store.models import StoredToolContent
+from chat.application.tools.common.tool_content_store.core.models import StoredToolContent
 from chat.application.tools.common.tool_content_store.store import ToolContentStore
 
 

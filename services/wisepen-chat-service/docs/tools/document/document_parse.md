@@ -6,6 +6,24 @@
 
 `document_parse` 将上游工具产出的 `tfile_*` 临时文件引用，或明显的文件直链 URL，批量解析为 Markdown。文件直链只支持完整 `http(s)` 非 HTML 文件 URL；普通网页仍交给 `web_fetch` / `web_crawl`。
 
+## 实现结构
+
+```text
+src/chat/application/tools/document_tools/
+  document_parse_tool.py       # 工具门面
+  document_parse/
+    service.py                 # 文档解析路由
+    models.py                  # DocumentParseRequest / DocumentParseResult
+    errors.py
+    cache.py                   # URL parsed markdown 缓存适配
+    parsers/
+      common_document/         # Docling / MarkItDown 通用解析
+      specialized/             # PDF / spreadsheet 专用解析
+  ocr/                         # PDF 扫描页和 image_ocr 共享的 OCR provider
+```
+
+`document_parse/` 和 `ocr/` 是 document 工具域下的两个独立能力族；当前没有大量共享编排层，因此不额外引入 `core/` 或 `services/` 包。
+
 ## 何时使用
 
 - 已经有一个或多个 `tfile_*`，需要把文件内容转为可检索 Markdown。
@@ -50,7 +68,7 @@ document parse 读取缓存时不能在 public/private 域之间回退，避免�
 
 | 字段 | 说明 |
 | --- | --- |
-| `visible_result.items` | 按输入顺序返回每个文件的 `source`、`status`、`file_name`、`source_scope` 和失败细节。 |
+| `visible_result.items` | 按输入顺序返回每个文件的 `source`、`status`、`file_name` 和失败 `reason`。 |
 | `visible_result.suggested_action` | 建议后续用 `tool_content_read` 的 `ranked_expand` 模式读取解析结果。 |
 | `cacheable_texts` | 每个成功文件一段 Markdown；当总长度超过内联阈值时会被缓存为独立的 `cnt_*` receipt。 |
 
@@ -74,7 +92,7 @@ document parse 读取缓存时不能在 public/private 域之间回退，避免�
 | 图片 | 不作为通用文档解析入口；模型看图后需要精确抽字时使用 `image_ocr` |
 | 其它普通文档 | Docling -> MarkItDown |
 
-`parsers/comon_document/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、Excel XML 和 CSV/TSV。当前 spreadsheet 专用路径只覆盖 openpyxl 已支持的 Excel XML 系列，以及 pandas 原生 CSV/TSV；`.xls`、`.xlsb`、`.ods` 等格式需要引入对应 pandas engine 后再单独扩展。通用 Docling 不维护额外 `allowed_formats` 白名单。PDF、spreadsheet 等专用路径不追加通用 MarkItDown 兜底；专用解析器如果需要特殊兜底，应在自己的策略内部维护，避免专用行为反向污染通用解析链路。
+`parsers/common_document/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、Excel XML 和 CSV/TSV。当前 spreadsheet 专用路径只覆盖 openpyxl 已支持的 Excel XML 系列，以及 pandas 原生 CSV/TSV；`.xls`、`.xlsb`、`.ods` 等格式需要引入对应 pandas engine 后再单独扩展。通用 Docling 不维护额外 `allowed_formats` 白名单。PDF、spreadsheet 等专用路径不追加通用 MarkItDown 兜底；专用解析器如果需要特殊兜底，应在自己的策略内部维护，避免专用行为反向污染通用解析链路。
 
 OCR provider 不属于 parser 树，统一放在 `document_tools/ocr/`。PDF 扫描页和 `image_ocr` 工具都复用这个辅助能力。
 

@@ -149,9 +149,19 @@ unknown/search file URL -> web_fetch -> tfile_* -> document_parse -> URL cache +
 
 ```text
 src/chat/application/tools/common/web_content_cache/
+  core/
+    models.py
+    protocols.py
+  _utils/
+    cache_ttl.py
+    metadata.py
+  service.py
+  gc.py
 src/chat/core/persistence/redis/web_content_cache_entry_repository.py
 src/chat/core/persistence/mongo/web_content_cache_value_repository.py
 ```
+
+`tools/common/*/core/protocols.py` 只定义应用层所需协议，具体 Redis/Mongo 实现在 `src/chat/core/persistence/`。当一个 common 子包同时出现 models、protocols、errors 等两个以上边界文件时，统一放入该子包 `core/`；只服务该子包内部的辅助函数放 `_utils/`，不要放在子包顶层伪装成稳定 API。
 
 Redis entry 保存 active URL 索引和统一 TTL；Mongo value 保存正文；GC 只删除不再 active 的 Mongo value。
 

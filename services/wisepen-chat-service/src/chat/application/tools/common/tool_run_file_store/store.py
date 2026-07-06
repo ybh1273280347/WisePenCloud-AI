@@ -10,20 +10,20 @@ import uuid
 from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
-from typing import Protocol
 
 from chat.application.tools.tool_settings import tool_settings
-from .errors import (
+from .core.errors import (
     InvalidToolFileRefError,
     ToolFileNotFoundError,
     ToolFileUnreadableError,
     ToolFileWriteError,
 )
-from .models import (
+from .core.models import (
     ResolvedToolFile,
     ToolFileRefRecord,
     ToolRunFileCleanupResult,
 )
+from .core.protocols import ToolRunFileRepository
 
 DEFAULT_TOOL_RUN_FILE_ROOT = Path(tempfile.gettempdir()) / "wisepen-tool-run-files"
 DEFAULT_TOOL_RUN_FILE_REF_TTL_SECONDS = tool_settings.TOOL_RUN_FILE_REF_TTL_SECONDS
@@ -39,27 +39,6 @@ _DANGEROUS_INNER_SUFFIXES = frozenset({
     ".jar", ".js", ".msi", ".ps1", ".scr", ".sh", ".vbs",
 })
 _HASH_CHUNK_BYTES = 1024 * 1024  # SHA-256 流式哈希分块大小，算法常量
-
-
-class ToolRunFileRepository(Protocol):
-    """短期工具文件引用的元数据仓储协议。"""
-
-    async def put(self, record: ToolFileRefRecord, *, ttl_seconds: int) -> None:
-        """写入引用记录。
-
-        Args:
-            record: 待持久化的文件引用记录。
-            ttl_seconds: Redis key 过期时间，单位秒。
-        """
-        ...
-
-    async def get(self, ref_id: str) -> ToolFileRefRecord | None:
-        """按 tfile_* 引用读取记录，不存在时返回 None。"""
-        ...
-
-    async def delete(self, ref_id: str) -> None:
-        """删除指定 tfile_* 引用记录。"""
-        ...
 
 
 class ToolRunFileStore:

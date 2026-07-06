@@ -164,6 +164,22 @@
 | 需要网页主体抽取成 Markdown | `web_tools/fetch_services/cleaners/TrafilaturaCleaner` |
 | 需要复用外部 URL 抓取、HTML 清洗或文件解析结果 | `src/chat/application/tools/common/web_content_cache/`，不要混入 `ToolContentStore` |
 
+## Tool Common 切面
+
+路径：`src/chat/application/tools/common/`
+
+用途：工具运行期的统一切面，不是业务工具实现目录。
+
+当前结构约定：
+
+| 子包 | 结构 | 说明 |
+| --- | --- | --- |
+| `tool_content_store/` | `core/models.py`、`core/protocols.py`、`store.py` | `cnt_*` 会话内大文本存储。 |
+| `tool_run_file_store/` | `core/models.py`、`core/errors.py`、`core/protocols.py`、`store.py`、`gc.py` | `tfile_*` 短期文件移交和文件系统 GC。 |
+| `web_content_cache/` | `core/models.py`、`core/protocols.py`、`_utils/cache_ttl.py`、`_utils/metadata.py`、`service.py`、`gc.py` | web/document 共享 URL 内容缓存。 |
+
+`core/protocols.py` 放应用层协议，Redis/Mongo 等具体实现仍在 `src/chat/core/persistence/`；`_utils/` 只放该 common 子包内部辅助函数，不从 `tools/common` 顶层扩散。
+
 ## 文档入口
 
 更细的组件说明见：

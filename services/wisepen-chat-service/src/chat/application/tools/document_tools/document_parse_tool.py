@@ -9,10 +9,12 @@ from typing import Any
 import httpx
 
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
-from chat.application.tools.common.tool_run_file_store.errors import tool_file_error_reason
+from chat.application.tools.common.tool_run_file_store.core.errors import tool_file_error_reason
 from chat.application.tools.common.web_content_cache import (
     WebContentCacheEntryRepository,
     WebContentCacheValueRepository,
+)
+from chat.application.tools.common.web_content_cache._utils.metadata import (
     source_scope_from_metadata,
     string_metadata,
 )
@@ -33,7 +35,7 @@ from chat.application.tools.document_tools.document_parse.cache import (
     DocumentParseCache,
     direct_url_metadata,
 )
-from chat.application.tools.document_tools.document_parse.models import DocumentParseRequest
+from chat.application.tools.document_tools.document_parse.core.models import DocumentParseRequest
 from chat.application.tools.document_tools.document_parse.service import DocumentParseService
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.batching import batched

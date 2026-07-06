@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from chat.application.tools.common.tool_content_store import ToolContentStore
-from chat.application.tools.common.tool_content_store.models import StoredToolContent, ToolContentChunk
+from chat.application.tools.common.tool_content_store.core.models import StoredToolContent, ToolContentChunk
 from chat.application.tools.session_tools.tool_content_read.content_window_builder import ToolContentWindowBuilder
 from chat.application.tools.session_tools.tool_content_read.models import (
     ToolContentReadMatch,

@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
-from chat.application.tools.common.tool_run_file_store.errors import tool_file_error_reason
+from chat.application.tools.common.tool_run_file_store.core.errors import tool_file_error_reason
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExactlyOneOf,

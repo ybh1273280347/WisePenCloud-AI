@@ -6,13 +6,13 @@ from typing import Any
 
 import redis.asyncio as redis
 
-from chat.application.tools.common.tool_content_store import ToolContentRepository
-from chat.application.tools.common.tool_content_store.models import (
+from chat.application.tools.common.tool_content_store.core.models import (
     StoredToolContent,
     ToolContentChunk,
     ToolContentIndex,
     ToolContentIndexEntry,
 )
+from chat.application.tools.common.tool_content_store.core.protocols import ToolContentRepository
 from chat.core.persistence.redis._utils import to_jsonable
 
 # --- 全局命名空间配置 ---

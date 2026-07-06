@@ -11,8 +11,8 @@ from typing import Any
 import fitz
 import httpx
 
-from chat.application.tools.document_tools.ocr.errors import OcrError
-from chat.application.tools.document_tools.ocr.models import OcrPageResult
+from chat.application.tools.document_tools.ocr.core.errors import OcrError
+from chat.application.tools.document_tools.ocr.core.models import OcrPageResult
 from chat.application.tools.tool_settings import tool_settings
 
 

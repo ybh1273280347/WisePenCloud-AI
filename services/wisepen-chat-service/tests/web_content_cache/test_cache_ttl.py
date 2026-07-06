@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from chat.application.tools.common.web_content_cache.cache_ttl import compute_ttl
+from chat.application.tools.common.web_content_cache._utils.cache_ttl import compute_ttl
 
 
 def test_compute_ttl_uses_default_expiration_without_cache_headers() -> None:

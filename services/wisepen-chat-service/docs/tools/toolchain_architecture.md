@@ -90,7 +90,7 @@ ToolInvocation
 | Render | `ToolOutputRenderer` | 普通返回值递归渲染；工具不得手写 XML 或为渲染构造私有 result layer。 |
 | Output Cache | `ToolOutputCache` | 小文本内联为 `<contents>`；大文本写入 `ToolContentStore` 生成 `cnt_*`；每段 `cacheable_texts[i]` 是独立内容单元，不能提前拼接。 |
 | Runtime File | `ToolRunFileStore` | 生产 `tfile_*`；按 `user_id/session_id` 校验作用域；模型和工具都不能传本地路径、OSS key 或 base64 作为跨工具文件协议。 |
-| URL Cache | `WebContentCacheService` + repositories | web/document 共享的 URL 缓存边界；Redis 存 active entry 和统一 TTL，Mongo 存正文，GC 清理 inactive。 |
+| URL Cache | `WebContentCacheService` + `web_content_cache/core/protocols.py` + persistence implementations | web/document 共享的 URL 缓存边界；Redis 存 active entry 和统一 TTL，Mongo 存正文，GC 清理 inactive。 |
 | Background | GC schedulers | 主服务启动 `ToolRunFileStoreGcScheduler` 和 `WebContentCacheGcScheduler`。 |
 | Suggested Actions | `SuggestedAction(s)` | 可写工具名、mode、原因、优先级和轻量 metadata；不写完整调用参数；不代替 schema 和提示词边界。 |
 
@@ -346,7 +346,7 @@ Math 工具的模型约束：不访问外部信息，不执行任意 Python，�
 | URL safety | `tools/utils/url/security.validate_public_http_url` | 只做 URL 安全性校验；不做页面内容阻断。 |
 | Markdown renderer | `tools/utils/markdown_renderer/html2markdown.py` | 只做确定性的 HTML 语法树到 Markdown 渲染；不处理特定业务或站点清洗逻辑。 |
 | Web cleaner | `fetch_services/cleaners/TrafilaturaCleaner` | cleaner 替换、正文保真度评估、表格/代码块渲染策略。 |
-| URL 缓存 | `WebContentCacheService` + Redis entry repository + Mongo value repository | TTL 策略、ETag/Last-Modified 增量刷新、raw HTML 保留策略、hydrate 结果缓存。 |
+| URL 缓存 | `WebContentCacheService` + `web_content_cache/core/protocols.py` + Redis/Mongo 持久化实现 | TTL 策略、ETag/Last-Modified 增量刷新、raw HTML 保留策略、hydrate 结果缓存。 |
 | 文档 parser | PDF strategy、Docling、Pandas、MarkItDown | Parser 顺序实验、PDF 页级策略优化。 |
 | OCR provider | PaddleCloud OCR client | 扫描 PDF 页和 `image_ocr` 的 OCR provider 替换。 |
 | 内容分块 | Markdown/plain chunking pipeline | chunk 大小、结构索引、页面/锚点抽取策略。 |

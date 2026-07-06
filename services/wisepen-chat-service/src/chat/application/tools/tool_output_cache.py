@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from chat.application.tools.common.tool_content_store.models import ToolContentReceipt
+from chat.application.tools.common.tool_content_store.core.models import ToolContentReceipt
 from chat.application.tools.common.tool_content_store.store import ToolContentStore
 from chat.application.tools.core.definition import ToolDefinition
 from chat.application.tools.core.llm.renderer import RenderToolResult

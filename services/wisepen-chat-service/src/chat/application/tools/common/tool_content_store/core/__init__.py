@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from .core.models import (
+from .models import (
     Metadata,
     StoredToolContent,
     ToolContentChunk,
@@ -8,8 +6,7 @@ from .core.models import (
     ToolContentIndexEntry,
     ToolContentReceipt,
 )
-from .core.protocols import ToolContentRepository
-from .store import ToolContentStore
+from .protocols import ToolContentRepository
 
 __all__ = [
     "Metadata",
@@ -18,6 +15,5 @@ __all__ = [
     "ToolContentIndex",
     "ToolContentIndexEntry",
     "ToolContentReceipt",
-    "ToolContentStore",
     "ToolContentRepository",
 ]

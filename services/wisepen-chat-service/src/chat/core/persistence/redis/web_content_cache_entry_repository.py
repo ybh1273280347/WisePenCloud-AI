@@ -8,7 +8,7 @@ from typing import Any
 
 import redis.asyncio as redis
 
-from chat.application.tools.common.web_content_cache import (
+from chat.application.tools.common.web_content_cache.core.models import (
     WebContentCacheEntry,
     WebContentCacheMode,
 )

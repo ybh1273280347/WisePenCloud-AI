@@ -7,8 +7,8 @@ from typing import Any
 
 import redis.asyncio as redis
 
-from chat.application.tools.common.tool_run_file_store.models import ToolFileRefRecord
-from chat.application.tools.common.tool_run_file_store.store import ToolRunFileRepository
+from chat.application.tools.common.tool_run_file_store.core.models import ToolFileRefRecord
+from chat.application.tools.common.tool_run_file_store.core.protocols import ToolRunFileRepository
 from chat.core.persistence.redis._utils import to_jsonable
 
 # --- 全局命名空间配置 ---
