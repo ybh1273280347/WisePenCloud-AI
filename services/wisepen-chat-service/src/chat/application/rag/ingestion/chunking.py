@@ -30,17 +30,13 @@ class RagChunkingService:
             *,
             markdown: str,
             resource_id: str = "",
-            document_id: str = "",
             document_version: str = "",
-            title: str = "",
     ) -> RagChunkingResult:
         # 复用父子 Markdown 分块引擎：CHILD 供检索，PARENT 用于引用完整上下文。
         result = self._engine.chunk(
             document=ChunkDocument(
                 text=markdown,
-                document_id=document_id or None,
                 content_type="text/markdown",
-                title=title or None,
             ),
         )
 
@@ -71,9 +67,7 @@ class RagChunkingService:
             child_chunks=tuple(child_chunks),
             pipeline=result.pipeline,
             resource_id=resource_id,
-            document_id=document_id,
             document_version=document_version,
-            title=title,
         )
 
     def chunk_payload(self, payload: RagMarkdownIngestionPayload) -> RagChunkingResult:
@@ -81,9 +75,7 @@ class RagChunkingService:
         return self.chunk(
             markdown=payload.markdown,
             resource_id=payload.resource_id,
-            document_id=payload.document_id,
             document_version=payload.document_version,
-            title=payload.title,
         )
 
 

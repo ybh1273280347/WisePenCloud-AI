@@ -136,7 +136,7 @@ Neo4j 图增强结果不混入主 topK。
 direct_evidence:
   - chunk_id: string
     resource_id: string
-    document_id: string
+    document_version: string
     text: string
     section_path: string
     score:
@@ -157,7 +157,7 @@ direct_evidence:
 text:
   用于最终上下文。
 
-chunk_id / resource_id / document_id:
+chunk_id / resource_id / document_version:
   用于回源、引用、审计。
 
 score:

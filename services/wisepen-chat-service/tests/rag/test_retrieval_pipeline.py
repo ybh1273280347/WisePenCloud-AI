@@ -55,9 +55,14 @@ from chat.application.rag.retrieval import (  # noqa: E402
     RagRetrievalProfile,
     ScoredChunk,
 )
+from chat.application.rag.consumers import (  # noqa: E402
+    DocumentReadyMessageError,
+    RagDocumentReadyIngestionService,
+)
 from chat.application.rag.ingestion import (  # noqa: E402
     RagChildChunk,
     RagChunkingService,
+    RagChunkingResult,
     RagMarkdownIngestionPayload,
     RagParentChunk,
 )
@@ -83,9 +88,7 @@ def test_chunking_service_produces_parent_and_child_chunks() -> None:
     page_two = "POST /v2/ai_search/web_search 使用 Bearer token。 " * 120
     payload = RagMarkdownIngestionPayload(
         resource_id="resource-auth",
-        document_id="doc-auth",
         document_version="v1",
-        title="API 文档",
         markdown="\n\n".join(
             [
                 "<!-- page 1 -->",
@@ -101,7 +104,6 @@ def test_chunking_service_produces_parent_and_child_chunks() -> None:
     result = RagChunkingService().chunk_payload(payload)
 
     assert result.resource_id == "resource-auth"
-    assert result.document_id == "doc-auth"
     assert result.document_version == "v1"
     assert result.pipeline == "parent_child_markdown"
     assert result.parent_chunks
@@ -125,8 +127,6 @@ def test_chunking_service_persists_extra_indexes_for_evidence_location() -> None
 
     result = RagChunkingService().chunk(
         markdown=markdown,
-        document_id="doc-auth",
-        title="API 文档",
     )
 
     all_extra_indexes = tuple(
@@ -154,6 +154,55 @@ def test_chunking_service_persists_extra_indexes_for_evidence_location() -> None
     assert all(chunk.page_label == "1" for chunk in page_one_chunks)
     assert all(chunk.start_offset is not None for chunk in page_one_chunks)
     assert all(chunk.end_offset is not None for chunk in page_one_chunks)
+
+
+@pytest.mark.anyio
+async def test_document_ready_ingestion_maps_kafka_payload_to_rag_payload() -> None:
+    chunking_service = _RecordingChunkingService()
+    service = RagDocumentReadyIngestionService(
+        chunking_service=chunking_service
+    )
+
+    await service.handle(
+        {
+            "resourceId": "resource-doc",
+            "version": 3,
+            "content": "# 标题\n\n正文内容",
+        }
+    )
+
+    assert chunking_service.payload is not None
+    assert chunking_service.payload.resource_id == "resource-doc"
+    assert chunking_service.payload.document_version == "3"
+    assert chunking_service.payload.markdown == "# 标题\n\n正文内容"
+
+
+def test_document_ready_ingestion_rejects_missing_content() -> None:
+    service = RagDocumentReadyIngestionService(
+        chunking_service=_RecordingChunkingService()
+    )
+
+    with pytest.raises(DocumentReadyMessageError):
+        service.ingest(
+            {
+                "resourceId": "resource-doc",
+                "version": 3,
+            }
+        )
+
+
+def test_document_ready_ingestion_rejects_missing_resource_id() -> None:
+    service = RagDocumentReadyIngestionService(
+        chunking_service=_RecordingChunkingService()
+    )
+
+    with pytest.raises(DocumentReadyMessageError):
+        service.ingest(
+            {
+                "version": 3,
+                "content": "# 标题",
+            }
+        )
 
 
 @pytest.mark.anyio
@@ -314,3 +363,18 @@ class _SoftGateResponse:
     def __init__(self, *, content: str) -> None:
         self.content = content
         self.usage_tokens = 12
+
+
+class _RecordingChunkingService:
+    def __init__(self) -> None:
+        self.payload: RagMarkdownIngestionPayload | None = None
+
+    def chunk_payload(self, payload: RagMarkdownIngestionPayload) -> RagChunkingResult:
+        self.payload = payload
+        return RagChunkingResult(
+            parent_chunks=(),
+            child_chunks=(),
+            pipeline="test",
+            resource_id=payload.resource_id,
+            document_version=payload.document_version,
+        )

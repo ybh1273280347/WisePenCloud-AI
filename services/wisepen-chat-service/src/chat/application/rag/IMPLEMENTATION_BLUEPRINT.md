@@ -48,11 +48,9 @@ knowledge_search
 
 ```python
 payload = RagMarkdownIngestionPayload(
-    resource_id=event.resource_id,
-    document_id=event.document_id,
-    document_version=event.document_version,
-    markdown=event.markdown_with_page_markers,
-    title=event.title,
+    resource_id=event.resourceId,
+    document_version=str(event.version),
+    markdown=event.content,
 )
 ```
 
@@ -94,9 +92,7 @@ class RagCorpusRepository:
         self,
         *,
         resource_id: str,
-        document_id: str,
         document_version: str,
-        title: str,
         parent_chunks: tuple[RagParentChunk, ...],
         child_chunks: tuple[RagChildChunk, ...],
     ) -> None:
@@ -117,7 +113,8 @@ class RagCorpusRepository:
     async def find_children_by_locator(
         self,
         *,
-        document_id: str,
+        resource_id: str,
+        document_version: str,
         page_label: str | None = None,
         anchor_label: str | None = None,
         section_path: tuple[str, ...] = (),
@@ -140,7 +137,6 @@ class RagQdrantRepository:
         dense_vectors: dict[str, list[float]],
         sparse_vectors: dict[str, SparseVector],
         resource_id: str,
-        document_id: str,
         document_version: str,
         corpus_version: str,
     ) -> None:
@@ -153,7 +149,6 @@ class RagQdrantRepository:
                     "chunk_id": child.chunk_id,
                     "parent_chunk_id": child.parent_chunk_id,
                     "resource_id": resource_id,
-                    "document_id": document_id,
                     "document_version": document_version,
                     "corpus_version": corpus_version,
                     "content_hash": child.content_hash,
@@ -176,7 +171,7 @@ class RagQdrantRepository:
 
 ### 2.4 Elasticsearch 写入
 
-Elastic 只服务 strict keyword prefilter 和精准 locator 查询。它可以保存 `indexing_text`、标题、章节、页码、锚点等
+Elastic 只服务 strict keyword prefilter 和精准 locator 查询。它可以保存 `indexing_text`、章节、页码、锚点等
 keyword/text 字段。
 
 ```python
@@ -186,10 +181,8 @@ class RagElasticRepository:
         *,
         child_chunks: tuple[RagChildChunk, ...],
         resource_id: str,
-        document_id: str,
         document_version: str,
         corpus_version: str,
-        title: str,
     ) -> None:
         docs = [
             {
@@ -197,10 +190,8 @@ class RagElasticRepository:
                 "chunk_id": child.chunk_id,
                 "parent_chunk_id": child.parent_chunk_id,
                 "resource_id": resource_id,
-                "document_id": document_id,
                 "document_version": document_version,
                 "corpus_version": corpus_version,
-                "title": title,
                 "indexing_text": child.indexing_text,
                 "evidence_text": child.text,
                 "page_label": child.page_label,
@@ -254,7 +245,7 @@ class RagIngestionApplicationService:
         content_hash = hash_text(payload.markdown)
 
         cached = await self._ingestion_cache.get_chunking_result(
-            document_id=payload.document_id,
+            resource_id=payload.resource_id,
             document_version=payload.document_version,
             content_hash=content_hash,
             engine_name="parent_child_markdown",
@@ -269,7 +260,6 @@ class RagIngestionApplicationService:
         child_chunks = await self._context_indexing_service.build(
             child_chunks=chunking_result.child_chunks,
             parent_chunks=chunking_result.parent_chunks,
-            document_title=payload.title,
         )
 
         dense_vectors = await self._embedding_service.embed(
@@ -281,15 +271,12 @@ class RagIngestionApplicationService:
 
         corpus_version = await self._corpus_versions.next_version(
             resource_id=payload.resource_id,
-            document_id=payload.document_id,
             document_version=payload.document_version,
         )
 
         await self._corpus.upsert_document(
             resource_id=payload.resource_id,
-            document_id=payload.document_id,
             document_version=payload.document_version,
-            title=payload.title,
             parent_chunks=chunking_result.parent_chunks,
             child_chunks=child_chunks,
         )
@@ -480,7 +467,8 @@ Elastic 输出只是一组 `candidate_chunk_ids`。Qdrant 仍然在这个 scope 
 ```python
 @dataclass(frozen=True, slots=True)
 class EvidenceLocatorQuery:
-    document_id: str
+    resource_id: str
+    document_version: str | None = None
     page_label: str | None = None
     anchor_label: str | None = None
     section_path: tuple[str, ...] = ()
@@ -493,7 +481,8 @@ class EvidenceLocatorQuery:
 class EvidenceLocatorService:
     async def locate(self, query: EvidenceLocatorQuery) -> EvidenceLocatorResult:
         child_chunks = await self._corpus.find_children_by_locator(
-            document_id=query.document_id,
+            resource_id=query.resource_id,
+            document_version=query.document_version,
             page_label=query.page_label,
             anchor_label=query.anchor_label,
             section_path=query.section_path,
@@ -551,7 +540,6 @@ class RagNeo4jRepository:
         self,
         *,
         resource_id: str,
-        document_id: str,
         document_version: str,
         corpus_version: str,
         child_chunks: tuple[RagChildChunk, ...],
@@ -561,7 +549,6 @@ class RagNeo4jRepository:
                 chunk_id=child.chunk_id,
                 parent_chunk_id=child.parent_chunk_id,
                 resource_id=resource_id,
-                document_id=document_id,
                 document_version=document_version,
                 corpus_version=corpus_version,
                 evidence_text=child.text,
@@ -722,7 +709,7 @@ class EvidenceMaterializer:
 Key 维度：
 
 ```text
-document_id
+resource_id
 document_version
 content_hash
 chunking_engine_name
@@ -744,7 +731,6 @@ class RagIngestionDeterministicCache:
         *,
         child_content_hash: str,
         parent_content_hash: str,
-        document_title_hash: str,
         model_version: str,
         prompt_version: str,
     ) -> ContextIndexingResult | None:

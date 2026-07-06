@@ -4,24 +4,27 @@
 
 ## 当前上游输入
 
-上游 Kafka 协议尚未最终定稿，但当前确定会提供：
+上游 Kafka 协议以文档服务 `DocumentReadyMessage` 为准：
 
-- 已注入页码标记的 Markdown 正文。
-- 预计算好的 ACL。
+```json
+{
+  "resourceId": "string",
+  "version": 1,
+  "content": "string"
+}
+```
 
-当前 RAG 入库代码只消费 Markdown 与文档归属信息。ACL 暂不进入当前协议；等权限模型确定后，应作为独立边界接入。
+当前 RAG 入库代码只消费 `resourceId`、`version` 和 `content`。ACL 暂不进入当前协议；等权限模型确定后，应作为独立边界接入。
 
 ## 入库负载
 
 `RagMarkdownIngestionPayload` 表达一篇 Markdown 文档的入库输入：
 
-| 字段                 | 类型    | 语义                       |
-|--------------------|-------|--------------------------|
-| `resource_id`      | `str` | 业务资源根。当前只作为索引归属标识，不表达权限。 |
-| `document_id`      | `str` | 文档稳定 ID。                 |
-| `document_version` | `str` | 上游文档版本或修订号。              |
-| `markdown`         | `str` | 已注入页码标记的 Markdown 正文。    |
-| `title`            | `str` | 文档标题。                    |
+| 字段                 | 类型    | 来源                         | 语义                       |
+|--------------------|-------|----------------------------|--------------------------|
+| `resource_id`      | `str` | `DocumentReadyMessage.resourceId` | 业务资源根。当前只作为索引归属标识，不表达权限。 |
+| `document_version` | `str` | `DocumentReadyMessage.version`    | 文档版本。                    |
+| `markdown`         | `str` | `DocumentReadyMessage.content`    | 已注入页码标记的 Markdown 正文。    |
 
 页码标记统一格式：
 
@@ -39,9 +42,7 @@
 | `child_chunks`     | `tuple[RagChildChunk, ...]`  | 子块集合，用于精准检索与 Context Indexing。                          |
 | `pipeline`         | `str`                        | 实际使用的 chunking pipeline 名。当前默认 `parent_child_markdown`。 |
 | `resource_id`      | `str`                        | 透传入库负载的资源归属标识。                                          |
-| `document_id`      | `str`                        | 透传入库负载的文档 ID。                                           |
 | `document_version` | `str`                        | 透传入库负载的文档版本。                                            |
-| `title`            | `str`                        | 透传入库负载的文档标题。                                            |
 
 ## Chunk 写入模型
 
@@ -115,6 +116,8 @@ RagChildChunk.chunk_id
 - VIEW hard auth 结果。
 - 已授权 evidence 物化缓存字段。
 - 只为未来权限模型预留的占位 DTO。
+- `document_id`：当前上游事件不提供稳定文档 ID，禁止用 `resource_id` 伪造同名字段。
+- `title` / `document_title`：当前上游事件不提供标题，禁止嗅探 `title`、`resourceName` 或其他非契约字段。
 - `extra_index_names` 这类只保存索引名、再靠别处反查的影子字段。
 - `page_range` / `page_numbers` 这类已经由不跨页 chunk 保证掉的冗余字段。
 - `page` / `anchor` 这类无法判断是标签、索引还是对象的模糊字段。

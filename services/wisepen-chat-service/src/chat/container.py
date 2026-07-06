@@ -12,6 +12,14 @@ from chat.application.agents import (
 )
 from chat.application.chat_turn_coordinator import ChatTurnCoordinator
 from chat.application.llm_provider_resolver import LLMProviderResolver
+from chat.application.rag.consumers import (
+    RagAclRecalculateConsumer,
+    RagDocumentReadyConsumer,
+)
+from chat.application.rag.acl import RagAclProjectionProjector
+from chat.application.rag.ingestion import (
+    RagChunkingService,
+)
 from chat.application.token_counter import TokenCounter
 from chat.application.tools.common.tool_content_store.store import (
     DEFAULT_TOOL_CONTENT_TTL_SECONDS,
@@ -92,6 +100,9 @@ from chat.core.config.nacos import nacos_client_manager
 from chat.core.persistence.mongo.message_repository import MongoMessageRepository
 from chat.core.persistence.mongo.model_repository import MongoModelRepository
 from chat.core.persistence.mongo.provider_repository import MongoProviderRepository
+from chat.core.persistence.mongo.rag_acl_projection_repository import (
+    MongoRagAclProjectionRepository,
+)
 from chat.core.persistence.mongo.session_repository import MongoSessionRepository
 from chat.core.persistence.mongo.web_content_cache_value_repository import (
     MongoWebContentCacheValueRepository,
@@ -121,6 +132,7 @@ from chat.core.security import SecretCipher
 from chat.service_client import FileStorageClient, AIAssetClient, ResourceClient
 from common.cloud.service_discovery import ServiceDiscovery
 from common.http.rpc_client import RpcClient
+from common.kafka.consumer import KafkaConsumerClient
 from common.kafka.producer import KafkaProducerClient
 
 
@@ -153,6 +165,30 @@ def _build_paddle_ocr_client(
             max_poll_attempts=tool_settings.PADDLE_OCR_MAX_POLL_ATTEMPTS,
         ),
         http_client=http_client,
+    )
+
+
+def _build_rag_document_ready_consumer(
+        *,
+        consumer: RagDocumentReadyConsumer,
+) -> KafkaConsumerClient:
+    return KafkaConsumerClient(
+        bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+        topic=settings.KAFKA_DOCUMENT_READY_TOPIC,
+        group_id=settings.KAFKA_RAG_DOCUMENT_READY_GROUP_ID,
+        handler=consumer.handle,
+    )
+
+
+def _build_rag_acl_recalc_consumer(
+        *,
+        consumer: RagAclRecalculateConsumer,
+) -> KafkaConsumerClient:
+    return KafkaConsumerClient(
+        bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+        topic=settings.KAFKA_RESOURCE_ACL_RECALC_TOPIC,
+        group_id=settings.KAFKA_RAG_ACL_RECALC_GROUP_ID,
+        handler=consumer.handle,
     )
 
 
@@ -264,6 +300,33 @@ class Container(containers.DeclarativeContainer):
     kafka_producer = providers.Singleton(
         KafkaProducerClient,
         bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+    )
+    rag_chunking_service = providers.Singleton(
+        RagChunkingService,
+    )
+    rag_document_ready_message_consumer = providers.Singleton(
+        RagDocumentReadyConsumer,
+        chunking_service=rag_chunking_service,
+    )
+    rag_document_ready_kafka_consumer = providers.Singleton(
+        _build_rag_document_ready_consumer,
+        consumer=rag_document_ready_message_consumer,
+    )
+    rag_acl_projection_projector = providers.Singleton(
+        RagAclProjectionProjector,
+    )
+    rag_acl_projection_repository = providers.Singleton(
+        MongoRagAclProjectionRepository,
+        projector=rag_acl_projection_projector,
+    )
+    rag_acl_recalculate_message_consumer = providers.Singleton(
+        RagAclRecalculateConsumer,
+        projector=rag_acl_projection_projector,
+        repository=rag_acl_projection_repository,
+    )
+    rag_acl_recalc_kafka_consumer = providers.Singleton(
+        _build_rag_acl_recalc_consumer,
+        consumer=rag_acl_recalculate_message_consumer,
     )
 
     # ==================================================================

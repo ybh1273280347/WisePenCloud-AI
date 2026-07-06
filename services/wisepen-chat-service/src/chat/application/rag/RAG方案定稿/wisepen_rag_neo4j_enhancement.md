@@ -56,7 +56,7 @@ Neo4j 中的 Chunk 应以 raw / evidence chunk 为准，context indexing text �
 Chunk:
   chunk_id: string
   resource_id: string
-  document_id: string
+  document_version: string
   raw_text: string
   evidence_text: string
   context_indexing_text: string
@@ -468,7 +468,7 @@ GraphExtractionService
 ```text
 组织 raw chunk + context indexing text 输入
 调用 Neo4j GraphRAG KG Builder
-保留 chunk_id / resource_id / document_id 锚点
+保留 chunk_id / resource_id / document_version 锚点
 校验抽取结果
 写入 Neo4j
 记录 extraction trace

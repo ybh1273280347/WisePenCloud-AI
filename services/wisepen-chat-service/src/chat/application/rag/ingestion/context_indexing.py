@@ -20,7 +20,7 @@ CONTEXT_INDEXING_SYSTEM_PROMPT = """\
 
 运行期输入是 XML：
 
-- `<metadata>` 包含 `<document_title>` 和 `<section_path>`，描述文档来源。
+- `<metadata>` 包含 `<section_path>`，描述 chunk 所处章节。
 - `<parent_text>` 是 `child_text` 所在父块，只用于判断 `child_text` 的局部语义位置。
 - `<child_text>` 是需要补充上下文的目标片段。
 
@@ -89,7 +89,6 @@ def _build_llm_prompt(payload: ContextIndexingInput) -> str:
         (
             "<context_indexing_input>",
             "  <metadata>",
-            f"    <document_title>{payload.document_title.strip()}</document_title>",
             f"    <section_path>{section_path}</section_path>",
             "  </metadata>",
             "",
@@ -126,7 +125,6 @@ def _compose_indexing_text(
 ) -> str:
     # indexing_text 服务检索；最终引用仍使用原始 evidence_text。
     parts = [
-        ("文档", payload.document_title),
         ("章节", " > ".join(payload.child_chunk.section_path)),
         ("上下文补充", indexing_context),
         ("正文", payload.child_chunk.text),

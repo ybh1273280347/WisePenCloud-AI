@@ -10,14 +10,13 @@ from chat.application.utils.chunking_engine.models import Chunk, ChunkIndex, Ind
 class RagMarkdownIngestionPayload:
     """RAG 当前可确定的 Markdown 入库负载。
 
+    当前协议严格对齐 DocumentReadyMessage：resourceId / version / content。
     权限投影不在当前协议内；等上游权限模型确定后，应作为独立边界接入。
     """
 
     resource_id: str  # 业务资源根，当前只作为索引归属锚点，不用于权限判断
-    document_id: str  # 文档稳定 ID，同一文档更新时保持不变
-    document_version: str  # 上游文档版本或修订号，用于版本一致性校验
-    markdown: str  # 已注入页码标记的 Markdown 正文
-    title: str = ""  # 文档标题，作为上下文补充的一部分
+    document_version: str  # 上游文档版本，用于版本一致性校验
+    markdown: str  # DocumentReadyMessage.content，已注入页码标记的 Markdown 正文
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,9 +170,7 @@ class RagChunkingResult:
     child_chunks: tuple[RagChildChunk, ...]
     pipeline: str
     resource_id: str = ""
-    document_id: str = ""
     document_version: str = ""
-    title: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,7 +179,6 @@ class ContextIndexingInput:
 
     parent_text: str  # child 所在父块全文，只用于补局部语义位置
     child_chunk: RagChildChunk  # 待补上下文的子块写入模型
-    document_title: str = ""  # 文档标题，帮助判断子块局部语义位置
 
 
 @dataclass(frozen=True, slots=True)

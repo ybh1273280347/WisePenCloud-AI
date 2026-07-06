@@ -35,6 +35,7 @@ def build_query_client(**kwargs):
 
 
 llm_clients_module.LiteLLMQueryClient = LiteLLMQueryClient
+llm_clients_module.QueryClient = LiteLLMQueryClient
 llm_clients_module.QueryResult = QueryResult
 llm_clients_module.build_query_client = build_query_client
 sys.modules["chat.application.utils.llm_clients"] = llm_clients_module
@@ -87,7 +88,6 @@ async def test_context_indexing_service_uses_llm_json_payload() -> None:
                     ),
                 ),
             ),
-            document_title="Redis 运维手册",
         )
     )
 
@@ -100,7 +100,6 @@ async def test_context_indexing_service_uses_llm_json_payload() -> None:
     assert "上下文补充: 该片段说明 Redis volatile-lru 策略只作用于设置过期时间的 key。" in result.indexing_text
     assert "正文: volatile-lru 只淘汰设置了过期时间的 key。" in result.indexing_text
     assert "<context_indexing_input>" in client.calls[0]["prompt"]
-    assert "<document_title>Redis 运维手册</document_title>" in client.calls[0]["prompt"]
     assert "Redis 内存管理章节介绍 maxmemory-policy" in client.calls[0]["prompt"]
 
 
@@ -125,7 +124,6 @@ async def test_context_indexing_service_rejects_bad_llm_response() -> None:
                         ),
                     ),
                 ),
-                document_title="API 文档",
             )
         )
 
@@ -151,7 +149,6 @@ async def test_context_indexing_service_requires_parent_text() -> None:
                     ),
                 ),
             ),
-            document_title="API 文档",
         )
     )
 

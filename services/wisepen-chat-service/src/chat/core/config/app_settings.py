@@ -51,16 +51,24 @@ class AppSettings(BaseModel):
     # ── Message Queue (Kafka) ──────────────────────────────────────────
     KAFKA_BOOTSTRAP_SERVERS: str  # Kafka 引导地址
     KAFKA_TOKEN_CONSUMPTION_TOPIC: str = "wisepen-user-token-consumption-topic"  # Token 消费 topic
+    KAFKA_DOCUMENT_READY_TOPIC: str = "wisepen-document-ready-topic"  # 文档就绪 topic
+    KAFKA_RAG_DOCUMENT_READY_GROUP_ID: str = "wisepen-chat-rag-document-ready-group"  # RAG 文档入库消费者组
+    KAFKA_RESOURCE_ACL_RECALC_TOPIC: str = "wisepen-resource-acl-recalc-topic"  # 资源 ACL 重算 topic
+    KAFKA_RAG_ACL_RECALC_GROUP_ID: str = "wisepen-chat-rag-acl-recalc-group"  # RAG ACL 投影消费者组
 
-    # ── Storage (Redis / MongoDB / Qdrant) ─────────────────────────────
+    # ── Storage (Redis / MongoDB / Qdrant / Neo4j / Elasticsearch) ─────
     REDIS_URL: str  # Redis 连接串
     MONGODB_URL: str  # MongoDB 连接串
     MONGODB_DB_NAME: str  # MongoDB 数据库名
     QDRANT_HOST: str  # Qdrant 主机地址
     QDRANT_PORT: int  # Qdrant 端口
     QDRANT_PASSWORD: str  # Qdrant 密码
-    ELASTIC_SEARCH_BASE_URL: str = ""  # Elasticsearch 基础 URL；空串表示未启用
-    ELASTIC_SEARCH_API_KEY: str = ""  # Elasticsearch API key；空串表示未启用
+    NEO4J_URI: str = "neo4j://localhost:7687"  # Neo4j 连接 URI
+    NEO4J_USERNAME: str = "neo4j"  # Neo4j 用户名
+    NEO4J_PASSWORD: str = "password123"  # Neo4j 密码
+    ELASTIC_SEARCH_BASE_URL: str = "http://wisepen-dev-server:9200"  # Elasticsearch 基础 URL；空串表示未启用
+    ELASTIC_SEARCH_USERNAME: str = "elastic"  # Elasticsearch 用户名
+    ELASTIC_SEARCH_PASSWORD: str = "root"  # Elasticsearch 密码
 
     # ── Context Window (模型上下文窗口预算) ────────────────────────────
     CTX_TOKEN_LIMIT: int = 128000  # 上下文窗口大小，对齐 gpt-4o 128k

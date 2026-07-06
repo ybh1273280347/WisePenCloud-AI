@@ -39,6 +39,7 @@ from chat.api.endpoints import model as model_endpoints
 from chat.api.endpoints import tool as tool_endpoints
 from chat.api.endpoints import web_search as web_search_endpoints
 from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping
+from chat.domain.entities.rag_acl import RagAclProjectionDocument
 from chat.domain.entities.web_search_credential import WebSearchCredential
 from chat.domain.entities.web_content_cache import WebContentCacheValueDocument
 
@@ -69,6 +70,7 @@ async def lifespan(app: FastAPI):
             ModelProviderMapping,
             WebSearchCredential,
             WebContentCacheValueDocument,
+            RagAclProjectionDocument,
         ],
     )
     info("beanie initialized.", db=settings.MONGODB_DB_NAME)
@@ -82,6 +84,14 @@ async def lifespan(app: FastAPI):
     # 启动 Kafka Producer
     kafka_producer = container.kafka_producer()
     await kafka_producer.start()
+
+    # 启动 RAG 文档就绪 Consumer
+    rag_document_ready_consumer = container.rag_document_ready_kafka_consumer()
+    await rag_document_ready_consumer.start()
+
+    # 启动 RAG ACL 重算 Consumer
+    rag_acl_recalc_consumer = container.rag_acl_recalc_kafka_consumer()
+    await rag_acl_recalc_consumer.start()
 
     # 启动 Oss File 加载器
     oss_file_loader = container.oss_file_loader()
@@ -102,6 +112,14 @@ async def lifespan(app: FastAPI):
     # 关闭 Kafka Producer
     kafka_producer = container.kafka_producer()
     await kafka_producer.stop()
+
+    # 关闭 RAG 文档就绪 Consumer
+    rag_document_ready_consumer = container.rag_document_ready_kafka_consumer()
+    await rag_document_ready_consumer.stop()
+
+    # 关闭 RAG ACL 重算 Consumer
+    rag_acl_recalc_consumer = container.rag_acl_recalc_kafka_consumer()
+    await rag_acl_recalc_consumer.stop()
 
     # 关闭 Oss File 加载器
     oss_file_loader = container.oss_file_loader()
