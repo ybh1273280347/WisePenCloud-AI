@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any, Dict, List, Optional
 
@@ -11,7 +12,11 @@ class TokenCounter:
 
     async def count_text(self, text: str, model_name: str = "gpt-4o") -> int:
         try:
-            return litellm.token_counter(model=self._to_openai_compatible_model(model_name), text=text)
+            return await asyncio.to_thread(
+                litellm.token_counter,
+                model=self._to_openai_compatible_model(model_name),
+                text=text,
+            )
         except Exception:
             return max(1, len(text))
 
@@ -22,7 +27,8 @@ class TokenCounter:
             tools: Optional[List[Dict[str, Any]]] = None,
     ) -> int:
         try:
-            return litellm.token_counter(
+            return await asyncio.to_thread(
+                litellm.token_counter,
                 model=self._to_openai_compatible_model(model_name),
                 messages=self._convert_messages(messages),
                 tools=tools,
