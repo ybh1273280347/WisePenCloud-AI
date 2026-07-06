@@ -22,12 +22,11 @@ class TokenCounter:
             tools: Optional[List[Dict[str, Any]]] = None,
     ) -> int:
         try:
-            result = await litellm.acount_tokens(
+            return litellm.token_counter(
                 model=self._to_openai_compatible_model(model_name),
                 messages=self._convert_messages(messages),
                 tools=tools,
             )
-            return int(getattr(result, "total_tokens", 0) or 0)
         except Exception:
             payload = self._convert_messages(messages)
             if tools:
