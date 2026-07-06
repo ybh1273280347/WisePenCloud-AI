@@ -19,7 +19,7 @@ from chat.application.tools.core.tool_return import (
 )
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
-from chat.application.tools.web_tools.search_services.candidate_store.repository import (
+from chat.application.tools.web_tools.search_services.candidate_store.repository_protocol import (
     WebSearchCandidateRepository,
 )
 from chat.application.tools.web_tools.fetch_services import FetchCoordinator

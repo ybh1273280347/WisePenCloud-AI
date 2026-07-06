@@ -16,7 +16,7 @@ from chat.application.tools.web_tools._search_tool_utils import (
     select_recommended_ids,
     store_candidate_mappings,
 )
-from chat.application.tools.web_tools.search_services.candidate_store.repository import (
+from chat.application.tools.web_tools.search_services.candidate_store.repository_protocol import (
     WebSearchCandidateRepository,
 )
 from chat.application.tools.web_tools.search_services.core.errors import (

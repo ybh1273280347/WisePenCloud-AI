@@ -1,5 +1,5 @@
 from .models import WebSearchCandidateMapping
-from .repository import WebSearchCandidateRepository
+from .repository_protocol import WebSearchCandidateRepository
 
 __all__ = [
     "WebSearchCandidateMapping",
