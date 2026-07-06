@@ -2,10 +2,21 @@
 
 > 一句话：基于 SymPy/SciPy/NumPy 做概率、分布、描述统计、回归和相关性计算，不执行任意代码。
 
-实现入口：`src/chat/application/tools/math_tools/stats_solver_tool.py`
+实现入口：`src/chat/application/tools/math_tools/stats_solve_tool.py`
 
 `stats_solver` 处理概率、分布函数、描述统计、线性回归和相关性计算。符号概率表达式使用 SymPy，分布、回归和相关性使用 SciPy/NumPy。
 
+
+## 实现分层
+
+| 关注点 | 入口 |
+| --- | --- |
+| 工具通用外壳 | `math_tools/core/base_tool.py` |
+| task 枚举 | `math_tools/core/tasks.py` |
+| solver 错误 | `math_tools/core/errors.py` |
+| 表达式解析 | `math_tools/_utils/expression_parser.py` |
+| payload 读取 | `math_tools/_utils/payload_readers.py` |
+| 具体 solver | `math_tools/solvers/` |
 ## 何时使用
 
 - 需要二项分布、Poisson 分布、正态/t/卡方/F 分布 CDF。

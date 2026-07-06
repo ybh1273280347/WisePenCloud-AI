@@ -2,10 +2,21 @@
 
 > 一句话：基于 SymPy/NumPy 做矩阵和线性代数任务，不执行任意代码。
 
-实现入口：`src/chat/application/tools/math_tools/linear_algebra_solver_tool.py`
+实现入口：`src/chat/application/tools/math_tools/linear_algebra_solve_tool.py`
 
 `linear_algebra_solver` 执行确定性的矩阵和线性代数任务。精确任务主要使用 SymPy，SVD、QR 和矩阵整数次幂使用 NumPy 数值计算。
 
+
+## 实现分层
+
+| 关注点 | 入口 |
+| --- | --- |
+| 工具通用外壳 | `math_tools/core/base_tool.py` |
+| task 枚举 | `math_tools/core/tasks.py` |
+| solver 错误 | `math_tools/core/errors.py` |
+| 表达式解析 | `math_tools/_utils/expression_parser.py` |
+| payload 读取 | `math_tools/_utils/payload_readers.py` |
+| 具体 solver | `math_tools/solvers/` |
 ## 何时使用
 
 - 需要行列式、迹、秩、逆、RREF、特征值、线性方程组、矩阵乘法、SVD、QR、零空间或矩阵幂。

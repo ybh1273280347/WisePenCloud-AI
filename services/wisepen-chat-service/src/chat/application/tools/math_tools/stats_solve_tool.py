@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from chat.application.tools.math_tools.base_math_tool import MathSolveTool
-from chat.application.tools.math_tools.services.solvers.stats_solver import StatsSolver
-from chat.application.tools.math_tools.services.tasks import StatsTask
+from chat.application.tools.math_tools.core.base_tool import MathSolveTool
+from chat.application.tools.math_tools.solvers.stats_solver import StatsSolver
+from chat.application.tools.math_tools.core.tasks import StatsTask
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",

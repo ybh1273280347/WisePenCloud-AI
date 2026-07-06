@@ -2,10 +2,21 @@
 
 > 一句话：基于 SymPy 做表达式化简、展开、因式分解和组合数学/数论任务，不执行任意代码。
 
-实现入口：`src/chat/application/tools/math_tools/expression_solver_tool.py`
+实现入口：`src/chat/application/tools/math_tools/expression_solve_tool.py`
 
 `expression_solver` 处理基础符号表达式、组合数学和轻量数论任务。它基于 SymPy 和 Python 标准库数学函数，不执行任意代码。
 
+
+## 实现分层
+
+| 关注点 | 入口 |
+| --- | --- |
+| 工具通用外壳 | `math_tools/core/base_tool.py` |
+| task 枚举 | `math_tools/core/tasks.py` |
+| solver 错误 | `math_tools/core/errors.py` |
+| 表达式解析 | `math_tools/_utils/expression_parser.py` |
+| payload 读取 | `math_tools/_utils/payload_readers.py` |
+| 具体 solver | `math_tools/solvers/` |
 ## 何时使用
 
 - 需要表达式化简、展开、因式分解或数值化。

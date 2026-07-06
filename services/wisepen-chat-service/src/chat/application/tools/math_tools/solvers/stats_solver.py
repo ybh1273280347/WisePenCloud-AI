@@ -7,15 +7,15 @@ import numpy as np
 import sympy as sp
 from scipy import stats
 
-from chat.application.tools.math_tools.services._utils import (
+from chat.application.tools.math_tools._utils import (
     parse_bound,
     parse_expr,
     read_latex,
     read_numeric_values,
     read_variable_name,
 )
-from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.tasks import StatsTask
+from chat.application.tools.math_tools.core.errors import MathSolverError
+from chat.application.tools.math_tools.core.tasks import StatsTask
 
 
 class StatsSolver:

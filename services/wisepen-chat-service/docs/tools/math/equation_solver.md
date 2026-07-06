@@ -2,10 +2,21 @@
 
 > 一句话：基于 SymPy/SciPy 解方程、不等式、数值求根和轻量优化，不执行任意代码。
 
-实现入口：`src/chat/application/tools/math_tools/equation_solver_tool.py`
+实现入口：`src/chat/application/tools/math_tools/equation_solve_tool.py`
 
 `equation_solver` 处理方程、不等式、数值求根和轻量优化任务。符号部分基于 SymPy，数值求根和优化基于 SciPy。
 
+
+## 实现分层
+
+| 关注点 | 入口 |
+| --- | --- |
+| 工具通用外壳 | `math_tools/core/base_tool.py` |
+| task 枚举 | `math_tools/core/tasks.py` |
+| solver 错误 | `math_tools/core/errors.py` |
+| 表达式解析 | `math_tools/_utils/expression_parser.py` |
+| payload 读取 | `math_tools/_utils/payload_readers.py` |
+| 具体 solver | `math_tools/solvers/` |
 ## 何时使用
 
 - 需要解单个方程、方程组、一元不等式。

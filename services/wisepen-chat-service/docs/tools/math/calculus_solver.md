@@ -2,10 +2,21 @@
 
 > 一句话：基于 SymPy 做确定性微积分、级数、ODE 和 Laplace 变换，不执行任意代码。
 
-实现入口：`src/chat/application/tools/math_tools/calculus_solver_tool.py`
+实现入口：`src/chat/application/tools/math_tools/calculus_solve_tool.py`
 
 `calculus_solver` 执行确定性的微积分、级数、常微分方程和 Laplace 变换任务。它基于 SymPy，不是 Python REPL，不执行任意代码，不读取文件，也不访问网络。
 
+
+## 实现分层
+
+| 关注点 | 入口 |
+| --- | --- |
+| 工具通用外壳 | `math_tools/core/base_tool.py` |
+| task 枚举 | `math_tools/core/tasks.py` |
+| solver 错误 | `math_tools/core/errors.py` |
+| 表达式解析 | `math_tools/_utils/expression_parser.py` |
+| payload 读取 | `math_tools/_utils/payload_readers.py` |
+| 具体 solver | `math_tools/solvers/` |
 ## 何时使用
 
 - 需要符号求导、积分、极限、泰勒展开、求和、常微分方程或 Laplace 变换。

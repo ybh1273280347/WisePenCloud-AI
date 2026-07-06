@@ -209,7 +209,8 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 - 工具门面只负责 schema、description、policy 和 service 调度。
 - 无状态 service 负责 SymPy / NumPy / SciPy 调用。
 - 固定 task 集合使用 `StrEnum`，schema 和 service 从同一枚举来源读取。
-- 同类 helper 聚合为命名空间类，例如 task registry、expression parser、payload reader、result formatter。
+- `core/` 放工具外壳、错误和 task 枚举；`_utils/` 放表达式解析和 payload 读取；`solvers/` 放具体 solver。
+- 同类 helper 聚合为清晰命名模块，例如 `expression_parser.py` 和 `payload_readers.py`。
 - 普通结果返回 dataclass，由统一递归渲染处理。
 
 ## 引用协议

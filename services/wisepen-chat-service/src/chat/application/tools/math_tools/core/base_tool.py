@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any
 
 from chat.application.tools.core import (
     ToolDefinition,
@@ -10,14 +10,10 @@ from chat.application.tools.core import (
     ToolPolicy,
     ToolRiskLevel,
 )
-from chat.application.tools.math_tools.services.errors import MathSolverError
+from chat.application.tools.math_tools.core.errors import MathSolverError
+from chat.application.tools.math_tools.solvers.base import MathSolver
 from chat.application.tools.tool_settings import tool_settings
 from common.logger import error
-
-
-class MathSolver(Protocol):
-    async def solve(self, task: str, payload: dict[str, Any]) -> Any:
-        ...
 
 
 class MathSolveTool:

@@ -5,7 +5,7 @@ from typing import Any
 
 import sympy as sp
 
-from chat.application.tools.math_tools.services._utils import (
+from chat.application.tools.math_tools._utils import (
     parse_bound,
     parse_expr,
     parse_ode_equation,
@@ -13,8 +13,8 @@ from chat.application.tools.math_tools.services._utils import (
     read_variable_name,
     read_variable_names,
 )
-from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.tasks import CalculusTask
+from chat.application.tools.math_tools.core.errors import MathSolverError
+from chat.application.tools.math_tools.core.tasks import CalculusTask
 
 
 class CalculusSolver:

@@ -7,7 +7,7 @@ import numpy as np
 import sympy as sp
 from scipy import optimize
 
-from chat.application.tools.math_tools.services._utils import (
+from chat.application.tools.math_tools._utils import (
     parse_bound,
     parse_equation,
     parse_expr,
@@ -17,8 +17,8 @@ from chat.application.tools.math_tools.services._utils import (
     read_variable_name,
     read_variable_names,
 )
-from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.tasks import EquationTask
+from chat.application.tools.math_tools.core.errors import MathSolverError
+from chat.application.tools.math_tools.core.tasks import EquationTask
 
 
 class EquationSolver:

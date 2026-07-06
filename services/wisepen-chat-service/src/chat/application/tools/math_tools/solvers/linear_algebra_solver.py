@@ -5,14 +5,14 @@ from typing import Any
 
 import numpy as np
 
-from chat.application.tools.math_tools.services._utils.readers import (
+from chat.application.tools.math_tools._utils.payload_readers import (
     read_latex,
     read_matrix,
     read_numeric_matrix,
     read_vector,
 )
-from chat.application.tools.math_tools.services.errors import MathSolverError
-from chat.application.tools.math_tools.services.tasks import LinearAlgebraTask
+from chat.application.tools.math_tools.core.errors import MathSolverError
+from chat.application.tools.math_tools.core.tasks import LinearAlgebraTask
 
 
 class LinearAlgebraSolver:

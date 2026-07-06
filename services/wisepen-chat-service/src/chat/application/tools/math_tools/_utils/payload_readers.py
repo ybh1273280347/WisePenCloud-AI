@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import sympy as sp
 
-from chat.application.tools.math_tools.services.errors import MathSolverError
+from chat.application.tools.math_tools.core.errors import MathSolverError
 
 
 def read_variable_name(payload: dict[str, Any], default: str = "x") -> str:
