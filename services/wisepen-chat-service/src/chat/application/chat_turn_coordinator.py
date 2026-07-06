@@ -14,7 +14,7 @@ from chat.application.token_counter import TokenCounter
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
 from chat.application.tools.skill_tools.utils.skill_matcher import SkillMatcher
-from chat.application.tools.web_tools.search_services.runtime_context import (
+from chat.application.tools.web_tools.search_services.core.runtime_context import (
     WebSearchRuntimeContextResolver,
 )
 from chat.core.config.app_settings import settings

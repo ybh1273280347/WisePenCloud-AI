@@ -76,25 +76,25 @@ sys.modules["chat.domain.entities.web_search_credential"] = web_search_credentia
 
 from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
 from chat.application.tools.core import ToolExecutionError
-from chat.application.tools.web_tools.search_services.errors import WebSearchEmptyResult
+from chat.application.tools.web_tools.search_services.core.errors import WebSearchEmptyResult
 from chat.application.tools.web_tools.search_services.providers.models import (
     ProviderSearchResponse,
     ProviderSearchResult,
     SearchPreview,
     SearchProviderName,
 )
-from chat.application.tools.web_tools.search_services.runtime_context import (
+from chat.application.tools.web_tools.search_services.core.runtime_context import (
     WebSearchRuntimeConfig,
 )
-from chat.application.tools.web_tools.search_services.sources import WebSearchSourceKind
-from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import (
+from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
+from chat.application.tools.web_tools.search_services.hydrators.academic import (
     HydratedPaper,
     HydratedPaperAuthor,
 )
-from chat.application.tools.web_tools.search_services.services.academic_search.service import (
+from chat.application.tools.web_tools.search_services.academic_search import (
     AcademicSearchService,
 )
-from chat.application.tools.web_tools.search_services.services.search_executor import WebSearchResult
+from chat.application.tools.web_tools.search_services.pipeline.search_executor import WebSearchResult
 from chat.application.tools.web_tools.web_search_tool import WebSearchTool
 
 

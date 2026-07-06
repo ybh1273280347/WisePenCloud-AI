@@ -1,20 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
-
 from chat.application.tools.core.tool_return import (
     SuggestedAction,
     SuggestedActionPriority,
     ToolReturn,
 )
 from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse
-from chat.application.tools.web_tools.search_services.services.candidates_builder import (
+from chat.application.tools.web_tools.search_services.pipeline.candidates_builder import (
     VisibleWebSearchCandidate,
     WebSearchCandidate,
 )
-from chat.application.tools.web_tools.search_services.services.search_executor import (
+from chat.application.tools.web_tools.search_services.pipeline.search_executor import (
     WebSearchResult,
 )
+
 
 def build_web_search_tool_return(
         result: WebSearchResult,

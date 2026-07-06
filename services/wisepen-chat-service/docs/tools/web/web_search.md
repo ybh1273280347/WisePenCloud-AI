@@ -103,13 +103,13 @@ question
 | 关注点 | 入口 |
 | --- | --- |
 | 工具实现 | `web_tools/web_search_tool.py` |
-| Web search service | `search_services/services/web_search/service.py` |
-| Web search result builder | `search_services/services/web_search/result_builder.py` |
-| 共享搜索编排 | `search_services/services/search.py` |
-| 共享候选构建 | `search_services/services/candidates.py` |
-| LLM 候选选择 | `search_services/candidate_selector.py` |
+| Web search service | `search_services/web_search.py` |
+| Web search result builder | `search_services/result_builders/web.py` |
+| 共享搜索编排 | `search_services/pipeline/search_executor.py` |
+| 共享候选构建 | `search_services/pipeline/candidates_builder.py` |
+| LLM 候选选择 | `search_services/pipeline/candidate_selector.py` |
 | 搜索源工厂 | `search_services/factories/` |
-| 运行期配置解析 | `search_services/runtime_context.py` |
+| 运行期配置解析 | `search_services/core/runtime_context.py` |
 | search_ref 映射缓存 | `search_services/candidate_store/` |
 | 搜索公共工具函数 | `web_tools/_search_tool_utils.py` |
 | web_fetch 工具 | `web_tools/web_fetch_tool.py` |

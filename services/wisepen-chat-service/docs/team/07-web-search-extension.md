@@ -33,34 +33,39 @@
 
 ```
 search_services/
-    candidate_selector.py       # LLM 候选选择（search 工具族共享，非 service 专属）
-    errors.py                   # 异常体系
-    runtime_context.py          # 运行期配置解析
-    sources.py                  # 运行时搜索源类型（platform_default / platform_member / custom）
+    __init__.py                 # 只导出稳定搜索 service
+    web_search.py               # WebSearchService，对外稳定服务入口
+    academic_search.py          # AcademicSearchService，对外稳定服务入口
+    core/
+        sources.py              # 运行时搜索源类型（platform_default / platform_member / custom）
+        errors.py               # 异常体系
+        runtime_context.py      # 运行期配置解析
+    pipeline/
+        candidates_builder.py   # 共享候选构建
+        search_executor.py      # 共享搜索执行与异常翻译
+        candidate_selector.py   # LLM 候选选择
+    result_builders/
+        web.py                  # build_web_search_tool_return
+        academic.py             # build_academic_search_tool_return
+    hydrators/
+        academic/               # OpenAlex 水合
     factories/                  # 搜索源与 integration searcher 工厂
     providers/                  # Provider 定义（枚举、请求/响应模型）
     searchers/
         platform/               # 平台默认源内部实现（4get / DDGS / fallback）
         integrations/           # 可被 platform_member 和 custom 复用的 provider adapter
     candidate_store/            # search_ref → URL 映射缓存
-    services/
-        search.py               # 共享搜索编排：execute_provider_search、WebSearchResult
-        candidates.py           # 共享候选构建：WebSearchCandidate、build_candidates、build_candidate_mappings
-        web_search/
-            service.py          # WebSearchService
-            result_builder.py   # build_web_search_tool_return
-        academic_search/
-            service.py          # AcademicSearchService
-            result_builder.py   # build_academic_search_tool_return
-            hydrators/          # OpenAlex 水合
 ```
 
 分层逻辑：
 
-- `services/search.py`：source 异常翻译、search_once 委托 —— 两个 service 共用。
-- `services/candidates.py`：候选对象构建与映射 —— 两个 service 共用。
-- `services/web_search/` 和 `services/academic_search/`：各自的 service 编排和 result builder，互不依赖。
-- `candidate_selector.py`：放在顶层，因为它是跨 service 的 LLM 候选选择能力，不属于任何单个 service。
+- `web_search.py` 和 `academic_search.py`：稳定服务入口，只承载各自工具的业务编排。
+- `pipeline/search_executor.py`：source 异常翻译、search_once 委托 —— 两个 service 共用。
+- `pipeline/candidates_builder.py`：候选对象构建与映射 —— 两个 service 共用。
+- `pipeline/candidate_selector.py`：跨 service 的 LLM 候选选择能力，不属于任何单个 service。
+- `result_builders/`：各工具可见返回构造，按 web / academic 拆分。
+- `hydrators/academic/`：学术搜索专属 OpenAlex 水合，不放回 service 目录。
+- `core/`：运行时搜索源、异常与 runtime context。
 - `factories/custom_source_factory.py`：只构造用户自定义源，读取用户 API key。
 - `factories/platform_source_factory.py`：只构造平台源；`platform_default` 使用 4get/DDGS fallback，`platform_member` 使用平台 API key 调用 integration provider。
 - `factories/integration_searcher_factory.py`：只负责构造 Exa、Tavily、AnySearch、百度千帆等可复用 provider adapter。
@@ -243,7 +248,7 @@ OpenAlex 永远只是可选水合层，不参与工具是否暴露的判断。
 不要用 mode/endpoint 参数在现有工具内部做二次路由。每开一个专用搜索类型，就是：
 
 1. 一个新的顶层工具（如 `news_search_tool.py`）。
-2. 对应的 service 和 result builder（在 `search_services/services/news_search/` 下）。
+2. 对应的 service 和 result builder（service 放在 `search_services/news_search.py`，result builder 放在 `search_services/result_builders/news.py`）。
 3. searcher 基类上新增一个占位方法（如 `search_news(...)`）。
 4. provider 枚举上新增 capability 开关（如 `supports_news_search`）。
 
@@ -278,15 +283,14 @@ def supports_news_search(self) -> bool:
 
 ### 第三步：新增 service 和 result builder
 
-目录：`search_services/services/news_search/`
+入口：
 
 ```
-services/news_search/
-    service.py          # NewsSearchService
-    result_builder.py   # build_news_search_tool_return
+search_services/news_search.py              # NewsSearchService
+search_services/result_builders/news.py     # build_news_search_tool_return
 ```
 
-service 复用 `services/search.py` 中的 `execute_provider_search`（只需改 `search_once` lambda 调用 `searcher.search_news(...)`）和 `services/candidates.py` 中的候选构建逻辑。
+service 复用 `pipeline/search_executor.py` 中的 `execute_provider_search`（只需改 `search_once` lambda 调用 `searcher.search_news(...)`）和 `pipeline/candidates_builder.py` 中的候选构建逻辑。
 
 result builder 根据专用搜索类型定义自己的可见字段（如新闻搜索可能暴露 `published_date`、`source_name`，图片搜索可能暴露 `thumbnail_url`、`image_dimensions`）。
 
@@ -320,7 +324,7 @@ result builder 根据专用搜索类型定义自己的可见字段（如新闻�
 
 1. searcher 基类新增 `search_xxx(...)` 占位方法。
 2. `SearchProviderName` 新增 `supports_xxx_search` capability。
-3. 新增 `search_services/services/xxx_search/`（service + result builder）。
+3. 新增 `search_services/xxx_search.py` 和 `search_services/result_builders/xxx.py`。
 4. 新增 `web_tools/xxx_search_tool.py` 顶层工具。
 5. 接入容器，确认暴露条件。
 6. 补文档和测试。
@@ -349,17 +353,17 @@ result builder 根据专用搜索类型定义自己的可见字段（如新闻�
 | Provider 枚举与能力 | `search_services/providers/models.py` |
 | Provider 适配 | `search_services/providers/` |
 | Searcher 实现 | `search_services/searchers/platform/`、`search_services/searchers/integrations/` |
-| 共享搜索编排 | `search_services/services/search.py` |
-| 共享候选构建 | `search_services/services/candidates.py` |
-| Web search service | `search_services/services/web_search/service.py` |
-| Web search result builder | `search_services/services/web_search/result_builder.py` |
-| Academic search service | `search_services/services/academic_search/service.py` |
-| Academic search result builder | `search_services/services/academic_search/result_builder.py` |
-| OpenAlex 水合 | `search_services/services/academic_search/hydrators/` |
-| LLM 候选选择 | `search_services/candidate_selector.py` |
+| 共享搜索编排 | `search_services/pipeline/search_executor.py` |
+| 共享候选构建 | `search_services/pipeline/candidates_builder.py` |
+| Web search service | `search_services/web_search.py` |
+| Web search result builder | `search_services/result_builders/web.py` |
+| Academic search service | `search_services/academic_search.py` |
+| Academic search result builder | `search_services/result_builders/academic.py` |
+| OpenAlex 水合 | `search_services/hydrators/academic/` |
+| LLM 候选选择 | `search_services/pipeline/candidate_selector.py` |
 | 搜索源工厂 | `search_services/factories/` |
-| 运行期配置解析 | `search_services/runtime_context.py` |
-| 异常体系 | `search_services/errors.py` |
+| 运行期配置解析 | `search_services/core/runtime_context.py` |
+| 异常体系 | `search_services/core/errors.py` |
 | search_ref 映射缓存 | `search_services/candidate_store/` |
 | 普通搜索工具 | `web_tools/web_search_tool.py` |
 | 学术搜索工具 | `web_tools/academic_search_tool.py` |

@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from chat.application.tools.web_tools.search_services.errors import (
+from chat.application.tools.web_tools.search_services.core.errors import (
     WebSearchCustomApiKeyInvalid,
     WebSearchCustomApiKeyMissing,
 )
 from chat.application.tools.web_tools.search_services.factories.integration_searcher_factory import (
     IntegrationSearcherFactory,
 )
-from chat.application.tools.web_tools.search_services.runtime_context import WebSearchRuntimeConfig
-from chat.application.tools.web_tools.search_services.sources import CustomSearchSource, WebSearchSourceKind
+from chat.application.tools.web_tools.search_services.core.runtime_context import WebSearchRuntimeConfig
+from chat.application.tools.web_tools.search_services.core.sources import CustomSearchSource, WebSearchSourceKind
 
 
 @dataclass(frozen=True, slots=True)

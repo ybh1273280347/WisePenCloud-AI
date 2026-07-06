@@ -19,7 +19,7 @@ from chat.application.tools.web_tools._search_tool_utils import (
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
-from chat.application.tools.web_tools.search_services.errors import (
+from chat.application.tools.web_tools.search_services.core.errors import (
     WebSearchCustomApiKeyInvalid,
     WebSearchCustomApiKeyMissing,
     WebSearchEmptyResult,
@@ -32,12 +32,12 @@ from chat.application.tools.web_tools.search_services.factories.custom_source_fa
 from chat.application.tools.web_tools.search_services.factories.platform_source_factory import (
     WebSearchPlatformSourceFactory,
 )
-from chat.application.tools.web_tools.search_services.services.candidates_builder import build_candidates
-from chat.application.tools.web_tools.search_services.services.web_search.result_builder import (
+from chat.application.tools.web_tools.search_services.pipeline.candidates_builder import build_candidates
+from chat.application.tools.web_tools.search_services.result_builders.web import (
     build_web_search_tool_return,
 )
-from chat.application.tools.web_tools.search_services.services.web_search.service import WebSearchService
-from chat.application.tools.web_tools.search_services.sources import WebSearchSourceKind
+from chat.application.tools.web_tools.search_services.web_search import WebSearchService
+from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
 
 # 边界控制常量（全部通过 tool_settings 调参控制）
 DEFAULT_WEB_SEARCH_RESULTS = tool_settings.WEB_SEARCH_DEFAULT_RESULTS

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from chat.application.tools.web_tools.search_services.errors import WebSearchCustomApiKeyInvalid
+from chat.application.tools.web_tools.search_services.core.errors import WebSearchCustomApiKeyInvalid
 from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
 from chat.application.tools.web_tools.search_services.searchers import (
     AnySearchSearcher,

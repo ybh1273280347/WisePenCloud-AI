@@ -70,8 +70,8 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 
 水合实现边界：
 
-- OpenAlex 逻辑位于 `search_services/services/academic_search/hydrators/`
-- 学术搜索的单次 provider 调用和 OpenAlex 水合编排位于 `search_services/services/academic_search/service.py`
+- OpenAlex 逻辑位于 `search_services/hydrators/academic/`
+- 学术搜索的单次 provider 调用和 OpenAlex 水合编排位于 `search_services/academic_search.py`
 - `url` 路径优先，命中失败后才回退到 `title`
 - `title` 路径只接受标准化后精确匹配且唯一的结果
 - URL 或 title 出现多结果时直接放弃水合，回退搜索源结果
@@ -106,13 +106,13 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 | 关注点 | 入口 |
 | --- | --- |
 | 工具实现 | `web_tools/academic_search_tool.py` |
-| Academic search service | `search_services/services/academic_search/service.py` |
-| Academic search result builder | `search_services/services/academic_search/result_builder.py` |
-| OpenAlex 水合 | `search_services/services/academic_search/hydrators/` |
-| 共享搜索编排 | `search_services/services/search.py` |
-| 共享候选构建 | `search_services/services/candidates.py` |
-| LLM 候选选择 | `search_services/candidate_selector.py` |
+| Academic search service | `search_services/academic_search.py` |
+| Academic search result builder | `search_services/result_builders/academic.py` |
+| OpenAlex 水合 | `search_services/hydrators/academic/` |
+| 共享搜索编排 | `search_services/pipeline/search_executor.py` |
+| 共享候选构建 | `search_services/pipeline/candidates_builder.py` |
+| LLM 候选选择 | `search_services/pipeline/candidate_selector.py` |
 | 搜索源工厂 | `search_services/factories/` |
-| 运行期配置解析 | `search_services/runtime_context.py` |
+| 运行期配置解析 | `search_services/core/runtime_context.py` |
 | search_ref 映射缓存 | `search_services/candidate_store/` |
 | 搜索公共工具函数 | `web_tools/_search_tool_utils.py` |

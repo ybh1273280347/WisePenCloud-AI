@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from chat.application.tools.web_tools.search_services.errors import (
+from chat.application.tools.web_tools.search_services.core.errors import (
     WebSearchCustomApiKeyInvalid,
     WebSearchCustomApiKeyMissing,
     WebSearchCustomError,
@@ -18,7 +18,7 @@ from chat.application.tools.web_tools.search_services.searchers import (
     SearchProviderCredentialError,
     SearchProviderNetworkError,
 )
-from chat.application.tools.web_tools.search_services.sources import (
+from chat.application.tools.web_tools.search_services.core.sources import (
     WebSearchRuntimeSource,
     WebSearchSourceKind,
 )

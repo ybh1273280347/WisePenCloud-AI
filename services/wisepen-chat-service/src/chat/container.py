@@ -62,7 +62,7 @@ from chat.application.tools.web_tools.search_services.factories.integration_sear
 from chat.application.tools.web_tools.search_services.factories.platform_source_factory import (
     WebSearchPlatformSourceFactory,
 )
-from chat.application.tools.web_tools.search_services.runtime_context import (
+from chat.application.tools.web_tools.search_services.core.runtime_context import (
     WebSearchRuntimeContextResolver,
 )
 from chat.application.tools.web_tools.search_services.searchers import (
@@ -72,9 +72,9 @@ from chat.application.tools.web_tools.search_services.searchers import (
     ProviderSearcher,
     SearchProviderConfig,
 )
-from chat.application.tools.web_tools.search_services.services.academic_search import AcademicSearchService
-from chat.application.tools.web_tools.search_services.services.academic_search.hydrators import PaperHydrator
-from chat.application.tools.web_tools.search_services.services.web_search.service import WebSearchService
+from chat.application.tools.web_tools.search_services.hydrators.academic import PaperHydrator
+from chat.application.tools.web_tools.search_services.academic_search import AcademicSearchService
+from chat.application.tools.web_tools.search_services.web_search import WebSearchService
 from chat.application.tools.web_tools.web_fetch import (
     FetchCoordinator,
     WebCrawler,
