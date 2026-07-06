@@ -21,12 +21,12 @@ web_tools_module = types.ModuleType("chat.application.tools.web_tools")
 web_tools_module.__path__ = [str(WEB_TOOLS_ROOT)]
 sys.modules["chat.application.tools.web_tools"] = web_tools_module
 
-web_fetch_module = types.ModuleType("chat.application.tools.web_tools.web_fetch")
-web_fetch_module.__path__ = [str(WEB_TOOLS_ROOT / "web_fetch")]
+web_fetch_module = types.ModuleType("chat.application.tools.web_tools.fetch_services")
+web_fetch_module.__path__ = [str(WEB_TOOLS_ROOT / "fetch_services")]
 web_fetch_module.FetchCoordinator = object
-sys.modules["chat.application.tools.web_tools.web_fetch"] = web_fetch_module
+sys.modules["chat.application.tools.web_tools.fetch_services"] = web_fetch_module
 
-from chat.application.tools.web_tools.web_fetch.models import (  # noqa: E402
+from chat.application.tools.web_tools.fetch_services.core.models import (  # noqa: E402
     WebFetchBatchResult,
     WebFetchResult,
 )

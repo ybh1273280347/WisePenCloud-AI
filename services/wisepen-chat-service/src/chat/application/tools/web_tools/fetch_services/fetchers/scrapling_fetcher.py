@@ -5,12 +5,12 @@ from scrapling.fetchers import StealthyFetcher
 from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
 from common.logger import warn
 from .._utils import decode_bytes
-from ..errors import (
+from ..core.errors import (
     UrlFetchHttpError,
     UrlFetchNetworkError,
     UrlFetchUnsupportedUrlError,
 )
-from ..models import RawFetchOutput
+from ..core.models import RawFetchOutput
 
 _DEFAULT_TIMEOUT_MS = 30_000
 

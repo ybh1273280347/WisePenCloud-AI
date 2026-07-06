@@ -342,10 +342,10 @@ Math 工具的模型约束：不访问外部信息，不执行任意 Python，�
 | --- | --- | --- |
 | 搜索 source/provider | `platform_default`（内部 4get/DDGS）、`platform_member`（平台 key + 可配置 integration provider）、`custom`（用户 key + Exa/Tavily/AnySearch/百度千帆） | provider capability 扩展、platform_member 路由配置、custom provider 扩展（如 academic search）。 |
 | 搜索内部小模型 | candidate ranker（仅看 candidate 文本，不看 supplier answer） | 提示词调优、JSON 解析容错、候选重排模型替换。 |
-| URL fetcher | `tools/utils/url/fetcher.fetch_url` -> `ScraplingFetcher` fallback | 新增 Playwright/browser fetcher、反爬策略、质量判断阈值实验。 |
+| URL fetcher | `fetch_services/fetchers/httpx_fetcher.py` -> `ScraplingFetcher` fallback | 新增 Playwright/browser fetcher、反爬策略、质量判断阈值实验。 |
 | URL safety | `tools/utils/url/security.validate_public_http_url` | 只做 URL 安全性校验；不做页面内容阻断。 |
 | Markdown renderer | `tools/utils/markdown_renderer/html2markdown.py` | 只做确定性的 HTML 语法树到 Markdown 渲染；不处理特定业务或站点清洗逻辑。 |
-| Web cleaner | `TrafilaturaCleaner` | cleaner 替换、正文保真度评估、表格/代码块渲染策略。 |
+| Web cleaner | `fetch_services/cleaners/TrafilaturaCleaner` | cleaner 替换、正文保真度评估、表格/代码块渲染策略。 |
 | URL 缓存 | `WebContentCacheService` + Redis entry repository + Mongo value repository | TTL 策略、ETag/Last-Modified 增量刷新、raw HTML 保留策略、hydrate 结果缓存。 |
 | 文档 parser | PDF strategy、Docling、Pandas、MarkItDown | Parser 顺序实验、PDF 页级策略优化。 |
 | OCR provider | PaddleCloud OCR client | 扫描 PDF 页和 `image_ocr` 的 OCR provider 替换。 |

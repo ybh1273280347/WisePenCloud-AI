@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from ..models import RawFetchOutput
+from ..core.models import RawFetchOutput
 
 
 class WebFetcher(Protocol):

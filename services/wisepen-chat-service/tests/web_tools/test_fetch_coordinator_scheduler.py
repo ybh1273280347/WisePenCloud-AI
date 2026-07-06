@@ -18,9 +18,9 @@ config_module = types.ModuleType("chat.core.config.app_settings")
 config_module.settings = types.SimpleNamespace(QUERY_MODEL="test-query-model")
 sys.modules["chat.core.config.app_settings"] = config_module
 
-from chat.application.tools.web_tools.web_fetch.cleaners.base import CleanedOutput  # noqa: E402
-from chat.application.tools.web_tools.web_fetch.fetch_coordinator import FetchCoordinator  # noqa: E402
-from chat.application.tools.web_tools.web_fetch.models import RawFetchOutput  # noqa: E402
+from chat.application.tools.web_tools.fetch_services.cleaners.base import CleanedOutput  # noqa: E402
+from chat.application.tools.web_tools.fetch_services.web_fetch import FetchCoordinator  # noqa: E402
+from chat.application.tools.web_tools.fetch_services.core.models import RawFetchOutput  # noqa: E402
 
 
 @pytest.mark.asyncio

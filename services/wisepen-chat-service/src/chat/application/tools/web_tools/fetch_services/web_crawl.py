@@ -13,11 +13,11 @@ from chat.application.tools.common.web_content_cache import (
 )
 from common.logger import info, warn
 from ._utils import judge_quality
-from .cache import WebFetchCache
 from .cleaners import BaseCleaner
-from .errors import UrlFetchError
+from .core.errors import UrlFetchError
+from .core.models import RawFetchOutput, WebFetchResult
 from .fetchers import WebFetcher
-from .models import RawFetchOutput, WebFetchResult
+from .infra.cache import WebFetchCache
 
 
 @dataclass(frozen=True, slots=True)

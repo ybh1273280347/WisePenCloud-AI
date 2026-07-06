@@ -10,7 +10,7 @@ from .models import (
     ScraplingJobHandler,
 )
 from .workers import httpx_worker, scrapling_worker
-from ..errors import UrlFetchError
+from ...core.errors import UrlFetchError
 
 
 class FetchBatchScheduler:

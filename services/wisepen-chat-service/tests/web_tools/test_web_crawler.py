@@ -23,32 +23,32 @@ web_tools_module = types.ModuleType("chat.application.tools.web_tools")
 web_tools_module.__path__ = [str(WEB_TOOLS_ROOT)]
 sys.modules["chat.application.tools.web_tools"] = web_tools_module
 
-web_fetch_module = types.ModuleType("chat.application.tools.web_tools.web_fetch")
-web_fetch_module.__path__ = [str(WEB_TOOLS_ROOT / "web_fetch")]
+web_fetch_module = types.ModuleType("chat.application.tools.web_tools.fetch_services")
+web_fetch_module.__path__ = [str(WEB_TOOLS_ROOT / "fetch_services")]
 web_fetch_module.FetchCoordinator = object
-sys.modules["chat.application.tools.web_tools.web_fetch"] = web_fetch_module
+sys.modules["chat.application.tools.web_tools.fetch_services"] = web_fetch_module
 
-utils_module = types.ModuleType("chat.application.tools.web_tools.web_fetch._utils")
+utils_module = types.ModuleType("chat.application.tools.web_tools.fetch_services._utils")
 utils_module.judge_quality = lambda **kwargs: types.SimpleNamespace(
     should_fallback=False,
     reason="ok",
 )
-sys.modules["chat.application.tools.web_tools.web_fetch._utils"] = utils_module
+sys.modules["chat.application.tools.web_tools.fetch_services._utils"] = utils_module
 
-cleaners_module = types.ModuleType("chat.application.tools.web_tools.web_fetch.cleaners")
+cleaners_module = types.ModuleType("chat.application.tools.web_tools.fetch_services.cleaners")
 cleaners_module.BaseCleaner = object
-sys.modules["chat.application.tools.web_tools.web_fetch.cleaners"] = cleaners_module
+sys.modules["chat.application.tools.web_tools.fetch_services.cleaners"] = cleaners_module
 
-fetchers_module = types.ModuleType("chat.application.tools.web_tools.web_fetch.fetchers")
+fetchers_module = types.ModuleType("chat.application.tools.web_tools.fetch_services.fetchers")
 fetchers_module.WebFetcher = object
-sys.modules["chat.application.tools.web_tools.web_fetch.fetchers"] = fetchers_module
+sys.modules["chat.application.tools.web_tools.fetch_services.fetchers"] = fetchers_module
 
 from chat.application.tools.common.web_content_cache import (  # noqa: E402
     WebContentCacheEntry,
     WebContentCacheMode,
     WebContentCacheValue,
 )
-from chat.application.tools.web_tools.web_fetch.crawler import WebCrawler  # noqa: E402
+from chat.application.tools.web_tools.fetch_services.web_crawl import WebCrawler  # noqa: E402
 
 
 class _UnusedFetcher:

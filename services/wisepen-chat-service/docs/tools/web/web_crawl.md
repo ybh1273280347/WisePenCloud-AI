@@ -3,7 +3,7 @@
 > 一句话：`web_crawl` 从种子 URL 出发递归抓取同域 HTML 页面集合，不是单页抓取工具，也不解析文件。
 
 实现入口：`src/chat/application/tools/web_tools/web_crawl_tool.py`
-内部服务：`src/chat/application/tools/web_tools/web_fetch/crawler.py`
+内部服务：`src/chat/application/tools/web_tools/fetch_services/web_crawl.py`
 
 `web_crawl` 从一个种子 URL 出发递归抓取 HTML 页面集合。它适合“读取站点的一组相关页面”，不是单 URL 抓取工具，也不是文件下载或 PDF 解析工具。
 
@@ -45,7 +45,7 @@ seed_url
   -> ToolReturn(cacheable_texts=page markdowns)
 ```
 
-`WebCrawlService` 直接使用底层 fetcher，而不是调用 `FetchCoordinator.fetch_one`，因为 crawl 需要 raw HTML 来提取链接。非 HTML 文件会被跳过，不生成 `tfile_*`，因为 crawl 的目标是 HTML 页面集合。
+`WebCrawler` 直接使用底层 fetcher，而不是调用 `FetchCoordinator.fetch_one`，因为 crawl 需要 raw HTML 来提取链接。非 HTML 文件会被跳过，不生成 `tfile_*`，因为 crawl 的目标是 HTML 页面集合。
 
 crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `web_content_cache`；命中时直接返回缓存 Markdown，并使用缓存中的 `raw_html` 继续抽取链接。未命中或 Redis entry 过期时执行物理抓取，清洗后的 Markdown 和 raw HTML 通过 `WebContentCacheService` 写回同一 URL 缓存路径。
 
@@ -75,9 +75,9 @@ crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `we
 
 ## 可插拔组件
 
-- fetcher 链：可实验 browser fetcher、站点限速、robots/域名策略。
+- fetcher 链：位于 `web_tools/fetch_services/fetchers/`，可实验 browser fetcher、站点限速、robots/域名策略。
 - link extractor：当前用 lxml 解析 `<a href>`，可扩展 sitemap、canonical、文档站导航解析。
-- cleaner：与 `web_fetch` 共用 cleaner，可替换正文抽取策略。
+- cleaner：位于 `web_tools/fetch_services/cleaners/`，与 `web_fetch` 共用，可替换正文抽取策略。
 - URL 缓存：与 `web_fetch` 共用 `WebContentCacheService`，可实验 TTL、raw HTML 保留策略。
 - frontier 策略：当前 BFS，可实验优先级队列、路径 allowlist、URL 去重规范化。
 

@@ -75,14 +75,14 @@ from chat.application.tools.web_tools.search_services.searchers import (
 from chat.application.tools.web_tools.search_services.hydrators.academic import PaperHydrator
 from chat.application.tools.web_tools.search_services.academic_search import AcademicSearchService
 from chat.application.tools.web_tools.search_services.web_search import WebSearchService
-from chat.application.tools.web_tools.web_fetch import (
+from chat.application.tools.web_tools.fetch_services import (
     FetchCoordinator,
     WebCrawler,
 )
-from chat.application.tools.web_tools.web_fetch.cleaners.trafilatura_cleaner import (
+from chat.application.tools.web_tools.fetch_services.cleaners.trafilatura_cleaner import (
     TrafilaturaCleaner,
 )
-from chat.application.tools.web_tools.web_fetch.fetchers import (
+from chat.application.tools.web_tools.fetch_services.fetchers import (
     HttpxFetcher,
     ScraplingFetcher,
 )

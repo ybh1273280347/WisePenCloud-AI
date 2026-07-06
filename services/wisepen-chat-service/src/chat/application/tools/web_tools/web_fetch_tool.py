@@ -22,8 +22,8 @@ from chat.application.tools.utils.url import UrlSecurityError, validate_public_h
 from chat.application.tools.web_tools.search_services.candidate_store.repository import (
     WebSearchCandidateRepository,
 )
-from chat.application.tools.web_tools.web_fetch import FetchCoordinator
-from chat.application.tools.web_tools.web_fetch.errors import UrlFetchError
+from chat.application.tools.web_tools.fetch_services import FetchCoordinator
+from chat.application.tools.web_tools.fetch_services.core.errors import UrlFetchError
 from common.logger import warn
 
 # --- 全局常量定义 ---

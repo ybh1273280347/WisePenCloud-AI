@@ -16,7 +16,7 @@
 命名约定：
 
 - 只有跨 tool、跨子包复用的稳定能力，才使用 `utils.py` 或 `utils/` 作为公开共享入口。
-- 只服务于单个子包内部的辅助能力，应命名为 `_<子包标识>_utils.py` 或 `_<子包标识>_utils/`，例如 `_web_fetch_utils/`、`_search_provider_utils/`。
+- 只服务于单个子包内部的辅助能力，应命名为 `_<子包标识>_utils.py` 或 `_<子包标识>_utils/`，或放在该服务包自己的私有 `_utils/` 下，例如 `fetch_services/_utils/`、`_search_provider_utils/`。
 - 邻近子包确需临时复用内部能力时，也应通过带子包标识的私有路径引用，避免把它误认为通用工具层能力。
 
 这里不重复写团队规则，只说明当前已有能力入口。
@@ -161,7 +161,7 @@
 | 需要提取 URL 文件名 | `tools/utils/url/filename.filename_from_url` |
 | 需要校验外部 URL 是否安全 | `tools/utils/url/security.validate_public_http_url` |
 | 需要 HTML 片段转 Markdown | `markdown_renderer/html2markdown.HtmlToMarkdownRenderer` |
-| 需要网页主体抽取成 Markdown | `web_tools/web_fetch/cleaners/TrafilaturaCleaner` |
+| 需要网页主体抽取成 Markdown | `web_tools/fetch_services/cleaners/TrafilaturaCleaner` |
 | 需要复用外部 URL 抓取、HTML 清洗或文件解析结果 | `src/chat/application/tools/common/web_content_cache/`，不要混入 `ToolContentStore` |
 
 ## 文档入口

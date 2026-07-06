@@ -10,12 +10,12 @@ from chat.application.tools.utils.url import (
     fetch_url,
 )
 from .._utils import decode_bytes
-from ..errors import (
+from ..core.errors import (
     UrlFetchHttpError,
     UrlFetchNetworkError,
     UrlFetchUnsupportedUrlError,
 )
-from ..models import RawFetchOutput
+from ..core.models import RawFetchOutput
 
 
 class HttpxFetcher:

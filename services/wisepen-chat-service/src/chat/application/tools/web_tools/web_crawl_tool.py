@@ -17,8 +17,8 @@ from chat.application.tools.core.tool_return import (
 )
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
-from chat.application.tools.web_tools.web_fetch import WebCrawler
-from chat.application.tools.web_tools.web_fetch.errors import UrlFetchError
+from chat.application.tools.web_tools.fetch_services import WebCrawler
+from chat.application.tools.web_tools.fetch_services.core.errors import UrlFetchError
 from common.logger import warn
 
 # --- 全局常量限制（通过 tool_settings 调参控制）---

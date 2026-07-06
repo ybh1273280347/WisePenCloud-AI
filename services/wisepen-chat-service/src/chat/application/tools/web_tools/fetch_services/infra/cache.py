@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from chat.application.tools.common.web_content_cache import (
     HtmlCacheWrite,
     NonHtmlCacheStubWrite,
@@ -7,11 +9,18 @@ from chat.application.tools.common.web_content_cache import (
     WebContentCacheService,
     WebContentCacheValueRepository,
 )
-from chat.application.tools.web_tools.web_fetch.models import RawFetchOutput, WebFetchResult
+from chat.application.tools.web_tools.fetch_services.core.models import RawFetchOutput, WebFetchResult
 from common.logger import info
-from .models import CachedWebFetchPage
 
 _PRODUCER_NAME = "web_fetch"
+
+
+@dataclass(frozen=True, slots=True)
+class _CachedWebFetchPage:
+    """命中 URL 缓存的网页结果，保留 crawl 抽链需要的 raw_html。"""
+
+    result: WebFetchResult
+    raw_html: str | None
 
 
 class WebFetchCache:
@@ -51,7 +60,7 @@ class WebFetchCache:
             *,
             url: str,
             user_id: str,
-    ) -> CachedWebFetchPage | None:
+    ) -> _CachedWebFetchPage | None:
         cached = await self._content_cache_service.read_markdown_page(
             url=url,
             user_id=user_id,
@@ -64,7 +73,7 @@ class WebFetchCache:
             url=url,
             cache_mode=cached.cache_mode.value,
         )
-        return CachedWebFetchPage(
+        return _CachedWebFetchPage(
             result=WebFetchResult(
                 source_url=cached.source_url,
                 final_url=cached.final_url,

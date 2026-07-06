@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from ..cleaners.base import CleanedOutput
-from ..models import FetchQuality, RawFetchOutput
+from ..core.models import FetchQuality, RawFetchOutput
 
 # 正文语义关键词，带词界避免误判
 _CONTENT_BLOCKED_RE = re.compile(

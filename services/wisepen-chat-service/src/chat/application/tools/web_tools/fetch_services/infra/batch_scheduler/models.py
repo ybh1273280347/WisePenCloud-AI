@@ -4,8 +4,8 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from ..errors import UrlFetchError
-from ..models import WebFetchFailure, WebFetchResult
+from ...core.errors import UrlFetchError
+from ...core.models import WebFetchFailure, WebFetchResult
 
 FetchOutcome = WebFetchResult | WebFetchFailure
 FetchSlot = FetchOutcome | None

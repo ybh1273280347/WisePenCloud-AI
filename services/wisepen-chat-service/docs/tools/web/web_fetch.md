@@ -3,7 +3,7 @@
 > 一句话：`web_fetch` 批量抓取独立 URL，HTML 返回清洗后的 Markdown，非 HTML 文件发布为 `tfile_*` 供 `document_parse` 解析。
 
 实现入口：`src/chat/application/tools/web_tools/web_fetch_tool.py`
-内部服务：`src/chat/application/tools/web_tools/web_fetch/fetch_coordinator.py`
+内部服务：`src/chat/application/tools/web_tools/fetch_services/web_fetch.py`
 
 `web_fetch` 批量抓取一组独立 URL。它是外界信息获取链中的正文抓取工具，不负责搜索候选、不递归爬站、不直接解析 PDF/Office 内容。
 
@@ -46,6 +46,20 @@ input urls or search_refs
 
 抓取链路优先使用工具层共享 `HttpxFetcher`；网络失败或 HTML 质量不足时降级到 `ScraplingFetcher`。HTML 由 `TrafilaturaCleaner` 清洗为 Markdown，并按 HTTP cache-control 计算 URL 缓存 TTL。
 
+内部服务结构：
+
+| 关注点 | 入口 |
+| --- | --- |
+| web_fetch 服务门面 | `web_tools/fetch_services/web_fetch.py` |
+| web_crawl 服务门面 | `web_tools/fetch_services/web_crawl.py` |
+| 共享模型 | `web_tools/fetch_services/core/models.py` |
+| 共享异常 | `web_tools/fetch_services/core/errors.py` |
+| HTTP 抓取实现 | `web_tools/fetch_services/fetchers/httpx_fetcher.py` |
+| Scrapling fallback | `web_tools/fetch_services/fetchers/scrapling_fetcher.py` |
+| HTML cleaner | `web_tools/fetch_services/cleaners/trafilatura_cleaner.py` |
+| URL 缓存适配 | `web_tools/fetch_services/infra/cache.py` |
+| 批量调度器 | `web_tools/fetch_services/infra/batch_scheduler/` |
+
 URL 缓存编排已经收敛到工具公共切面：
 
 ```text
@@ -84,10 +98,10 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 
 ## 可插拔组件
 
-- `tools/utils/url/fetcher.fetch_url`：常规 HTTP 下载，可实验 header、重试、MIME 探测和最大响应字节。
+- `fetch_services/fetchers/httpx_fetcher.py`：常规 HTTP 下载，可实验 header、重试、MIME 探测和最大响应字节。
 - `tools/utils/url/security.validate_public_http_url`：URL 安全性校验，只校验 URL 本身，不做页面内容阻断。
-- `ScraplingFetcher`：动态/反爬 fallback，可替换为 Playwright 类 browser fetcher。
-- `TrafilaturaCleaner`：web_fetch 内部 HTML 正文抽取，可替换 cleaner。
+- `fetch_services/fetchers/scrapling_fetcher.py`：动态/反爬 fallback，可替换为 Playwright 类 browser fetcher。
+- `fetch_services/cleaners/trafilatura_cleaner.py`：web_fetch 内部 HTML 正文抽取，可替换 cleaner。
 - `judge_quality`：降级判断阈值，可按站点类型或内容长度实验。
 - `WebContentCacheService`：统一 URL 缓存门面，可扩展 ETag、Last-Modified、缓存分层。
 - `RedisWebContentCacheEntryRepository` / `MongoWebContentCacheValueRepository`：缓存 active 索引和正文持久化实现。
