@@ -53,7 +53,7 @@ class ExpressionSolveTool(MathSolveTool):
     """表达式、组合和轻量数论工具门面。"""
 
     def __init__(self) -> None:
-        super().__init__(name="expression_solver", description=(
+        super().__init__(name="expression_solve", description=(
             "Simplify, expand, factor, and numerically evaluate expressions; compute basic combinatorics (factorial, combinations, permutations) and lightweight number theory (gcd, lcm, prime factors).\n"
             "\n"
             "WHEN TO TRIGGER:\n"
@@ -61,10 +61,10 @@ class ExpressionSolveTool(MathSolveTool):
             "  - MUST trigger when computing factorial, combinations (nCr), or permutations (nPr).\n"
             "  - MUST trigger when computing gcd, lcm, or prime factorization of integers.\n"
             "DO NOT TRIGGER when:\n"
-            "  - The task is solving an equation, inequality, or optimization — use equation_solver instead.\n"
-            "  - The task is differentiation, integration, limits, or ODEs — use calculus_solver instead.\n"
-            "  - The task is matrix operations or linear systems — use linear_algebra_solver instead.\n"
-            "  - The task is probability distributions or descriptive statistics — use stats_solver instead.\n"
+            "  - The task is solving an equation, inequality, or optimization — use equation_solve instead.\n"
+            "  - The task is differentiation, integration, limits, or ODEs — use calculus_solve instead.\n"
+            "  - The task is matrix operations or linear systems — use linear_algebra_solve instead.\n"
+            "  - The task is probability distributions or descriptive statistics — use stats_solve instead.\n"
             "\n"
             "INPUT RULES:\n"
             f"  - task MUST be one of: {', '.join(ExpressionTask.values())}.\n"

@@ -106,7 +106,7 @@ class StatsSolveTool(MathSolveTool):
     """统计和概率求解工具门面。"""
 
     def __init__(self) -> None:
-        super().__init__(name="stats_solver", description=(
+        super().__init__(name="stats_solve", description=(
             "Compute probability and statistics tasks: binomial and Poisson probabilities, normal/t/chi-square/F CDFs, finite uniform expectation and variance, descriptive statistics, linear regression, and Pearson/Spearman correlation.\n"
             "\n"
             "WHEN TO TRIGGER:\n"
@@ -116,10 +116,10 @@ class StatsSolveTool(MathSolveTool):
             "  - MUST trigger when computing descriptive statistics (mean, variance, median, quartiles) of a sample.\n"
             "  - MUST trigger when fitting a linear regression or computing Pearson/Spearman correlation.\n"
             "DO NOT TRIGGER when:\n"
-            "  - The task is solving an equation or optimization — use equation_solver instead.\n"
-            "  - The task is differentiation, integration, or ODEs — use calculus_solver instead.\n"
-            "  - The task is matrix operations — use linear_algebra_solver instead.\n"
-            "  - The task is simplifying or factoring an expression — use expression_solver instead.\n"
+            "  - The task is solving an equation or optimization — use equation_solve instead.\n"
+            "  - The task is differentiation, integration, or ODEs — use calculus_solve instead.\n"
+            "  - The task is matrix operations — use linear_algebra_solve instead.\n"
+            "  - The task is simplifying or factoring an expression — use expression_solve instead.\n"
             "\n"
             "INPUT RULES:\n"
             f"  - task MUST be one of: {', '.join(StatsTask.values())}.\n"

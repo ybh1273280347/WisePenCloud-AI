@@ -89,7 +89,7 @@ class EquationSolveTool(MathSolveTool):
     """方程、不等式和轻量优化工具门面。"""
 
     def __init__(self) -> None:
-        super().__init__(name="equation_solver", description=(
+        super().__init__(name="equation_solve", description=(
             "Solve algebraic equations, equation systems, univariate inequalities, numeric roots, and bounded/constrained minimization.\n"
             "\n"
             "WHEN TO TRIGGER:\n"
@@ -97,9 +97,9 @@ class EquationSolveTool(MathSolveTool):
             "  - MUST trigger when finding a numeric root of f(x)=0 with a bracket or initial guess.\n"
             "  - SHOULD trigger when minimizing a scalar or constrained objective within bounds.\n"
             "DO NOT TRIGGER when:\n"
-            "  - The task is differentiation, integration, limits, series, or ODEs — use calculus_solver instead.\n"
-            "  - The task is matrix determinant, inverse, eigenvalues, or linear systems Ax=b — use linear_algebra_solver instead.\n"
-            "  - The task is simplifying, expanding, factoring, or numerically evaluating an expression — use expression_solver instead.\n"
+            "  - The task is differentiation, integration, limits, series, or ODEs — use calculus_solve instead.\n"
+            "  - The task is matrix determinant, inverse, eigenvalues, or linear systems Ax=b — use linear_algebra_solve instead.\n"
+            "  - The task is simplifying, expanding, factoring, or numerically evaluating an expression — use expression_solve instead.\n"
             "\n"
             "INPUT RULES:\n"
             f"  - task MUST be one of: {', '.join(EquationTask.values())}.\n"

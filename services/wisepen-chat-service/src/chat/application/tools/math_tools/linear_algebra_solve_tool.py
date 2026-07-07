@@ -45,7 +45,7 @@ class LinearAlgebraSolveTool(MathSolveTool):
     """线性代数求解工具门面。"""
 
     def __init__(self) -> None:
-        super().__init__(name="linear_algebra_solver", description=(
+        super().__init__(name="linear_algebra_solve", description=(
             "Solve deterministic linear algebra tasks: determinant, trace, rank, inverse, RREF, eigenvalues, linear systems (Ax=b), matrix multiplication, SVD, QR decomposition, null space, and matrix powers.\n"
             "\n"
             "WHEN TO TRIGGER:\n"
@@ -54,10 +54,10 @@ class LinearAlgebraSolveTool(MathSolveTool):
             "  - MUST trigger when solving a linear system Ax=b (pass vector) or multiplying two matrices.\n"
             "  - MUST trigger when raising a square matrix to an integer power.\n"
             "DO NOT TRIGGER when:\n"
-            "  - The task is solving a nonlinear equation or optimization — use equation_solver instead.\n"
-            "  - The task is differentiation, integration, or ODEs — use calculus_solver instead.\n"
-            "  - The task is simplifying or factoring a scalar expression — use expression_solver instead.\n"
-            "  - The task is probability or descriptive statistics — use stats_solver instead.\n"
+            "  - The task is solving a nonlinear equation or optimization — use equation_solve instead.\n"
+            "  - The task is differentiation, integration, or ODEs — use calculus_solve instead.\n"
+            "  - The task is simplifying or factoring a scalar expression — use expression_solve instead.\n"
+            "  - The task is probability or descriptive statistics — use stats_solve instead.\n"
             "\n"
             "INPUT RULES:\n"
             f"  - task MUST be one of: {', '.join(LinearAlgebraTask.values())}.\n"

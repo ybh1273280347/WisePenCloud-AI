@@ -32,11 +32,11 @@ TOOL_CATALOG_ITEMS = (
         key="math_tools",
         label="数学工具",
         tool_names=(
-            "calculus_solver",
-            "linear_algebra_solver",
-            "equation_solver",
-            "stats_solver",
-            "expression_solver",
+            "calculus_solve",
+            "linear_algebra_solve",
+            "equation_solve",
+            "stats_solve",
+            "expression_solve",
         ),
     ),
     ToolCatalogItem(

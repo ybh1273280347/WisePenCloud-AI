@@ -92,7 +92,7 @@ class CalculusSolveTool(MathSolveTool):
     """微积分求解工具门面。"""
 
     def __init__(self) -> None:
-        super().__init__(name="calculus_solver", description=(
+        super().__init__(name="calculus_solve", description=(
             "Solve deterministic calculus tasks with SymPy: differentiation, partial differentiation, indefinite/definite integrals, double integrals, limits, Taylor series, summations, ODEs, and Laplace transforms.\n"
             "\n"
             "WHEN TO TRIGGER:\n"
@@ -101,10 +101,10 @@ class CalculusSolveTool(MathSolveTool):
             "  - MUST trigger when solving an ordinary differential equation (ODE).\n"
             "  - MUST trigger when computing a Laplace transform or double integral.\n"
             "DO NOT TRIGGER when:\n"
-            "  - The task is solving an algebraic equation, inequality, or numeric root — use equation_solver instead.\n"
-            "  - The task is matrix determinant, inverse, eigenvalues, or linear systems Ax=b — use linear_algebra_solver instead.\n"
-            "  - The task is simplifying, expanding, factoring, or numerically evaluating an expression — use expression_solver instead.\n"
-            "  - The task is probability or descriptive statistics — use stats_solver instead.\n"
+            "  - The task is solving an algebraic equation, inequality, or numeric root — use equation_solve instead.\n"
+            "  - The task is matrix determinant, inverse, eigenvalues, or linear systems Ax=b — use linear_algebra_solve instead.\n"
+            "  - The task is simplifying, expanding, factoring, or numerically evaluating an expression — use expression_solve instead.\n"
+            "  - The task is probability or descriptive statistics — use stats_solve instead.\n"
             "\n"
             "INPUT RULES:\n"
             f"  - task MUST be one of: {', '.join(CalculusTask.values())}.\n"
