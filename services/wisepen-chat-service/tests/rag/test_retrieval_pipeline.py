@@ -447,7 +447,7 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
         RagKnowledgeSearchRequest(
             query="AppBuilder API Key",
             resource_id="resource-doc",
-            retrieval_profile=RagRetrievalProfile.ANCHORED_EXACT,
+            retrieval_profile=RagRetrievalProfile.LEXICAL,
             keywords=("API Key",),
             permission_scope=RagPermissionScope(
                 user_id="user-1",
@@ -460,6 +460,7 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
     retrieval_request = qdrant_repository.retrieve_calls[0]
     assert retrieval_request.candidate_chunk_ids == ("child-1",)
     assert retrieval_request.query_text == "AppBuilder API Key"
+    assert retrieval_request.retrieval_profile == RagRetrievalProfile.LEXICAL
     assert retrieval_request.permission_scope is not None
     assert result.should_continue
     assert result.direct_evidence[0].citation_id == "E1"
@@ -496,7 +497,7 @@ async def test_knowledge_search_stops_when_elastic_strict_prefilter_is_empty() -
         RagKnowledgeSearchRequest(
             query="不存在的锚点",
             resource_id="resource-doc",
-            retrieval_profile=RagRetrievalProfile.ANCHORED_EXACT,
+            retrieval_profile=RagRetrievalProfile.LEXICAL,
             keywords=("不存在的锚点",),
         )
     )

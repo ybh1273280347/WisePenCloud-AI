@@ -29,6 +29,9 @@ class _Settings:
     ZERO_ENTROPY_API_KEY = "test-zero-entropy-key"
     EVIDENCE_RANKER_ZE_MODEL = "test-rerank-model"
     EVIDENCE_RANKER_ZE_TOP_N = 20
+    RAG_KNOWLEDGE_SEARCH_TOP_K = 8
+    RAG_KNOWLEDGE_SEARCH_CANDIDATE_LIMIT = 80
+    RAG_KNOWLEDGE_SEARCH_ELASTIC_PREFILTER_LIMIT = 1000
 
 
 config_module = types.ModuleType("chat.core.config.app_settings")
@@ -89,14 +92,14 @@ async def test_rag_knowledge_search_tool_maps_model_args_to_acl_safe_request() -
         {"user_id": "user-1", "session_id": "session-1"},
         query="AppBuilder API Key 怎么申请？",
         resource_id="resource-doc",
-        retrieval_profile="anchored_exact",
+        retrieval_profile="lexical",
         keywords=["API Key"],
     )
 
     request = searcher.requests[0]
     assert request.query == "AppBuilder API Key 怎么申请？"
     assert request.resource_id == "resource-doc"
-    assert request.retrieval_profile == RagRetrievalProfile.ANCHORED_EXACT
+    assert request.retrieval_profile == RagRetrievalProfile.LEXICAL
     assert request.keywords == ("API Key",)
     assert request.permission_scope is not None
     assert request.permission_scope.user_id == "user-1"

@@ -18,7 +18,6 @@ class RagRetrievalProfile(StrEnum):
     BALANCED = "balanced"  # 语义 + lexical 均衡
     SEMANTIC = "semantic"  # 偏重向量语义相似度
     LEXICAL = "lexical"  # 偏重关键词匹配
-    ANCHORED_EXACT = "anchored_exact"  # 锚点或标题精确匹配，用于定位到具体段落
 
 
 class RagGroupRole(StrEnum):
@@ -67,6 +66,7 @@ class RagQdrantRetrievalRequest:
     resource_id: str
     query_text: str
     query_vector: Sequence[float]
+    retrieval_profile: RagRetrievalProfile = RagRetrievalProfile.BALANCED
     candidate_chunk_ids: tuple[str, ...] = ()
     permission_scope: RagPermissionScope | None = None
     top_k: int = 100

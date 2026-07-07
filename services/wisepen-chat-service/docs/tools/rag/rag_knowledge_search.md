@@ -14,7 +14,7 @@
 
 - 用户要从已附加、已选中或当前上下文明确给出的 WisePen 私有知识资源中回答问题。
 - 当前轮已知 `resource_id`。
-- 需要主模型显式选择 `balanced`、`semantic`、`lexical` 或 `anchored_exact` 检索模式。
+- 需要主模型显式选择 `balanced`、`semantic` 或 `lexical` 检索模式。
 
 ## 何时禁止使用
 
@@ -28,10 +28,10 @@
 schema 负责校验：
 
 - `query`、`resource_id` 必填且非空。
-- `retrieval_profile` 只能是 `balanced`、`semantic`、`lexical`、`anchored_exact`。
+- `retrieval_profile` 只能是 `balanced`、`semantic`、`lexical`。
 - `keywords` 是可选精确内容短语，只用于 Elastic chunk 内容关键词过滤。
 
-`top_k`、`candidate_limit`、`elastic_prefilter_limit` 是运维调参项，只能从 `tool_settings` 读取，不允许模型参数注入。版本字段只作为系统内部版本标识存在，不进入模型入参。
+`top_k`、`candidate_limit`、`elastic_prefilter_limit` 是运维调参项，只能从 `app_settings` 读取，不允许模型参数注入。版本字段只作为系统内部版本标识存在，不进入模型入参。
 
 安全上下文来自 `context`：
 

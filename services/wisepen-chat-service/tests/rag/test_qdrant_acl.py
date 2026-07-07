@@ -17,11 +17,13 @@ from chat.application.rag.retrieval.models import (  # noqa: E402
     RagQdrantRetrievalFilterRequest,
     RagQdrantRetrievalRequest,
     RagRetrievalChannel,
+    RagRetrievalProfile,
 )
 from chat.application.rag.retrieval.permission_filter import RagPermissionFilterBuilder  # noqa: E402
 from chat.application.rag.retrieval.pipeline.qdrant_retrieve import RagQdrantRetriever  # noqa: E402
 from chat.core.persistence.qdrant import RagQdrantRepository  # noqa: E402
 from qdrant_client import models as qdrant_models  # noqa: E402
+from qdrant_client.conversions import common_types as qdrant_types  # noqa: E402
 
 
 def test_qdrant_permission_filter_keeps_group_acl_exceptions_nested() -> None:
@@ -139,9 +141,10 @@ async def test_qdrant_acl_projection_updates_payload_by_resource_filter() -> Non
 @pytest.mark.anyio
 async def test_qdrant_retrieve_uses_dense_sparse_rrf_prefetch() -> None:
     client = _FakeQdrantClient()
-    client.query_response = _QueryResponse(
-        [
-            _ScoredPoint(
+    client.query_response = qdrant_types.QueryResponse(
+        points=[
+            _scored_point(
+                "chunk-a",
                 score=0.82,
                 payload={
                     "chunk_id": "chunk-a",
@@ -191,6 +194,93 @@ async def test_qdrant_retrieve_uses_dense_sparse_rrf_prefetch() -> None:
 
 
 @pytest.mark.anyio
+async def test_qdrant_semantic_profile_uses_weighted_dense_sparse_rrf() -> None:
+    client = _FakeQdrantClient()
+    client.query_responses = [
+        qdrant_types.QueryResponse(
+            points=[
+                _scored_point("dense-a", score=0.91),
+                _scored_point("shared", score=0.88),
+            ]
+        ),
+        qdrant_types.QueryResponse(
+            points=[
+                _scored_point("sparse-a", score=0.93),
+                _scored_point("shared", score=0.87),
+            ]
+        ),
+    ]
+    retriever = RagQdrantRetriever(
+        client=client,
+        collection_name="rag-test",
+        permission_filter_builder=RagPermissionFilterBuilder(),
+        bm25_config=_bm25_config(),
+        weighted_rrf_k=0.0,
+        semantic_dense_rrf_weight=3.0,
+        semantic_sparse_rrf_weight=1.0,
+    )
+
+    chunks = await retriever.retrieve(
+        RagQdrantRetrievalRequest(
+            resource_id="res-1",
+            query_text="概念性问题",
+            query_vector=[0.1, 0.2],
+            retrieval_profile=RagRetrievalProfile.SEMANTIC,
+            top_k=10,
+        )
+    )
+
+    assert [call["using"] for call in client.query_points_calls] == ["dense", "sparse"]
+    assert all("prefetch" not in call for call in client.query_points_calls)
+    assert [chunk.chunk_id for chunk in chunks] == ["dense-a", "shared", "sparse-a"]
+    assert chunks[0].retrieval_channels == (RagRetrievalChannel.DENSE,)
+    assert chunks[1].retrieval_channels == (
+        RagRetrievalChannel.DENSE,
+        RagRetrievalChannel.SPARSE,
+    )
+
+
+@pytest.mark.anyio
+async def test_qdrant_lexical_profile_uses_sparse_weighted_rrf() -> None:
+    client = _FakeQdrantClient()
+    client.query_responses = [
+        qdrant_types.QueryResponse(
+            points=[
+                _scored_point("dense-a", score=0.91),
+            ]
+        ),
+        qdrant_types.QueryResponse(
+            points=[
+                _scored_point("sparse-a", score=0.93),
+                _scored_point("dense-a", score=0.87),
+            ]
+        ),
+    ]
+    retriever = RagQdrantRetriever(
+        client=client,
+        collection_name="rag-test",
+        permission_filter_builder=RagPermissionFilterBuilder(),
+        bm25_config=_bm25_config(),
+        weighted_rrf_k=0.0,
+        lexical_dense_rrf_weight=1.0,
+        lexical_sparse_rrf_weight=3.0,
+    )
+
+    chunks = await retriever.retrieve(
+        RagQdrantRetrievalRequest(
+            resource_id="res-1",
+            query_text="错误码 E401",
+            query_vector=[0.1, 0.2],
+            retrieval_profile=RagRetrievalProfile.LEXICAL,
+            top_k=10,
+        )
+    )
+
+    assert [call["using"] for call in client.query_points_calls] == ["dense", "sparse"]
+    assert [chunk.chunk_id for chunk in chunks] == ["sparse-a", "dense-a"]
+
+
+@pytest.mark.anyio
 async def test_qdrant_upsert_uses_native_bm25_document_for_sparse_vector() -> None:
     client = _FakeQdrantClient()
     repository = RagQdrantRepository(
@@ -233,7 +323,8 @@ class _FakeQdrantClient:
         self.create_collection_calls: list[dict[str, Any]] = []
         self.update_collection_calls: list[dict[str, Any]] = []
         self.query_points_calls: list[dict[str, Any]] = []
-        self.query_response: Any = _QueryResponse([])
+        self.query_responses: list[Any] = []
+        self.query_response: qdrant_types.QueryResponse = qdrant_types.QueryResponse(points=[])
 
     async def set_payload(self, **kwargs: Any) -> None:
         self.set_payload_calls.append(kwargs)
@@ -256,18 +347,34 @@ class _FakeQdrantClient:
 
     async def query_points(self, **kwargs: Any) -> Any:
         self.query_points_calls.append(kwargs)
+        if self.query_responses:
+            return self.query_responses.pop(0)
         return self.query_response
 
 
-class _QueryResponse:
-    def __init__(self, points: list[Any]) -> None:
-        self.points = points
+def _scored_point(
+        chunk_id: str,
+        *,
+        score: float,
+        payload: dict[str, Any] | None = None,
+) -> qdrant_types.ScoredPoint:
+    return qdrant_types.ScoredPoint(
+        id=chunk_id,
+        version=1,
+        score=score,
+        payload=payload or _payload(chunk_id),
+    )
 
 
-class _ScoredPoint:
-    def __init__(self, *, score: float, payload: dict[str, Any]) -> None:
-        self.score = score
-        self.payload = payload
+def _payload(chunk_id: str) -> dict[str, Any]:
+    return {
+        "chunk_id": chunk_id,
+        "parent_chunk_id": f"parent-{chunk_id}",
+        "resource_id": "res-1",
+        "document_version": "3",
+        "corpus_version": "3",
+        "evidence_text": f"{chunk_id} evidence",
+    }
 
 
 class _ChildChunk:

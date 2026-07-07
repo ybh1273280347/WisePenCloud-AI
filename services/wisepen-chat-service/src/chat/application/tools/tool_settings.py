@@ -74,14 +74,6 @@ class ToolSettings(BaseModel):
     TOOL_CONTENT_READ_DEFAULT_MAX_MATCHES: int = 10              # 内容读取正则默认最大匹配数
     TOOL_CONTENT_READ_MAX_WINDOW_CHARS: int = 100_000            # 内容读取最大上下文窗口字符数
 
-    # ── RAG Behavior (私有知识库检索行为参数) ─────────────────────────
-    RAG_KNOWLEDGE_SEARCH_DEFAULT_TOP_K: int = 8                  # RAG 默认证据条数
-    RAG_KNOWLEDGE_SEARCH_MAX_TOP_K: int = 20                     # RAG 单次最大证据条数
-    RAG_KNOWLEDGE_SEARCH_DEFAULT_CANDIDATE_LIMIT: int = 80       # RAG 默认候选召回数量
-    RAG_KNOWLEDGE_SEARCH_MAX_CANDIDATE_LIMIT: int = 200          # RAG 单次最大候选召回数量
-    RAG_KNOWLEDGE_SEARCH_DEFAULT_ELASTIC_PREFILTER_LIMIT: int = 1000  # RAG Elastic 默认前置过滤上限
-    RAG_KNOWLEDGE_SEARCH_MAX_ELASTIC_PREFILTER_LIMIT: int = 2000      # RAG Elastic 单次前置过滤上限
-
     # ── Math Behavior (数学计算行为参数) ───────────────────────────────
     MATH_TOOL_MAX_EXPRESSION_CHARS: int = 2000                   # 数学表达式最大字符数
 

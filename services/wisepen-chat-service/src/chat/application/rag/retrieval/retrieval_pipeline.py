@@ -121,6 +121,7 @@ class RagRetrievalPipeline:
                 resource_id=request.resource_id,
                 query_text=request.query,
                 query_vector=query_vector,
+                retrieval_profile=request.retrieval_profile,
                 candidate_chunk_ids=candidate_scope or (),
                 permission_scope=request.permission_scope,
                 top_k=request.candidate_limit,

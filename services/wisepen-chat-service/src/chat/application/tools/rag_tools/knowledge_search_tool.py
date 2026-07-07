@@ -20,6 +20,7 @@ from chat.application.tools.core import (
 )
 from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.tool_settings import tool_settings
+from chat.core.config.app_settings import settings
 
 MAX_RAG_STRING_ITEMS = 16
 
@@ -37,7 +38,7 @@ DO NOT TRIGGER when:
 INPUT RULES:
   - query is the user's information need, not a rewritten hidden query plan.
   - resource_id identifies the target knowledge resource.
-  - retrieval_profile is selected by you: balanced is default, semantic for fuzzy concepts, lexical for exact terms, anchored_exact for exact keywords, error codes, function names, or quoted phrases.
+  - retrieval_profile is selected by you: balanced is default, semantic for fuzzy concepts, lexical for exact terms, error codes, function names, or quoted phrases.
   - keywords are optional exact content phrases for Elastic filtering; omit them unless the user supplied concrete terms.
   - Do not pass user_id, group roles, ACL data, Qdrant IDs, graph IDs, or internal storage IDs.
 
@@ -114,7 +115,7 @@ class RagKnowledgeSearchTool:
 
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
         try:
-            # top_k/candidate_limit/elastic_prefilter_limit 是调参项，固定从 tool settings 读取。
+            # top_k/candidate_limit/elastic_prefilter_limit 是调参项，固定从 app settings 读取。
             result = await self._searcher.search(
                 RagKnowledgeSearchRequest(
                     query=kwargs["query"].strip(),
@@ -132,10 +133,10 @@ class RagKnowledgeSearchTool:
                         group_role_map={},
                     ),
                     session_id=str(context["session_id"]),
-                    top_k=tool_settings.RAG_KNOWLEDGE_SEARCH_TOP_K,
-                    candidate_limit=tool_settings.RAG_KNOWLEDGE_SEARCH_CANDIDATE_LIMIT,
+                    top_k=settings.RAG_KNOWLEDGE_SEARCH_TOP_K,
+                    candidate_limit=settings.RAG_KNOWLEDGE_SEARCH_CANDIDATE_LIMIT,
                     elastic_prefilter_limit=(
-                        tool_settings.RAG_KNOWLEDGE_SEARCH_ELASTIC_PREFILTER_LIMIT
+                        settings.RAG_KNOWLEDGE_SEARCH_ELASTIC_PREFILTER_LIMIT
                     ),
                 )
             )
