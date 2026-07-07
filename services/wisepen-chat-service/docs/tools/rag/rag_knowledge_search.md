@@ -7,6 +7,7 @@
 | 工具门面 | `src/chat/application/tools/rag_tools/knowledge_search_tool.py` |
 | 应用服务 | `src/chat/application/rag/knowledge_search.py` |
 | 检索编排 | `src/chat/application/rag/retrieval/retrieval_pipeline.py` |
+| Ranking 节点 | `src/chat/application/rag/retrieval/pipeline/ranking.py` |
 | 注册入口 | `src/chat/container.py` |
 
 ## 何时使用
@@ -47,8 +48,8 @@ rag_knowledge_search
   -> RagRetrievalPipeline
      -> RagElasticFilter.filter_candidate_chunk_ids
      -> RagQdrantRetriever.retrieve
+     -> RagEvidenceRankingService
      -> RagGraphEnhancement.enhance
-  -> RagEvidenceRankingService
   -> AnswerabilityHardGate / AnswerabilitySoftGate
   -> RagEvidenceMaterializer
   -> RagContextBuilder
@@ -66,7 +67,7 @@ RAG 主链路采用 `Elastic keyword prefilter -> Qdrant dense + BM25 -> Ranking
 - Elastic 只做 chunk `indexing_text` 的严格关键词前置过滤，不作为一路召回源，不参与最终 topK 融合。
 - Elastic 只在 `keywords` 非空时启用，返回 candidate chunk id scope；没有关键词时直接跳过。
 - Qdrant filter 只表达资源范围、Elastic candidate scope 和 ACL 权限范围，不做内容过滤或版本过滤。
-- RankingEngine 只处理主召回候选，负责最终 direct evidence 的融合、重排、过滤和多样化。
+- RankingEngine 是 retrieval pipeline 内部阶段，只处理主召回候选，负责最终 direct evidence 的融合、重排、过滤和多样化；下游只消费已排序候选。
 - Neo4j graph enhancement 不混入主 topK，只输出 `graph_evidence` 和 `ontology_hints`。
 
 版本字段是系统内部版本化标识，只用于入库、回源、缓存签名和引用定位；模型不得注入任何 version 字段，也不得把 version 当作事实源或排序信号。

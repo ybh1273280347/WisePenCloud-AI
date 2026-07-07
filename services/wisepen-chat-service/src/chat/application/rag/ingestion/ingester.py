@@ -184,7 +184,11 @@ class RagMarkdownIngester:
             )
             for child in child_chunks
         }
-        cached_vectors = await self._load_cached_embeddings(cache_keys)
+        cached_vectors = (
+            await self._ingestion_cache.get_embedding_vectors(cache_keys)
+            if self._ingestion_cache is not None
+            else {}
+        )
         missing_children = tuple(
             child
             for child in child_chunks
@@ -199,12 +203,13 @@ class RagMarkdownIngester:
             child.chunk_id: vector
             for child, vector in zip(missing_children, result.embeddings, strict=True)
         }
-        await self._store_cached_embeddings(
-            {
-                chunk_id: (cache_keys[chunk_id], vector)
-                for chunk_id, vector in fresh_vectors.items()
-            }
-        )
+        if self._ingestion_cache is not None:
+            await self._ingestion_cache.set_embedding_vectors(
+                {
+                    chunk_id: (cache_keys[chunk_id], vector)
+                    for chunk_id, vector in fresh_vectors.items()
+                }
+            )
         return {**cached_vectors, **fresh_vectors}
 
     async def _chunk_payload(self, payload: RagMarkdownIngestionPayload) -> RagChunkingResult:
@@ -217,7 +222,13 @@ class RagMarkdownIngester:
         if self._ingestion_cache is not None:
             cached = await self._ingestion_cache.get_chunking_result(key)
             if cached is not None:
-                return _with_payload_identity(cached, payload)
+                return RagChunkingResult(
+                    parent_chunks=cached.parent_chunks,
+                    child_chunks=cached.child_chunks,
+                    pipeline=cached.pipeline,
+                    resource_id=payload.resource_id,
+                    document_version=payload.document_version,
+                )
 
         result = self._chunking_service.chunk_payload(payload)
         if self._ingestion_cache is not None:
@@ -253,35 +264,6 @@ class RagMarkdownIngester:
         if self._ingestion_cache is not None:
             await self._ingestion_cache.set_context_indexed_child(key, result.child_chunk)
         return result.child_chunk
-
-    async def _load_cached_embeddings(
-            self,
-            keys: dict[str, RagEmbeddingCacheKey],
-    ) -> dict[str, list[float]]:
-        if self._ingestion_cache is None:
-            return {}
-        return await self._ingestion_cache.get_embedding_vectors(keys)
-
-    async def _store_cached_embeddings(
-            self,
-            vectors: dict[str, tuple[RagEmbeddingCacheKey, list[float]]],
-    ) -> None:
-        if self._ingestion_cache is None:
-            return
-        await self._ingestion_cache.set_embedding_vectors(vectors)
-
-
-def _with_payload_identity(
-        result: RagChunkingResult,
-        payload: RagMarkdownIngestionPayload,
-) -> RagChunkingResult:
-    return RagChunkingResult(
-        parent_chunks=result.parent_chunks,
-        child_chunks=result.child_chunks,
-        pipeline=result.pipeline,
-        resource_id=payload.resource_id,
-        document_version=payload.document_version,
-    )
 
 
 def _hash_text(value: str) -> str:

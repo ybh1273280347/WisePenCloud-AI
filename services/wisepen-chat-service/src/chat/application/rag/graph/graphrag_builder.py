@@ -107,7 +107,7 @@ class Neo4jGraphRagKnowledgeGraphBuilder:
             document_info=DocumentInfo.model_validate(
                 {
                     "path": resource_id,
-                    "uid": _document_uid(resource_id, document_version),
+                    "uid": f"{resource_id}:{document_version}",
                     "metadata": {
                         "resource_id": resource_id,
                         "document_version": document_version,
@@ -198,10 +198,6 @@ def _build_text_chunks(
             ]
         }
     )
-
-
-def _document_uid(resource_id: str, document_version: str) -> str:
-    return f"{resource_id}:{document_version}"
 
 
 def _to_messages(message_history: Any) -> list[dict[str, str]]:

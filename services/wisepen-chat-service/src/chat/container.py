@@ -28,9 +28,9 @@ from chat.application.rag.ingestion.ingester import RagMarkdownIngester
 from chat.application.rag.kafka_consumers.acl_recalculate_consumer import RagAclRecalculateConsumer
 from chat.application.rag.kafka_consumers.document_ready_consumer import RagDocumentReadyConsumer
 from chat.application.rag.knowledge_search import RagKnowledgeSearcher
-from chat.application.rag.ranking import RagEvidenceRankingService
 from chat.application.rag.retrieval import (
     RagElasticFilter,
+    RagEvidenceRankingService,
     RagGraphEnhancement,
     RagPermissionFilterBuilder,
     RagQdrantRetriever,
@@ -517,12 +517,12 @@ class Container(containers.DeclarativeContainer):
         embedding_client=rag_embedding_client,
         elastic_filter=rag_elastic_filter,
         qdrant_retriever=rag_qdrant_retriever,
+        ranking_service=rag_evidence_ranking_service,
         graph_enhancement=rag_graph_enhancement,
     )
     rag_knowledge_searcher = providers.Singleton(
         RagKnowledgeSearcher,
         retrieval_pipeline=rag_retrieval_pipeline,
-        ranking_service=rag_evidence_ranking_service,
         hard_gate=rag_answerability_hard_gate,
         soft_gate=rag_answerability_soft_gate,
         evidence_materializer=rag_evidence_materializer,

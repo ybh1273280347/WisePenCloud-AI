@@ -4,6 +4,7 @@ from .models import (
     RagPermissionScope,
     RagQdrantRetrievalRequest,
     RagQdrantRetrievalFilterRequest,
+    RagRankedChunk,
     RagRetrievalChannel,
     RagRetrievalProfile,
     ScoredChunk,
@@ -11,6 +12,8 @@ from .models import (
 from .permission_filter import RagPermissionFilterBuilder
 from .pipeline import (
     RagElasticFilter,
+    RagEvidenceRankingRequest,
+    RagEvidenceRankingService,
     RagGraphEnhancement,
     RagQdrantRetriever,
 )
@@ -24,6 +27,8 @@ from .retrieval_pipeline import (
 __all__ = [
     "RagElasticKeywordFilterRequest",
     "RagElasticFilter",
+    "RagEvidenceRankingRequest",
+    "RagEvidenceRankingService",
     "RagGraphEnhancement",
     "RagGroupRole",
     "RagPermissionFilterBuilder",
@@ -31,6 +36,7 @@ __all__ = [
     "RagQdrantRetrievalFilterRequest",
     "RagQdrantRetrievalRequest",
     "RagQdrantRetriever",
+    "RagRankedChunk",
     "RagRetrievalPipeline",
     "RagRetrievalPipelineRequest",
     "RagRetrievalPipelineResult",

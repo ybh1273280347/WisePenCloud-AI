@@ -61,7 +61,7 @@ from chat.application.rag.graph import (  # noqa: E402
     RagGraphEnhancementResult,
     RagGraphEvidence,
 )
-from chat.application.rag.ranking import (  # noqa: E402
+from chat.application.rag.retrieval.pipeline import (  # noqa: E402
     RagEvidenceRankingRequest,
     RagEvidenceRankingService,
 )
@@ -73,6 +73,7 @@ from chat.application.rag.context_builder import (  # noqa: E402
 from chat.application.rag.retrieval import (  # noqa: E402
     RagGraphEnhancement,
     RagPermissionScope,
+    RagRankedChunk,
     RagRetrievalPipeline,
     RagRetrievalChannel,
     RagRetrievalProfile,
@@ -370,9 +371,9 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
             embedding_client=_RecordingEmbeddingClient(),
             elastic_filter=_RecordingElasticFilter(candidate_chunk_ids=("child-1",)),
             qdrant_retriever=qdrant_repository,
+            ranking_service=_RecordingRankingService(),
             graph_enhancement=RagGraphEnhancement(repository=graph_repository),
         ),
-        ranking_service=_RecordingRankingService(),
         hard_gate=AnswerabilityHardGate(),
         soft_gate=soft_gate,
         evidence_materializer=RagEvidenceMaterializer(
@@ -420,8 +421,8 @@ async def test_knowledge_search_stops_when_elastic_strict_prefilter_is_empty() -
             embedding_client=_RecordingEmbeddingClient(),
             elastic_filter=_RecordingElasticFilter(candidate_chunk_ids=()),
             qdrant_retriever=qdrant_repository,
+            ranking_service=_RecordingRankingService(),
         ),
-        ranking_service=_RecordingRankingService(),
         hard_gate=AnswerabilityHardGate(),
         soft_gate=_RecordingSoftGate(),
         evidence_materializer=RagEvidenceMaterializer(
@@ -482,20 +483,12 @@ async def test_evidence_materializer_uses_mongo_child_and_parent_context() -> No
         corpus_repository=corpus_repository
     ).materialize(
         RagEvidenceMaterializeRequest(
-            ranked=(
-                RankedCandidate(
-                    candidate=RankCandidate(
-                        candidate_id="child-1",
-                        text="Qdrant payload text",
-                    ),
-                    rank=1,
-                    score=0.82,
-                ),
-            ),
-            retrieved_chunks=(
-                ScoredChunk(
+            candidates=(
+                _ranked_chunk(
                     chunk_id="child-1",
                     text="Qdrant payload text",
+                    rank=1,
+                    score=0.82,
                     retrieval_score=0.91,
                     retrieval_rank=1,
                     resource_id="resource-doc",
@@ -545,17 +538,12 @@ async def test_evidence_materializer_uses_cache_without_storing_rank_score() -> 
 
     first = await materializer.materialize(
         RagEvidenceMaterializeRequest(
-            ranked=(
-                RankedCandidate(
-                    candidate=RankCandidate(candidate_id="child-1", text="Qdrant payload text"),
-                    rank=1,
-                    score=0.91,
-                ),
-            ),
-            retrieved_chunks=(
-                ScoredChunk(
+            candidates=(
+                _ranked_chunk(
                     chunk_id="child-1",
                     text="Qdrant payload text",
+                    rank=1,
+                    score=0.91,
                     retrieval_score=0.91,
                     retrieval_rank=1,
                     resource_id="resource-doc",
@@ -569,17 +557,12 @@ async def test_evidence_materializer_uses_cache_without_storing_rank_score() -> 
     )
     second = await materializer.materialize(
         RagEvidenceMaterializeRequest(
-            ranked=(
-                RankedCandidate(
-                    candidate=RankCandidate(candidate_id="child-1", text="Qdrant payload text"),
-                    rank=2,
-                    score=0.81,
-                ),
-            ),
-            retrieved_chunks=(
-                ScoredChunk(
+            candidates=(
+                _ranked_chunk(
                     chunk_id="child-1",
                     text="Qdrant payload text",
+                    rank=2,
+                    score=0.81,
                     retrieval_score=0.91,
                     retrieval_rank=1,
                     resource_id="resource-doc",
@@ -810,6 +793,43 @@ def _retrieved_hit(
         text=text,
         retrieval_score=retrieval_score,
         retrieval_rank=retrieval_rank,
+    )
+
+
+def _ranked_chunk(
+        *,
+        chunk_id: str,
+        text: str,
+        rank: int,
+        score: float,
+        retrieval_score: float,
+        retrieval_rank: int,
+        resource_id: str = "",
+        document_version: str = "",
+        corpus_version: str = "",
+        parent_chunk_id: str = "",
+) -> RagRankedChunk:
+    chunk = ScoredChunk(
+        chunk_id=chunk_id,
+        text=text,
+        retrieval_score=retrieval_score,
+        retrieval_rank=retrieval_rank,
+        resource_id=resource_id,
+        document_version=document_version,
+        corpus_version=corpus_version,
+        parent_chunk_id=parent_chunk_id,
+    )
+    return RagRankedChunk(
+        ranking=RankedCandidate(
+            candidate=RankCandidate(
+                candidate_id=chunk_id,
+                text=text,
+                prior_rank=retrieval_rank,
+            ),
+            rank=rank,
+            score=score,
+        ),
+        chunk=chunk,
     )
 
 

@@ -4,6 +4,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
+from chat.application.utils.ranking_engine.models import RankedCandidate
+
 
 class RagRetrievalChannel(StrEnum):
     DENSE = "dense"
@@ -87,3 +89,11 @@ class ScoredChunk:
     section_path: tuple[str, ...] = ()  # 章节路径
     anchor_labels: tuple[str, ...] = ()  # 表格、图片、公式等锚点标签
     retrieval_channels: tuple[RagRetrievalChannel, ...] = ()  # 命中的主召回通道
+
+
+@dataclass(frozen=True, slots=True)
+class RagRankedChunk:
+    """检索 pipeline 对外输出的已排序候选。"""
+
+    ranking: RankedCandidate
+    chunk: ScoredChunk

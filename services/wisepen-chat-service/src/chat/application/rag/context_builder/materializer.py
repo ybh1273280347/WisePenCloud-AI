@@ -8,7 +8,7 @@ from chat.application.rag.cache.evidence_materialization import (
     RagEvidenceMaterializationCacheScope,
     RagMaterializedEvidenceView,
 )
-from chat.application.rag.retrieval import ScoredChunk
+from chat.application.rag.retrieval import RagRankedChunk, ScoredChunk
 from chat.application.utils.ranking_engine.models import RankedCandidate
 from .models import RagDirectEvidence
 
@@ -19,8 +19,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class RagEvidenceMaterializeRequest:
-    ranked: tuple[RankedCandidate, ...]
-    retrieved_chunks: tuple[ScoredChunk, ...]
+    candidates: tuple[RagRankedChunk, ...]
     cache_scope: RagEvidenceMaterializationCacheScope | None = None
 
 
@@ -42,10 +41,12 @@ class RagEvidenceMaterializer:
             self,
             request: RagEvidenceMaterializeRequest,
     ) -> tuple[RagDirectEvidence, ...]:
-        ranked_ids = tuple(item.candidate_id for item in request.ranked)
-        cached_views_by_child_id = await self._load_cached_views(
-            scope=request.cache_scope,
-            ranked_ids=ranked_ids,
+        ranked = tuple(item.ranking for item in request.candidates)
+        ranked_ids = tuple(item.candidate_id for item in ranked)
+        cached_views_by_child_id = (
+            await self._cache.get_many(scope=request.cache_scope, child_chunk_ids=ranked_ids)
+            if self._cache is not None and request.cache_scope is not None
+            else {}
         )
         missing_ids = tuple(
             chunk_id
@@ -53,15 +54,15 @@ class RagEvidenceMaterializer:
             if chunk_id not in cached_views_by_child_id
         )
         retrieved_by_id = {
-            chunk.chunk_id: chunk
-            for chunk in request.retrieved_chunks
+            item.ranking.candidate_id: item.chunk
+            for item in request.candidates
         }
         child_by_id = {
             chunk.chunk_id: chunk
             for chunk in await self._corpus_repository.load_child_chunks(missing_ids)
         }
         parent_ids = _resolve_ranked_parent_ids(
-            request.ranked,
+            ranked,
             child_by_id=child_by_id,
             retrieved_by_id=retrieved_by_id,
         )
@@ -72,7 +73,7 @@ class RagEvidenceMaterializer:
 
         views_to_cache: dict[str, RagMaterializedEvidenceView] = {}
         evidence_by_parent_id: dict[str, RagDirectEvidence] = {}
-        for item in request.ranked:
+        for item in ranked:
             retrieved = retrieved_by_id.get(item.candidate_id)
             view = cached_views_by_child_id.get(item.candidate_id)
             if view is None:
@@ -96,31 +97,12 @@ class RagEvidenceMaterializer:
                 view,
                 citation_id=f"E{item.rank}",
             )
-        await self._store_cached_views(
-            scope=request.cache_scope,
-            views_by_child_id=views_to_cache,
-        )
+        if self._cache is not None and request.cache_scope is not None:
+            await self._cache.set_many(
+                scope=request.cache_scope,
+                views_by_child_id=views_to_cache,
+            )
         return tuple(evidence_by_parent_id.values())
-
-    async def _load_cached_views(
-            self,
-            *,
-            scope: RagEvidenceMaterializationCacheScope | None,
-            ranked_ids: tuple[str, ...],
-    ) -> dict[str, RagMaterializedEvidenceView]:
-        if self._cache is None or scope is None:
-            return {}
-        return await self._cache.get_many(scope=scope, child_chunk_ids=ranked_ids)
-
-    async def _store_cached_views(
-            self,
-            *,
-            scope: RagEvidenceMaterializationCacheScope | None,
-            views_by_child_id: dict[str, RagMaterializedEvidenceView],
-    ) -> None:
-        if self._cache is None or scope is None:
-            return
-        await self._cache.set_many(scope=scope, views_by_child_id=views_by_child_id)
 
 
 def _resolve_parent_chunk_id(
@@ -166,15 +148,16 @@ def _to_materialized_view(
         section_path = retrieved.section_path
         anchor_labels = retrieved.anchor_labels
     parent_chunk_id = _resolve_parent_chunk_id(child, retrieved)
+    text = item.candidate.text
+    if child is not None:
+        text = child.text
+    if parent is not None:
+        text = parent.text
 
     return RagMaterializedEvidenceView(
         parent_chunk_id=parent_chunk_id,
         document_version=retrieved.document_version if retrieved is not None else "",
-        text=_evidence_text(
-            item=item,
-            child=child,
-            parent=parent,
-        ),
+        text=text,
         citation_anchor=_build_citation_anchor(
             parent_chunk_id=parent_chunk_id,
             page_label=page_label,
@@ -186,19 +169,6 @@ def _to_materialized_view(
         anchor_labels=anchor_labels,
         matched_child_ids=(item.candidate_id,),
     )
-
-
-def _evidence_text(
-        *,
-        item: RankedCandidate,
-        child: RagChildChunk | None,
-        parent: RagParentChunk | None,
-) -> str:
-    if parent is not None:
-        return parent.text
-    if child is not None:
-        return child.text
-    return item.candidate.text
 
 
 def _to_direct_evidence(
