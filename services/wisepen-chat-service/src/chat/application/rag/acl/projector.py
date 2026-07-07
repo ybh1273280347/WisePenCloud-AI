@@ -4,10 +4,13 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .core import (
-    RagAclProjectionError,
     RagComputedGroupAclProjection,
     RagResourceAclProjection,
 )
+
+
+class RagAclProjectionError(ValueError):
+    """ACL projection payload 不符合 RAG 权限投影契约。"""
 
 _VIEW_MASK = 1 << 1  # ResourceAction.VIEW，RAG evidence 进入上下文必须具备阅读权限
 

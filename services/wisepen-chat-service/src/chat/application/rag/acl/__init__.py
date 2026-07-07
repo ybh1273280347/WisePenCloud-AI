@@ -1,11 +1,10 @@
 from .core import (
-    RagAclProjectionError,
     RagAclProjectionRepository,
     RagAclProjectionSyncTarget,
     RagComputedGroupAclProjection,
     RagResourceAclProjection,
 )
-from .projector import RagAclProjectionProjector
+from .projector import RagAclProjectionError, RagAclProjectionProjector
 from .updater import RagAclProjectionUpdater
 
 __all__ = [

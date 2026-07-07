@@ -107,7 +107,7 @@ class AppSettings(BaseModel):
     RAG_EVIDENCE_MATERIALIZATION_CACHE_TTL_SECONDS: int = 600  # RAG 已授权 evidence 物化缓存 TTL
     RAG_GRAPH_ENHANCEMENT_CACHE_TTL_SECONDS: int = 600  # RAG Neo4j 图增强结果缓存 TTL
     RAG_GRAPH_VERSION: str = "v1"  # RAG 图投影版本，变更后让旧 graph cache 自然 miss
-    RAG_ONTOLOGY_SCHEMA_VERSION: str = "default"  # RAG ontology schema 版本，变更后让旧 graph cache 自然 miss
+    RAG_ONTOLOGY_SCHEMA_VERSION: str = "v1"  # RAG ontology schema 版本，变更后让旧 graph cache 自然 miss
     RAG_KNOWLEDGE_SEARCH_TOP_K: int = 8  # RAG 返回给 answerability 的证据条数
     RAG_KNOWLEDGE_SEARCH_CANDIDATE_LIMIT: int = 80  # RAG 召回和排序中间窗口
     RAG_KNOWLEDGE_SEARCH_ELASTIC_PREFILTER_LIMIT: int = 1000  # RAG Elastic 关键词前置过滤窗口
