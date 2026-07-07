@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from bson import ObjectId
+
 from chat.application.rag.acl import (
     RagAclProjectionProjector,
     RagComputedGroupAclProjection,
@@ -39,10 +41,10 @@ class MongoRagAclProjectionRepository:
     async def load_resource_projection(self, resource_id: str) -> RagResourceAclProjection | None:
         raw = await RagAclProjectionDocument.get_pymongo_collection().database[
             _RESOURCE_ITEMS_COLLECTION
-        ].find_one({"_id": resource_id})
+        ].find_one(_resource_item_query(resource_id))
         if raw is None:
             return None
-        return self._projector.from_resource_item(raw)
+        return self._projector.from_resource_item({**raw, "_id": str(raw["_id"])})
 
     async def upsert_projection(self, projection: RagResourceAclProjection) -> None:
         now = datetime.now(timezone.utc)
@@ -97,3 +99,9 @@ def _to_group_documents(
         )
         for item in projection.computed_group_acls
     ]
+
+
+def _resource_item_query(resource_id: str) -> dict[str, object]:
+    if ObjectId.is_valid(resource_id):
+        return {"_id": ObjectId(resource_id)}
+    return {"_id": resource_id}

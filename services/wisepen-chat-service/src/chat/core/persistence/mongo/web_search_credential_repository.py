@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from hashlib import sha256
 
+from beanie.operators import In
 from pymongo.errors import DuplicateKeyError
 
 from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
@@ -160,10 +161,13 @@ class MongoWebSearchCredentialRepository:
         """返回当前生效的平台路由凭证。"""
         return await WebSearchCredential.find_one(
             WebSearchCredential.user_id == user_id,
-            WebSearchCredential.source.in_([
-                WebSearchCredentialSource.PLATFORM_DEFAULT,
-                WebSearchCredentialSource.PLATFORM_MEMBER,
-            ]),
+            In(
+                WebSearchCredential.source,
+                [
+                    WebSearchCredentialSource.PLATFORM_DEFAULT,
+                    WebSearchCredentialSource.PLATFORM_MEMBER,
+                ],
+            ),
             WebSearchCredential.is_active == True,  # noqa: E712
         )
 

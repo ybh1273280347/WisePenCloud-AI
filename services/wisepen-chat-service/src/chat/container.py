@@ -67,12 +67,10 @@ from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillM
 from chat.application.tools.tool_output_cache import ToolOutputCache
 from chat.application.tools.tool_output_renderer import ToolOutputRenderer
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.web_tools import (
-    AcademicSearchTool,
-    WebCrawlTool,
-    WebFetchTool,
-    WebSearchTool,
-)
+from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
+from chat.application.tools.web_tools.web_crawl_tool import WebCrawlTool
+from chat.application.tools.web_tools.web_fetch_tool import WebFetchTool
+from chat.application.tools.web_tools.web_search_tool import WebSearchTool
 from chat.application.tools.web_tools.fetch_services import (
     FetchCoordinator,
     WebCrawler,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 import pytest
+from bson import ObjectId
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
@@ -168,18 +169,21 @@ async def test_acl_projection_service_fetches_projection_for_recalc_event() -> N
 
 
 @pytest.mark.anyio
-async def test_acl_projection_service_rejects_missing_resource_item() -> None:
+async def test_acl_projection_service_skips_missing_resource_item() -> None:
+    repository = _RecordingAclProjectionRepository()
     service = RagAclRecalculateConsumer(
-        repository=_RecordingAclProjectionRepository(),
+        repository=repository,
     )
 
-    with pytest.raises(RagAclProjectionError):
-        await service.handle(
-            {
-                "resourceId": "res-2",
-                "triggerSource": "TAG_CHANGED",
-            }
-        )
+    await service.handle(
+        {
+            "resourceId": "res-2",
+            "triggerSource": "TAG_CHANGED",
+        }
+    )
+
+    assert repository.load_calls == ["res-2"]
+    assert repository.saved is None
 
 
 @pytest.mark.anyio
@@ -213,6 +217,40 @@ async def test_mongo_acl_projection_repository_loads_resource_item_from_pymongo_
     assert projection.owner_id == "owner-1"
     assert projection.readable_users == ("reader",)
     assert collection.database["wisepen_resource_items"].queries == [{"_id": "res-1"}]
+
+
+@pytest.mark.anyio
+async def test_mongo_acl_projection_repository_loads_object_id_resource_item(
+        monkeypatch,
+) -> None:
+    object_id = ObjectId()
+    raw_resource = {
+        "_id": object_id,
+        "ownerId": "owner-1",
+        "specifiedUsersGrantedActionsMask": {"reader": 2},
+        "computedGroupAcls": {},
+    }
+    collection = _FakeProjectionCollection(
+        database={
+            "wisepen_resource_items": _FakeResourceCollection(raw_resource),
+        }
+    )
+    monkeypatch.setattr(
+        RagAclProjectionDocument,
+        "get_pymongo_collection",
+        classmethod(lambda cls: collection),
+    )
+    repository = MongoRagAclProjectionRepository(
+        projector=RagAclProjectionProjector(),
+    )
+
+    projection = await repository.load_resource_projection(str(object_id))
+
+    assert projection is not None
+    assert projection.resource_id == str(object_id)
+    assert projection.owner_id == "owner-1"
+    assert projection.readable_users == ("reader",)
+    assert collection.database["wisepen_resource_items"].queries == [{"_id": object_id}]
 
 
 class _RecordingAclProjectionRepository:

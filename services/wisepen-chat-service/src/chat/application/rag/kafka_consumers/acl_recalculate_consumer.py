@@ -14,7 +14,7 @@ from chat.application.rag.kafka_consumers.payload_readers import (
     read_optional_string,
     read_required_string,
 )
-from common.logger import info
+from common.logger import info, warn
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +49,13 @@ class RagAclRecalculateConsumer:
     async def handle(self, payload: Mapping[str, Any]) -> None:
         message = parse_acl_recalculate_message(payload)
         projection = await self.refresh_projection(message)
+        if projection is None:
+            warn(
+                "rag acl projection refresh skipped because resource item was not found.",
+                resource_id=message.resource_id,
+                trigger_source=message.trigger_source,
+            )
+            return
         info(
             "rag acl projection refreshed.",
             resource_id=projection.resource_id,
@@ -60,10 +67,10 @@ class RagAclRecalculateConsumer:
     async def refresh_projection(
             self,
             message: AclRecalculateMessage,
-    ) -> RagResourceAclProjection:
+    ) -> RagResourceAclProjection | None:
         projection = await self._repository.load_resource_projection(message.resource_id)
         if projection is None:
-            raise RagAclProjectionError("Resource item for ACL projection was not found.")
+            return None
         if projection.resource_id != message.resource_id:
             raise RagAclProjectionError("ACL projection resourceId does not match recalculate message.")
         await self._repository.upsert_projection(projection)
