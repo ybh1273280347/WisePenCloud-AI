@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 from chat.application.tools.common.web_content_cache import (
     NonHtmlCacheStubWrite,
-    WebContentCacheEntryRepository,
+    WebContentCacheRepository,
     WebContentCacheService,
-    WebContentCacheValueRepository,
 )
 from chat.application.tools.common.web_content_cache._utils.metadata import (
     source_scope_from_metadata,
@@ -30,12 +29,10 @@ class DocumentParseCache:
     def __init__(
             self,
             *,
-            content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
-            content_cache_value_repository: WebContentCacheValueRepository | None = None,
+            content_cache_repository: WebContentCacheRepository | None = None,
     ) -> None:
         self._content_cache_service = WebContentCacheService(
-            entry_repository=content_cache_entry_repository,
-            value_repository=content_cache_value_repository,
+            repository=content_cache_repository,
         )
 
     async def write_direct_url_cache_stub(
@@ -43,7 +40,7 @@ class DocumentParseCache:
             *,
             user_id: str,
             raw: FetchedUrl,
-    ) -> str | None:
+    ) -> bool:
         return await self._content_cache_service.write_non_html_stub(
             NonHtmlCacheStubWrite(
                 user_id=user_id,
@@ -112,15 +109,11 @@ def direct_url_metadata(
         url: str,
         final_url: str | None,
         content_type: str | None,
-        cache_doc_id: str | None = None,
 ) -> dict[str, object]:
-    metadata: dict[str, object] = {
+    return {
         "source_kind": "web_fetch",
         "source_scope": "web_public",
         "source_url": url,
         "final_url": final_url,
         "content_type": content_type,
     }
-    if cache_doc_id:
-        metadata["source_cache_doc_id"] = cache_doc_id
-    return metadata

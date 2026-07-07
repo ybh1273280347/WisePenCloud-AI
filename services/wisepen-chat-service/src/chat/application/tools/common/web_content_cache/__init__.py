@@ -1,13 +1,8 @@
 from .core.models import (
     WebContentCacheMode,
-    WebContentCacheEntry,
     WebContentCacheValue,
-    WebContentCacheCleanupResult,
 )
-from .core.protocols import (
-    WebContentCacheEntryRepository,
-    WebContentCacheValueRepository,
-)
+from .core.protocols import WebContentCacheRepository
 from .service import (
     CachedMarkdownPage,
     HtmlCacheWrite,
@@ -23,11 +18,8 @@ __all__ = [
     "NonHtmlCacheStubWrite",
     "WEB_CUSTOM_SOURCE_SCOPE",
     "WEB_PUBLIC_SOURCE_SCOPE",
-    "WebContentCacheEntryRepository",
     "WebContentCacheMode",
-    "WebContentCacheEntry",
-    "WebContentCacheCleanupResult",
+    "WebContentCacheRepository",
     "WebContentCacheService",
-    "WebContentCacheValueRepository",
     "WebContentCacheValue",
 ]

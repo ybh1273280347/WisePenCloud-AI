@@ -106,10 +106,8 @@ class MongoWebSearchCredentialRepository:
                 provider=provider,
                 source=WebSearchCredentialSource.CUSTOM,
                 api_key_ciphertext=api_key_ciphertext,
-                api_key_masked=self._mask_api_key(api_key),
                 api_key_fingerprint=self._fingerprint_api_key(api_key),
                 openalex_api_key_ciphertext=openalex_api_key_ciphertext,
-                openalex_api_key_masked=self._mask_optional_api_key(normalized_openalex_key),
                 openalex_api_key_fingerprint=self._fingerprint_optional_api_key(normalized_openalex_key),
                 support_academic=provider.supports_academic_search,
                 created_at=now,
@@ -120,10 +118,8 @@ class MongoWebSearchCredentialRepository:
 
         # 分支 B: 覆盖旧凭证
         credential.api_key_ciphertext = api_key_ciphertext
-        credential.api_key_masked = self._mask_api_key(api_key)
         credential.api_key_fingerprint = self._fingerprint_api_key(api_key)
         credential.openalex_api_key_ciphertext = openalex_api_key_ciphertext
-        credential.openalex_api_key_masked = self._mask_optional_api_key(normalized_openalex_key)
         credential.openalex_api_key_fingerprint = self._fingerprint_optional_api_key(normalized_openalex_key)
         credential.support_academic = provider.supports_academic_search
         credential.updated_at = now
@@ -234,22 +230,9 @@ class MongoWebSearchCredentialRepository:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _mask_api_key(api_key: str) -> str:
-        """对秘钥进行脱敏展示，保留前后各 4 位。"""
-        if len(api_key) <= 8:
-            return "*" * len(api_key)
-        return f"{api_key[:4]}***{api_key[-4:]}"
-
-    @staticmethod
     def _fingerprint_api_key(api_key: str) -> str:
         """计算秘钥摘要，以便在不解密明文的情况下比对凭证是否发生变更。"""
         return sha256(api_key.encode("utf-8")).hexdigest()
-
-    @classmethod
-    def _mask_optional_api_key(cls, api_key: str) -> str:
-        if not api_key:
-            return ""
-        return cls._mask_api_key(api_key)
 
     @staticmethod
     def _fingerprint_optional_api_key(api_key: str) -> str:
@@ -280,10 +263,8 @@ class MongoWebSearchCredentialRepository:
             source=source,
             is_active=is_active_default,
             api_key_ciphertext="",
-            api_key_masked="",
             api_key_fingerprint="",
             openalex_api_key_ciphertext="",
-            openalex_api_key_masked="",
             openalex_api_key_fingerprint="",
             support_academic=False,
             created_at=now,

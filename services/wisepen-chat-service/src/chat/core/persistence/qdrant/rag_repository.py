@@ -9,10 +9,6 @@ from qdrant_client import models as qdrant_models
 
 from chat.application.rag.acl import RagResourceAclProjection
 
-_DEFAULT_DENSE_VECTOR_NAME = "dense"
-_DEFAULT_SPARSE_VECTOR_NAME = "sparse"
-_QDRANT_BM25_MODEL = "Qdrant/bm25"
-
 
 class RagQdrantRepository:
     """RAG child chunk 的 Qdrant 检索投影仓储。"""
@@ -34,8 +30,8 @@ class RagQdrantRepository:
             collection_name: str,
             dense_vector_size: int,
             bm25_config: qdrant_models.Bm25Config,
-            dense_vector_name: str = _DEFAULT_DENSE_VECTOR_NAME,
-            sparse_vector_name: str = _DEFAULT_SPARSE_VECTOR_NAME,
+            dense_vector_name: str = "dense",
+            sparse_vector_name: str = "sparse",
     ) -> None:
         self._client = client
         self._collection_name = collection_name
@@ -123,6 +119,24 @@ class RagQdrantRepository:
             )
         self._collection_ready = True
 
+    async def update_acl_projection(self, projection: RagResourceAclProjection) -> None:
+        if self._client is None:
+            return
+
+        await self._client.set_payload(
+            collection_name=self._collection_name,
+            payload=_build_acl_payload(projection),
+            points=qdrant_models.Filter(
+                must=[
+                    qdrant_models.FieldCondition(
+                        key="resource_id",
+                        match=qdrant_models.MatchValue(value=projection.resource_id),
+                    )
+                ]
+            ),
+            wait=True,
+        )
+
     async def _delete_document_points(
             self,
             *,
@@ -148,24 +162,6 @@ class RagQdrantRepository:
             wait=True,
         )
 
-    async def update_acl_projection(self, projection: RagResourceAclProjection) -> None:
-        if self._client is None:
-            return
-
-        await self._client.set_payload(
-            collection_name=self._collection_name,
-            payload=_build_acl_payload(projection),
-            points=qdrant_models.Filter(
-                must=[
-                    qdrant_models.FieldCondition(
-                        key="resource_id",
-                        match=qdrant_models.MatchValue(value=projection.resource_id),
-                    )
-                ]
-            ),
-            wait=True,
-        )
-
     def _build_vector(
             self,
             child: Any,
@@ -176,7 +172,7 @@ class RagQdrantRepository:
             self._dense_vector_name: list(dense_vectors[child.chunk_id]),
             self._sparse_vector_name: qdrant_models.Document(
                 text=child.indexing_text or child.text,
-                model=_QDRANT_BM25_MODEL,
+                model="Qdrant/bm25",
                 options=self._bm25_config,
             ),
         }

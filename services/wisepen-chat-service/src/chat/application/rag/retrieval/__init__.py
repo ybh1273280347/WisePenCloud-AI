@@ -1,4 +1,9 @@
 from .filters import RagPermissionFilterBuilder
+from .hybrid_retriever import (
+    RagHybridRetrievalRequest,
+    RagHybridRetrievalResult,
+    RagHybridRetriever,
+)
 from .models import (
     RagElasticStrictPrefilterRequest,
     RagExactFilter,
@@ -12,9 +17,6 @@ from .models import (
 )
 from .retrievers import (
     RagElasticRetriever,
-    RagHybridRetrievalRequest,
-    RagHybridRetrievalResult,
-    RagHybridRetriever,
     RagQdrantRetriever,
 )
 

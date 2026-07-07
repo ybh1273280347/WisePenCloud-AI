@@ -90,8 +90,8 @@ ToolInvocation
 | Render | `ToolOutputRenderer` | 普通返回值递归渲染；工具不得手写 XML 或为渲染构造私有 result layer。 |
 | Output Cache | `ToolOutputCache` | 小文本内联为 `<contents>`；大文本写入 `ToolContentStore` 生成 `cnt_*`；每段 `cacheable_texts[i]` 是独立内容单元，不能提前拼接。 |
 | Runtime File | `ToolRunFileStore` | 生产 `tfile_*`；按 `user_id/session_id` 校验作用域；模型和工具都不能传本地路径、OSS key 或 base64 作为跨工具文件协议。 |
-| URL Cache | `WebContentCacheService` + `web_content_cache/core/protocols.py` + persistence implementations | web/document 共享的 URL 缓存边界；Redis 存 active entry 和统一 TTL，Mongo 存正文，GC 清理 inactive。 |
-| Background | GC schedulers | 主服务启动 `ToolRunFileStoreGcScheduler` 和 `WebContentCacheGcScheduler`。 |
+| URL Cache | `WebContentCacheService` + `web_content_cache/core/protocols.py` + Redis persistence implementation | web/document 共享的 URL 缓存边界；Redis 直接保存 URL cache value 和统一 TTL。 |
+| Background | GC schedulers | 主服务启动 `ToolRunFileStoreGcScheduler`；`web_content_cache` 由 Redis TTL 自然过期。 |
 | Suggested Actions | `SuggestedAction(s)` | 可写工具名、mode、原因、优先级和轻量 metadata；不写完整调用参数；不代替 schema 和提示词边界。 |
 
 ## 三类引用
@@ -191,27 +191,18 @@ web_fetch(search_refs=[...])
 
 - HTML 成功抓取后，`web_fetch` 写入清洗后的 Markdown。
 - HTML crawl 页面同样通过 `WebContentCacheService` 读写同一 URL 缓存；缓存命中时仍保留 raw HTML 用于继续抽链。
-- 非 HTML 抓取后，`web_fetch` 先写占位文档，并把 `source_cache_doc_id` 写进 `tfile_*` metadata。
+- 非 HTML 抓取后，`web_fetch` 先写 Redis 占位记录，并把 `source_kind/source_scope/source_url/final_url` 写进 `tfile_*` metadata。
 - `document_parse` 解析来源为 `web_fetch` 的文件后，回填同一 URL 缓存文档的 Markdown，并标记 `parser=document_parse` 和 `parser_version`。
 - `document_parse(direct_urls=[...])` 也先读同一 URL parse 缓存；未命中时下载文件、预创建占位、解析并回填。
-- Redis entry 未过期时命中缓存；过期后视为未命中并重新抓取或解析。
+- Redis value 未过期时命中缓存；过期后视为未命中并重新抓取或解析。
 
 缓存访问域由 `source_scope` 决定：`web_public` 走公共缓存，`web_custom` 走用户私有缓存。document parse 读取时不能在 public/private 间串域回退。
 
-TTL 使用单层语义：`expire_at` 是 Redis entry 的统一过期时间，过期后不再返回旧内容。
+TTL 使用单层语义：`expire_at` 是 Redis value 的统一过期时间，过期后不再返回旧内容。
 
-### Mongo 正文清理
+### Redis 直存
 
-Redis entry 是 URL cache active 状态的权威索引，并按 `expire_at` 设置 TTL 自动过期。MongoDB 中的 `wisepen_web_content_cache_values` 只保存正文文档，不依赖 Mongo TTL 自动删除。
-
-主服务启动时会启动 `WebContentCacheGcScheduler`，定期清理 Mongo 中已经不 active 的缓存正文：
-
-- 只扫描 `updated_at` 早于保留期的 Mongo 文档。
-- 对每个候选文档，按 `user_id + canonical_url + cache_mode` 查询 Redis active entry。
-- 如果 Redis entry 仍指向同一个 Mongo `doc_id`，保留。
-- 如果 Redis entry 不存在，或已指向新文档，删除该 Mongo 文档。
-
-默认扫描周期是 3 天，inactive 保留期是 7 天，单次最多处理 1000 条，可通过 `tool_settings` 调整。
+Redis 是 URL cache 的唯一正文存储。`RedisWebContentCacheRepository` 按 public/private cache mode 写入完整 `WebContentCacheValue`，包含 raw HTML、Markdown、metadata、ETag、Last-Modified 和 `expire_at`。Redis TTL 到期后记录自然消失，不再需要 Mongo value 文档或 web content cache GC。
 
 ## Session 内容链
 
@@ -346,7 +337,7 @@ Math 工具的模型约束：不访问外部信息，不执行任意 Python，�
 | URL safety | `tools/utils/url/security.validate_public_http_url` | 只做 URL 安全性校验；不做页面内容阻断。 |
 | Markdown renderer | `tools/utils/markdown_renderer/html2markdown.py` | 只做确定性的 HTML 语法树到 Markdown 渲染；不处理特定业务或站点清洗逻辑。 |
 | Web cleaner | `fetch_services/cleaners/TrafilaturaCleaner` | cleaner 替换、正文保真度评估、表格/代码块渲染策略。 |
-| URL 缓存 | `WebContentCacheService` + `web_content_cache/core/protocols.py` + Redis/Mongo 持久化实现 | TTL 策略、ETag/Last-Modified 增量刷新、raw HTML 保留策略、hydrate 结果缓存。 |
+| URL 缓存 | `WebContentCacheService` + `web_content_cache/core/protocols.py` + Redis 持久化实现 | TTL 策略、ETag/Last-Modified 增量刷新、raw HTML 保留策略、hydrate 结果缓存。 |
 | 文档 parser | PDF strategy、Docling、Pandas、MarkItDown | Parser 顺序实验、PDF 页级策略优化。 |
 | OCR provider | PaddleCloud OCR client | 扫描 PDF 页和 `image_ocr` 的 OCR provider 替换。 |
 | 内容分块 | Markdown/plain chunking pipeline | chunk 大小、结构索引、页面/锚点抽取策略。 |

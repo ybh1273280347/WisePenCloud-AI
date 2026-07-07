@@ -8,8 +8,7 @@ from urllib.parse import urljoin, urlparse
 from lxml import html as lxml_html
 
 from chat.application.tools.common.web_content_cache import (
-    WebContentCacheEntryRepository,
-    WebContentCacheValueRepository,
+    WebContentCacheRepository,
 )
 from common.logger import info, warn
 from ._utils import judge_quality
@@ -57,8 +56,7 @@ class WebCrawler:
             httpx_fetcher: WebFetcher,
             scrapling_fetcher: WebFetcher,
             cleaner: BaseCleaner,
-            content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
-            content_cache_value_repository: WebContentCacheValueRepository | None = None,
+            content_cache_repository: WebContentCacheRepository | None = None,
             min_text_length: int = 200,
             concurrency: int = 5,
     ) -> None:
@@ -67,8 +65,7 @@ class WebCrawler:
         self._cleaner = cleaner
         self._cache = WebFetchCache(
             cleaner_name=cleaner.name,
-            entry_repository=content_cache_entry_repository,
-            value_repository=content_cache_value_repository,
+            repository=content_cache_repository,
             producer_name="web_crawl",
         )
         self._min_text_length = min_text_length

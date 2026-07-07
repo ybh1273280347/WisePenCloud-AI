@@ -6,8 +6,7 @@ from pathlib import Path
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.core.errors import ToolRunFileStoreError
 from chat.application.tools.common.web_content_cache import (
-    WebContentCacheEntryRepository,
-    WebContentCacheValueRepository,
+    WebContentCacheRepository,
 )
 from chat.application.tools.utils.url import filename_from_url
 from common.logger import info, warn
@@ -51,8 +50,7 @@ class FetchCoordinator:
             scrapling_fetcher: WebFetcher,
             cleaner: BaseCleaner,
             file_store: ToolRunFileStore,
-            content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
-            content_cache_value_repository: WebContentCacheValueRepository | None = None,
+            content_cache_repository: WebContentCacheRepository | None = None,
             min_text_length: int = 200,
             batch_concurrency: int = 5,
             scrapling_concurrency: int = 2,
@@ -64,8 +62,7 @@ class FetchCoordinator:
         self._file_store = file_store
         self._cache = WebFetchCache(
             cleaner_name=cleaner.name,
-            entry_repository=content_cache_entry_repository,
-            value_repository=content_cache_value_repository,
+            repository=content_cache_repository,
         )
         self._min_text_length = min_text_length
         self._batch_concurrency = max(1, int(batch_concurrency))
@@ -426,7 +423,7 @@ class FetchCoordinator:
                     filename_from_url(raw.final_url or raw.source_url)
                     or f"download.{raw.file_label or 'bin'}"
             )
-            cache_doc_id = await self._cache.write_non_html_stub(
+            await self._cache.write_non_html_stub(
                 user_id=user_id,
                 source_scope=source_scope,
                 raw=raw,
@@ -445,7 +442,6 @@ class FetchCoordinator:
                     "source_url": raw.source_url,
                     "final_url": raw.final_url,
                     "content_type": raw.content_type,
-                    "source_cache_doc_id": cache_doc_id,
                 },
             )
             info(

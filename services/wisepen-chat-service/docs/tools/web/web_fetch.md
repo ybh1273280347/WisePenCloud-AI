@@ -66,13 +66,13 @@ URL 缓存编排已经收敛到工具公共切面：
 src/chat/application/tools/common/web_content_cache/
 ```
 
-其中 Redis entry 保存 active URL 索引和统一 TTL；Mongo value 保存 raw HTML、Markdown 与 metadata。Redis entry 未过期时命中缓存，过期后视为未命中并重新抓取。
+其中 Redis value 直接保存 raw HTML、Markdown、metadata 和统一 TTL。Redis value 未过期时命中缓存，过期后视为未命中并重新抓取。
 
 非 HTML 文件不会被 `web_fetch` 解析。它会：
 
 1. 下载到临时文件。
 2. 为 URL 写入缓存占位文档。
-3. 发布为 `tfile_*`，metadata 包含 `source_kind=web_fetch`、`source_scope`、`source_url`、`final_url`、`source_cache_doc_id`。
+3. 发布为 `tfile_*`，metadata 包含 `source_kind=web_fetch`、`source_scope`、`source_url`、`final_url`。
 4. 返回 `file_ref` 和 `file_label`，建议下一步调用 `document_parse`。
 
 ## 输出
@@ -105,7 +105,7 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 - `judge_quality`：降级判断阈值，可按站点类型或内容长度实验。
 - `WebContentCacheService`：统一 URL 缓存门面，可扩展 ETag、Last-Modified、缓存分层。
 - `web_content_cache/core/protocols.py`：定义缓存 active 索引和正文存储协议。
-- `RedisWebContentCacheEntryRepository` / `MongoWebContentCacheValueRepository`：协议对应的 Redis/Mongo 持久化实现。
+- `RedisWebContentCacheRepository`：协议对应的 Redis 持久化实现。
 
 ## 后续优化
 

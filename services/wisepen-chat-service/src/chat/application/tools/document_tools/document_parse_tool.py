@@ -11,8 +11,7 @@ import httpx
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.core.errors import tool_file_error_reason
 from chat.application.tools.common.web_content_cache import (
-    WebContentCacheEntryRepository,
-    WebContentCacheValueRepository,
+    WebContentCacheRepository,
 )
 from chat.application.tools.common.web_content_cache._utils.metadata import (
     source_scope_from_metadata,
@@ -79,8 +78,7 @@ class DocumentParseTool:
             *,
             file_store: ToolRunFileStore,
             parse_service: DocumentParseService,
-            content_cache_entry_repository: WebContentCacheEntryRepository | None = None,
-            content_cache_value_repository: WebContentCacheValueRepository | None = None,
+            content_cache_repository: WebContentCacheRepository | None = None,
             url_download_http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._file_store = file_store
@@ -88,8 +86,7 @@ class DocumentParseTool:
         self._url_download_http_client = url_download_http_client
         self._max_download_bytes = tool_settings.DOCUMENT_PARSE_MAX_DOWNLOAD_BYTES
         self._cache = DocumentParseCache(
-            content_cache_entry_repository=content_cache_entry_repository,
-            content_cache_value_repository=content_cache_value_repository,
+            content_cache_repository=content_cache_repository,
         )
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
@@ -387,7 +384,7 @@ class DocumentParseTool:
                 max_response_bytes=self._max_download_bytes,
                 allow_html=False,
             )
-            cache_doc_id = await self._cache.write_direct_url_cache_stub(
+            await self._cache.write_direct_url_cache_stub(
                 user_id=user_id,
                 raw=raw,
             )
@@ -395,7 +392,6 @@ class DocumentParseTool:
                 url=raw.source_url,
                 final_url=raw.final_url or raw.source_url,
                 content_type=raw.content_type,
-                cache_doc_id=cache_doc_id,
             )
             record = await self._file_store.publish_file(
                 user_id=user_id,

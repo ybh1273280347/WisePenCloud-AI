@@ -110,13 +110,13 @@ return ToolReturn(
 | 切面 | 标识 | 生命周期 | 用途 |
 | --- | --- | --- | --- |
 | `ToolContentStore` | `cnt_*` | 会话内短期 TTL | 模型后续读取工具输出大文本。 |
-| `web_content_cache` | URL entry + Mongo value | 按 HTTP TTL / inactive GC | 复用外部 URL 抓取、HTML 清洗和文件解析结果。 |
+| `web_content_cache` | Redis URL value | 按 HTTP TTL 自然过期 | 复用外部 URL 抓取、HTML 清洗和文件解析结果。 |
 
 规则：
 
 - 工具返回给模型的大文本读取凭证只用 `cnt_*`。
 - 外部 URL 的复用只走 `web_content_cache`。
-- 不得把 URL cache 的 Mongo `doc_id` 暴露给模型。
+- 不得把 URL cache 的 Redis key 暴露给模型。
 - 不得用 `cnt_*` 替代 URL cache；`cnt_*` 过期后不代表 URL 内容必须重新抓取。
 - 不得用 URL cache 替代 `ToolContentStore`；模型读取窗口仍必须通过 session 工具。
 
@@ -208,7 +208,7 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 - 每个成功文件对应一段 `cacheable_texts`，由 `ToolOutputCache` 分批生成多个 `cnt_*`。
 - 返回中应包含单个 `SuggestedAction`，推荐后续用 `tool_content_read` 的 `ranked_expand` 读取解析后的 Markdown。
 
-`web_fetch` 和 `document_parse` 是同一核心外界信息获取工具体系里的两个阶段化入口。二者共享 URL 内容缓存、HTTP 下载能力和 `source_kind/source_scope/source_url/source_cache_doc_id` metadata 是正确行为：它保证网页正文、文件直链和 web_fetch 产出的非 HTML 文件都能落在统一 URL 缓存路径上。
+`web_fetch` 和 `document_parse` 是同一核心外界信息获取工具体系里的两个阶段化入口。二者共享 URL 内容缓存、HTTP 下载能力和 `source_kind/source_scope/source_url` metadata 是正确行为：它保证网页正文、文件直链和 web_fetch 产出的非 HTML 文件都能落在统一 URL 缓存路径上。
 
 这类耦合只允许存在于核心外界信息获取体系内，不应扩散成普通工具之间的任意互调。`document_parse` 仍不负责上传、资产持久化、知识库入库或文件展示。
 
@@ -218,8 +218,7 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 
 - `ToolOutputCache` 写 `cnt_*` 后，由 Redis TTL 自然过期。
 - `ToolRunFileStore` 生成 `tfile_*` 后，由主服务中的 `ToolRunFileStoreGcScheduler` 清理本地对象。
-- `web_content_cache` 的 Redis entry 按统一 TTL 自然过期，过期后视为未命中。
-- `web_content_cache` 的 Mongo 正文由主服务中的 `WebContentCacheGcScheduler` 定期清理；Redis entry 是 active 状态权威来源，GC 只删除不再 active 的 Mongo value。
+- `web_content_cache` 的 Redis value 按统一 TTL 自然过期，过期后视为未命中。
 
 工具实现不得同步等待后台 GC 完成。
 
@@ -249,7 +248,7 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 | 缓存下标 | 是否避免把 `cacheable_texts` 的内部下标暴露到 `visible_result`。 |
 | 自定义缓存 | 是否存在工具内自定义缓存、手写 receipt 或重复读取协议。 |
 | URL 复用 | 是否把 URL 复用放进 `web_content_cache`，而不是混入 `ToolContentStore`。 |
-| 模型暴露 | 是否把 Mongo cache `doc_id`、Redis key、本地路径或 object key 暴露给模型。 |
+| 模型暴露 | 是否把 URL cache Redis key、本地路径或 object key 暴露给模型。 |
 | `tool_content_read` | 是否只返回读取窗口，未把窗口文本再次放入 `ToolReturn.cacheable_texts`。 |
 | `tool_content_sequential_read` | 是否保持单 `content_id` 顺序读取边界，没有把它做成跨文档搜索工具。 |
 | `cache_chunked` | 是否只用于控制 chunk/index。 |

@@ -39,8 +39,7 @@ ToolScope disclosure
 | 大文本输出缓存 | `ToolOutputCache` | 将 `ToolReturn.cacheable_texts` 内联或转成 `cnt_*`。 | 不得手写 `<content_receipt>` 或自建大文本读取协议。 |
 | 内容存储 | `ToolContentStore` | 会话内短期文本存储、chunk/index、receipt。 | 不得把 `cnt_*` 当永久业务 ID。 |
 | 文件移交 | `ToolRunFileStore` | 工具间短期文件引用 `tfile_*`，按用户和会话隔离。 | 不得传本地路径、OSS key、base64 作为工具间文件协议。 |
-| URL 内容缓存 | `WebContentCacheService` + Redis entry repository + Mongo value repository | URL 到 HTML/文件占位/解析 Markdown 的缓存路径。 | web/document 不得维护第二套 URL cache。 |
-| Mongo 缓存 GC | `WebContentCacheGcScheduler` | 删除 Mongo 中不再 active 的正文缓存。 | 不得删除 Redis active entry；Redis TTL 是 active 权威索引。 |
+| URL 内容缓存 | `WebContentCacheService` + Redis content repository | URL 到 HTML/文件占位/解析 Markdown 的缓存路径。 | web/document 不得维护第二套 URL cache。 |
 | Suggested actions | `SuggestedAction(s)` | 给模型提示下一步工具链。 | 不得把完整工具参数硬塞进建议动作。 |
 
 ## 标准开发流程
@@ -143,7 +142,7 @@ unknown/search file URL -> web_fetch -> tfile_* -> document_parse -> URL cache +
 
 ## Background 行为
 
-后台 GC 随主服务自动启动：`ToolRunFileStoreGcScheduler`、`WebContentCacheGcScheduler` 随 `chat.main` lifespan 启动和停止。
+后台 GC 随主服务自动启动：`ToolRunFileStoreGcScheduler` 随 `chat.main` lifespan 启动和停止。`web_content_cache` 由 Redis TTL 自然过期，不再需要正文 GC。
 
 当前 URL cache 组件路径：
 
@@ -156,14 +155,12 @@ src/chat/application/tools/common/web_content_cache/
     cache_ttl.py
     metadata.py
   service.py
-  gc.py
-src/chat/core/persistence/redis/web_content_cache_entry_repository.py
-src/chat/core/persistence/mongo/web_content_cache_value_repository.py
+src/chat/core/persistence/redis/web_content_cache_repository.py
 ```
 
-`tools/common/*/core/protocols.py` 只定义应用层所需协议，具体 Redis/Mongo 实现在 `src/chat/core/persistence/`。当一个 common 子包同时出现 models、protocols、errors 等两个以上边界文件时，统一放入该子包 `core/`；只服务该子包内部的辅助函数放 `_utils/`，不要放在子包顶层伪装成稳定 API。
+`tools/common/*/core/protocols.py` 只定义应用层所需协议，具体 Redis 实现在 `src/chat/core/persistence/`。当一个 common 子包同时出现 models、protocols、errors 等两个以上边界文件时，统一放入该子包 `core/`；只服务该子包内部的辅助函数放 `_utils/`，不要放在子包顶层伪装成稳定 API。
 
-Redis entry 保存 active URL 索引和统一 TTL；Mongo value 保存正文；GC 只删除不再 active 的 Mongo value。
+Redis value 保存 URL 正文、raw HTML、metadata 和统一 TTL，过期后自然未命中。
 
 ## Review 清单
 
@@ -176,5 +173,4 @@ Redis entry 保存 active URL 索引和统一 TTL；Mongo value 保存正文；G
 | 重复缓存 | 是否把读取窗口再次缓存成新 `cnt_*`。 |
 | 文件协议 | 是否使用 `ToolRunFileStore` 传文件，而不是本地路径。 |
 | URL cache | web/document 是否复用 `web_content_cache`。 |
-| Mongo GC | Mongo cache GC 是否只删除不再 active 的 Mongo value，未删除 Redis entry。 |
 | 文档完整 | 文档是否写明 tool 链路、模型约束和可插拔点。 |

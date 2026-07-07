@@ -5,9 +5,8 @@ from dataclasses import dataclass
 from chat.application.tools.common.web_content_cache import (
     HtmlCacheWrite,
     NonHtmlCacheStubWrite,
-    WebContentCacheEntryRepository,
+    WebContentCacheRepository,
     WebContentCacheService,
-    WebContentCacheValueRepository,
 )
 from chat.application.tools.web_tools.fetch_services.core.models import RawFetchOutput, WebFetchResult
 from common.logger import info
@@ -32,15 +31,13 @@ class WebFetchCache:
             self,
             *,
             cleaner_name: str,
-            entry_repository: WebContentCacheEntryRepository | None = None,
-            value_repository: WebContentCacheValueRepository | None = None,
+            repository: WebContentCacheRepository | None = None,
             producer_name: str = _PRODUCER_NAME,
     ) -> None:
         self._cleaner_name = cleaner_name
         self._producer_name = producer_name
         self._content_cache_service = WebContentCacheService(
-            entry_repository=entry_repository,
-            value_repository=value_repository,
+            repository=repository,
         )
 
     async def read_result(
@@ -118,7 +115,7 @@ class WebFetchCache:
             user_id: str,
             source_scope: str,
             raw: RawFetchOutput,
-    ) -> str | None:
+    ) -> bool:
         return await self._content_cache_service.write_non_html_stub(
             NonHtmlCacheStubWrite(
                 user_id=user_id,

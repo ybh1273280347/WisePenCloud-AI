@@ -3,50 +3,31 @@ from __future__ import annotations
 from typing import Protocol
 
 from .models import (
-    WebContentCacheEntry,
     WebContentCacheMode,
     WebContentCacheValue,
 )
 
 
-class WebContentCacheEntryRepository(Protocol):
-    """Redis 侧：缓存索引读写。"""
+class WebContentCacheRepository(Protocol):
+    """Redis 侧：URL 内容缓存读写。"""
 
-    async def get_entry(
+    async def get_value(
             self,
             *,
             user_id: str,
             url: str,
             cache_mode: WebContentCacheMode | str,
-    ) -> WebContentCacheEntry | None:
+    ) -> WebContentCacheValue | None:
         ...
 
-    async def get_readable_entry(
-            self,
-            *,
-            user_id: str,
-            url: str,
-    ) -> WebContentCacheEntry | None:
+    async def set_value(self, value: WebContentCacheValue) -> None:
         ...
 
-    async def set_entry(self, entry: WebContentCacheEntry) -> None:
-        ...
-
-    async def delete_entry(
+    async def delete_value(
             self,
             *,
             user_id: str,
             url: str,
             cache_mode: WebContentCacheMode | str,
     ) -> None:
-        ...
-
-
-class WebContentCacheValueRepository(Protocol):
-    """MongoDB 侧：正文内容存储。"""
-
-    async def get_value(self, *, doc_id: str) -> WebContentCacheValue | None:
-        ...
-
-    async def save_value(self, value: WebContentCacheValue) -> str:
         ...

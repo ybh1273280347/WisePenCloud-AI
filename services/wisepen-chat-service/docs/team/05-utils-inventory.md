@@ -176,9 +176,9 @@
 | --- | --- | --- |
 | `tool_content_store/` | `core/models.py`、`core/protocols.py`、`store.py` | `cnt_*` 会话内大文本存储。 |
 | `tool_run_file_store/` | `core/models.py`、`core/errors.py`、`core/protocols.py`、`store.py`、`gc.py` | `tfile_*` 短期文件移交和文件系统 GC。 |
-| `web_content_cache/` | `core/models.py`、`core/protocols.py`、`_utils/cache_ttl.py`、`_utils/metadata.py`、`service.py`、`gc.py` | web/document 共享 URL 内容缓存。 |
+| `web_content_cache/` | `core/models.py`、`core/protocols.py`、`_utils/cache_ttl.py`、`_utils/metadata.py`、`service.py` | web/document 共享 URL 内容缓存。 |
 
-`core/protocols.py` 放应用层协议，Redis/Mongo 等具体实现仍在 `src/chat/core/persistence/`；`_utils/` 只放该 common 子包内部辅助函数，不从 `tools/common` 顶层扩散。
+`core/protocols.py` 放应用层协议，Redis 等具体实现仍在 `src/chat/core/persistence/`；`_utils/` 只放该 common 子包内部辅助函数，不从 `tools/common` 顶层扩散。
 
 ## 文档入口
 

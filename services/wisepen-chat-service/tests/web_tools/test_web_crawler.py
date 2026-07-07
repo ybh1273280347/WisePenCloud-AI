@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 import types
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -44,7 +43,6 @@ fetchers_module.WebFetcher = object
 sys.modules["chat.application.tools.web_tools.fetch_services.fetchers"] = fetchers_module
 
 from chat.application.tools.common.web_content_cache import (  # noqa: E402
-    WebContentCacheEntry,
     WebContentCacheMode,
     WebContentCacheValue,
 )
@@ -67,31 +65,23 @@ class _UnusedCleaner:
         raise AssertionError("cache hit should avoid cleaning")
 
 
-class _EntryRepository:
-    def __init__(self, entries: dict[tuple[str, str, WebContentCacheMode], WebContentCacheEntry]) -> None:
-        self._entries = entries
+class _CacheRepository:
+    def __init__(self, values: dict[tuple[str, str, WebContentCacheMode], WebContentCacheValue]) -> None:
+        self._values = values
 
-    async def get_entry(
+    async def get_value(
             self,
             *,
             user_id: str,
             url: str,
             cache_mode: WebContentCacheMode | str,
-    ) -> WebContentCacheEntry | None:
-        return self._entries.get((user_id, url, WebContentCacheMode(cache_mode)))
+    ) -> WebContentCacheValue | None:
+        return self._values.get((user_id, url, WebContentCacheMode(cache_mode)))
 
-    async def get_readable_entry(
-            self,
-            *,
-            user_id: str,
-            url: str,
-    ) -> WebContentCacheEntry | None:
-        return self._entries.get((user_id, url, WebContentCacheMode.PUBLIC))
+    async def set_value(self, value: WebContentCacheValue) -> None:
+        raise AssertionError(f"cache hit should avoid writing {value.canonical_url}")
 
-    async def set_entry(self, entry: WebContentCacheEntry) -> None:
-        raise AssertionError(f"cache hit should avoid writing {entry.canonical_url}")
-
-    async def delete_entry(
+    async def delete_value(
             self,
             *,
             user_id: str,
@@ -101,44 +91,21 @@ class _EntryRepository:
         raise AssertionError(f"cache hit should avoid deleting {url}")
 
 
-class _ValueRepository:
-    def __init__(self, values: dict[str, WebContentCacheValue]) -> None:
-        self._values = values
-
-    async def get_value(self, *, doc_id: str) -> WebContentCacheValue | None:
-        return self._values.get(doc_id)
-
-    async def save_value(self, value: WebContentCacheValue) -> str:
-        raise AssertionError(f"cache hit should avoid saving {value.canonical_url}")
-
-
 @pytest.mark.asyncio
 async def test_web_crawler_reuses_fetch_cache_and_cached_raw_html_for_links() -> None:
     user_id = "u1"
     seed_url = "https://example.test/start"
     child_url = "https://example.test/child"
 
-    entries = {
-        (user_id, seed_url, WebContentCacheMode.PUBLIC): _cache_entry(
-            user_id=user_id,
-            url=seed_url,
-            doc_id="seed-doc",
-        ),
-        (user_id, child_url, WebContentCacheMode.PUBLIC): _cache_entry(
-            user_id=user_id,
-            url=child_url,
-            doc_id="child-doc",
-        ),
-    }
     values = {
-        "seed-doc": _cache_value(
+        (user_id, seed_url, WebContentCacheMode.PUBLIC): _cache_value(
             user_id=user_id,
             url=seed_url,
             raw_html='<html><body><a href="/child">Child</a></body></html>',
             markdown="# Seed",
             title="Seed",
         ),
-        "child-doc": _cache_value(
+        (user_id, child_url, WebContentCacheMode.PUBLIC): _cache_value(
             user_id=user_id,
             url=child_url,
             raw_html="<html><body>Child</body></html>",
@@ -152,8 +119,7 @@ async def test_web_crawler_reuses_fetch_cache_and_cached_raw_html_for_links() ->
         httpx_fetcher=httpx_fetcher,
         scrapling_fetcher=scrapling_fetcher,
         cleaner=_UnusedCleaner(),
-        content_cache_entry_repository=_EntryRepository(entries),
-        content_cache_value_repository=_ValueRepository(values),
+        content_cache_repository=_CacheRepository(values),
         concurrency=1,
     )
 
@@ -171,22 +137,6 @@ async def test_web_crawler_reuses_fetch_cache_and_cached_raw_html_for_links() ->
     assert scrapling_fetcher.calls == 0
 
 
-def _cache_entry(
-        *,
-        user_id: str,
-        url: str,
-        doc_id: str,
-) -> WebContentCacheEntry:
-    return WebContentCacheEntry(
-        user_id=user_id,
-        url_hash=sha256(url.encode("utf-8")).hexdigest(),
-        canonical_url=url,
-        mongo_doc_id=doc_id,
-        cache_mode=WebContentCacheMode.PUBLIC,
-        expire_at=datetime.now(timezone.utc) + timedelta(minutes=5),
-    )
-
-
 def _cache_value(
         *,
         user_id: str,
@@ -196,7 +146,6 @@ def _cache_value(
         title: str,
 ) -> WebContentCacheValue:
     return WebContentCacheValue(
-        id=None,
         user_id=user_id,
         canonical_url=url,
         final_url=url,
@@ -205,5 +154,6 @@ def _cache_value(
         content_type="text/html",
         raw_html=raw_html,
         markdown=markdown,
+        expire_at=datetime.now(timezone.utc) + timedelta(minutes=5),
         metadata={"title": title},
     )

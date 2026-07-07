@@ -17,9 +17,7 @@ class WebSearchCredentialResponse(BaseModel):
     user_id: str
     provider: SearchProviderName | None
     source: WebSearchCredentialSource
-    api_key_masked: str
     api_key_fingerprint: str
-    openalex_api_key_masked: str
     support_academic: bool
     is_active: bool
     created_at: str

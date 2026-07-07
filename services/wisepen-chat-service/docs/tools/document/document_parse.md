@@ -46,7 +46,7 @@ src/chat/application/tools/document_tools/
 
 `web_fetch` 和 `document_parse` 共同构成核心外界信息获取工具体系：`web_fetch` 负责网页正文和不确定 URL 的抓取，`document_parse` 负责文件内容解析。两者共享 URL 内容缓存、HTTP fetcher 能力和 `source_*` metadata 是有意设计的正确行为，不视为需要拆除的错误耦合。
 
-直链解析会先按 URL 读取 parse markdown 缓存；未命中时使用工具层共享 URL fetcher 下载文件，预创建同一 URL 缓存文档，再把解析出的 Markdown 回填到该 URL 缓存路径。
+直链解析会先按 URL 读取 parse markdown 缓存；未命中时使用工具层共享 URL fetcher 下载文件，预创建同一 URL Redis 缓存记录，再把解析出的 Markdown 回填到该 URL 缓存路径。
 
 URL 缓存公共组件位于：
 
@@ -54,11 +54,11 @@ URL 缓存公共组件位于：
 src/chat/application/tools/common/web_content_cache/
 ```
 
-`document_parse` 通过 `DocumentParseCache` 使用同一套 Redis entry + Mongo value 缓存：
+`document_parse` 通过 `DocumentParseCache` 使用同一套 Redis URL 内容缓存：
 
-- `file_refs`：按 `tfile_*` metadata 中的 `source_kind/source_scope/source_url/source_cache_doc_id` 精确读取和回写 parsed Markdown。
+- `file_refs`：按 `tfile_*` metadata 中的 `source_kind/source_scope/source_url` 精确读取和回写 parsed Markdown。
 - `direct_urls`：先读 URL parsed cache；未命中时下载文件、写非 HTML 占位，再解析并回填。
-- Redis entry 未过期时命中 parsed Markdown 缓存；过期后视为未命中并重新下载或解析。
+- Redis value 未过期时命中 parsed Markdown 缓存；过期后视为未命中并重新下载或解析。
 
 document parse 读取缓存时不能在 public/private 域之间回退，避免自定义搜索源或用户私有 URL 结果串域。
 
@@ -121,4 +121,4 @@ OCR provider 不属于 parser 树，统一放在 `document_tools/ocr/`。PDF 扫
 ## 统一切面
 
 - 工具门面不手写 `cnt_*` receipt；大文本缓存由 `ToolOutputCache` 和 `ToolContentStore` 统一处理。
-- URL cache 的 Mongo `doc_id`、Redis key 和 `source_cache_doc_id` 不暴露给模型；它们只在工具内部 metadata 中流转。
+- URL cache 的 Redis key 不暴露给模型；工具内部只通过 `source_scope/source_url` 定位缓存。

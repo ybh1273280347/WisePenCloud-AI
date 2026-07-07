@@ -42,7 +42,6 @@ from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, Mode
 from chat.domain.entities.rag_acl import RagAclProjectionDocument
 from chat.domain.entities.rag_corpus import RagChildChunkDocument, RagParentChunkDocument
 from chat.domain.entities.web_search_credential import WebSearchCredential
-from chat.domain.entities.web_content_cache import WebContentCacheValueDocument
 
 # 避免 HTTP 代理拦截内部中间件请求。
 no_proxy = ",".join(filter(None, [
@@ -70,7 +69,6 @@ async def lifespan(app: FastAPI):
             Model,
             ModelProviderMapping,
             WebSearchCredential,
-            WebContentCacheValueDocument,
             RagAclProjectionDocument,
             RagParentChunkDocument,
             RagChildChunkDocument,

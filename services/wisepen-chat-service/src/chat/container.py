@@ -42,7 +42,6 @@ from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.gc import (
     ToolRunFileStoreGcScheduler,
 )
-from chat.application.tools.common.web_content_cache.gc import WebContentCacheGcScheduler
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
 from chat.application.tools.document_tools import DocumentParseTool, ImageOcrTool
@@ -119,17 +118,14 @@ from chat.core.persistence.mongo.rag_acl_projection_repository import (
 )
 from chat.core.persistence.mongo.rag_corpus_repository import MongoRagCorpusRepository
 from chat.core.persistence.mongo.session_repository import MongoSessionRepository
-from chat.core.persistence.mongo.web_content_cache_value_repository import (
-    MongoWebContentCacheValueRepository,
-)
 from chat.core.persistence.mongo.web_search_credential_repository import (
     MongoWebSearchCredentialRepository,
 )
 from chat.core.persistence.redis.hot_context import RedisHotContext
 from chat.core.persistence.redis.tool_content_repository import RedisToolContentRepository
 from chat.core.persistence.redis.tool_run_file_repository import RedisToolRunFileRepository
-from chat.core.persistence.redis.web_content_cache_entry_repository import (
-    RedisWebContentCacheEntryRepository,
+from chat.core.persistence.redis.web_content_cache_repository import (
+    RedisWebContentCacheRepository,
 )
 from chat.core.persistence.redis.web_search_candidate_repository import (
     RedisWebSearchCandidateRepository,
@@ -574,16 +570,9 @@ class Container(containers.DeclarativeContainer):
     )
 
     # --- Web Fetch / Crawl 组件 ---
-    web_content_cache_entry_repository = providers.Singleton(
-        RedisWebContentCacheEntryRepository,
+    web_content_cache_repository = providers.Singleton(
+        RedisWebContentCacheRepository,
         redis_url=settings.REDIS_URL,
-    )
-    web_content_cache_value_repository = providers.Singleton(
-        MongoWebContentCacheValueRepository,
-    )
-    web_content_cache_gc_scheduler = providers.Singleton(
-        WebContentCacheGcScheduler,
-        entry_repository=web_content_cache_entry_repository,
     )
     web_fetch_http_client = providers.Singleton(
         _build_web_fetch_http_client,
@@ -606,8 +595,7 @@ class Container(containers.DeclarativeContainer):
         httpx_fetcher=web_fetch_httpx_fetcher,
         scrapling_fetcher=web_fetch_scrapling_fetcher,
         cleaner=web_fetch_cleaner,
-        content_cache_entry_repository=web_content_cache_entry_repository,
-        content_cache_value_repository=web_content_cache_value_repository,
+        content_cache_repository=web_content_cache_repository,
         min_text_length=tool_settings.WEB_FETCH_MIN_TEXT_LENGTH,
         concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
     )
@@ -617,8 +605,7 @@ class Container(containers.DeclarativeContainer):
         scrapling_fetcher=web_fetch_scrapling_fetcher,
         cleaner=web_fetch_cleaner,
         file_store=tool_run_file_store,
-        content_cache_entry_repository=web_content_cache_entry_repository,
-        content_cache_value_repository=web_content_cache_value_repository,
+        content_cache_repository=web_content_cache_repository,
         min_text_length=tool_settings.WEB_FETCH_MIN_TEXT_LENGTH,
         batch_concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
         scrapling_concurrency=tool_settings.WEB_FETCH_SCRAPLING_CONCURRENCY,
@@ -652,8 +639,7 @@ class Container(containers.DeclarativeContainer):
         DocumentParseTool,
         file_store=tool_run_file_store,
         parse_service=document_parse_service,
-        content_cache_entry_repository=web_content_cache_entry_repository,
-        content_cache_value_repository=web_content_cache_value_repository,
+        content_cache_repository=web_content_cache_repository,
         url_download_http_client=web_fetch_http_client,
     )
     image_ocr_tool = providers.Singleton(

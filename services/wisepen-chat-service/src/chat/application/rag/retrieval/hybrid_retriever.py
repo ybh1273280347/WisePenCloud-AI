@@ -11,8 +11,8 @@ from chat.application.rag.retrieval.models import (
     RagRetrievalProfile,
     ScoredChunk,
 )
-from .elastic_retriever import RagElasticRetriever
-from .qdrant_retriever import RagQdrantRetriever
+from chat.application.rag.retrieval.retrievers.elastic_retriever import RagElasticRetriever
+from chat.application.rag.retrieval.retrievers.qdrant_retriever import RagQdrantRetriever
 
 
 @dataclass(frozen=True, slots=True)
