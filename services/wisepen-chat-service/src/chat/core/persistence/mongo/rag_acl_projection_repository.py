@@ -37,7 +37,7 @@ class MongoRagAclProjectionRepository:
         return _to_projection(document)
 
     async def load_resource_projection(self, resource_id: str) -> RagResourceAclProjection | None:
-        raw = await RagAclProjectionDocument.get_motor_collection().database[
+        raw = await RagAclProjectionDocument.get_pymongo_collection().database[
             _RESOURCE_ITEMS_COLLECTION
         ].find_one({"_id": resource_id})
         if raw is None:

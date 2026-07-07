@@ -16,6 +16,10 @@ from chat.application.rag.kafka_consumers.acl_recalculate_consumer import (  # n
     RagAclRecalculateConsumer,
     parse_acl_recalculate_message,
 )
+from chat.core.persistence.mongo.rag_acl_projection_repository import (  # noqa: E402
+    MongoRagAclProjectionRepository,
+)
+from chat.domain.entities.rag_acl import RagAclProjectionDocument  # noqa: E402
 
 
 def test_parse_acl_recalculate_message_uses_real_resource_topic_fields() -> None:
@@ -178,6 +182,39 @@ async def test_acl_projection_service_rejects_missing_resource_item() -> None:
         )
 
 
+@pytest.mark.anyio
+async def test_mongo_acl_projection_repository_loads_resource_item_from_pymongo_collection(
+        monkeypatch,
+) -> None:
+    raw_resource = {
+        "_id": "res-1",
+        "ownerId": "owner-1",
+        "specifiedUsersGrantedActionsMask": {"reader": 2},
+        "computedGroupAcls": {},
+    }
+    collection = _FakeProjectionCollection(
+        database={
+            "wisepen_resource_items": _FakeResourceCollection(raw_resource),
+        }
+    )
+    monkeypatch.setattr(
+        RagAclProjectionDocument,
+        "get_pymongo_collection",
+        classmethod(lambda cls: collection),
+    )
+    repository = MongoRagAclProjectionRepository(
+        projector=RagAclProjectionProjector(),
+    )
+
+    projection = await repository.load_resource_projection("res-1")
+
+    assert projection is not None
+    assert projection.resource_id == "res-1"
+    assert projection.owner_id == "owner-1"
+    assert projection.readable_users == ("reader",)
+    assert collection.database["wisepen_resource_items"].queries == [{"_id": "res-1"}]
+
+
 class _RecordingAclProjectionRepository:
     def __init__(self) -> None:
         self.load_calls: list[str] = []
@@ -205,3 +242,18 @@ class _RecordingAclProjectionUpdater(RagAclProjectionUpdater):
 
     async def update_read_acl(self, projection: RagResourceAclProjection) -> None:
         self.updated.append(projection)
+
+
+class _FakeProjectionCollection:
+    def __init__(self, *, database: dict[str, object]) -> None:
+        self.database = database
+
+
+class _FakeResourceCollection:
+    def __init__(self, raw: dict[str, object] | None) -> None:
+        self.raw = raw
+        self.queries: list[dict[str, object]] = []
+
+    async def find_one(self, query: dict[str, object]) -> dict[str, object] | None:
+        self.queries.append(query)
+        return self.raw
