@@ -1,0 +1,133 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from chat.application.rag.retrieval import (  # noqa: E402
+    RagElasticStrictPrefilterRequest,
+    RagElasticRetriever,
+    RagExactFilter,
+    RagPermissionFilterBuilder,
+    RagPermissionScope,
+)
+
+
+def test_elastic_strict_prefilter_builds_bool_filter_with_exact_fields() -> None:
+    retriever = RagElasticRetriever(
+        client=_FakeElasticClient(),
+        index_name="rag-test",
+        permission_filter_builder=RagPermissionFilterBuilder(),
+    )
+
+    query = retriever.build_strict_prefilter_query(
+        RagElasticStrictPrefilterRequest(
+            query="AppBuilder API Key",
+            resource_id="res-1",
+            corpus_version="corpus-7",
+            exact_filter=RagExactFilter(
+                document_version="3",
+                page_label="12",
+                anchor_labels=("表 3",),
+                section_path=("鉴权", "API Key"),
+                required_phrases=("Bearer token",),
+            ),
+            permission_scope=RagPermissionScope(
+                user_id="user-1",
+                group_role_map={
+                    "group-admin": "ADMIN",
+                    "group-member": "MEMBER",
+                },
+            ),
+            limit=20,
+        )
+    )
+
+    bool_query = query["bool"]
+    assert {"term": {"resource_id": "res-1"}} in bool_query["filter"]
+    assert {"term": {"corpus_version": "corpus-7"}} in bool_query["filter"]
+    assert {"term": {"document_version": "3"}} in bool_query["filter"]
+    assert {"term": {"page_label": "12"}} in bool_query["filter"]
+    assert {"terms": {"anchor_labels": ["表 3"]}} in bool_query["filter"]
+    assert {"term": {"section_path_text": "鉴权 > API Key"}} in bool_query["filter"]
+    assert bool_query["must"] == [
+        {"match_phrase": {"indexing_text": {"query": "AppBuilder API Key"}}},
+        {"match_phrase": {"indexing_text": {"query": "Bearer token"}}},
+    ]
+    assert bool_query["filter"][-1]["bool"]["minimum_should_match"] == 1
+
+
+def test_permission_filter_keeps_group_acl_exceptions_nested() -> None:
+    query = RagPermissionFilterBuilder().build_elastic_filter(
+        RagPermissionScope(
+            user_id="user-1",
+            group_role_map={
+                "managed": "OWNER",
+                "joined": "MEMBER",
+            },
+        )
+    )
+
+    should = query["bool"]["should"]
+    assert {"term": {"owner_id": "user-1"}} in should
+    assert {"term": {"readable_users": "user-1"}} in should
+    assert any(item.get("nested", {}).get("path") == "computed_group_acls" for item in should)
+
+    member_discover = should[3]["nested"]["query"]["bool"]
+    assert {"terms": {"computed_group_acls.group_id": ["managed", "joined"]}} in member_discover["filter"]
+    assert {"term": {"computed_group_acls.is_readable": True}} in member_discover["filter"]
+    assert member_discover["must_not"] == [
+        {"term": {"computed_group_acls.excluded_read_users": "user-1"}}
+    ]
+
+
+@pytest.mark.anyio
+async def test_elastic_strict_prefilter_returns_chunk_ids_from_source() -> None:
+    client = _FakeElasticClient(
+        response={
+            "hits": {
+                "hits": [
+                    {"_source": {"chunk_id": "chunk-a"}},
+                    {"_source": {"chunk_id": "chunk-b"}},
+                    {"_source": {}},
+                ]
+            }
+        }
+    )
+    retriever = RagElasticRetriever(
+        client=client,
+        index_name="rag-test",
+        permission_filter_builder=RagPermissionFilterBuilder(),
+    )
+
+    chunk_ids = await retriever.strict_prefilter(
+        RagElasticStrictPrefilterRequest(
+            query="",
+            resource_id="res-1",
+            corpus_version="corpus-1",
+            exact_filter=RagExactFilter(chunk_ids=("chunk-a", "chunk-b")),
+        )
+    )
+
+    assert chunk_ids == ("chunk-a", "chunk-b")
+    assert client.search_calls[0]["index"] == "rag-test"
+    assert client.search_calls[0]["size"] == 1000
+    assert client.search_calls[0]["source_includes"] == ["chunk_id"]
+
+
+class _FakeElasticClient:
+    def __init__(self, *, response: dict[str, Any] | None = None) -> None:
+        self.response = response or {"hits": {"hits": []}}
+        self.search_calls: list[dict[str, Any]] = []
+        self.delete_by_query_calls: list[dict[str, Any]] = []
+
+    async def search(self, **kwargs: Any) -> dict[str, Any]:
+        self.search_calls.append(kwargs)
+        return self.response
+
+    async def delete_by_query(self, **kwargs: Any) -> None:
+        self.delete_by_query_calls.append(kwargs)

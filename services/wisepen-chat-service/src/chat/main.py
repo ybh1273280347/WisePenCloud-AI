@@ -40,6 +40,7 @@ from chat.api.endpoints import tool as tool_endpoints
 from chat.api.endpoints import web_search as web_search_endpoints
 from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping
 from chat.domain.entities.rag_acl import RagAclProjectionDocument
+from chat.domain.entities.rag_corpus import RagChildChunkDocument, RagParentChunkDocument
 from chat.domain.entities.web_search_credential import WebSearchCredential
 from chat.domain.entities.web_content_cache import WebContentCacheValueDocument
 
@@ -71,6 +72,8 @@ async def lifespan(app: FastAPI):
             WebSearchCredential,
             WebContentCacheValueDocument,
             RagAclProjectionDocument,
+            RagParentChunkDocument,
+            RagChildChunkDocument,
         ],
     )
     info("beanie initialized.", db=settings.MONGODB_DB_NAME)
@@ -132,6 +135,18 @@ async def lifespan(app: FastAPI):
         await container.rpc_client().aclose()
     except Exception as e:
         error("rpc client close failed.", exc=e)
+    try:
+        elasticsearch_client = container.elasticsearch_client()
+        if elasticsearch_client is not None:
+            await elasticsearch_client.close()
+    except Exception as e:
+        error("elasticsearch client close failed.", exc=e)
+    try:
+        qdrant_client = container.qdrant_client()
+        if qdrant_client is not None:
+            await qdrant_client.close()
+    except Exception as e:
+        error("qdrant client close failed.", exc=e)
     try:
         await container.service_discovery().close()
     except Exception as e:

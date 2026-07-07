@@ -2,7 +2,6 @@
 
 from .hard_gate import AnswerabilityHardGate
 from .models import (
-    RagAnswerabilityDecision,
     RagAnswerabilityInput,
     RagAnswerabilityWarning,
     RagAnswerabilityWarningReason,
@@ -16,7 +15,6 @@ __all__ = [
     "AnswerabilityHardGate",
     "AnswerabilitySoftGate",
     "AnswerabilitySoftGateError",
-    "RagAnswerabilityDecision",
     "RagAnswerabilityInput",
     "RagAnswerabilityWarning",
     "RagAnswerabilityWarningReason",

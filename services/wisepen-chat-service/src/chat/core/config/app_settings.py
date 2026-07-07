@@ -63,12 +63,20 @@ class AppSettings(BaseModel):
     QDRANT_HOST: str  # Qdrant 主机地址
     QDRANT_PORT: int  # Qdrant 端口
     QDRANT_PASSWORD: str  # Qdrant 密码
+    QDRANT_RAG_COLLECTION_NAME: str = "wisepen_rag_child_chunks"  # RAG child chunk Qdrant collection
+    QDRANT_RAG_BM25_TOKENIZER: Literal[
+        "prefix",
+        "whitespace",
+        "word",
+        "multilingual",
+    ] = "multilingual"  # Qdrant BM25 tokenizer 类型
     NEO4J_URI: str = "neo4j://localhost:7687"  # Neo4j 连接 URI
     NEO4J_USERNAME: str = "neo4j"  # Neo4j 用户名
     NEO4J_PASSWORD: str = "password123"  # Neo4j 密码
     ELASTIC_SEARCH_BASE_URL: str = "http://wisepen-dev-server:9200"  # Elasticsearch 基础 URL；空串表示未启用
     ELASTIC_SEARCH_USERNAME: str = "elastic"  # Elasticsearch 用户名
     ELASTIC_SEARCH_PASSWORD: str = "root"  # Elasticsearch 密码
+    ELASTIC_SEARCH_RAG_INDEX_NAME: str = "wisepen_rag_child_chunks"  # RAG child chunk strict prefilter 索引名
 
     # ── Context Window (模型上下文窗口预算) ────────────────────────────
     CTX_TOKEN_LIMIT: int = 128000  # 上下文窗口大小，对齐 gpt-4o 128k

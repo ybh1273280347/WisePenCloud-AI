@@ -8,11 +8,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from chat.application.rag.acl import (  # noqa: E402
     RagAclProjectionError,
+    RagAclProjectionProjector,
+    RagAclProjectionUpdater,
     RagResourceAclProjection,
-    parse_rag_acl_projection,
 )
-from chat.application.rag.consumers import (  # noqa: E402
-    RagAclProjectionService,
+from chat.application.rag.kafka_consumers.acl_recalculate_consumer import (  # noqa: E402
+    RagAclRecalculateConsumer,
     parse_acl_recalculate_message,
 )
 
@@ -30,21 +31,21 @@ def test_parse_acl_recalculate_message_uses_real_resource_topic_fields() -> None
 
 
 def test_parse_rag_acl_projection_matches_resource_es_projection_shape() -> None:
-    projection = parse_rag_acl_projection(
+    projection = RagAclProjectionProjector().from_projection_payload(
         {
             "resourceId": "res-1",
             "ownerId": "owner-1",
-            "specifiedDiscoverUsers": ["user-a"],
+            "readableUsers": ["user-a"],
             "computedGroupAcls": [
                 {
                     "groupId": "101",
-                    "isDiscover": True,
-                    "specifiedUsers": ["blocked-user"],
+                    "isReadable": True,
+                    "excludedReadUsers": ["blocked-user"],
                 },
                 {
                     "groupId": "102",
-                    "isDiscover": False,
-                    "specifiedUsers": ["allowed-user"],
+                    "isReadable": False,
+                    "readableUsers": ["allowed-user"],
                 },
             ],
         }
@@ -52,17 +53,54 @@ def test_parse_rag_acl_projection_matches_resource_es_projection_shape() -> None
 
     assert projection.resource_id == "res-1"
     assert projection.owner_id == "owner-1"
-    assert projection.specified_discover_users == ("user-a",)
+    assert projection.readable_users == ("user-a",)
     assert [item.group_id for item in projection.computed_group_acls] == ["101", "102"]
-    assert projection.computed_group_acls[0].is_discover is True
-    assert projection.computed_group_acls[1].specified_users == ("allowed-user",)
+    assert projection.computed_group_acls[0].is_readable is True
+    assert projection.computed_group_acls[0].excluded_read_users == ("blocked-user",)
+    assert projection.computed_group_acls[1].readable_users == ("allowed-user",)
+
+
+def test_acl_projection_from_resource_item_uses_view_permission_not_discover() -> None:
+    projection = RagAclProjectionProjector().from_resource_item(
+        {
+            "_id": "res-1",
+            "ownerId": "owner-1",
+            "specifiedUsersGrantedActionsMask": {
+                "discover-only": 1,
+                "view-user": 2,
+            },
+            "computedGroupAcls": {
+                "101": {
+                    "baseMask": 3,
+                    "userMasks": {
+                        "blocked-user": 1,
+                    },
+                },
+                "102": {
+                    "baseMask": 1,
+                    "userMasks": {
+                        "allowed-user": 2,
+                    },
+                },
+            },
+        }
+    )
+
+    assert projection.readable_users == ("view-user",)
+    assert projection.computed_group_acls[0].is_readable
+    assert projection.computed_group_acls[0].excluded_read_users == ("blocked-user",)
+    assert not projection.computed_group_acls[1].is_readable
+    assert projection.computed_group_acls[1].readable_users == ("allowed-user",)
 
 
 @pytest.mark.anyio
 async def test_acl_projection_service_saves_projection_from_enriched_event() -> None:
     repository = _RecordingAclProjectionRepository()
-    service = RagAclProjectionService(
+    updater = _RecordingAclProjectionUpdater()
+    service = RagAclRecalculateConsumer(
+        projector=RagAclProjectionProjector(),
         repository=repository,
+        updater=updater,
     )
 
     await service.handle(
@@ -70,7 +108,7 @@ async def test_acl_projection_service_saves_projection_from_enriched_event() -> 
             "resourceId": "res-1",
             "triggerSource": "RESOURCE_ACTION_PERMISSION_CHANGED",
             "ownerId": "owner-1",
-            "specifiedDiscoverUsers": ["user-a"],
+            "readableUsers": ["user-a"],
             "computedGroupAcls": [],
         }
     )
@@ -79,6 +117,7 @@ async def test_acl_projection_service_saves_projection_from_enriched_event() -> 
     assert repository.saved is not None
     assert repository.saved.resource_id == "res-1"
     assert repository.saved.owner_id == "owner-1"
+    assert updater.updated == [repository.saved]
 
 
 @pytest.mark.anyio
@@ -90,7 +129,8 @@ async def test_acl_projection_service_fetches_projection_for_recalc_event() -> N
         computed_group_acls=(),
     )
     repository.source_projection = source_projection
-    service = RagAclProjectionService(
+    service = RagAclRecalculateConsumer(
+        projector=RagAclProjectionProjector(),
         repository=repository,
     )
 
@@ -109,7 +149,8 @@ async def test_acl_projection_service_fetches_projection_for_recalc_event() -> N
 
 @pytest.mark.anyio
 async def test_acl_projection_service_rejects_missing_resource_item() -> None:
-    service = RagAclProjectionService(
+    service = RagAclRecalculateConsumer(
+        projector=RagAclProjectionProjector(),
         repository=_RecordingAclProjectionRepository(),
     )
 
@@ -141,3 +182,11 @@ class _RecordingAclProjectionRepository:
         if self.source_projection is None or self.source_projection.resource_id != resource_id:
             return None
         return self.source_projection
+
+
+class _RecordingAclProjectionUpdater(RagAclProjectionUpdater):
+    def __init__(self) -> None:
+        self.updated: list[RagResourceAclProjection] = []
+
+    async def update_read_acl(self, projection: RagResourceAclProjection) -> None:
+        self.updated.append(projection)

@@ -12,10 +12,17 @@ from chat.domain.entities.rag_acl import (
     RagComputedGroupAclProjectionDocument,
 )
 
-_RESOURCE_ITEMS_COLLECTION = "wisepen_resource_items"
+_RESOURCE_ITEMS_COLLECTION = "wisepen_resource_items"  # resource-service 原始资源集合，用于回源查询
 
 
 class MongoRagAclProjectionRepository:
+    """ACL 投影的 MongoDB 持久化实现。
+
+    - get_projection: 从投影集合查询已缓存的权限投影
+    - load_resource_projection: 从 resource-service 原始集合回源查询并构建投影
+    - upsert_projection: 写入或更新投影文档
+    """
+
     __slots__ = ("_projector",)
 
     def __init__(self, *, projector: RagAclProjectionProjector) -> None:
@@ -46,7 +53,7 @@ class MongoRagAclProjectionRepository:
             document = RagAclProjectionDocument(
                 resource_id=projection.resource_id,
                 owner_id=projection.owner_id,
-                specified_discover_users=list(projection.specified_discover_users),
+                readable_users=list(projection.readable_users),
                 computed_group_acls=_to_group_documents(projection),
                 created_at=now,
                 updated_at=now,
@@ -55,7 +62,7 @@ class MongoRagAclProjectionRepository:
             return
 
         document.owner_id = projection.owner_id
-        document.specified_discover_users = list(projection.specified_discover_users)
+        document.readable_users = list(projection.readable_users)
         document.computed_group_acls = _to_group_documents(projection)
         document.updated_at = now
         await document.save()
@@ -65,12 +72,13 @@ def _to_projection(document: RagAclProjectionDocument) -> RagResourceAclProjecti
     return RagResourceAclProjection(
         resource_id=document.resource_id,
         owner_id=document.owner_id,
-        specified_discover_users=tuple(document.specified_discover_users),
+        readable_users=tuple(document.readable_users),
         computed_group_acls=tuple(
             RagComputedGroupAclProjection(
                 group_id=item.group_id,
-                is_discover=item.is_discover,
-                specified_users=tuple(item.specified_users),
+                is_readable=item.is_readable,
+                readable_users=tuple(item.readable_users),
+                excluded_read_users=tuple(item.excluded_read_users),
             )
             for item in document.computed_group_acls
         ),
@@ -83,8 +91,9 @@ def _to_group_documents(
     return [
         RagComputedGroupAclProjectionDocument(
             group_id=item.group_id,
-            is_discover=item.is_discover,
-            specified_users=list(item.specified_users),
+            is_readable=item.is_readable,
+            readable_users=list(item.readable_users),
+            excluded_read_users=list(item.excluded_read_users),
         )
         for item in projection.computed_group_acls
     ]

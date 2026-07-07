@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 
 from chat.application.utils.ranking_engine.models import RankedCandidate
@@ -67,26 +67,3 @@ class RagAnswerabilityWarning:
         """只要存在 warning，就触发 Neo4j Ontology Enhancement 做进一步图增强。"""
         return bool(self.warnings)
 
-
-@dataclass(frozen=True, slots=True)
-class RagAnswerabilityDecision:
-    """Answerability Gate 总输出。"""
-
-    hard_gate: RagHardGateDecision
-    # 当 hard_gate 通过时，这些引用 id 将用于构建带引用的最终回答。
-    supporting_citation_ids: tuple[str, ...] = ()
-    answerability_warning: RagAnswerabilityWarning | None = None
-    metadata: dict[str, object] = field(default_factory=dict)
-
-    @property
-    def should_continue(self) -> bool:
-        return self.hard_gate.should_continue
-
-    @property
-    def should_enhance_with_neo4j(self) -> bool:
-        """只有先通过硬门控，且软门控报出 warning 时，才值得做图增强。"""
-        return bool(
-            self.should_continue
-            and self.answerability_warning
-            and self.answerability_warning.should_enhance_with_neo4j
-        )

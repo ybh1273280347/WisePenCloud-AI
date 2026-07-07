@@ -2,6 +2,13 @@
 
 本文把 RAG 定稿方案落成后续开发可直接对照的实现骨架。这里写的是伪代码和模块联动，不是当前必须立即提交的生产代码。
 
+2026-07-07 当前实现覆盖说明：
+
+- 当前入口是 `RagMarkdownIngester`、`RagKnowledgeSearcher`、`rag/kafka_consumers/`、`rag/retrieval/retrievers/` 和 `rag/retrieval/filters/`。
+- Qdrant / Elasticsearch repository 只承载写入、删除和 ACL payload 更新；检索逻辑已拆到 retriever。
+- RAG 权限投影使用 VIEW/read 语义，不能再按 discover 字段判断 evidence 是否可进 prompt。
+- direct evidence 以父块作为模型直接证据，命中的子块只作为 `matched_child_chunks` 定位信息。
+
 当前边界：
 
 - 可以明确 Qdrant、Elasticsearch、Neo4j、缓存和 Context Builder 的主流程。
@@ -240,7 +247,7 @@ class RagElasticRepository:
 ## 3. 入库编排伪代码
 
 ```python
-class RagIngestionApplicationService:
+class RagMarkdownIngester:
     async def ingest_markdown(self, payload: RagMarkdownIngestionPayload) -> None:
         content_hash = hash_text(payload.markdown)
 
@@ -265,9 +272,8 @@ class RagIngestionApplicationService:
         dense_vectors = await self._embedding_service.embed(
             {child.chunk_id: child.indexing_text for child in child_chunks}
         )
-        sparse_vectors = await self._sparse_encoder.encode(
-            {child.chunk_id: child.indexing_text for child in child_chunks}
-        )
+        # Qdrant sparse/BM25 直接写入 models.Document(model="Qdrant/bm25", text=indexing_text)，
+        # 不在业务层维护 term id 或 sparse encoder。
 
         corpus_version = await self._corpus_versions.next_version(
             resource_id=payload.resource_id,
@@ -398,7 +404,11 @@ class RagQdrantRepository:
         top_k: int,
     ) -> tuple[ScoredChunk, ...]:
         dense_vector = await self._embedding.embed_query(query)
-        sparse_vector = await self._sparse_encoder.encode_query(query)
+        bm25_query = qdrant_models.Document(
+            text=query,
+            model="Qdrant/bm25",
+            options=qdrant_models.Bm25Config(...),
+        )
 
         qdrant_filter = {
             "resource_id": resource_id,
@@ -411,7 +421,7 @@ class RagQdrantRepository:
 
         dense_hits, sparse_hits = await gather(
             self._search_dense(dense_vector, qdrant_filter, top_k),
-            self._search_sparse(sparse_vector, qdrant_filter, top_k),
+            self._search_sparse(bm25_query, qdrant_filter, top_k),
         )
 
         merged = reciprocal_rank_fusion(
@@ -717,7 +727,7 @@ chunking_engine_version
 context_indexing_model_version
 context_indexing_prompt_version
 embedding_model_version
-sparse_encoder_version
+qdrant_bm25_config_version
 graph_extraction_config_version
 ontology_schema_version
 ```
@@ -820,7 +830,7 @@ permission scope slot
 
 ## 11. 权限接入位置
 
-当前文档只标位置，不定义权限模型。
+旧蓝图只标位置；当前实现已接入 VIEW/read 权限模型。
 
 后续权限模型确定后，新增独立模块负责：
 
@@ -832,13 +842,13 @@ permission scope slot
 插入点：
 
 ```text
-RagIngestionApplicationService
+RagMarkdownIngester
   -> 写入权限投影到独立模型或各后端检索投影
 
-RagElasticRepository.strict_prefilter
+RagElasticRetriever.strict_prefilter
   -> append permission filter
 
-RagQdrantRepository.retrieve
+RagQdrantRetriever.retrieve
   -> append permission filter
 
 RagNeo4jRepository.expand_for_warnings
@@ -856,11 +866,12 @@ EvidenceMaterializer
 建议按下面顺序开发，避免一上来把权限和缓存搅进主链路：
 
 1. Corpus Store repository：保存 parent / child chunk 与 `extra_indexes`。
-2. Qdrant repository：child chunk dense + sparse 写入与主召回。
-3. Elastic repository：strict prefilter 与 locator 查询。
-4. Evidence materializer：先做无缓存批量回源。
-5. `KnowledgeSearchApplicationService`：串起 Elastic -> Qdrant -> Ranking -> Gate -> materializer -> Context Builder。
-6. Neo4j ingestion / enhancement：先写图入库和 Soft Gate 后置增强。
-7. Ingestion deterministic cache：优先缓存 embedding / context indexing。
-8. 权限模型确定后接 filter builder、permission scope key、prompt 前 hard auth。
-9. 最后再开 materialization cache 和 graph enhancement cache。
+2. Qdrant repository：child chunk dense + sparse 写入、删除与 read ACL payload 更新。
+3. Elastic repository：strict prefilter 文档写入、删除与 read ACL payload 更新。
+4. Qdrant / Elastic retriever：主召回、strict prefilter、权限过滤和可选精确过滤。
+5. Evidence materializer：先做无缓存批量回源，返回父块 evidence。
+6. `RagKnowledgeSearcher`：串起 HybridRetriever -> Ranking -> Gate -> materializer -> Context Builder。
+7. Neo4j ingestion / enhancement：先写图入库和 Soft Gate 后置增强。
+8. Ingestion deterministic cache：优先缓存 embedding / context indexing。
+9. 后续补 prompt 前 hard auth / bulk auth。
+10. 最后再开 materialization cache 和 graph enhancement cache。

@@ -5,6 +5,9 @@ from typing import List
 import hishel.httpx as hishel_httpx
 import httpx
 from dependency_injector import containers, providers
+from elasticsearch import AsyncElasticsearch
+from qdrant_client import AsyncQdrantClient
+from qdrant_client import models as qdrant_models
 from v2.nacos import NacosNamingService
 
 from chat.application.agents import (
@@ -12,14 +15,24 @@ from chat.application.agents import (
 )
 from chat.application.chat_turn_coordinator import ChatTurnCoordinator
 from chat.application.llm_provider_resolver import LLMProviderResolver
-from chat.application.rag.consumers import (
-    RagAclRecalculateConsumer,
-    RagDocumentReadyConsumer,
-)
-from chat.application.rag.acl import RagAclProjectionProjector
+from chat.application.rag.acl import RagAclProjectionProjector, RagAclProjectionUpdater
+from chat.application.rag.answerability import AnswerabilityHardGate, AnswerabilitySoftGate
+from chat.application.rag.context_builder import RagContextBuilder, RagEvidenceMaterializer
 from chat.application.rag.ingestion import (
+    ContextIndexingService,
+    RagMarkdownIngester,
     RagChunkingService,
 )
+from chat.application.rag.kafka_consumers.acl_recalculate_consumer import RagAclRecalculateConsumer
+from chat.application.rag.kafka_consumers.document_ready_consumer import RagDocumentReadyConsumer
+from chat.application.rag.ranking import RagEvidenceRankingService
+from chat.application.rag.retrieval import (
+    RagElasticRetriever,
+    RagHybridRetriever,
+    RagPermissionFilterBuilder,
+    RagQdrantRetriever,
+)
+from chat.application.rag.knowledge_search import RagKnowledgeSearcher
 from chat.application.token_counter import TokenCounter
 from chat.application.tools.common.tool_content_store.store import (
     DEFAULT_TOOL_CONTENT_TTL_SECONDS,
@@ -94,6 +107,7 @@ from chat.application.tools.web_tools.fetch_services.fetchers import (
     HttpxFetcher,
     ScraplingFetcher,
 )
+from chat.application.utils.llm_clients.embedding import build_embedding_client
 from chat.core.config.app_settings import settings
 from chat.core.config.bootstrap_settings import bootstrap_settings
 from chat.core.config.nacos import nacos_client_manager
@@ -103,6 +117,7 @@ from chat.core.persistence.mongo.provider_repository import MongoProviderReposit
 from chat.core.persistence.mongo.rag_acl_projection_repository import (
     MongoRagAclProjectionRepository,
 )
+from chat.core.persistence.mongo.rag_corpus_repository import MongoRagCorpusRepository
 from chat.core.persistence.mongo.session_repository import MongoSessionRepository
 from chat.core.persistence.mongo.web_content_cache_value_repository import (
     MongoWebContentCacheValueRepository,
@@ -119,6 +134,8 @@ from chat.core.persistence.redis.web_content_cache_entry_repository import (
 from chat.core.persistence.redis.web_search_candidate_repository import (
     RedisWebSearchCandidateRepository,
 )
+from chat.core.persistence.elasticsearch import RagElasticRepository
+from chat.core.persistence.qdrant import RagQdrantRepository
 from chat.core.providers import (
     AnthropicAdapter,
     GeminiAdapter,
@@ -189,6 +206,38 @@ def _build_rag_acl_recalc_consumer(
         topic=settings.KAFKA_RESOURCE_ACL_RECALC_TOPIC,
         group_id=settings.KAFKA_RAG_ACL_RECALC_GROUP_ID,
         handler=consumer.handle,
+    )
+
+
+def _build_elasticsearch_client() -> AsyncElasticsearch | None:
+    base_url = settings.ELASTIC_SEARCH_BASE_URL.strip()
+    if not base_url:
+        return None
+
+    return AsyncElasticsearch(
+        base_url,
+        basic_auth=(
+            settings.ELASTIC_SEARCH_USERNAME,
+            settings.ELASTIC_SEARCH_PASSWORD,
+        ),
+    )
+
+
+def _build_qdrant_client() -> AsyncQdrantClient | None:
+    host = settings.QDRANT_HOST.strip()
+    if not host:
+        return None
+
+    return AsyncQdrantClient(
+        host=host,
+        port=settings.QDRANT_PORT,
+        api_key=settings.QDRANT_PASSWORD or None,
+    )
+
+
+def _build_qdrant_bm25_config() -> qdrant_models.Bm25Config:
+    return qdrant_models.Bm25Config(
+        tokenizer=qdrant_models.TokenizerType(settings.QDRANT_RAG_BM25_TOKENIZER),
     )
 
 
@@ -304,13 +353,17 @@ class Container(containers.DeclarativeContainer):
     rag_chunking_service = providers.Singleton(
         RagChunkingService,
     )
-    rag_document_ready_message_consumer = providers.Singleton(
-        RagDocumentReadyConsumer,
-        chunking_service=rag_chunking_service,
+    rag_context_indexing_service = providers.Singleton(
+        ContextIndexingService,
     )
-    rag_document_ready_kafka_consumer = providers.Singleton(
-        _build_rag_document_ready_consumer,
-        consumer=rag_document_ready_message_consumer,
+    rag_embedding_client = providers.Singleton(
+        build_embedding_client,
+    )
+    rag_qdrant_bm25_config = providers.Singleton(
+        _build_qdrant_bm25_config,
+    )
+    rag_corpus_repository = providers.Singleton(
+        MongoRagCorpusRepository,
     )
     rag_acl_projection_projector = providers.Singleton(
         RagAclProjectionProjector,
@@ -319,10 +372,101 @@ class Container(containers.DeclarativeContainer):
         MongoRagAclProjectionRepository,
         projector=rag_acl_projection_projector,
     )
+    elasticsearch_client = providers.Singleton(
+        _build_elasticsearch_client,
+    )
+    rag_permission_filter_builder = providers.Singleton(
+        RagPermissionFilterBuilder,
+    )
+    qdrant_client = providers.Singleton(
+        _build_qdrant_client,
+    )
+    rag_qdrant_repository = providers.Singleton(
+        RagQdrantRepository,
+        client=qdrant_client,
+        collection_name=settings.QDRANT_RAG_COLLECTION_NAME,
+        dense_vector_size=settings.EMBEDDING_DIMENSIONS,
+        bm25_config=rag_qdrant_bm25_config,
+    )
+    rag_elastic_repository = providers.Singleton(
+        RagElasticRepository,
+        client=elasticsearch_client,
+        index_name=settings.ELASTIC_SEARCH_RAG_INDEX_NAME,
+    )
+    rag_qdrant_retriever = providers.Singleton(
+        RagQdrantRetriever,
+        client=qdrant_client,
+        collection_name=settings.QDRANT_RAG_COLLECTION_NAME,
+        permission_filter_builder=rag_permission_filter_builder,
+        bm25_config=rag_qdrant_bm25_config,
+    )
+    rag_elastic_retriever = providers.Singleton(
+        RagElasticRetriever,
+        client=elasticsearch_client,
+        index_name=settings.ELASTIC_SEARCH_RAG_INDEX_NAME,
+        permission_filter_builder=rag_permission_filter_builder,
+    )
+    rag_markdown_ingester = providers.Singleton(
+        RagMarkdownIngester,
+        chunking_service=rag_chunking_service,
+        context_indexing_service=rag_context_indexing_service,
+        embedding_client=rag_embedding_client,
+        corpus_repository=rag_corpus_repository,
+        acl_repository=rag_acl_projection_repository,
+        qdrant_repository=rag_qdrant_repository,
+        elastic_repository=rag_elastic_repository,
+    )
+    rag_evidence_ranking_service = providers.Singleton(
+        RagEvidenceRankingService,
+    )
+    rag_evidence_materializer = providers.Singleton(
+        RagEvidenceMaterializer,
+        corpus_repository=rag_corpus_repository,
+    )
+    rag_context_builder = providers.Singleton(
+        RagContextBuilder,
+    )
+    rag_answerability_hard_gate = providers.Singleton(
+        AnswerabilityHardGate,
+    )
+    rag_answerability_soft_gate = providers.Singleton(
+        AnswerabilitySoftGate,
+    )
+    rag_hybrid_retriever = providers.Singleton(
+        RagHybridRetriever,
+        embedding_client=rag_embedding_client,
+        elastic_retriever=rag_elastic_retriever,
+        qdrant_retriever=rag_qdrant_retriever,
+    )
+    rag_knowledge_searcher = providers.Singleton(
+        RagKnowledgeSearcher,
+        retriever=rag_hybrid_retriever,
+        ranking_service=rag_evidence_ranking_service,
+        hard_gate=rag_answerability_hard_gate,
+        soft_gate=rag_answerability_soft_gate,
+        evidence_materializer=rag_evidence_materializer,
+        context_builder=rag_context_builder,
+    )
+    rag_document_ready_message_consumer = providers.Singleton(
+        RagDocumentReadyConsumer,
+        ingester=rag_markdown_ingester,
+    )
+    rag_document_ready_kafka_consumer = providers.Singleton(
+        _build_rag_document_ready_consumer,
+        consumer=rag_document_ready_message_consumer,
+    )
+    rag_acl_projection_updater = providers.Singleton(
+        RagAclProjectionUpdater,
+        targets=providers.List(
+            rag_qdrant_repository,
+            rag_elastic_repository,
+        ),
+    )
     rag_acl_recalculate_message_consumer = providers.Singleton(
         RagAclRecalculateConsumer,
         projector=rag_acl_projection_projector,
         repository=rag_acl_projection_repository,
+        updater=rag_acl_projection_updater,
     )
     rag_acl_recalc_kafka_consumer = providers.Singleton(
         _build_rag_acl_recalc_consumer,
