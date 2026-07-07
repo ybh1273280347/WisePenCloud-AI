@@ -12,13 +12,13 @@ from chat.application.tools.session_tools.tool_content_read.models import (
     ToolContentSelector,
     ToolContentWindow,
 )
-from chat.application.utils.ranking_engine import (
+from chat.application.utils.ranking_engine.engine import RankingEngine
+from chat.application.utils.ranking_engine.models import (
     RankCandidate,
     RankQuery,
     RankRequest,
-    RankingEngine,
 )
-from chat.application.utils.ranking_engine import get_ranking_engine
+from chat.application.utils.ranking_engine.registry import get_ranking_engine
 
 
 class _RegexLimitReached(Exception):

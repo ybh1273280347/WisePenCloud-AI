@@ -48,6 +48,7 @@ class RagDocumentReadyConsumer:
         )
 
     async def ingest(self, payload: Mapping[str, Any]) -> RagMarkdownIngestResult:
+        # 保留独立方法用于独立单测
         message = _parse_document_ready_message(payload)
         rag_payload = RagMarkdownIngestionPayload(
             resource_id=message.resource_id,

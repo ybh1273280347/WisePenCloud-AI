@@ -10,7 +10,12 @@ from chat.application.tools.common.web_content_cache.core.models import (
     WebContentCacheMode,
     WebContentCacheValue,
 )
-from chat.core.persistence.redis._utils import to_jsonable
+from chat.core.persistence.redis._utils.jsonable import to_jsonable
+from chat.core.persistence._utils.payload_readers import (
+    read_optional_datetime,
+    read_optional_int,
+    read_optional_str,
+)
 from chat.core.persistence.redis.base import RedisRepository
 
 _VALUE_KEY_PREFIX = "wisepen:web_content_cache:value:"
@@ -38,17 +43,17 @@ class RedisWebContentCacheRepository(RedisRepository):
         return WebContentCacheValue(
             user_id=str(payload["user_id"]),
             canonical_url=str(payload["canonical_url"]),
-            final_url=_optional_str(payload.get("final_url")),
+            final_url=read_optional_str(payload.get("final_url")),
             cache_mode=WebContentCacheMode(str(payload["cache_mode"])),
-            status_code=_optional_int(payload.get("status_code")),
-            content_type=_optional_str(payload.get("content_type")),
-            raw_html=_optional_str(payload.get("raw_html")),
-            markdown=_optional_str(payload.get("markdown")),
-            content_hash=_optional_str(payload.get("content_hash")),
-            fetched_at=_optional_datetime(payload.get("fetched_at")),
-            expire_at=_optional_datetime(payload.get("expire_at")),
-            etag=_optional_str(payload.get("etag")),
-            last_modified=_optional_str(payload.get("last_modified")),
+            status_code=read_optional_int(payload.get("status_code")),
+            content_type=read_optional_str(payload.get("content_type")),
+            raw_html=read_optional_str(payload.get("raw_html")),
+            markdown=read_optional_str(payload.get("markdown")),
+            content_hash=read_optional_str(payload.get("content_hash")),
+            fetched_at=read_optional_datetime(payload.get("fetched_at")),
+            expire_at=read_optional_datetime(payload.get("expire_at")),
+            etag=read_optional_str(payload.get("etag")),
+            last_modified=read_optional_str(payload.get("last_modified")),
             metadata=_metadata(payload.get("metadata")),
         )
 
@@ -93,24 +98,6 @@ class RedisWebContentCacheRepository(RedisRepository):
     @staticmethod
     def _hash(value: str) -> str:
         return sha256(value.encode("utf-8")).hexdigest()
-
-
-def _optional_str(value: object) -> str | None:
-    if value is None:
-        return None
-    return str(value)
-
-
-def _optional_int(value: object) -> int | None:
-    if value is None:
-        return None
-    return int(value)
-
-
-def _optional_datetime(value: object) -> datetime | None:
-    if value is None:
-        return None
-    return datetime.fromisoformat(str(value))
 
 
 def _metadata(value: object) -> dict[str, object]:

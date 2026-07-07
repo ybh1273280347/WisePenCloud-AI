@@ -16,9 +16,13 @@ from chat.application.rag.ingestion.models import (
     RagChunkingResult,
     RagParentChunk,
 )
-from chat.application.rag.utils import read_optional_text, read_text_tuple
 from chat.application.utils.chunking_engine.models import IndexKind
-from chat.core.persistence.redis._utils import to_jsonable
+from chat.core.persistence.redis._utils.jsonable import to_jsonable
+from chat.core.persistence._utils.payload_readers import (
+    read_optional_int,
+    read_optional_trimmed_str,
+    read_trimmed_str_sequence,
+)
 from chat.core.persistence.redis.base import RedisRepository
 
 _CHUNKING_KEY_PREFIX = "wisepen:rag:ingestion:chunking:"
@@ -147,8 +151,8 @@ def _decode_parent_chunk(payload: dict[str, Any]) -> RagParentChunk:
         chunk_id=str(payload["chunk_id"]),
         text=str(payload["text"]),
         chunk_index=int(payload["chunk_index"]),
-        start_offset=_optional_int(payload.get("start_offset")),
-        end_offset=_optional_int(payload.get("end_offset")),
+        start_offset=read_optional_int(payload.get("start_offset")),
+        end_offset=read_optional_int(payload.get("end_offset")),
         extra_indexes=_decode_extra_indexes(payload.get("extra_indexes")),
         content_hash=str(payload.get("content_hash") or ""),
     )
@@ -160,8 +164,8 @@ def _decode_child_chunk(payload: dict[str, Any]) -> RagChildChunk:
         text=str(payload["text"]),
         chunk_index=int(payload["chunk_index"]),
         parent_chunk_id=str(payload["parent_chunk_id"]),
-        start_offset=_optional_int(payload.get("start_offset")),
-        end_offset=_optional_int(payload.get("end_offset")),
+        start_offset=read_optional_int(payload.get("start_offset")),
+        end_offset=read_optional_int(payload.get("end_offset")),
         extra_indexes=_decode_extra_indexes(payload.get("extra_indexes")),
         content_hash=str(payload.get("content_hash") or ""),
         indexing_context=str(payload.get("indexing_context") or ""),
@@ -176,19 +180,12 @@ def _decode_extra_indexes(value: object) -> tuple[RagChunkExtraIndex, ...]:
         RagChunkExtraIndex(
             index_name=str(item["index_name"]),
             index_kind=IndexKind(str(item["index_kind"])),
-            start_offset=_optional_int(item.get("start_offset")),
-            end_offset=_optional_int(item.get("end_offset")),
-            section_path=read_text_tuple(item.get("section_path")),
-            page_label=read_optional_text(item.get("page_label")),
-            anchor_label=read_optional_text(item.get("anchor_label")),
+            start_offset=read_optional_int(item.get("start_offset")),
+            end_offset=read_optional_int(item.get("end_offset")),
+            section_path=read_trimmed_str_sequence(item.get("section_path")),
+            page_label=read_optional_trimmed_str(item.get("page_label")),
+            anchor_label=read_optional_trimmed_str(item.get("anchor_label")),
         )
         for item in value
         if isinstance(item, dict)
     )
-
-
-def _optional_int(value: object) -> int | None:
-    if value is None:
-        return None
-    return int(value)
-

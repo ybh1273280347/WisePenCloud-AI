@@ -8,7 +8,10 @@ from chat.application.rag.models import (
     RagKnowledgeSearchRequest,
     RagKnowledgeSearchResult,
 )
-from chat.application.rag.retrieval import RagRetrievalPipeline, RagRetrievalPipelineRequest
+from chat.application.rag.retrieval.retrieval_pipeline import (
+    RagRetrievalPipeline,
+    RagRetrievalPipelineRequest,
+)
 
 
 class RagKnowledgeSearcher:

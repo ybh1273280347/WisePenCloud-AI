@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from chat.application.rag.utils import read_text_tuple
 from chat.application.rag.context_builder import RagDirectEvidence
 from chat.application.rag.graph import RagGraphEvidence, RagOntologyHint
 from chat.application.rag.knowledge_search import RagKnowledgeSearcher
 from chat.application.rag.models import RagKnowledgeSearchRequest
-from chat.application.rag.retrieval import (
+from chat.application.rag.retrieval.models import (
     RagPermissionScope,
     RagRetrievalProfile,
 )
@@ -123,7 +122,11 @@ class RagKnowledgeSearchTool:
                     retrieval_profile=RagRetrievalProfile(
                         kwargs.get("retrieval_profile") or RagRetrievalProfile.BALANCED.value
                     ),
-                    keywords=read_text_tuple(kwargs.get("keywords")),
+                    keywords=tuple(
+                        item.strip()
+                        for item in kwargs.get("keywords", ())
+                        if item.strip()
+                    ),
                     permission_scope=RagPermissionScope(
                         user_id=str(context["user_id"]),
                         group_role_map={},

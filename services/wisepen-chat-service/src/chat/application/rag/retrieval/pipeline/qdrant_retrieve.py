@@ -6,7 +6,6 @@ from typing import Any
 from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
-from chat.application.rag.utils import read_optional_text, read_text_tuple
 from chat.application.rag.retrieval.models import (
     RagQdrantRetrievalFilterRequest,
     RagQdrantRetrievalRequest,
@@ -161,25 +160,46 @@ def _to_scored_chunk(
     if not isinstance(payload, Mapping):
         return None
 
-    chunk_id = read_optional_text(payload.get("chunk_id")) or read_optional_text(
+    chunk_id = _read_optional_payload_str(
+        payload.get("chunk_id")
+    ) or _read_optional_payload_str(
         getattr(point, "id", None)
     )
     if not chunk_id:
         return None
 
-    parent_chunk_id = read_optional_text(payload.get("parent_chunk_id"))
+    parent_chunk_id = _read_optional_payload_str(payload.get("parent_chunk_id"))
     return ScoredChunk(
         chunk_id=chunk_id,
-        text=read_optional_text(payload.get("evidence_text")) or "",
+        text=_read_optional_payload_str(payload.get("evidence_text")) or "",
         retrieval_score=float(getattr(point, "score", 0.0)),
         retrieval_rank=rank,
         group_key=parent_chunk_id or None,
-        resource_id=read_optional_text(payload.get("resource_id")) or "",
-        document_version=read_optional_text(payload.get("document_version")) or "",
-        corpus_version=read_optional_text(payload.get("corpus_version")) or "",
+        resource_id=_read_optional_payload_str(payload.get("resource_id")) or "",
+        document_version=_read_optional_payload_str(
+            payload.get("document_version")
+        ) or "",
+        corpus_version=_read_optional_payload_str(payload.get("corpus_version")) or "",
         parent_chunk_id=parent_chunk_id or "",
-        page_label=read_optional_text(payload.get("page_label")),
-        section_path=read_text_tuple(payload.get("section_path")),
-        anchor_labels=read_text_tuple(payload.get("anchor_labels")),
+        page_label=_read_optional_payload_str(payload.get("page_label")),
+        section_path=_read_payload_str_sequence(payload.get("section_path")),
+        anchor_labels=_read_payload_str_sequence(payload.get("anchor_labels")),
         retrieval_channels=channels,
+    )
+
+
+def _read_optional_payload_str(value: object) -> str | None:
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    return candidate or None
+
+
+def _read_payload_str_sequence(value: object) -> tuple[str, ...]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        return ()
+    return tuple(
+        candidate
+        for item in value
+        if (candidate := str(item).strip())
     )

@@ -5,12 +5,15 @@ from dataclasses import asdict
 from hashlib import sha256
 from typing import Any
 
-from chat.application.rag.cache import (
+from chat.application.rag.cache.evidence_materialization import (
     RagEvidenceMaterializationCacheScope,
     RagMaterializedEvidenceView,
 )
-from chat.application.rag.utils import read_optional_text, read_text_tuple
-from chat.core.persistence.redis._utils import to_jsonable
+from chat.core.persistence.redis._utils.jsonable import to_jsonable
+from chat.core.persistence._utils.payload_readers import (
+    read_optional_trimmed_str,
+    read_trimmed_str_sequence,
+)
 from chat.core.persistence.redis.base import RedisRepository
 
 _KEY_PREFIX = "wisepen:rag:evidence_materialized:"
@@ -90,8 +93,8 @@ def _decode_view(payload: dict[str, Any]) -> RagMaterializedEvidenceView:
         parent_chunk_id=str(payload["parent_chunk_id"]),
         document_version=str(payload["document_version"]),
         text=str(payload["text"]),
-        page_label=read_optional_text(payload.get("page_label")),
-        section_path=read_text_tuple(payload.get("section_path")),
-        anchor_labels=read_text_tuple(payload.get("anchor_labels")),
-        matched_child_ids=read_text_tuple(payload.get("matched_child_ids")),
+        page_label=read_optional_trimmed_str(payload.get("page_label")),
+        section_path=read_trimmed_str_sequence(payload.get("section_path")),
+        anchor_labels=read_trimmed_str_sequence(payload.get("anchor_labels")),
+        matched_child_ids=read_trimmed_str_sequence(payload.get("matched_child_ids")),
     )

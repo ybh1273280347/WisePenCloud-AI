@@ -3,18 +3,28 @@ from __future__ import annotations
 import os
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
 os.environ.setdefault("NACOS_SERVER_ADDR", "127.0.0.1:8848")
 
 ranking_engine_stub = types.ModuleType("chat.application.utils.ranking_engine")
-ranking_engine_stub.RankCandidate = object
-ranking_engine_stub.RankQuery = object
-ranking_engine_stub.RankRequest = object
-ranking_engine_stub.RankingEngine = object
-ranking_engine_stub.get_ranking_engine = lambda _: object()
+ranking_engine_stub.__path__ = [
+    str(
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "chat"
+        / "application"
+        / "utils"
+        / "ranking_engine"
+    )
+]
 sys.modules.setdefault("chat.application.utils.ranking_engine", ranking_engine_stub)
+
+ranking_engine_registry_stub = types.ModuleType("chat.application.utils.ranking_engine.registry")
+ranking_engine_registry_stub.get_ranking_engine = lambda _: object()
+sys.modules.setdefault("chat.application.utils.ranking_engine.registry", ranking_engine_registry_stub)
 
 from chat.application.tools.core import ExactlyOneOfCheck, ToolInvocation
 from chat.application.tools.session_tools.tool_content_read.models import (

@@ -11,7 +11,7 @@ from chat.application.tools.common.tool_content_store.core.models import (
     ToolContentIndexEntry,
 )
 from chat.application.tools.common.tool_content_store.core.repository_protocol import ToolContentRepository
-from chat.core.persistence.redis._utils import to_jsonable
+from chat.core.persistence.redis._utils.jsonable import to_jsonable
 from chat.core.persistence.redis.base import RedisRepository
 
 # --- 全局命名空间配置 ---

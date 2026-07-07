@@ -5,7 +5,6 @@ from dataclasses import asdict
 from hashlib import sha256
 from typing import Any
 
-from chat.application.rag.utils import read_optional_text, read_text_tuple
 from chat.application.rag.cache.graph_enhancement import RagGraphEnhancementCacheKey
 from chat.application.rag.graph import (
     RagConceptPath,
@@ -13,7 +12,11 @@ from chat.application.rag.graph import (
     RagGraphEvidence,
     RagOntologyHint,
 )
-from chat.core.persistence.redis._utils import to_jsonable
+from chat.core.persistence.redis._utils.jsonable import to_jsonable
+from chat.core.persistence._utils.payload_readers import (
+    read_optional_trimmed_str,
+    read_trimmed_str_sequence,
+)
 from chat.core.persistence.redis.base import RedisRepository
 
 _KEY_PREFIX = "wisepen:rag:graph_enhancement:"
@@ -85,20 +88,22 @@ def _decode_graph_evidence(payload: dict[str, Any]) -> RagGraphEvidence:
         chunk_id=str(payload["chunk_id"]),
         document_version=str(payload["document_version"]),
         evidence_text=str(payload["evidence_text"]),
-        page_label=read_optional_text(payload.get("page_label")),
-        section_path=read_text_tuple(payload.get("section_path")),
-        anchor_labels=read_text_tuple(payload.get("anchor_labels")),
-        path=read_text_tuple(payload.get("path")),
-        related_concepts=read_text_tuple(payload.get("related_concepts")),
+        page_label=read_optional_trimmed_str(payload.get("page_label")),
+        section_path=read_trimmed_str_sequence(payload.get("section_path")),
+        anchor_labels=read_trimmed_str_sequence(payload.get("anchor_labels")),
+        path=read_trimmed_str_sequence(payload.get("path")),
+        related_concepts=read_trimmed_str_sequence(payload.get("related_concepts")),
     )
 
 
 def _decode_hint(payload: dict[str, Any]) -> RagOntologyHint:
     return RagOntologyHint(
         concept=str(payload["concept"]),
-        class_candidates=read_text_tuple(payload.get("class_candidates")),
-        relation_type_candidates=read_text_tuple(payload.get("relation_type_candidates")),
-        path_preview=read_text_tuple(payload.get("path_preview")),
+        class_candidates=read_trimmed_str_sequence(payload.get("class_candidates")),
+        relation_type_candidates=read_trimmed_str_sequence(
+            payload.get("relation_type_candidates")
+        ),
+        path_preview=read_trimmed_str_sequence(payload.get("path_preview")),
     )
 
 
@@ -106,6 +111,6 @@ def _decode_path(payload: dict[str, Any]) -> RagConceptPath:
     return RagConceptPath(
         source_concept=str(payload["source_concept"]),
         target_concept=str(payload["target_concept"]),
-        path=read_text_tuple(payload.get("path")),
-        support_chunk_ids=read_text_tuple(payload.get("support_chunk_ids")),
+        path=read_trimmed_str_sequence(payload.get("path")),
+        support_chunk_ids=read_trimmed_str_sequence(payload.get("support_chunk_ids")),
     )

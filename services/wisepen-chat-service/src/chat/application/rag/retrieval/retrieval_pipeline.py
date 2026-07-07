@@ -10,7 +10,9 @@ from chat.application.rag.answerability import (
     RagAnswerabilityWarning,
     RagHardGateDecision,
 )
-from chat.application.rag.cache import RagEvidenceMaterializationCacheScope
+from chat.application.rag.cache.evidence_materialization import (
+    RagEvidenceMaterializationCacheScope,
+)
 from chat.application.rag.context_builder.models import RagDirectEvidence
 from chat.application.rag.graph import RagGraphEnhancementRequest, RagGraphEnhancementResult
 from chat.application.rag.retrieval.models import (
@@ -21,12 +23,12 @@ from chat.application.rag.retrieval.models import (
     RagRetrievalProfile,
     ScoredChunk,
 )
-from chat.application.rag.retrieval.pipeline import (
-    RagElasticFilter,
+from chat.application.rag.retrieval.pipeline.elastic_filter import RagElasticFilter
+from chat.application.rag.retrieval.pipeline.graph_enhancement import RagGraphEnhancement
+from chat.application.rag.retrieval.pipeline.qdrant_retrieve import RagQdrantRetriever
+from chat.application.rag.retrieval.pipeline.ranking import (
     RagEvidenceRankingRequest,
     RagEvidenceRankingService,
-    RagGraphEnhancement,
-    RagQdrantRetriever,
 )
 from chat.application.utils.ranking_engine.models import RankedCandidate
 

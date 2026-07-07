@@ -7,7 +7,7 @@ from typing import Any
 
 from chat.application.tools.common.tool_run_file_store.core.models import ToolFileRefRecord
 from chat.application.tools.common.tool_run_file_store.core.protocols import ToolRunFileRepository
-from chat.core.persistence.redis._utils import to_jsonable
+from chat.core.persistence.redis._utils.jsonable import to_jsonable
 from chat.core.persistence.redis.base import RedisRepository
 
 # --- 全局命名空间配置 ---

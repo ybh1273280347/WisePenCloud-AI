@@ -20,22 +20,18 @@ from chat.application.rag.acl import RagAclProjectionProjector, RagAclProjection
 from chat.application.rag.answerability import AnswerabilityHardGate, AnswerabilitySoftGate
 from chat.application.rag.context_builder import RagContextBuilder, RagEvidenceMaterializer
 from chat.application.rag.graph.graphrag_builder import Neo4jGraphRagKnowledgeGraphBuilder
-from chat.application.rag.ingestion import (
-    ContextIndexingService,
-    RagChunkingService,
-)
+from chat.application.rag.ingestion.chunking import RagChunkingService
+from chat.application.rag.ingestion.context_indexing import ContextIndexingService
 from chat.application.rag.ingestion.ingester import RagMarkdownIngester
 from chat.application.rag.kafka_consumers.acl_recalculate_consumer import RagAclRecalculateConsumer
 from chat.application.rag.kafka_consumers.document_ready_consumer import RagDocumentReadyConsumer
 from chat.application.rag.knowledge_search import RagKnowledgeSearcher
-from chat.application.rag.retrieval import (
-    RagElasticFilter,
-    RagEvidenceRankingService,
-    RagGraphEnhancement,
-    RagPermissionFilterBuilder,
-    RagQdrantRetriever,
-    RagRetrievalPipeline,
-)
+from chat.application.rag.retrieval.permission_filter import RagPermissionFilterBuilder
+from chat.application.rag.retrieval.pipeline.elastic_filter import RagElasticFilter
+from chat.application.rag.retrieval.pipeline.graph_enhancement import RagGraphEnhancement
+from chat.application.rag.retrieval.pipeline.qdrant_retrieve import RagQdrantRetriever
+from chat.application.rag.retrieval.pipeline.ranking import RagEvidenceRankingService
+from chat.application.rag.retrieval.retrieval_pipeline import RagRetrievalPipeline
 from chat.application.token_counter import TokenCounter
 from chat.application.tools.common.tool_content_store.store import (
     DEFAULT_TOOL_CONTENT_TTL_SECONDS,

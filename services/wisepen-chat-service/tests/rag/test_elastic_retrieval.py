@@ -8,12 +8,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from chat.application.rag.retrieval import (  # noqa: E402
+from chat.application.rag.retrieval.models import (  # noqa: E402
     RagElasticKeywordFilterRequest,
-    RagElasticFilter,
-    RagPermissionFilterBuilder,
     RagPermissionScope,
 )
+from chat.application.rag.retrieval.permission_filter import RagPermissionFilterBuilder  # noqa: E402
+from chat.application.rag.retrieval.pipeline.elastic_filter import RagElasticFilter  # noqa: E402
 
 
 def test_elastic_keyword_filter_builds_content_phrase_query_with_scope_filters() -> None:

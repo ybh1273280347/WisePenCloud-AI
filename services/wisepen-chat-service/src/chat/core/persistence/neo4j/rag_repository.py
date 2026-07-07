@@ -4,7 +4,10 @@ from typing import Any
 
 from neo4j import AsyncDriver
 
-from chat.application.rag.utils import read_optional_text, read_text_tuple
+from chat.core.persistence._utils.payload_readers import (
+    read_optional_trimmed_str,
+    read_trimmed_str_sequence,
+)
 from chat.application.rag.acl import RagResourceAclProjection
 from chat.application.rag.graph import (
     RagConceptPath,
@@ -172,10 +175,10 @@ def _seed_chunk_ids(request: RagGraphEnhancementRequest) -> tuple[str, ...]:
 
 def _to_graph_evidence(record: Any) -> RagGraphEvidence:
     chunk_id = str(record["chunk_id"])
-    page_label = read_optional_text(record.get("page_label"))
-    section_path = read_text_tuple(record.get("section_path"))
-    anchor_labels = read_text_tuple(record.get("anchor_labels"))
-    path = read_text_tuple(record.get("support_seed_ids")) + (chunk_id,)
+    page_label = read_optional_trimmed_str(record.get("page_label"))
+    section_path = read_trimmed_str_sequence(record.get("section_path"))
+    anchor_labels = read_trimmed_str_sequence(record.get("anchor_labels"))
+    path = read_trimmed_str_sequence(record.get("support_seed_ids")) + (chunk_id,)
     return RagGraphEvidence(
         chunk_id=chunk_id,
         document_version=str(record["document_version"]),
@@ -184,7 +187,7 @@ def _to_graph_evidence(record: Any) -> RagGraphEvidence:
         section_path=section_path,
         anchor_labels=anchor_labels,
         path=path,
-        related_concepts=read_text_tuple(record.get("related_concepts")),
+        related_concepts=read_trimmed_str_sequence(record.get("related_concepts")),
     )
 
 
@@ -196,4 +199,3 @@ def _warning_hints(request: RagGraphEnhancementRequest) -> tuple[RagOntologyHint
         )
         for reason in request.answerability_warning.warnings
     )
-

@@ -12,14 +12,14 @@ from chat.application.rag.acl import (  # noqa: E402
     RagComputedGroupAclProjection,
     RagResourceAclProjection,
 )
-from chat.application.rag.retrieval import (  # noqa: E402
-    RagPermissionFilterBuilder,
+from chat.application.rag.retrieval.models import (  # noqa: E402
     RagPermissionScope,
     RagQdrantRetrievalFilterRequest,
     RagQdrantRetrievalRequest,
-    RagQdrantRetriever,
     RagRetrievalChannel,
 )
+from chat.application.rag.retrieval.permission_filter import RagPermissionFilterBuilder  # noqa: E402
+from chat.application.rag.retrieval.pipeline.qdrant_retrieve import RagQdrantRetriever  # noqa: E402
 from chat.core.persistence.qdrant import RagQdrantRepository  # noqa: E402
 from qdrant_client import models as qdrant_models  # noqa: E402
 

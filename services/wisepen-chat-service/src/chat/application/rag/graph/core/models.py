@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from chat.application.rag.answerability import RagAnswerabilityWarning
     from chat.application.rag.context_builder.models import RagDirectEvidence
-    from chat.application.rag.retrieval import RagPermissionScope
+    from chat.application.rag.retrieval.models import RagPermissionScope
 
 
 @dataclass(frozen=True, slots=True)

@@ -48,20 +48,24 @@ from chat.application.rag.answerability import (  # noqa: E402
     RagAnswerabilityWarningReason,
     RagHardGateReason,
 )
-from chat.application.rag.cache import (  # noqa: E402
+from chat.application.rag.cache.evidence_materialization import (  # noqa: E402
+    RagEvidenceMaterializationCacheScope,
+    RagMaterializedEvidenceView,
+)
+from chat.application.rag.cache.graph_enhancement import (  # noqa: E402
+    RagGraphEnhancementCacheKey,
+)
+from chat.application.rag.cache.ingestion_deterministic import (  # noqa: E402
     RagChunkingCacheKey,
     RagContextIndexingCacheKey,
     RagEmbeddingCacheKey,
-    RagEvidenceMaterializationCacheScope,
-    RagGraphEnhancementCacheKey,
-    RagMaterializedEvidenceView,
 )
 from chat.application.rag.graph import (  # noqa: E402
     RagGraphEnhancementRequest,
     RagGraphEnhancementResult,
     RagGraphEvidence,
 )
-from chat.application.rag.retrieval.pipeline import (  # noqa: E402
+from chat.application.rag.retrieval.pipeline.ranking import (  # noqa: E402
     RagEvidenceRankingRequest,
     RagEvidenceRankingService,
 )
@@ -70,15 +74,15 @@ from chat.application.rag.context_builder import (  # noqa: E402
     RagEvidenceMaterializeRequest,
     RagEvidenceMaterializer,
 )
-from chat.application.rag.retrieval import (  # noqa: E402
-    RagGraphEnhancement,
+from chat.application.rag.retrieval.models import (  # noqa: E402
     RagPermissionScope,
     RagRankedChunk,
-    RagRetrievalPipeline,
     RagRetrievalChannel,
     RagRetrievalProfile,
     ScoredChunk,
 )
+from chat.application.rag.retrieval.pipeline.graph_enhancement import RagGraphEnhancement  # noqa: E402
+from chat.application.rag.retrieval.retrieval_pipeline import RagRetrievalPipeline  # noqa: E402
 from chat.application.rag.knowledge_search import (  # noqa: E402
     RagKnowledgeSearcher,
     RagKnowledgeSearchRequest,
@@ -88,13 +92,15 @@ from chat.application.rag.kafka_consumers.document_ready_consumer import (  # no
     RagDocumentReadyConsumer,
 )
 from chat.application.rag.acl import RagResourceAclProjection  # noqa: E402
-from chat.application.rag.ingestion import (  # noqa: E402
+from chat.application.rag.ingestion.chunking import RagChunkingService  # noqa: E402
+from chat.application.rag.ingestion.context_indexing import (  # noqa: E402
     ContextIndexingError,
     ContextIndexingInput,
     ContextIndexingResult,
+)
+from chat.application.rag.ingestion.models import (  # noqa: E402
     RagChildChunk,
     RagChunkExtraIndex,
-    RagChunkingService,
     RagChunkingResult,
     RagMarkdownIngestionPayload,
     RagParentChunk,

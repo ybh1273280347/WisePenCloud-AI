@@ -8,13 +8,13 @@ from chat.application.rag.cache.evidence_materialization import (
     RagEvidenceMaterializationCacheScope,
     RagMaterializedEvidenceView,
 )
-from chat.application.rag.retrieval import RagRankedChunk, ScoredChunk
+from chat.application.rag.retrieval.models import RagRankedChunk, ScoredChunk
 from chat.application.utils.ranking_engine.models import RankedCandidate
 from .models import RagDirectEvidence
 
 if TYPE_CHECKING:
     from chat.application.rag.corpus import RagCorpusRepository
-    from chat.application.rag.ingestion import RagChildChunk, RagParentChunk
+    from chat.application.rag.ingestion.models import RagChildChunk, RagParentChunk
 
 
 @dataclass(frozen=True, slots=True)

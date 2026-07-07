@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from chat.application.rag.answerability import RagAnswerabilityWarning, RagHardGateDecision
 from chat.application.rag.context_builder import RagContextPackage, RagDirectEvidence
 from chat.application.rag.graph import RagGraphEnhancementResult
-from chat.application.rag.retrieval import (
+from chat.application.rag.retrieval.models import (
     RagPermissionScope,
     RagRetrievalProfile,
 )

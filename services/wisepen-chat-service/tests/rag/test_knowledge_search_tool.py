@@ -51,7 +51,7 @@ from chat.application.rag.graph import (  # noqa: E402
     RagOntologyHint,
 )
 from chat.application.rag.models import RagKnowledgeSearchResult  # noqa: E402
-from chat.application.rag.retrieval import RagRetrievalProfile  # noqa: E402
+from chat.application.rag.retrieval.models import RagRetrievalProfile  # noqa: E402
 from chat.application.tools.core.tool_return import ToolReturn  # noqa: E402
 from chat.application.tools.rag_tools import RagKnowledgeSearchTool  # noqa: E402
 
