@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
+from typing import cast
 
 
 def read_optional_str(value: object) -> str | None:
@@ -27,6 +28,12 @@ def read_optional_datetime(value: object) -> datetime | None:
     if value is None:
         return None
     return datetime.fromisoformat(str(value))
+
+
+def read_dict(value: object) -> dict[str, object]:
+    if isinstance(value, dict):
+        return cast(dict[str, object], value)
+    return {}
 
 
 def read_trimmed_str_sequence(value: object) -> tuple[str, ...]:

@@ -36,7 +36,20 @@ class MongoRagAclProjectionRepository:
         )
         if document is None:
             return None
-        return _to_projection(document)
+        return RagResourceAclProjection(
+            resource_id=document.resource_id,
+            owner_id=document.owner_id,
+            readable_users=tuple(document.readable_users),
+            computed_group_acls=tuple(
+                RagComputedGroupAclProjection(
+                    group_id=item.group_id,
+                    is_readable=item.is_readable,
+                    readable_users=tuple(item.readable_users),
+                    excluded_read_users=tuple(item.excluded_read_users),
+                )
+                for item in document.computed_group_acls
+            ),
+        )
 
     async def load_resource_projection(self, resource_id: str) -> RagResourceAclProjection | None:
         raw = await RagAclProjectionDocument.get_pymongo_collection().database[
@@ -68,23 +81,6 @@ class MongoRagAclProjectionRepository:
         document.computed_group_acls = _to_group_documents(projection)
         document.updated_at = now
         await document.save()
-
-
-def _to_projection(document: RagAclProjectionDocument) -> RagResourceAclProjection:
-    return RagResourceAclProjection(
-        resource_id=document.resource_id,
-        owner_id=document.owner_id,
-        readable_users=tuple(document.readable_users),
-        computed_group_acls=tuple(
-            RagComputedGroupAclProjection(
-                group_id=item.group_id,
-                is_readable=item.is_readable,
-                readable_users=tuple(item.readable_users),
-                excluded_read_users=tuple(item.excluded_read_users),
-            )
-            for item in document.computed_group_acls
-        ),
-    )
 
 
 def _to_group_documents(

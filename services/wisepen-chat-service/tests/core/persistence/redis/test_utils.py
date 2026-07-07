@@ -5,6 +5,7 @@ from enum import StrEnum
 
 from chat.core.persistence.redis._utils.jsonable import to_jsonable
 from chat.core.persistence._utils.payload_readers import (
+    read_dict,
     read_optional_datetime,
     read_optional_int,
     read_optional_str,
@@ -50,5 +51,7 @@ def test_payload_readers_decode_optional_redis_values() -> None:
     assert read_optional_trimmed_str("  ") is None
     assert read_optional_int("12") == 12
     assert read_optional_datetime(timestamp.isoformat()) == timestamp
+    assert read_dict({"source": "web"}) == {"source": "web"}
+    assert read_dict(None) == {}
     assert read_trimmed_str_sequence([" a ", "", 3, None]) == ("a", "3", "None")
     assert read_trimmed_str_sequence("abc") == ()

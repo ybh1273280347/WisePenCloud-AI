@@ -36,20 +36,37 @@ class MongoRagCorpusRepository:
         ).delete()
 
         parent_documents = [
-            _to_parent_document(
-                chunk,
+            RagParentChunkDocument(
                 resource_id=resource_id,
                 document_version=document_version,
-                now=now,
+                chunk_id=chunk.chunk_id,
+                text=chunk.text,
+                chunk_index=chunk.chunk_index,
+                start_offset=chunk.start_offset,
+                end_offset=chunk.end_offset,
+                extra_indexes=_to_extra_index_documents(chunk.extra_indexes),
+                content_hash=chunk.content_hash,
+                created_at=now,
+                updated_at=now,
             )
             for chunk in parent_chunks
         ]
         child_documents = [
-            _to_child_document(
-                chunk,
+            RagChildChunkDocument(
                 resource_id=resource_id,
                 document_version=document_version,
-                now=now,
+                chunk_id=chunk.chunk_id,
+                parent_chunk_id=chunk.parent_chunk_id,
+                text=chunk.text,
+                chunk_index=chunk.chunk_index,
+                start_offset=chunk.start_offset,
+                end_offset=chunk.end_offset,
+                extra_indexes=_to_extra_index_documents(chunk.extra_indexes),
+                content_hash=chunk.content_hash,
+                indexing_context=chunk.indexing_context,
+                indexing_text=chunk.indexing_text,
+                created_at=now,
+                updated_at=now,
             )
             for chunk in child_chunks
         ]
@@ -71,7 +88,18 @@ class MongoRagCorpusRepository:
         ).to_list()
         by_id = {document.chunk_id: document for document in documents}
         return tuple(
-            _to_child_chunk(document)
+            RagChildChunk(
+                chunk_id=document.chunk_id,
+                text=document.text,
+                chunk_index=document.chunk_index,
+                parent_chunk_id=document.parent_chunk_id,
+                start_offset=document.start_offset,
+                end_offset=document.end_offset,
+                extra_indexes=_to_extra_indexes(document.extra_indexes),
+                content_hash=document.content_hash,
+                indexing_context=document.indexing_context,
+                indexing_text=document.indexing_text,
+            )
             for chunk_id in chunk_ids
             if (document := by_id.get(chunk_id)) is not None
         )
@@ -88,57 +116,18 @@ class MongoRagCorpusRepository:
         ).to_list()
         by_id = {document.chunk_id: document for document in documents}
         return tuple(
-            _to_parent_chunk(document)
+            RagParentChunk(
+                chunk_id=document.chunk_id,
+                text=document.text,
+                chunk_index=document.chunk_index,
+                start_offset=document.start_offset,
+                end_offset=document.end_offset,
+                extra_indexes=_to_extra_indexes(document.extra_indexes),
+                content_hash=document.content_hash,
+            )
             for chunk_id in chunk_ids
             if (document := by_id.get(chunk_id)) is not None
         )
-
-
-def _to_parent_document(
-        chunk: RagParentChunk,
-        *,
-        resource_id: str,
-        document_version: str,
-        now: datetime,
-) -> RagParentChunkDocument:
-    return RagParentChunkDocument(
-        resource_id=resource_id,
-        document_version=document_version,
-        chunk_id=chunk.chunk_id,
-        text=chunk.text,
-        chunk_index=chunk.chunk_index,
-        start_offset=chunk.start_offset,
-        end_offset=chunk.end_offset,
-        extra_indexes=_to_extra_index_documents(chunk.extra_indexes),
-        content_hash=chunk.content_hash,
-        created_at=now,
-        updated_at=now,
-    )
-
-
-def _to_child_document(
-        chunk: RagChildChunk,
-        *,
-        resource_id: str,
-        document_version: str,
-        now: datetime,
-) -> RagChildChunkDocument:
-    return RagChildChunkDocument(
-        resource_id=resource_id,
-        document_version=document_version,
-        chunk_id=chunk.chunk_id,
-        parent_chunk_id=chunk.parent_chunk_id,
-        text=chunk.text,
-        chunk_index=chunk.chunk_index,
-        start_offset=chunk.start_offset,
-        end_offset=chunk.end_offset,
-        extra_indexes=_to_extra_index_documents(chunk.extra_indexes),
-        content_hash=chunk.content_hash,
-        indexing_context=chunk.indexing_context,
-        indexing_text=chunk.indexing_text,
-        created_at=now,
-        updated_at=now,
-    )
 
 
 def _to_extra_index_documents(
@@ -156,33 +145,6 @@ def _to_extra_index_documents(
         )
         for index in indexes
     ]
-
-
-def _to_parent_chunk(document: RagParentChunkDocument) -> RagParentChunk:
-    return RagParentChunk(
-        chunk_id=document.chunk_id,
-        text=document.text,
-        chunk_index=document.chunk_index,
-        start_offset=document.start_offset,
-        end_offset=document.end_offset,
-        extra_indexes=_to_extra_indexes(document.extra_indexes),
-        content_hash=document.content_hash,
-    )
-
-
-def _to_child_chunk(document: RagChildChunkDocument) -> RagChildChunk:
-    return RagChildChunk(
-        chunk_id=document.chunk_id,
-        text=document.text,
-        chunk_index=document.chunk_index,
-        parent_chunk_id=document.parent_chunk_id,
-        start_offset=document.start_offset,
-        end_offset=document.end_offset,
-        extra_indexes=_to_extra_indexes(document.extra_indexes),
-        content_hash=document.content_hash,
-        indexing_context=document.indexing_context,
-        indexing_text=document.indexing_text,
-    )
 
 
 def _to_extra_indexes(

@@ -93,9 +93,14 @@ class RagEvidenceMaterializer:
             if not view.parent_chunk_id or view.parent_chunk_id in evidence_by_parent_id:
                 continue
 
-            evidence_by_parent_id[view.parent_chunk_id] = _to_direct_evidence(
-                view,
+            evidence_by_parent_id[view.parent_chunk_id] = RagDirectEvidence(
                 citation_id=f"E{item.rank}",
+                document_version=view.document_version,
+                text=view.text,
+                page_label=view.page_label,
+                section_path=view.section_path,
+                anchor_labels=view.anchor_labels,
+                matched_child_ids=view.matched_child_ids,
             )
         if self._cache is not None and request.cache_scope is not None:
             await self._cache.set_many(
@@ -162,20 +167,4 @@ def _to_materialized_view(
         section_path=section_path,
         anchor_labels=anchor_labels,
         matched_child_ids=(item.candidate_id,),
-    )
-
-
-def _to_direct_evidence(
-        view: RagMaterializedEvidenceView,
-        *,
-        citation_id: str,
-) -> RagDirectEvidence:
-    return RagDirectEvidence(
-        citation_id=citation_id,
-        document_version=view.document_version,
-        text=view.text,
-        page_label=view.page_label,
-        section_path=view.section_path,
-        anchor_labels=view.anchor_labels,
-        matched_child_ids=view.matched_child_ids,
     )

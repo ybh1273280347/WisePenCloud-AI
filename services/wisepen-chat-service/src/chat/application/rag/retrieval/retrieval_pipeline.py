@@ -108,7 +108,7 @@ class RagRetrievalPipeline:
         if candidate_scope == ():
             return RagRetrievalPipelineResult(
                 hard_gate=(
-                    self._hard_gate.decide(_answerability_input(request, ()))
+                    self._hard_gate.decide(_to_answerability_input(request, ()))
                     if self._hard_gate is not None
                     else None
                 )
@@ -145,7 +145,7 @@ class RagRetrievalPipeline:
         ):
             return RagRetrievalPipelineResult(candidates=candidates)
 
-        answerability_input = _answerability_input(request, candidates)
+        answerability_input = _to_answerability_input(request, candidates)
         hard_gate = self._hard_gate.decide(answerability_input)
         if not hard_gate.should_continue:
             return RagRetrievalPipelineResult(
@@ -157,10 +157,13 @@ class RagRetrievalPipeline:
             for candidate in candidates
             if self._hard_gate.accepts(candidate.ranking.score)
         )
-        answerability_input = _answerability_input(request, accepted_candidates)
+        answerability_input = _to_answerability_input(request, accepted_candidates)
+
+        # materializer 依赖 retrieval 类型，放在运行时边界导入以避免 retrieval 包初始化环。
+        from chat.application.rag.context_builder import RagEvidenceMaterializeRequest
 
         direct_evidence = await self._evidence_materializer.materialize(
-            _materialize_request(
+            RagEvidenceMaterializeRequest(
                 candidates=accepted_candidates,
                 cache_scope=_build_materialization_cache_scope(request),
             )
@@ -186,21 +189,7 @@ class RagRetrievalPipeline:
         )
 
 
-def _materialize_request(
-        *,
-        candidates: tuple[RagRankedChunk, ...],
-        cache_scope: RagEvidenceMaterializationCacheScope | None,
-):
-    # materializer 依赖 retrieval 类型，放在运行时边界导入以避免 retrieval 包初始化环。
-    from chat.application.rag.context_builder import RagEvidenceMaterializeRequest
-
-    return RagEvidenceMaterializeRequest(
-        candidates=candidates,
-        cache_scope=cache_scope,
-    )
-
-
-def _answerability_input(
+def _to_answerability_input(
         request: RagRetrievalPipelineRequest,
         candidates: tuple[RagRankedChunk, ...],
 ) -> RagAnswerabilityInput:

@@ -87,7 +87,19 @@ class ToolContentStore:
             )
 
             index = ToolContentIndex(entries=tuple(
-                _to_tool_index_entry(idx)
+                ToolContentIndexEntry(
+                    index_name=idx.name,
+                    index_kind=idx.kind.value,
+                    chunk_indices=idx.chunk_indices,
+                    start_offset=idx.start_offset,
+                    end_offset=idx.end_offset,
+                    section_path=(
+                        cast(tuple[str, ...] | None, idx.metadata.get("section_path"))
+                        or ()
+                    ),
+                    page_label=cast(str | None, idx.metadata.get("page_label")),
+                    anchor_label=cast(str | None, idx.metadata.get("anchor_label")),
+                )
                 for idx in result.indexes
             ))
             chunk_metadata = dict(result.metadata)
@@ -189,20 +201,6 @@ def _first_section_path(value: object) -> tuple[str, ...]:
     if isinstance(first, list | tuple):
         return tuple(first)
     return tuple(value)
-
-
-def _to_tool_index_entry(index: ChunkIndex) -> ToolContentIndexEntry:
-    metadata = index.metadata
-    return ToolContentIndexEntry(
-        index_name=index.name,
-        index_kind=index.kind.value,
-        chunk_indices=index.chunk_indices,
-        start_offset=index.start_offset,
-        end_offset=index.end_offset,
-        section_path=cast(tuple[str, ...] | None, metadata.get("section_path")) or (),
-        page_label=cast(str | None, metadata.get("page_label")),
-        anchor_label=cast(str | None, metadata.get("anchor_label")),
-    )
 
 
 def _chunk_extra_index_view(indexes: tuple[ChunkIndex, ...]) -> dict[str, dict[str, object]]:

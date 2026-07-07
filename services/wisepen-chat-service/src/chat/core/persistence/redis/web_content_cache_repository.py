@@ -12,6 +12,7 @@ from chat.application.tools.common.web_content_cache.core.models import (
 )
 from chat.core.persistence.redis._utils.jsonable import to_jsonable
 from chat.core.persistence._utils.payload_readers import (
+    read_dict,
     read_optional_datetime,
     read_optional_int,
     read_optional_str,
@@ -54,7 +55,7 @@ class RedisWebContentCacheRepository(RedisRepository):
             expire_at=read_optional_datetime(payload.get("expire_at")),
             etag=read_optional_str(payload.get("etag")),
             last_modified=read_optional_str(payload.get("last_modified")),
-            metadata=_metadata(payload.get("metadata")),
+            metadata=read_dict(payload.get("metadata")),
         )
 
     async def set_value(self, value: WebContentCacheValue) -> None:
@@ -98,12 +99,6 @@ class RedisWebContentCacheRepository(RedisRepository):
     @staticmethod
     def _hash(value: str) -> str:
         return sha256(value.encode("utf-8")).hexdigest()
-
-
-def _metadata(value: object) -> dict[str, object]:
-    if isinstance(value, dict):
-        return value
-    return {}
 
 
 def _redis_ttl_seconds(expire_at: datetime | None) -> int:
