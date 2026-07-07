@@ -65,7 +65,8 @@ async def test_rag_knowledge_search_tool_maps_model_args_to_acl_safe_request() -
                     citation_id="E1",
                     document_version="3",
                     text="请求必须携带 AppBuilder API Key。",
-                    citation_anchor="p.1 | 鉴权",
+                    page_label="1",
+                    section_path=("鉴权",),
                     matched_child_ids=("child-internal",),
                 ),
             ),
@@ -74,7 +75,8 @@ async def test_rag_knowledge_search_tool_maps_model_args_to_acl_safe_request() -
                     chunk_id="graph-child-internal",
                     document_version="3",
                     evidence_text="Graph 补充证据。",
-                    citation_anchor="p.2 | 接口",
+                    page_label="2",
+                    section_path=("接口",),
                     path=("child-internal", "graph-child-internal"),
                     related_concepts=("API Key",),
                 ),
@@ -107,9 +109,15 @@ async def test_rag_knowledge_search_tool_maps_model_args_to_acl_safe_request() -
     assert output.tag == "rag_knowledge_search_result"
     assert output.visible_result["answerability"]["status"] == "passed"
     assert output.visible_result["direct_evidence"][0]["citation_id"] == "E1"
+    assert "citation_anchor" not in output.visible_result["direct_evidence"][0]
+    assert output.visible_result["direct_evidence"][0]["page_label"] == "1"
+    assert output.visible_result["direct_evidence"][0]["section_path"] == ["鉴权"]
     assert "parent-internal" not in output.visible_result["direct_evidence"][0]
     assert "score" not in output.visible_result["direct_evidence"][0]
     assert "matched_child_chunks" not in output.visible_result["direct_evidence"][0]
+    assert "citation_anchor" not in output.visible_result["graph_evidence"][0]
+    assert output.visible_result["graph_evidence"][0]["page_label"] == "2"
+    assert output.visible_result["graph_evidence"][0]["section_path"] == ["接口"]
     assert output.visible_result["graph_evidence"][0]["related_concepts"] == ["API Key"]
     assert len(output.cacheable_texts) == 1
     assert "请求必须携带 AppBuilder API Key" in output.cacheable_texts[0]

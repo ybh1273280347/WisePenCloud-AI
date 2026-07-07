@@ -132,8 +132,8 @@ RAG 缓存只优化中间步骤，不缓存最终答案，也不替代权限判�
 - `answerability.reason`
 - `answerability.warnings`
 - `answerability.guidance`
-- `direct_evidence` 的 citation、页码、章节、短 excerpt
-- `graph_evidence` 的 citation、相关概念、短 excerpt
+- `direct_evidence` 的 `citation_id`、页码、章节、锚点标签、短 excerpt
+- `graph_evidence` 的页码、章节、锚点标签、相关概念、短 excerpt
 - `ontology_hints`
 
 `visible_result` 不回显 `resource_id`、`retrieval_profile`、检索数量、rank、score、Elastic 预过滤命中状态、parent chunk id 或 child chunk id。
@@ -142,7 +142,7 @@ RAG 缓存只优化中间步骤，不缓存最终答案，也不替代权限判�
 
 ## 模型约束
 
-- 只能用 `citation_id` 和 `citation_anchor` 引用证据。
+- direct evidence 只能用 `citation_id` 引用证据；定位信息使用 `page_label`、`section_path`、`anchor_labels`。
 - Hard Gate 被拒时不得生成实质答案。
 - Soft Gate warning 存在时必须保守回答，并说明证据边界。
 - 不得伪造不存在的证据、资源版本或 citation。

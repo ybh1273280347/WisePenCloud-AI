@@ -90,7 +90,6 @@ def _decode_view(payload: dict[str, Any]) -> RagMaterializedEvidenceView:
         parent_chunk_id=str(payload["parent_chunk_id"]),
         document_version=str(payload["document_version"]),
         text=str(payload["text"]),
-        citation_anchor=str(payload["citation_anchor"]),
         page_label=read_optional_text(payload.get("page_label")),
         section_path=read_text_tuple(payload.get("section_path")),
         anchor_labels=read_text_tuple(payload.get("anchor_labels")),

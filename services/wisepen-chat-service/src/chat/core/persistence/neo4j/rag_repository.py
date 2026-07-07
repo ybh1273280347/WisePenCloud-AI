@@ -180,12 +180,9 @@ def _to_graph_evidence(record: Any) -> RagGraphEvidence:
         chunk_id=chunk_id,
         document_version=str(record["document_version"]),
         evidence_text=str(record.get("evidence_text") or ""),
-        citation_anchor=_build_citation_anchor(
-            chunk_id=chunk_id,
-            page_label=page_label,
-            section_path=section_path,
-            anchor_labels=anchor_labels,
-        ),
+        page_label=page_label,
+        section_path=section_path,
+        anchor_labels=anchor_labels,
         path=path,
         related_concepts=read_text_tuple(record.get("related_concepts")),
     )
@@ -200,21 +197,3 @@ def _warning_hints(request: RagGraphEnhancementRequest) -> tuple[RagOntologyHint
         for reason in request.answerability_warning.warnings
     )
 
-
-def _build_citation_anchor(
-        *,
-        chunk_id: str,
-        page_label: str | None,
-        section_path: tuple[str, ...],
-        anchor_labels: tuple[str, ...],
-) -> str:
-    parts: list[str] = []
-    if page_label:
-        parts.append(f"p.{page_label}")
-    if section_path:
-        parts.append(" > ".join(section_path))
-    if anchor_labels:
-        parts.append(", ".join(anchor_labels))
-    if not parts:
-        parts.append(chunk_id)
-    return " | ".join(parts)

@@ -5,6 +5,7 @@
 
 from .chunking import RagChunkingService
 from .context_indexing import ContextIndexingError, ContextIndexingService
+from .ingester import RagIngestionRetryableError
 from .models import (
     ContextIndexingInput,
     ContextIndexingResult,
@@ -24,6 +25,7 @@ __all__ = [
     "RagChunkExtraIndex",
     "RagChunkingResult",
     "RagChunkingService",
+    "RagIngestionRetryableError",
     "RagMarkdownIngestionPayload",
     "RagParentChunk",
     "ContextIndexingService",

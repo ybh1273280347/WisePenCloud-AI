@@ -4,10 +4,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from chat.application.rag.ingestion.ingester import RagMarkdownIngester, RagMarkdownIngestResult
+from chat.application.rag.ingestion.ingester import (
+    RagIngestionRetryableError,
+    RagMarkdownIngester,
+    RagMarkdownIngestResult,
+)
 from chat.application.rag.ingestion.models import RagMarkdownIngestionPayload
-from chat.application.rag.kafka_consumers._utils import read_required_string
-from common.logger import info
+from chat.application.rag.kafka_consumers.payload_readers import read_required_string, read_required_version
+from common.logger import error, info
 
 
 class DocumentReadyMessageError(ValueError):
@@ -50,7 +54,17 @@ class RagDocumentReadyConsumer:
             document_version=message.version,
             markdown=message.content,
         )
-        return await self._ingester.ingest_markdown(rag_payload)
+        try:
+            return await self._ingester.ingest_markdown(rag_payload)
+        except RagIngestionRetryableError as exc:
+            error(
+                "rag document ready ingestion failed; kafka offset will not be committed.",
+                e=exc,
+                resource_id=message.resource_id,
+                document_version=message.version,
+                retryable=True,
+            )
+            raise
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +83,7 @@ def _parse_document_ready_message(payload: Mapping[str, Any]) -> _DocumentReadyM
         message_name="DocumentReadyMessage",
         error_factory=DocumentReadyMessageError,
     )
-    version = read_required_string(
+    version = read_required_version(
         payload,
         "version",
         message_name="DocumentReadyMessage",

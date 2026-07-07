@@ -89,6 +89,7 @@ from chat.application.rag.kafka_consumers.document_ready_consumer import (  # no
 )
 from chat.application.rag.acl import RagResourceAclProjection  # noqa: E402
 from chat.application.rag.ingestion import (  # noqa: E402
+    ContextIndexingError,
     ContextIndexingInput,
     ContextIndexingResult,
     RagChildChunk,
@@ -99,6 +100,7 @@ from chat.application.rag.ingestion import (  # noqa: E402
     RagParentChunk,
 )
 from chat.application.rag.ingestion.ingester import (  # noqa: E402
+    RagIngestionRetryableError,
     RagMarkdownIngester,
     RagMarkdownIngestResult,
 )
@@ -280,6 +282,54 @@ async def test_rag_ingestion_indexes_corpus_qdrant_and_elastic_with_acl_projecti
 
 
 @pytest.mark.anyio
+async def test_rag_ingestion_retries_context_indexing_failure_without_writing_indexes() -> None:
+    parent = RagParentChunk(
+        chunk_id="parent-1",
+        text="父块说明 API 鉴权要求。",
+        chunk_index=0,
+    )
+    child = RagChildChunk(
+        chunk_id="child-1",
+        text="请求必须携带 Authorization header。",
+        chunk_index=1,
+        parent_chunk_id="parent-1",
+    )
+    corpus_repository = _RecordingCorpusRepository()
+    qdrant_repository = _RecordingIndexRepository()
+    elastic_repository = _RecordingIndexRepository()
+    service = RagMarkdownIngester(
+        chunking_service=_PreparedChunkingService(
+            RagChunkingResult(
+                parent_chunks=(parent,),
+                child_chunks=(child,),
+                pipeline="test",
+                resource_id="resource-doc",
+                document_version="3",
+            )
+        ),
+        context_indexing_service=_FailingContextIndexingService(),
+        embedding_client=_RecordingEmbeddingClient(),
+        corpus_repository=corpus_repository,
+        acl_repository=_RecordingAclRepository(None),
+        qdrant_repository=qdrant_repository,
+        elastic_repository=elastic_repository,
+    )
+
+    with pytest.raises(RagIngestionRetryableError):
+        await service.ingest_markdown(
+            RagMarkdownIngestionPayload(
+                resource_id="resource-doc",
+                document_version="3",
+                markdown="# 鉴权\n\n请求必须携带 Authorization header。",
+            )
+        )
+
+    assert corpus_repository.saved is None
+    assert qdrant_repository.upsert_calls == []
+    assert elastic_repository.upsert_calls == []
+
+
+@pytest.mark.anyio
 async def test_rag_ingestion_uses_deterministic_cache_for_repeated_payload() -> None:
     parent = RagParentChunk(
         chunk_id="parent-1",
@@ -360,7 +410,8 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
                     chunk_id="child-2",
                     document_version="3",
                     evidence_text="Graph 补充证据说明 API Key 的申请入口。",
-                    citation_anchor="p.1 | 鉴权",
+                    page_label="1",
+                    section_path=("鉴权",),
                     path=("child-1", "child-2"),
                 ),
             )
@@ -372,13 +423,13 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
             elastic_filter=_RecordingElasticFilter(candidate_chunk_ids=("child-1",)),
             qdrant_retriever=qdrant_repository,
             ranking_service=_RecordingRankingService(),
+            hard_gate=AnswerabilityHardGate(),
+            soft_gate=soft_gate,
+            evidence_materializer=RagEvidenceMaterializer(
+                corpus_repository=_RecordingCorpusRepository(),
+                cache=_RecordingEvidenceCache(),
+            ),
             graph_enhancement=RagGraphEnhancement(repository=graph_repository),
-        ),
-        hard_gate=AnswerabilityHardGate(),
-        soft_gate=soft_gate,
-        evidence_materializer=RagEvidenceMaterializer(
-            corpus_repository=_RecordingCorpusRepository(),
-            cache=_RecordingEvidenceCache(),
         ),
         context_builder=RagContextBuilder(),
     )
@@ -403,7 +454,8 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
     assert retrieval_request.permission_scope is not None
     assert result.should_continue
     assert result.direct_evidence[0].citation_id == "E1"
-    assert result.direct_evidence[0].citation_anchor == "p.1 | 鉴权"
+    assert result.direct_evidence[0].page_label == "1"
+    assert result.direct_evidence[0].section_path == ("鉴权",)
     assert result.context is not None
     assert "AppBuilder API Key" in result.context.context_text
     assert "Graph 补充证据" in result.context.context_text
@@ -422,11 +474,11 @@ async def test_knowledge_search_stops_when_elastic_strict_prefilter_is_empty() -
             elastic_filter=_RecordingElasticFilter(candidate_chunk_ids=()),
             qdrant_retriever=qdrant_repository,
             ranking_service=_RecordingRankingService(),
-        ),
-        hard_gate=AnswerabilityHardGate(),
-        soft_gate=_RecordingSoftGate(),
-        evidence_materializer=RagEvidenceMaterializer(
-            corpus_repository=_RecordingCorpusRepository()
+            hard_gate=AnswerabilityHardGate(),
+            soft_gate=_RecordingSoftGate(),
+            evidence_materializer=RagEvidenceMaterializer(
+                corpus_repository=_RecordingCorpusRepository()
+            ),
         ),
         context_builder=RagContextBuilder(),
     )
@@ -501,7 +553,8 @@ async def test_evidence_materializer_uses_mongo_child_and_parent_context() -> No
 
     assert direct_evidence[0].text == "父块完整上下文，包含鉴权接口和调用限制。"
     assert direct_evidence[0].matched_child_ids == ("child-1",)
-    assert direct_evidence[0].citation_anchor == "p.2 | 鉴权"
+    assert direct_evidence[0].page_label == "2"
+    assert direct_evidence[0].section_path == ("鉴权",)
 
 
 @pytest.mark.anyio
@@ -590,7 +643,7 @@ async def test_graph_enhancement_uses_cache_for_same_warning_scope() -> None:
                     chunk_id="child-2",
                     document_version="3",
                     evidence_text="Graph 补充证据。",
-                    citation_anchor="p.1",
+                    page_label="1",
                 ),
             )
         )
@@ -649,6 +702,38 @@ async def test_document_ready_ingestion_rejects_missing_resource_id() -> None:
     with pytest.raises(DocumentReadyMessageError):
         await service.ingest(
             {
+                "version": 3,
+                "content": "# 标题",
+            }
+        )
+
+
+@pytest.mark.anyio
+async def test_document_ready_ingestion_rejects_non_string_resource_id() -> None:
+    service = RagDocumentReadyConsumer(
+        ingester=_RecordingIngestionService(),
+    )
+
+    with pytest.raises(DocumentReadyMessageError):
+        await service.ingest(
+            {
+                "resourceId": 123,
+                "version": 3,
+                "content": "# 标题",
+            }
+        )
+
+
+@pytest.mark.anyio
+async def test_document_ready_ingestion_rethrows_retryable_ingestion_failure() -> None:
+    service = RagDocumentReadyConsumer(
+        ingester=_FailingIngestionService(),
+    )
+
+    with pytest.raises(RagIngestionRetryableError):
+        await service.ingest(
+            {
+                "resourceId": "resource-doc",
                 "version": 3,
                 "content": "# 标题",
             }
@@ -840,7 +925,7 @@ def _direct_evidence_for_graph():
         citation_id="E1",
         document_version="3",
         text="父块证据。",
-        citation_anchor="p.1",
+        page_label="1",
         matched_child_ids=("child-1",),
     )
 
@@ -880,6 +965,11 @@ class _RecordingIngestionService:
             indexed_child_count=0,
             acl_projection=None,
         )
+
+
+class _FailingIngestionService:
+    async def ingest_markdown(self, payload: RagMarkdownIngestionPayload) -> RagMarkdownIngestResult:
+        raise RagIngestionRetryableError("retry ingestion")
 
 
 class _RecordingCorpusRepository:
@@ -957,6 +1047,11 @@ class _RecordingContextIndexingService:
                 indexing_text=f"上下文补充: 该片段说明 API 鉴权请求头要求。\n正文: {payload.child_chunk.text}",
             )
         )
+
+
+class _FailingContextIndexingService:
+    async def build(self, payload: ContextIndexingInput) -> ContextIndexingResult:
+        raise ContextIndexingError("context indexing failed")
 
 
 class _RecordingEmbeddingClient:

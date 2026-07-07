@@ -518,14 +518,14 @@ class Container(containers.DeclarativeContainer):
         elastic_filter=rag_elastic_filter,
         qdrant_retriever=rag_qdrant_retriever,
         ranking_service=rag_evidence_ranking_service,
+        hard_gate=rag_answerability_hard_gate,
+        soft_gate=rag_answerability_soft_gate,
+        evidence_materializer=rag_evidence_materializer,
         graph_enhancement=rag_graph_enhancement,
     )
     rag_knowledge_searcher = providers.Singleton(
         RagKnowledgeSearcher,
         retrieval_pipeline=rag_retrieval_pipeline,
-        hard_gate=rag_answerability_hard_gate,
-        soft_gate=rag_answerability_soft_gate,
-        evidence_materializer=rag_evidence_materializer,
         context_builder=rag_context_builder,
     )
     rag_document_ready_message_consumer = providers.Singleton(
@@ -546,7 +546,6 @@ class Container(containers.DeclarativeContainer):
     )
     rag_acl_recalculate_message_consumer = providers.Singleton(
         RagAclRecalculateConsumer,
-        projector=rag_acl_projection_projector,
         repository=rag_acl_projection_repository,
         updater=rag_acl_projection_updater,
     )

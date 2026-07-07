@@ -158,12 +158,6 @@ def _to_materialized_view(
         parent_chunk_id=parent_chunk_id,
         document_version=retrieved.document_version if retrieved is not None else "",
         text=text,
-        citation_anchor=_build_citation_anchor(
-            parent_chunk_id=parent_chunk_id,
-            page_label=page_label,
-            section_path=section_path,
-            anchor_labels=anchor_labels,
-        ),
         page_label=page_label,
         section_path=section_path,
         anchor_labels=anchor_labels,
@@ -180,28 +174,8 @@ def _to_direct_evidence(
         citation_id=citation_id,
         document_version=view.document_version,
         text=view.text,
-        citation_anchor=view.citation_anchor,
         page_label=view.page_label,
         section_path=view.section_path,
         anchor_labels=view.anchor_labels,
         matched_child_ids=view.matched_child_ids,
     )
-
-
-def _build_citation_anchor(
-        *,
-        parent_chunk_id: str,
-        page_label: str | None,
-        section_path: tuple[str, ...],
-        anchor_labels: tuple[str, ...],
-) -> str:
-    parts: list[str] = []
-    if page_label:
-        parts.append(f"p.{page_label}")
-    if section_path:
-        parts.append(" > ".join(section_path))
-    if anchor_labels:
-        parts.append(", ".join(anchor_labels))
-    if not parts:
-        parts.append(parent_chunk_id)
-    return " | ".join(parts)

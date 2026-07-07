@@ -16,7 +16,9 @@ class RagGraphEvidence:
     chunk_id: str
     document_version: str
     evidence_text: str
-    citation_anchor: str
+    page_label: str | None = None
+    section_path: tuple[str, ...] = ()
+    anchor_labels: tuple[str, ...] = ()
     path: tuple[str, ...] = ()
     related_concepts: tuple[str, ...] = ()
 

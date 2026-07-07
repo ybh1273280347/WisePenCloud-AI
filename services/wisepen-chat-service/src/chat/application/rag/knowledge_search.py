@@ -1,24 +1,12 @@
 from __future__ import annotations
 
-from chat.application.rag.answerability import (
-    AnswerabilityHardGate,
-    AnswerabilitySoftGate,
-    RagAnswerabilityInput,
-)
-from chat.application.rag.utils import permission_scope_key
-from chat.application.rag.cache import RagEvidenceMaterializationCacheScope
 from chat.application.rag.context_builder import (
     RagContextBuildRequest,
     RagContextBuilder,
-    RagEvidenceMaterializeRequest,
-    RagEvidenceMaterializer,
 )
 from chat.application.rag.models import (
     RagKnowledgeSearchRequest,
     RagKnowledgeSearchResult,
-)
-from chat.application.rag.graph import (
-    RagGraphEnhancementRequest,
 )
 from chat.application.rag.retrieval import RagRetrievalPipeline, RagRetrievalPipelineRequest
 
@@ -27,26 +15,17 @@ class RagKnowledgeSearcher:
     """执行定稿中的 RAG 主检索链路。"""
 
     __slots__ = (
-        "_hard_gate",
         "_context_builder",
-        "_evidence_materializer",
         "_retrieval_pipeline",
-        "_soft_gate",
     )
 
     def __init__(
             self,
             *,
             retrieval_pipeline: RagRetrievalPipeline,
-            hard_gate: AnswerabilityHardGate,
-            soft_gate: AnswerabilitySoftGate,
-            evidence_materializer: RagEvidenceMaterializer,
             context_builder: RagContextBuilder,
     ) -> None:
         self._retrieval_pipeline = retrieval_pipeline
-        self._hard_gate = hard_gate
-        self._soft_gate = soft_gate
-        self._evidence_materializer = evidence_materializer
         self._context_builder = context_builder
 
     async def search(self, request: RagKnowledgeSearchRequest) -> RagKnowledgeSearchResult:
@@ -54,6 +33,7 @@ class RagKnowledgeSearcher:
             RagRetrievalPipelineRequest(
                 query=request.query,
                 resource_id=request.resource_id,
+                session_id=request.session_id,
                 retrieval_profile=request.retrieval_profile,
                 keywords=request.keywords,
                 permission_scope=request.permission_scope,
@@ -63,33 +43,17 @@ class RagKnowledgeSearcher:
             )
         )
 
-        answerability_input = RagAnswerabilityInput(
-            query=request.query,
-            retrieval_profile=request.retrieval_profile.value,
-            ranked=tuple(item.ranking for item in retrieval.candidates),
-        )
-        hard_gate = self._hard_gate.decide(answerability_input)
+        hard_gate = retrieval.hard_gate
+        if hard_gate is None:
+            raise RuntimeError("RagRetrievalPipeline must be configured with answerability gates.")
         if not hard_gate.should_continue:
             return RagKnowledgeSearchResult(
                 hard_gate=hard_gate,
             )
 
-        direct_evidence = await self._evidence_materializer.materialize(
-            RagEvidenceMaterializeRequest(
-                candidates=retrieval.candidates,
-                cache_scope=_build_materialization_cache_scope(request),
-            )
-        )
-        warning = await self._soft_gate.evaluate(answerability_input)
-        graph_enhancement = await self._retrieval_pipeline.enhance_graph(
-            RagGraphEnhancementRequest(
-                query=request.query,
-                resource_id=request.resource_id,
-                direct_evidence=direct_evidence,
-                answerability_warning=warning,
-                permission_scope=request.permission_scope,
-            )
-        )
+        direct_evidence = retrieval.direct_evidence
+        warning = retrieval.answerability_warning
+        graph_enhancement = retrieval.graph_enhancement
         context = self._context_builder.build(
             RagContextBuildRequest(
                 query=request.query,
@@ -106,22 +70,3 @@ class RagKnowledgeSearcher:
             graph_enhancement=graph_enhancement,
             context=context,
         )
-
-
-def _build_materialization_cache_scope(
-        request: RagKnowledgeSearchRequest,
-) -> RagEvidenceMaterializationCacheScope | None:
-    if request.permission_scope is None:
-        return None
-
-    user_id = request.permission_scope.user_id.strip()
-    session_id = request.session_id.strip()
-    if not user_id or not session_id:
-        return None
-
-    return RagEvidenceMaterializationCacheScope(
-        user_id=user_id,
-        session_id=session_id,
-        resource_id=request.resource_id,
-        permission_scope_key=permission_scope_key(request.permission_scope.group_role_map),
-    )

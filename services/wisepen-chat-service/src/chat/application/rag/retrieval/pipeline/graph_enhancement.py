@@ -4,7 +4,6 @@ import json
 from hashlib import sha256
 from typing import TYPE_CHECKING
 
-from chat.application.rag.utils import permission_scope_key
 from chat.application.rag.cache.graph_enhancement import (
     RagGraphEnhancementCache,
     RagGraphEnhancementCacheKey,
@@ -80,7 +79,7 @@ def _build_cache_key(
         resource_id=request.resource_id,
         direct_evidence_signature=_direct_evidence_signature(request.direct_evidence),
         warning_signature=_warning_signature(request),
-        permission_scope_key=permission_scope_key(request.permission_scope.group_role_map),
+        permission_scope_key=_permission_scope_cache_key(request.permission_scope.group_role_map),
         graph_version=graph_version or "latest",
         ontology_schema_version=ontology_schema_version or "default",
     )
@@ -106,6 +105,13 @@ def _warning_signature(request: RagGraphEnhancementRequest) -> str:
             ],
             "guidance": request.answerability_warning.guidance,
         }
+    )
+
+
+def _permission_scope_cache_key(group_role_map: dict[str, str]) -> str:
+    return "|".join(
+        f"{group_id}:{role}"
+        for group_id, role in sorted(group_role_map.items())
     )
 
 

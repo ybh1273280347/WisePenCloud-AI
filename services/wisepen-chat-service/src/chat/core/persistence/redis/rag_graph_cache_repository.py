@@ -5,7 +5,7 @@ from dataclasses import asdict
 from hashlib import sha256
 from typing import Any
 
-from chat.application.rag.utils import read_text_tuple
+from chat.application.rag.utils import read_optional_text, read_text_tuple
 from chat.application.rag.cache.graph_enhancement import RagGraphEnhancementCacheKey
 from chat.application.rag.graph import (
     RagConceptPath,
@@ -85,7 +85,9 @@ def _decode_graph_evidence(payload: dict[str, Any]) -> RagGraphEvidence:
         chunk_id=str(payload["chunk_id"]),
         document_version=str(payload["document_version"]),
         evidence_text=str(payload["evidence_text"]),
-        citation_anchor=str(payload["citation_anchor"]),
+        page_label=read_optional_text(payload.get("page_label")),
+        section_path=read_text_tuple(payload.get("section_path")),
+        anchor_labels=read_text_tuple(payload.get("anchor_labels")),
         path=read_text_tuple(payload.get("path")),
         related_concepts=read_text_tuple(payload.get("related_concepts")),
     )

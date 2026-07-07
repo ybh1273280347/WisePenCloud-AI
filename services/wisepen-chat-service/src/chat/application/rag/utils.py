@@ -18,10 +18,3 @@ def read_text_tuple(value: object) -> tuple[str, ...]:
         for item in value
         if (text := str(item).strip())
     )
-
-
-def permission_scope_key(group_role_map: dict[str, str]) -> str:
-    return "|".join(
-        f"{group_id}:{role}"
-        for group_id, role in sorted(group_role_map.items())
-    )

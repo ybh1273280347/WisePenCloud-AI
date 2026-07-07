@@ -15,10 +15,6 @@ from chat.application.rag.retrieval.models import (
 )
 from chat.application.rag.retrieval.permission_filter import RagPermissionFilterBuilder
 
-_DEFAULT_DENSE_VECTOR_NAME = "dense"
-_DEFAULT_SPARSE_VECTOR_NAME = "sparse"
-_QDRANT_BM25_MODEL = "Qdrant/bm25"
-
 
 class RagQdrantRetriever:
     """Qdrant dense + BM25 主检索步骤。
@@ -43,8 +39,8 @@ class RagQdrantRetriever:
             collection_name: str,
             permission_filter_builder: RagPermissionFilterBuilder,
             bm25_config: qdrant_models.Bm25Config,
-            dense_vector_name: str = _DEFAULT_DENSE_VECTOR_NAME,
-            sparse_vector_name: str = _DEFAULT_SPARSE_VECTOR_NAME,
+            dense_vector_name: str = "dense",
+            sparse_vector_name: str = "sparse",
     ) -> None:
         self._client = client
         self._collection_name = collection_name
@@ -132,7 +128,7 @@ class RagQdrantRetriever:
                 qdrant_models.Prefetch(
                     query=qdrant_models.Document(
                         text=request.query_text,
-                        model=_QDRANT_BM25_MODEL,
+                        model="Qdrant/bm25",
                         options=self._bm25_config,
                     ),
                     using=self._sparse_vector_name,

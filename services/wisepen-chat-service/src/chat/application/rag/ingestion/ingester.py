@@ -12,7 +12,10 @@ from chat.application.rag.cache.ingestion_deterministic import (
     RagIngestionDeterministicCache,
 )
 from chat.application.rag.ingestion.chunking import RagChunkingService
-from chat.application.rag.ingestion.context_indexing import ContextIndexingService
+from chat.application.rag.ingestion.context_indexing import (
+    ContextIndexingError,
+    ContextIndexingService,
+)
 from chat.application.rag.ingestion.models import (
     ContextIndexingInput,
     RagChildChunk,
@@ -42,6 +45,10 @@ class RagMarkdownIngestResult:
     pipeline: str
     indexed_child_count: int
     acl_projection: RagResourceAclProjection | None
+
+
+class RagIngestionRetryableError(RuntimeError):
+    """RAG 入库遇到可重试失败，Kafka 消费者应重抛以避免提交 offset。"""
 
 
 class RagMarkdownIngester:
@@ -96,7 +103,12 @@ class RagMarkdownIngester:
 
     async def ingest_markdown(self, payload: RagMarkdownIngestionPayload) -> RagMarkdownIngestResult:
         chunking_result = await self._chunk_payload(payload)
-        child_chunks = await self._build_context_indexed_children(chunking_result)
+        try:
+            child_chunks = await self._build_context_indexed_children(chunking_result)
+        except ContextIndexingError as exc:
+            raise RagIngestionRetryableError(
+                "RAG ingestion failed before indexing because context indexing failed."
+            ) from exc
         corpus_version = payload.document_version
         acl_projection = await self._acl_repository.get_projection(payload.resource_id)
 

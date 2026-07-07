@@ -46,7 +46,7 @@ OUTPUT RULES:
   - The tool returns answerability status, citations, direct evidence summaries, graph evidence summaries, and optional cached RAG context.
   - If answerability.status is rejected, do not fabricate an answer; explain the reason or ask for clarification.
   - If warnings are present, answer conservatively using the evidence and mention limits when needed.
-  - Treat citation_id/citation_anchor as the only model-facing evidence locator.
+  - Treat citation_id plus page_label/section_path/anchor_labels as the model-facing direct evidence locator.
 """
 
 # 只暴露模型能决定的语义字段；版本标识、权限范围和检索窗口都由系统边界注入。
@@ -115,7 +115,7 @@ class RagKnowledgeSearchTool:
 
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
         try:
-            # top_k/candidate_limit/elastic_prefilter_limit 是运维调参项，固定从 tool settings 读取。
+            # top_k/candidate_limit/elastic_prefilter_limit 是调参项，固定从 tool settings 读取。
             result = await self._searcher.search(
                 RagKnowledgeSearchRequest(
                     query=kwargs["query"].strip(),
@@ -191,7 +191,6 @@ def _answerability_payload(result: Any) -> dict[str, Any]:
 def _direct_evidence_payload(evidence: RagDirectEvidence) -> dict[str, Any]:
     return {
         "citation_id": evidence.citation_id,
-        "citation_anchor": evidence.citation_anchor,
         "document_version": evidence.document_version,
         "page_label": evidence.page_label,
         "section_path": list(evidence.section_path),
@@ -202,8 +201,10 @@ def _direct_evidence_payload(evidence: RagDirectEvidence) -> dict[str, Any]:
 
 def _graph_evidence_payload(evidence: RagGraphEvidence) -> dict[str, Any]:
     return {
-        "citation_anchor": evidence.citation_anchor,
         "document_version": evidence.document_version,
+        "page_label": evidence.page_label,
+        "section_path": list(evidence.section_path),
+        "anchor_labels": list(evidence.anchor_labels),
         "related_concepts": list(evidence.related_concepts),
         "excerpt": _excerpt(evidence.evidence_text),
     }

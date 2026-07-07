@@ -58,7 +58,6 @@ def _render_context_text(request: RagContextBuildRequest) -> str:
 def _render_evidence(evidence: RagDirectEvidence) -> str:
     attrs = [
         f'citation_id="{xml_attr(evidence.citation_id)}"',
-        f'citation_anchor="{xml_attr(evidence.citation_anchor)}"',
     ]
     if evidence.document_version:
         attrs.append(f'document_version="{xml_attr(evidence.document_version)}"')
@@ -102,15 +101,26 @@ def _render_warning(request: RagContextBuildRequest) -> str:
 
 
 def _render_graph_evidence(evidence: RagGraphEvidence) -> str:
-    attrs = [
-        f'citation_anchor="{xml_attr(evidence.citation_anchor)}"',
-    ]
+    attrs = []
     if evidence.document_version:
         attrs.append(f'document_version="{xml_attr(evidence.document_version)}"')
+    if evidence.page_label:
+        attrs.append(f'page_label="{xml_attr(evidence.page_label)}"')
+
+    locator_lines = []
+    if evidence.section_path:
+        locator_lines.append(
+            f"      <section_path>{xml_text(' > '.join(evidence.section_path))}</section_path>"
+        )
+    if evidence.anchor_labels:
+        locator_lines.append(
+            f"      <anchor_labels>{xml_text(', '.join(evidence.anchor_labels))}</anchor_labels>"
+        )
 
     return "\n".join(
         (
             f"    <evidence {' '.join(attrs)}>",
+            *locator_lines,
             f"      <text>{xml_cdata(evidence.evidence_text.strip())}</text>",
             "    </evidence>",
         )

@@ -24,7 +24,6 @@ class RagMaterializedEvidenceView:
     parent_chunk_id: str
     document_version: str
     text: str
-    citation_anchor: str
     page_label: str | None = None
     section_path: tuple[str, ...] = ()
     anchor_labels: tuple[str, ...] = ()

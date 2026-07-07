@@ -15,7 +15,9 @@ def read_required_string(
     value = payload.get(key)
     if value is None:
         raise error_factory(f"{message_name}.{key} is required.")
-    text = str(value).strip()
+    if not isinstance(value, str):
+        raise error_factory(f"{message_name}.{key} must be a string.")
+    text = value.strip()
     if not text:
         raise error_factory(f"{message_name}.{key} must not be empty.")
     return text
@@ -26,5 +28,26 @@ def read_optional_string(payload: Mapping[str, Any], key: str) -> str | None:
     value = payload.get(key)
     if value is None:
         return None
-    text = str(value).strip()
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
     return text or None
+
+
+def read_required_version(
+        payload: Mapping[str, Any],
+        key: str,
+        *,
+        message_name: str,
+        error_factory: Callable[[str], Exception],
+) -> str:
+    """读取 Java Integer/string 版本标识，并统一转成 RAG 内部版本字符串。"""
+    value = payload.get(key)
+    if value is None:
+        raise error_factory(f"{message_name}.{key} is required.")
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise error_factory(f"{message_name}.{key} must be an integer or string.")
+    text = str(value).strip()
+    if not text:
+        raise error_factory(f"{message_name}.{key} must not be empty.")
+    return text
