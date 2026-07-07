@@ -152,10 +152,16 @@ class RagRetrievalPipeline:
                 candidates=candidates,
                 hard_gate=hard_gate,
             )
+        accepted_candidates = tuple(
+            candidate
+            for candidate in candidates
+            if self._hard_gate.accepts(candidate.ranking.score)
+        )
+        answerability_input = _answerability_input(request, accepted_candidates)
 
         direct_evidence = await self._evidence_materializer.materialize(
             _materialize_request(
-                candidates=candidates,
+                candidates=accepted_candidates,
                 cache_scope=_build_materialization_cache_scope(request),
             )
         )
@@ -172,7 +178,7 @@ class RagRetrievalPipeline:
                 )
             )
         return RagRetrievalPipelineResult(
-            candidates=candidates,
+            candidates=accepted_candidates,
             hard_gate=hard_gate,
             direct_evidence=direct_evidence,
             answerability_warning=warning,

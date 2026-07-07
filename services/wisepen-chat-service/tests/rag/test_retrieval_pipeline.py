@@ -82,7 +82,10 @@ from chat.application.rag.retrieval.models import (  # noqa: E402
     ScoredChunk,
 )
 from chat.application.rag.retrieval.pipeline.graph_enhancement import RagGraphEnhancement  # noqa: E402
-from chat.application.rag.retrieval.retrieval_pipeline import RagRetrievalPipeline  # noqa: E402
+from chat.application.rag.retrieval.retrieval_pipeline import (  # noqa: E402
+    RagRetrievalPipeline,
+    RagRetrievalPipelineRequest,
+)
 from chat.application.rag.knowledge_search import (  # noqa: E402
     RagKnowledgeSearcher,
     RagKnowledgeSearchRequest,
@@ -818,6 +821,71 @@ def test_hard_gate_rejects_when_all_topk_scores_are_extremely_low() -> None:
 
     assert not decision.should_continue
     assert decision.reason == RagHardGateReason.TOPK_ALL_BELOW_ABSOLUTE_MIN_SCORE
+
+
+def test_hard_gate_accepts_only_candidates_above_absolute_threshold() -> None:
+    hard_gate = AnswerabilityHardGate()
+
+    assert hard_gate.accepts(0.3)
+    assert not hard_gate.accepts(0.29)
+
+
+@pytest.mark.anyio
+async def test_retrieval_pipeline_filters_low_score_candidates_before_materialization() -> None:
+    soft_gate = _RecordingSoftGate()
+    pipeline = RagRetrievalPipeline(
+        embedding_client=_RecordingEmbeddingClient(),
+        elastic_filter=_RecordingElasticFilter(candidate_chunk_ids=None),
+        qdrant_retriever=_RecordingRetrievalRepository(
+            chunks=(
+                ScoredChunk(
+                    chunk_id="child-strong",
+                    text="AppBuilder API Key 用于接口鉴权。",
+                    retrieval_score=0.72,
+                    retrieval_rank=1,
+                    resource_id="resource-doc",
+                    document_version="3",
+                    corpus_version="ctx-v1",
+                    parent_chunk_id="parent-1",
+                ),
+                ScoredChunk(
+                    chunk_id="child-weak",
+                    text="无关的低质量候选。",
+                    retrieval_score=0.12,
+                    retrieval_rank=2,
+                    resource_id="resource-doc",
+                    document_version="3",
+                    corpus_version="ctx-v1",
+                    parent_chunk_id="parent-2",
+                ),
+            )
+        ),
+        ranking_service=_RecordingRankingService(),
+        hard_gate=AnswerabilityHardGate(),
+        soft_gate=soft_gate,
+        evidence_materializer=RagEvidenceMaterializer(
+            corpus_repository=_RecordingCorpusRepository(),
+            cache=_RecordingEvidenceCache(),
+        ),
+    )
+
+    result = await pipeline.retrieve(
+        RagRetrievalPipelineRequest(
+            query="AppBuilder API Key 鉴权",
+            resource_id="resource-doc",
+            session_id="session-1",
+            permission_scope=RagPermissionScope(
+                user_id="user-1",
+                group_role_map={},
+            ),
+        )
+    )
+
+    assert result.hard_gate is not None
+    assert result.hard_gate.should_continue
+    assert [item.chunk.chunk_id for item in result.candidates] == ["child-strong"]
+    assert [item.matched_child_ids for item in result.direct_evidence] == [("child-strong",)]
+    assert [item.candidate_id for item in soft_gate.calls[0].ranked] == ["child-strong"]
 
 
 @pytest.mark.anyio

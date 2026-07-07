@@ -36,14 +36,14 @@ class AnswerabilityHardGate:
                 reason=RagHardGateReason.EMPTY_RETRIEVAL,
             )
 
-        # 所有候选分数都低于绝对下限：证据整体不可信，不再进入 Soft Gate 和主模型。
-        if all(
-                item.score < self._absolute_min_score_threshold
-                for item in answerability_input.ranked
-        ):
+        # 候选已按分数排序；最高分都低于绝对下限时，证据整体不可信。
+        if answerability_input.ranked[0].score < self._absolute_min_score_threshold:
             return RagHardGateDecision(
                 status=RagHardGateStatus.REJECTED,
                 reason=RagHardGateReason.TOPK_ALL_BELOW_ABSOLUTE_MIN_SCORE,
             )
 
         return RagHardGateDecision(status=RagHardGateStatus.PASSED)
+
+    def accepts(self, score: float) -> bool:
+        return score >= self._absolute_min_score_threshold
