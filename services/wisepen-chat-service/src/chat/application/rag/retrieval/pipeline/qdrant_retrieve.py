@@ -6,13 +6,14 @@ from typing import Any
 from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
-from chat.application.rag.retrieval.filters import RagPermissionFilterBuilder
+from chat.application.rag.utils import read_optional_text, read_text_tuple
 from chat.application.rag.retrieval.models import (
     RagQdrantRetrievalFilterRequest,
     RagQdrantRetrievalRequest,
     RagRetrievalChannel,
     ScoredChunk,
 )
+from chat.application.rag.retrieval.permission_filter import RagPermissionFilterBuilder
 
 _DEFAULT_DENSE_VECTOR_NAME = "dense"
 _DEFAULT_SPARSE_VECTOR_NAME = "sparse"
@@ -20,7 +21,11 @@ _QDRANT_BM25_MODEL = "Qdrant/bm25"
 
 
 class RagQdrantRetriever:
-    """Qdrant dense + BM25 检索入口。"""
+    """Qdrant dense + BM25 主检索步骤。
+
+    Qdrant filter 只承载 resource、Elastic 候选集合和 ACL 范围；内容相关性由 dense/BM25
+    查询本身决定，不通过 payload 过滤表达。
+    """
 
     __slots__ = (
         "_bm25_config",
@@ -49,13 +54,12 @@ class RagQdrantRetriever:
         self._sparse_vector_name = sparse_vector_name
 
     async def retrieve(self, request: RagQdrantRetrievalRequest) -> tuple[ScoredChunk, ...]:
-        if self._client is None or request.top_k <= 0:
+        if self._client is None:
             return ()
 
         query_filter = self.build_retrieval_filter(
             RagQdrantRetrievalFilterRequest(
                 resource_id=request.resource_id,
-                corpus_version=request.corpus_version,
                 candidate_chunk_ids=request.candidate_chunk_ids,
                 permission_scope=request.permission_scope,
             )
@@ -79,14 +83,11 @@ class RagQdrantRetriever:
             self,
             request: RagQdrantRetrievalFilterRequest,
     ) -> qdrant_models.Filter:
+        # candidate_chunk_ids 来自 Elastic 关键词 prefilter；没有关键词时不限制 chunk_id。
         must: list[qdrant_models.Condition] = [
             qdrant_models.FieldCondition(
                 key="resource_id",
                 match=qdrant_models.MatchValue(value=request.resource_id),
-            ),
-            qdrant_models.FieldCondition(
-                key="corpus_version",
-                match=qdrant_models.MatchValue(value=request.corpus_version),
             ),
         ]
         if request.candidate_chunk_ids:
@@ -109,6 +110,7 @@ class RagQdrantRetriever:
             query_filter: qdrant_models.Filter,
     ) -> Any:
         if not request.query_text.strip():
+            # 无文本查询时只能走 dense 向量；有文本时再启用 Qdrant BM25 sparse 分支做 RRF。
             return await self._client.query_points(
                 collection_name=self._collection_name,
                 query=list(request.query_vector),
@@ -163,36 +165,25 @@ def _to_scored_chunk(
     if not isinstance(payload, Mapping):
         return None
 
-    chunk_id = _read_string(payload.get("chunk_id")) or _read_string(getattr(point, "id", None))
+    chunk_id = read_optional_text(payload.get("chunk_id")) or read_optional_text(
+        getattr(point, "id", None)
+    )
     if not chunk_id:
         return None
 
-    parent_chunk_id = _read_string(payload.get("parent_chunk_id"))
+    parent_chunk_id = read_optional_text(payload.get("parent_chunk_id"))
     return ScoredChunk(
         chunk_id=chunk_id,
-        text=_read_string(payload.get("evidence_text")) or "",
+        text=read_optional_text(payload.get("evidence_text")) or "",
         retrieval_score=float(getattr(point, "score", 0.0)),
         retrieval_rank=rank,
         group_key=parent_chunk_id or None,
-        resource_id=_read_string(payload.get("resource_id")) or "",
-        document_version=_read_string(payload.get("document_version")) or "",
-        corpus_version=_read_string(payload.get("corpus_version")) or "",
+        resource_id=read_optional_text(payload.get("resource_id")) or "",
+        document_version=read_optional_text(payload.get("document_version")) or "",
+        corpus_version=read_optional_text(payload.get("corpus_version")) or "",
         parent_chunk_id=parent_chunk_id or "",
-        page_label=_read_string(payload.get("page_label")),
-        section_path=_read_string_tuple(payload.get("section_path")),
-        anchor_labels=_read_string_tuple(payload.get("anchor_labels")),
+        page_label=read_optional_text(payload.get("page_label")),
+        section_path=read_text_tuple(payload.get("section_path")),
+        anchor_labels=read_text_tuple(payload.get("anchor_labels")),
         retrieval_channels=channels,
     )
-
-
-def _read_string(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _read_string_tuple(value: Any) -> tuple[str, ...]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
-        return ()
-    return tuple(str(item) for item in value if str(item).strip())

@@ -6,6 +6,7 @@ import hishel.httpx as hishel_httpx
 import httpx
 from dependency_injector import containers, providers
 from elasticsearch import AsyncElasticsearch
+from neo4j import AsyncGraphDatabase, AsyncDriver, GraphDatabase, Driver
 from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 from v2.nacos import NacosNamingService
@@ -18,21 +19,23 @@ from chat.application.llm_provider_resolver import LLMProviderResolver
 from chat.application.rag.acl import RagAclProjectionProjector, RagAclProjectionUpdater
 from chat.application.rag.answerability import AnswerabilityHardGate, AnswerabilitySoftGate
 from chat.application.rag.context_builder import RagContextBuilder, RagEvidenceMaterializer
+from chat.application.rag.graph.graphrag_builder import Neo4jGraphRagKnowledgeGraphBuilder
 from chat.application.rag.ingestion import (
     ContextIndexingService,
-    RagMarkdownIngester,
     RagChunkingService,
 )
+from chat.application.rag.ingestion.ingester import RagMarkdownIngester
 from chat.application.rag.kafka_consumers.acl_recalculate_consumer import RagAclRecalculateConsumer
 from chat.application.rag.kafka_consumers.document_ready_consumer import RagDocumentReadyConsumer
+from chat.application.rag.knowledge_search import RagKnowledgeSearcher
 from chat.application.rag.ranking import RagEvidenceRankingService
 from chat.application.rag.retrieval import (
-    RagElasticRetriever,
-    RagHybridRetriever,
+    RagElasticFilter,
+    RagGraphEnhancement,
     RagPermissionFilterBuilder,
     RagQdrantRetriever,
+    RagRetrievalPipeline,
 )
-from chat.application.rag.knowledge_search import RagKnowledgeSearcher
 from chat.application.token_counter import TokenCounter
 from chat.application.tools.common.tool_content_store.store import (
     DEFAULT_TOOL_CONTENT_TTL_SECONDS,
@@ -57,6 +60,7 @@ from chat.application.tools.math_tools import (
     LinearAlgebraSolveTool,
     StatsSolveTool,
 )
+from chat.application.tools.rag_tools import RagKnowledgeSearchTool
 from chat.application.tools.session_tools import (
     GetHistoricalChatMessagesTool,
     ToolContentReadTool,
@@ -73,28 +77,6 @@ from chat.application.tools.web_tools import (
     WebFetchTool,
     WebSearchTool,
 )
-from chat.application.tools.web_tools.search_services.factories.custom_source_factory import (
-    WebSearchCustomSourceFactory,
-)
-from chat.application.tools.web_tools.search_services.factories.integration_searcher_factory import (
-    IntegrationSearcherFactory,
-)
-from chat.application.tools.web_tools.search_services.factories.platform_source_factory import (
-    WebSearchPlatformSourceFactory,
-)
-from chat.application.tools.web_tools.search_services.core.runtime_context import (
-    WebSearchRuntimeContextResolver,
-)
-from chat.application.tools.web_tools.search_services.searchers import (
-    DdgSearcher,
-    FourGetSearcher,
-    PlatformDefaultSearcher,
-    ProviderSearcher,
-    SearchProviderConfig,
-)
-from chat.application.tools.web_tools.search_services.hydrators.academic import PaperHydrator
-from chat.application.tools.web_tools.search_services.academic_search import AcademicSearchService
-from chat.application.tools.web_tools.search_services.web_search import WebSearchService
 from chat.application.tools.web_tools.fetch_services import (
     FetchCoordinator,
     WebCrawler,
@@ -106,10 +88,34 @@ from chat.application.tools.web_tools.fetch_services.fetchers import (
     HttpxFetcher,
     ScraplingFetcher,
 )
+from chat.application.tools.web_tools.search_services.academic_search import AcademicSearchService
+from chat.application.tools.web_tools.search_services.core.runtime_context import (
+    WebSearchRuntimeContextResolver,
+)
+from chat.application.tools.web_tools.search_services.factories.custom_source_factory import (
+    WebSearchCustomSourceFactory,
+)
+from chat.application.tools.web_tools.search_services.factories.integration_searcher_factory import (
+    IntegrationSearcherFactory,
+)
+from chat.application.tools.web_tools.search_services.factories.platform_source_factory import (
+    WebSearchPlatformSourceFactory,
+)
+from chat.application.tools.web_tools.search_services.hydrators.academic import PaperHydrator
+from chat.application.tools.web_tools.search_services.searchers import (
+    DdgSearcher,
+    FourGetSearcher,
+    PlatformDefaultSearcher,
+    ProviderSearcher,
+    SearchProviderConfig,
+)
+from chat.application.tools.web_tools.search_services.web_search import WebSearchService
+from chat.application.utils.llm_clients import build_query_client
 from chat.application.utils.llm_clients.embedding import build_embedding_client
 from chat.core.config.app_settings import settings
 from chat.core.config.bootstrap_settings import bootstrap_settings
 from chat.core.config.nacos import nacos_client_manager
+from chat.core.persistence.elasticsearch import RagElasticRepository
 from chat.core.persistence.mongo.message_repository import MongoMessageRepository
 from chat.core.persistence.mongo.model_repository import MongoModelRepository
 from chat.core.persistence.mongo.provider_repository import MongoProviderRepository
@@ -121,7 +127,16 @@ from chat.core.persistence.mongo.session_repository import MongoSessionRepositor
 from chat.core.persistence.mongo.web_search_credential_repository import (
     MongoWebSearchCredentialRepository,
 )
+from chat.core.persistence.neo4j import RagNeo4jRepository
+from chat.core.persistence.qdrant import RagQdrantRepository
 from chat.core.persistence.redis.hot_context import RedisHotContext
+from chat.core.persistence.redis.rag_evidence_cache_repository import (
+    RedisRagEvidenceMaterializationCache,
+)
+from chat.core.persistence.redis.rag_graph_cache_repository import RedisRagGraphEnhancementCache
+from chat.core.persistence.redis.rag_ingestion_cache_repository import (
+    RedisRagIngestionDeterministicCache,
+)
 from chat.core.persistence.redis.tool_content_repository import RedisToolContentRepository
 from chat.core.persistence.redis.tool_run_file_repository import RedisToolRunFileRepository
 from chat.core.persistence.redis.web_content_cache_repository import (
@@ -130,8 +145,6 @@ from chat.core.persistence.redis.web_content_cache_repository import (
 from chat.core.persistence.redis.web_search_candidate_repository import (
     RedisWebSearchCandidateRepository,
 )
-from chat.core.persistence.elasticsearch import RagElasticRepository
-from chat.core.persistence.qdrant import RagQdrantRepository
 from chat.core.providers import (
     AnthropicAdapter,
     GeminiAdapter,
@@ -228,6 +241,28 @@ def _build_qdrant_client() -> AsyncQdrantClient | None:
         host=host,
         port=settings.QDRANT_PORT,
         api_key=settings.QDRANT_PASSWORD or None,
+    )
+
+
+def _build_neo4j_driver() -> AsyncDriver | None:
+    uri = settings.NEO4J_URI.strip()
+    if not uri:
+        return None
+
+    return AsyncGraphDatabase.driver(
+        uri,
+        auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD),
+    )
+
+
+def _build_neo4j_sync_driver() -> Driver | None:
+    uri = settings.NEO4J_URI.strip()
+    if not uri:
+        return None
+
+    return GraphDatabase.driver(
+        uri,
+        auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD),
     )
 
 
@@ -377,6 +412,12 @@ class Container(containers.DeclarativeContainer):
     qdrant_client = providers.Singleton(
         _build_qdrant_client,
     )
+    neo4j_driver = providers.Singleton(
+        _build_neo4j_driver,
+    )
+    neo4j_sync_driver = providers.Singleton(
+        _build_neo4j_sync_driver,
+    )
     rag_qdrant_repository = providers.Singleton(
         RagQdrantRepository,
         client=qdrant_client,
@@ -389,6 +430,25 @@ class Container(containers.DeclarativeContainer):
         client=elasticsearch_client,
         index_name=settings.ELASTIC_SEARCH_RAG_INDEX_NAME,
     )
+    rag_neo4j_repository = providers.Singleton(
+        RagNeo4jRepository,
+        driver=neo4j_driver,
+        permission_filter_builder=rag_permission_filter_builder,
+    )
+    rag_graph_query_client = providers.Singleton(
+        build_query_client,
+        model=settings.QUERY_MODEL,
+    )
+    rag_knowledge_graph_builder = providers.Singleton(
+        Neo4jGraphRagKnowledgeGraphBuilder,
+        driver=neo4j_sync_driver,
+        llm_client=rag_graph_query_client,
+    )
+    rag_ingestion_deterministic_cache = providers.Singleton(
+        RedisRagIngestionDeterministicCache,
+        redis_url=settings.REDIS_URL,
+        ttl_seconds=settings.RAG_INGESTION_DETERMINISTIC_CACHE_TTL_SECONDS,
+    )
     rag_qdrant_retriever = providers.Singleton(
         RagQdrantRetriever,
         client=qdrant_client,
@@ -396,8 +456,8 @@ class Container(containers.DeclarativeContainer):
         permission_filter_builder=rag_permission_filter_builder,
         bm25_config=rag_qdrant_bm25_config,
     )
-    rag_elastic_retriever = providers.Singleton(
-        RagElasticRetriever,
+    rag_elastic_filter = providers.Singleton(
+        RagElasticFilter,
         client=elasticsearch_client,
         index_name=settings.ELASTIC_SEARCH_RAG_INDEX_NAME,
         permission_filter_builder=rag_permission_filter_builder,
@@ -411,13 +471,25 @@ class Container(containers.DeclarativeContainer):
         acl_repository=rag_acl_projection_repository,
         qdrant_repository=rag_qdrant_repository,
         elastic_repository=rag_elastic_repository,
+        graph_repository=rag_neo4j_repository,
+        knowledge_graph_builder=rag_knowledge_graph_builder,
+        ingestion_cache=rag_ingestion_deterministic_cache,
+        summary_model=settings.SUMMARY_MODEL,
+        embedding_model=settings.EMBEDDING_MODEL,
+        embedding_dimensions=settings.EMBEDDING_DIMENSIONS,
     )
     rag_evidence_ranking_service = providers.Singleton(
         RagEvidenceRankingService,
     )
+    rag_evidence_materialization_cache = providers.Singleton(
+        RedisRagEvidenceMaterializationCache,
+        redis_url=settings.REDIS_URL,
+        ttl_seconds=settings.RAG_EVIDENCE_MATERIALIZATION_CACHE_TTL_SECONDS,
+    )
     rag_evidence_materializer = providers.Singleton(
         RagEvidenceMaterializer,
         corpus_repository=rag_corpus_repository,
+        cache=rag_evidence_materialization_cache,
     )
     rag_context_builder = providers.Singleton(
         RagContextBuilder,
@@ -428,15 +500,28 @@ class Container(containers.DeclarativeContainer):
     rag_answerability_soft_gate = providers.Singleton(
         AnswerabilitySoftGate,
     )
-    rag_hybrid_retriever = providers.Singleton(
-        RagHybridRetriever,
+    rag_graph_enhancement_cache = providers.Singleton(
+        RedisRagGraphEnhancementCache,
+        redis_url=settings.REDIS_URL,
+        ttl_seconds=settings.RAG_GRAPH_ENHANCEMENT_CACHE_TTL_SECONDS,
+    )
+    rag_graph_enhancement = providers.Singleton(
+        RagGraphEnhancement,
+        repository=rag_neo4j_repository,
+        cache=rag_graph_enhancement_cache,
+        graph_version=settings.RAG_GRAPH_VERSION,
+        ontology_schema_version=settings.RAG_ONTOLOGY_SCHEMA_VERSION,
+    )
+    rag_retrieval_pipeline = providers.Singleton(
+        RagRetrievalPipeline,
         embedding_client=rag_embedding_client,
-        elastic_retriever=rag_elastic_retriever,
+        elastic_filter=rag_elastic_filter,
         qdrant_retriever=rag_qdrant_retriever,
+        graph_enhancement=rag_graph_enhancement,
     )
     rag_knowledge_searcher = providers.Singleton(
         RagKnowledgeSearcher,
-        retriever=rag_hybrid_retriever,
+        retrieval_pipeline=rag_retrieval_pipeline,
         ranking_service=rag_evidence_ranking_service,
         hard_gate=rag_answerability_hard_gate,
         soft_gate=rag_answerability_soft_gate,
@@ -456,6 +541,7 @@ class Container(containers.DeclarativeContainer):
         targets=providers.List(
             rag_qdrant_repository,
             rag_elastic_repository,
+            rag_neo4j_repository,
         ),
     )
     rag_acl_recalculate_message_consumer = providers.Singleton(
@@ -689,6 +775,12 @@ class Container(containers.DeclarativeContainer):
         candidate_repository=web_search_candidate_repository,
     )
 
+    # --- RAG Tools ---
+    rag_knowledge_search_tool = providers.Singleton(
+        RagKnowledgeSearchTool,
+        searcher=rag_knowledge_searcher,
+    )
+
     # --- Skill Tools ---
     load_skill_tool = providers.Singleton(
         LoadSkillTool,
@@ -719,6 +811,7 @@ class Container(containers.DeclarativeContainer):
         academic_search_tool,
         web_crawl_tool,
         web_fetch_tool,
+        rag_knowledge_search_tool,
         search_history_tool,
         load_skill_tool,
         load_skill_asset_tool,

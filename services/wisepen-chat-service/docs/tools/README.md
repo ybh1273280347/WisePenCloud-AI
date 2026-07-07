@@ -11,6 +11,7 @@
 
 - `document/`：文件解析工具。
 - `math/`：结构化数学计算工具。
+- `rag/`：WisePen 私有知识库检索工具。
 - `session/`：会话历史与 `cnt_*` 内容读取工具。
 - `skill/`：Skill 指令和文本资产懒加载工具。
 - `web/`：搜索、学术搜索、抓取和站点爬取工具。
@@ -67,6 +68,10 @@
 - [tool_content_read](session/tool_content_read.md)
 - [tool_content_sequential_read](session/tool_content_sequential_read.md)
 - [get_historical_chat_messages](session/get_historical_chat_messages.md)
+
+### rag
+
+- [rag_knowledge_search](rag/rag_knowledge_search.md)
 
 ### skill
 

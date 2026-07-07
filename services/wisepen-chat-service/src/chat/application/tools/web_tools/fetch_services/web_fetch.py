@@ -11,6 +11,10 @@ from chat.application.tools.common.web_content_cache import (
 from chat.application.tools.utils.url import filename_from_url
 from common.logger import info, warn
 from ._utils import judge_quality
+from .cleaners.base import BaseCleaner
+from .core.errors import UrlFetchError, UrlFetchHttpError, UrlFetchUnsupportedUrlError
+from .core.models import RawFetchOutput, WebFetchBatchResult, WebFetchFailure, WebFetchResult
+from .fetchers import WebFetcher
 from .infra.batch_scheduler import (
     AdmitFallback,
     FetchBatchScheduler,
@@ -18,10 +22,6 @@ from .infra.batch_scheduler import (
     FetchQueue,
     FetchSlot,
 )
-from .cleaners.base import BaseCleaner
-from .core.errors import UrlFetchError, UrlFetchHttpError, UrlFetchUnsupportedUrlError
-from .core.models import RawFetchOutput, WebFetchBatchResult, WebFetchFailure, WebFetchResult
-from .fetchers import WebFetcher
 from .infra.cache import WebFetchCache
 
 _PRODUCER_NAME = "web_fetch"

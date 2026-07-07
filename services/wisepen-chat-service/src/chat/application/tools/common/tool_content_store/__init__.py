@@ -8,7 +8,7 @@ from .core.models import (
     ToolContentIndexEntry,
     ToolContentReceipt,
 )
-from .core.protocols import ToolContentRepository
+from .core.repository_protocol import ToolContentRepository
 from .store import ToolContentStore
 
 __all__ = [

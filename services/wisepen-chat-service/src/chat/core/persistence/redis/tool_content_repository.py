@@ -4,29 +4,28 @@ import json
 from dataclasses import asdict
 from typing import Any
 
-import redis.asyncio as redis
-
 from chat.application.tools.common.tool_content_store.core.models import (
     StoredToolContent,
     ToolContentChunk,
     ToolContentIndex,
     ToolContentIndexEntry,
 )
-from chat.application.tools.common.tool_content_store.core.protocols import ToolContentRepository
+from chat.application.tools.common.tool_content_store.core.repository_protocol import ToolContentRepository
 from chat.core.persistence.redis._utils import to_jsonable
+from chat.core.persistence.redis.base import RedisRepository
 
 # --- 全局命名空间配置 ---
 _CONTENT_KEY_PREFIX = "wisepen:tool_content:item:"
 _SESSION_KEY_PREFIX = "wisepen:tool_content:session:"
 
 
-class RedisToolContentRepository(ToolContentRepository):
+class RedisToolContentRepository(RedisRepository, ToolContentRepository):
     """基于 Redis 的 ToolContent 仓储实现。"""
 
-    __slots__ = ("_redis", "_ttl_seconds")
+    __slots__ = ("_ttl_seconds",)
 
     def __init__(self, *, redis_url: str, ttl_seconds: int) -> None:
-        self._redis = redis.from_url(redis_url, decode_responses=True)
+        super().__init__(redis_url=redis_url)
         self._ttl_seconds = ttl_seconds
 
     async def put(self, stored: StoredToolContent) -> None:

@@ -14,7 +14,12 @@ def test_list_tool_catalog_items_returns_visible_tool_mappings() -> None:
         for item in responses
     }
 
-    assert list(tool_names_by_key) == ["web_search", "image_ocr", "math_tools"]
+    assert list(tool_names_by_key) == [
+        "web_search",
+        "image_ocr",
+        "math_tools",
+        "rag_knowledge_search",
+    ]
     assert tool_names_by_key["web_search"] == ["web_search", "academic_search"]
     assert tool_names_by_key["image_ocr"] == ["image_ocr"]
     assert tool_names_by_key["math_tools"] == [
@@ -24,3 +29,4 @@ def test_list_tool_catalog_items_returns_visible_tool_mappings() -> None:
         "stats_solver",
         "expression_solver",
     ]
+    assert tool_names_by_key["rag_knowledge_search"] == ["rag_knowledge_search"]

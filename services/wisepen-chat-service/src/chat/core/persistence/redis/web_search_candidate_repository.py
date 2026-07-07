@@ -4,27 +4,23 @@ import json
 from dataclasses import asdict
 from typing import Any
 
-import redis.asyncio as redis
-
 from chat.application.tools.web_tools.search_services.candidate_store.models import (
     WebSearchCandidateMapping,
 )
 from chat.application.tools.web_tools.search_services.candidate_store.repository_protocol import (
     WebSearchCandidateRepository,
 )
+from chat.core.persistence.redis.base import RedisRepository
 
 # --- 全局配置 ---
 _KEY_PREFIX = "wisepen:web_search_candidate:"
 
 
-class RedisWebSearchCandidateRepository(WebSearchCandidateRepository):
+class RedisWebSearchCandidateRepository(RedisRepository, WebSearchCandidateRepository):
     """Redis 实现：保存 web_search 候选 ID 到 URL 的短期映射。"""
 
-    __slots__ = ("_redis",)
-    _redis: redis.Redis  # __slots__ 不影响类型标注，仅用于静态检查
-
     def __init__(self, *, redis_url: str) -> None:
-        self._redis = redis.from_url(redis_url, decode_responses=True)
+        super().__init__(redis_url=redis_url)
 
     async def set_mapping(
             self,

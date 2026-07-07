@@ -14,9 +14,8 @@ from .models import (
     RagMarkdownIngestionPayload,
     RagParentChunk,
 )
-from .ingester import RagMarkdownIngester, RagMarkdownIngestResult
 
-# 包根只暴露入库阶段稳定 DTO 和 service，避免把 prompt 细节泄漏到外层。
+# 包根只暴露入库阶段稳定 DTO 和轻量 service，重型编排入口从具体模块导入。
 __all__ = [
     "ContextIndexingError",
     "ContextIndexingInput",
@@ -28,6 +27,4 @@ __all__ = [
     "RagMarkdownIngestionPayload",
     "RagParentChunk",
     "ContextIndexingService",
-    "RagMarkdownIngester",
-    "RagMarkdownIngestResult",
 ]

@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
-from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
 from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
+from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
 from chat.core.security import SecretCipherError
 from chat.domain.entities.web_search_credential import WebSearchCredentialSource
 

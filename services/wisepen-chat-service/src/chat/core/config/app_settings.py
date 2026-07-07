@@ -58,11 +58,14 @@ class AppSettings(BaseModel):
 
     # ── Storage (Redis / MongoDB / Qdrant / Neo4j / Elasticsearch) ─────
     REDIS_URL: str  # Redis 连接串
+
     MONGODB_URL: str  # MongoDB 连接串
     MONGODB_DB_NAME: str  # MongoDB 数据库名
+
     QDRANT_HOST: str  # Qdrant 主机地址
     QDRANT_PORT: int  # Qdrant 端口
     QDRANT_PASSWORD: str  # Qdrant 密码
+
     QDRANT_RAG_COLLECTION_NAME: str = "wisepen_rag_child_chunks"  # RAG child chunk Qdrant collection
     QDRANT_RAG_BM25_TOKENIZER: Literal[
         "prefix",
@@ -70,12 +73,15 @@ class AppSettings(BaseModel):
         "word",
         "multilingual",
     ] = "multilingual"  # Qdrant BM25 tokenizer 类型
+
     NEO4J_URI: str = "neo4j://localhost:7687"  # Neo4j 连接 URI
     NEO4J_USERNAME: str = "neo4j"  # Neo4j 用户名
     NEO4J_PASSWORD: str = "password123"  # Neo4j 密码
-    ELASTIC_SEARCH_BASE_URL: str = "http://wisepen-dev-server:9200"  # Elasticsearch 基础 URL；空串表示未启用
-    ELASTIC_SEARCH_USERNAME: str = "elastic"  # Elasticsearch 用户名
-    ELASTIC_SEARCH_PASSWORD: str = "root"  # Elasticsearch 密码
+
+    ELASTIC_SEARCH_BASE_URL: str  # Elasticsearch 基础 URL；空串表示未启用
+    ELASTIC_SEARCH_USERNAME: str  # Elasticsearch 用户名
+    ELASTIC_SEARCH_PASSWORD: str  # Elasticsearch 密码
+
     ELASTIC_SEARCH_RAG_INDEX_NAME: str = "wisepen_rag_child_chunks"  # RAG child chunk strict prefilter 索引名
 
     # ── Context Window (模型上下文窗口预算) ────────────────────────────
@@ -96,6 +102,13 @@ class AppSettings(BaseModel):
     AGENT_MAX_ITERATIONS: int = 20  # 最大推理迭代次数
     TOOL_RESULT_MAX_CHARS: int = 4000  # 工具返回内容截断上限 (~1000 token)
 
+    # —— RAG ——————————————————————————————————————————————————————————
+    RAG_INGESTION_DETERMINISTIC_CACHE_TTL_SECONDS: int = 7 * 24 * 3600  # RAG 入库确定性中间结果缓存 TTL
+    RAG_EVIDENCE_MATERIALIZATION_CACHE_TTL_SECONDS: int = 600  # RAG 已授权 evidence 物化缓存 TTL
+    RAG_GRAPH_ENHANCEMENT_CACHE_TTL_SECONDS: int = 600  # RAG Neo4j 图增强结果缓存 TTL
+    RAG_GRAPH_VERSION: str = "v1"  # RAG 图投影版本，变更后让旧 graph cache 自然 miss
+    RAG_ONTOLOGY_SCHEMA_VERSION: str = "default"  # RAG ontology schema 版本，变更后让旧 graph cache 自然 miss
+
     # ── PaddleOCR Cloud (OCR 云端服务网关) ─────────────────────────────
     PADDLE_OCR_TOKEN: str  # PaddleOCR 服务 token
     PADDLE_OCR_API_URL: str  # PaddleOCR 服务 API URL
@@ -115,9 +128,8 @@ class AppSettings(BaseModel):
                                          ] | None = None  # 会员平台源当前路由到的 provider；None 表示未启用
     WEB_SEARCH_PLATFORM_MEMBER_API_KEY: str | None = None  # 会员平台源使用的平台密钥
 
-    # ── Third-Party Credentials (三方垂直领域鉴权) ─────────────────────
+    # ── Third-Party Credentials (三方垂直领域) ─────────────────────
     OPENALEX_BASE_URL: str = "https://api.openalex.org"  # OpenAlex API 基础 URL
-    OPENALEX_API_KEY: str  # OpenAlex API key
 
     # ── Skill (技能召回) ───────────────────────────────────────────────
     SKILL_MATCH_TOP_K: int = 20  # 默认召回数量

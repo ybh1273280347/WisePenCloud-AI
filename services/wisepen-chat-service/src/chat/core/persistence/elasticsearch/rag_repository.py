@@ -128,6 +128,7 @@ class RagElasticRepository:
             "start_offset": child.start_offset,
             "end_offset": child.end_offset,
         }
+        # indexing_text 仅服务关键词 prefilter；version 字段只用于投影替换和引用标识。
         if acl_projection is None:
             return document
 

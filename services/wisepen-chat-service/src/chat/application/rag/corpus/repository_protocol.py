@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from chat.application.rag.ingestion.models import RagChildChunk, RagParentChunk
+if TYPE_CHECKING:
+    from chat.application.rag.ingestion.models import RagChildChunk, RagParentChunk
 
 
 class RagCorpusRepository(Protocol):

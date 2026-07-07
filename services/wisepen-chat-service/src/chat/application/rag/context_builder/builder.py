@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from chat.application.rag.graph import RagGraphEvidence, RagOntologyHint
 from chat.application.utils.xml_markup import xml_attr, xml_cdata, xml_text
 
 from .models import RagContextBuildRequest, RagContextPackage, RagDirectEvidence
@@ -16,6 +17,8 @@ class RagContextBuilder:
             direct_evidence=request.direct_evidence,
             context_text=_render_context_text(request),
             answerability_warning=request.answerability_warning,
+            graph_evidence=request.graph_evidence,
+            ontology_hints=request.ontology_hints,
         )
 
 
@@ -25,6 +28,14 @@ def _render_context_text(request: RagContextBuildRequest) -> str:
         for evidence in request.direct_evidence
     ]
     warning_block = _render_warning(request)
+    graph_blocks = [
+        _render_graph_evidence(evidence)
+        for evidence in request.graph_evidence
+    ]
+    hint_blocks = [
+        _render_ontology_hint(hint)
+        for hint in request.ontology_hints
+    ]
     return "\n".join(
         (
             "<rag_context>",
@@ -32,6 +43,12 @@ def _render_context_text(request: RagContextBuildRequest) -> str:
             "  <direct_evidence>",
             *evidence_blocks,
             "  </direct_evidence>",
+            "  <graph_evidence>",
+            *graph_blocks,
+            "  </graph_evidence>",
+            "  <ontology_hints>",
+            *hint_blocks,
+            "  </ontology_hints>",
             warning_block,
             "</rag_context>",
         )
@@ -41,13 +58,8 @@ def _render_context_text(request: RagContextBuildRequest) -> str:
 def _render_evidence(evidence: RagDirectEvidence) -> str:
     attrs = [
         f'citation_id="{xml_attr(evidence.citation_id)}"',
-        f'parent_chunk_id="{xml_attr(evidence.parent_chunk_id)}"',
         f'citation_anchor="{xml_attr(evidence.citation_anchor)}"',
-        f'rank="{evidence.rank}"',
-        f'score="{evidence.score:.6f}"',
     ]
-    if evidence.resource_id:
-        attrs.append(f'resource_id="{xml_attr(evidence.resource_id)}"')
     if evidence.document_version:
         attrs.append(f'document_version="{xml_attr(evidence.document_version)}"')
     if evidence.page_label:
@@ -62,8 +74,6 @@ def _render_evidence(evidence: RagDirectEvidence) -> str:
         locator_lines.append(
             f"      <anchor_labels>{xml_text(', '.join(evidence.anchor_labels))}</anchor_labels>"
         )
-    if evidence.matched_child_chunks:
-        locator_lines.append(_render_matched_child_chunks(evidence))
 
     return "\n".join(
         (
@@ -73,32 +83,6 @@ def _render_evidence(evidence: RagDirectEvidence) -> str:
             "    </evidence>",
         )
     )
-
-
-def _render_matched_child_chunks(evidence: RagDirectEvidence) -> str:
-    lines = ["      <matched_child_chunks>"]
-    for child in evidence.matched_child_chunks:
-        attrs = [f'chunk_id="{xml_attr(child.chunk_id)}"']
-        if child.page_label:
-            attrs.append(f'page_label="{xml_attr(child.page_label)}"')
-        lines.append(f"        <child {' '.join(attrs)}>")
-        if child.section_path:
-            lines.append(
-                f"          <section_path>{xml_text(' > '.join(child.section_path))}</section_path>"
-            )
-        if child.anchor_labels:
-            lines.append(
-                f"          <anchor_labels>{xml_text(', '.join(child.anchor_labels))}</anchor_labels>"
-            )
-        if child.retrieval_channels:
-            lines.append(
-                "          <retrieval_channels>"
-                f"{xml_text(', '.join(channel.value for channel in child.retrieval_channels))}"
-                "</retrieval_channels>"
-            )
-        lines.append("        </child>")
-    lines.append("      </matched_child_chunks>")
-    return "\n".join(lines)
 
 
 def _render_warning(request: RagContextBuildRequest) -> str:
@@ -115,3 +99,38 @@ def _render_warning(request: RagContextBuildRequest) -> str:
             "  </answerability_warning>",
         )
     )
+
+
+def _render_graph_evidence(evidence: RagGraphEvidence) -> str:
+    attrs = [
+        f'citation_anchor="{xml_attr(evidence.citation_anchor)}"',
+    ]
+    if evidence.document_version:
+        attrs.append(f'document_version="{xml_attr(evidence.document_version)}"')
+
+    return "\n".join(
+        (
+            f"    <evidence {' '.join(attrs)}>",
+            f"      <text>{xml_cdata(evidence.evidence_text.strip())}</text>",
+            "    </evidence>",
+        )
+    )
+
+
+def _render_ontology_hint(hint: RagOntologyHint) -> str:
+    attrs = [f'concept="{xml_attr(hint.concept)}"']
+    lines = [f"    <hint {' '.join(attrs)}>"]
+    if hint.class_candidates:
+        lines.append(
+            f"      <class_candidates>{xml_text(', '.join(hint.class_candidates))}</class_candidates>"
+        )
+    if hint.relation_type_candidates:
+        lines.append(
+            "      <relation_type_candidates>"
+            f"{xml_text(', '.join(hint.relation_type_candidates))}"
+            "</relation_type_candidates>"
+        )
+    if hint.path_preview:
+        lines.append(f"      <path_preview>{xml_text(' > '.join(hint.path_preview))}</path_preview>")
+    lines.append("    </hint>")
+    return "\n".join(lines)

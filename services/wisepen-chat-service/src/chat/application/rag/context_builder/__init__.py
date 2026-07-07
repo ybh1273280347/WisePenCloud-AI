@@ -4,7 +4,6 @@ from .models import (
     RagContextBuildRequest,
     RagContextPackage,
     RagDirectEvidence,
-    RagMatchedChildChunk,
 )
 
 __all__ = [
@@ -14,5 +13,4 @@ __all__ = [
     "RagDirectEvidence",
     "RagEvidenceMaterializeRequest",
     "RagEvidenceMaterializer",
-    "RagMatchedChildChunk",
 ]

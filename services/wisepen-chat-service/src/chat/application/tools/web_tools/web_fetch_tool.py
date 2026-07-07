@@ -19,11 +19,11 @@ from chat.application.tools.core.tool_return import (
 )
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
+from chat.application.tools.web_tools.fetch_services import FetchCoordinator
+from chat.application.tools.web_tools.fetch_services.core.errors import UrlFetchError
 from chat.application.tools.web_tools.search_services.candidate_store.repository_protocol import (
     WebSearchCandidateRepository,
 )
-from chat.application.tools.web_tools.fetch_services import FetchCoordinator
-from chat.application.tools.web_tools.fetch_services.core.errors import UrlFetchError
 from common.logger import warn
 
 # --- 全局常量定义 ---

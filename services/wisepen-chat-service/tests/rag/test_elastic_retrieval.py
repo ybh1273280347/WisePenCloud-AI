@@ -9,33 +9,24 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from chat.application.rag.retrieval import (  # noqa: E402
-    RagElasticStrictPrefilterRequest,
-    RagElasticRetriever,
-    RagExactFilter,
+    RagElasticKeywordFilterRequest,
+    RagElasticFilter,
     RagPermissionFilterBuilder,
     RagPermissionScope,
 )
 
 
-def test_elastic_strict_prefilter_builds_bool_filter_with_exact_fields() -> None:
-    retriever = RagElasticRetriever(
+def test_elastic_keyword_filter_builds_content_phrase_query_with_scope_filters() -> None:
+    elastic_filter = RagElasticFilter(
         client=_FakeElasticClient(),
         index_name="rag-test",
         permission_filter_builder=RagPermissionFilterBuilder(),
     )
 
-    query = retriever.build_strict_prefilter_query(
-        RagElasticStrictPrefilterRequest(
-            query="AppBuilder API Key",
+    query = elastic_filter.build_keyword_filter_query(
+        RagElasticKeywordFilterRequest(
+            keywords=("AppBuilder API Key", "Bearer token"),
             resource_id="res-1",
-            corpus_version="corpus-7",
-            exact_filter=RagExactFilter(
-                document_version="3",
-                page_label="12",
-                anchor_labels=("表 3",),
-                section_path=("鉴权", "API Key"),
-                required_phrases=("Bearer token",),
-            ),
             permission_scope=RagPermissionScope(
                 user_id="user-1",
                 group_role_map={
@@ -49,11 +40,6 @@ def test_elastic_strict_prefilter_builds_bool_filter_with_exact_fields() -> None
 
     bool_query = query["bool"]
     assert {"term": {"resource_id": "res-1"}} in bool_query["filter"]
-    assert {"term": {"corpus_version": "corpus-7"}} in bool_query["filter"]
-    assert {"term": {"document_version": "3"}} in bool_query["filter"]
-    assert {"term": {"page_label": "12"}} in bool_query["filter"]
-    assert {"terms": {"anchor_labels": ["表 3"]}} in bool_query["filter"]
-    assert {"term": {"section_path_text": "鉴权 > API Key"}} in bool_query["filter"]
     assert bool_query["must"] == [
         {"match_phrase": {"indexing_text": {"query": "AppBuilder API Key"}}},
         {"match_phrase": {"indexing_text": {"query": "Bearer token"}}},
@@ -98,18 +84,16 @@ async def test_elastic_strict_prefilter_returns_chunk_ids_from_source() -> None:
             }
         }
     )
-    retriever = RagElasticRetriever(
+    elastic_filter = RagElasticFilter(
         client=client,
         index_name="rag-test",
         permission_filter_builder=RagPermissionFilterBuilder(),
     )
 
-    chunk_ids = await retriever.strict_prefilter(
-        RagElasticStrictPrefilterRequest(
-            query="",
+    chunk_ids = await elastic_filter.filter_candidate_chunk_ids(
+        RagElasticKeywordFilterRequest(
+            keywords=("API Key",),
             resource_id="res-1",
-            corpus_version="corpus-1",
-            exact_filter=RagExactFilter(chunk_ids=("chunk-a", "chunk-b")),
         )
     )
 

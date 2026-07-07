@@ -4,9 +4,9 @@ import uuid
 from dataclasses import dataclass
 
 from chat.application.tools.web_tools.search_services.candidate_store import WebSearchCandidateMapping
-from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse
 from chat.application.tools.web_tools.search_services.core.runtime_context import WebSearchRuntimeConfig
 from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
+from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse
 
 
 @dataclass(frozen=True, slots=True)

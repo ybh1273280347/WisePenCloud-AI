@@ -41,15 +41,16 @@ class QueryClient:
             system_prompt: str | None = None,
             messages: list[Message] | None = None,
             max_tokens: int | None = None,
+            response_format: dict[str, Any] | None = None,
     ) -> QueryResult:
         response = await self._async_client.chat.completions.create(
-            model=self.model,
-            messages=self._build_messages(
+            **self._build_completion_kwargs(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 messages=messages,
+                max_tokens=max_tokens,
+                response_format=response_format,
             ),
-            max_tokens=max_tokens,
         )
         return self._parse_response(response)
 
@@ -60,18 +61,41 @@ class QueryClient:
             system_prompt: str | None = None,
             messages: list[Message] | None = None,
             max_tokens: int | None = None,
+            response_format: dict[str, Any] | None = None,
     ) -> QueryResult:
         """同步查询入口，用于少量非 async 调用场景。"""
         response = self._sync_client.chat.completions.create(
-            model=self.model,
-            messages=self._build_messages(
+            **self._build_completion_kwargs(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                messages=messages,
+                max_tokens=max_tokens,
+                response_format=response_format,
+            ),
+        )
+        return self._parse_response(response)
+
+    def _build_completion_kwargs(
+            self,
+            *,
+            prompt: str,
+            system_prompt: str | None,
+            messages: list[Message] | None,
+            max_tokens: int | None,
+            response_format: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": self._build_messages(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 messages=messages,
             ),
-            max_tokens=max_tokens,
-        )
-        return self._parse_response(response)
+            "max_tokens": max_tokens,
+        }
+        if response_format is not None:
+            kwargs["response_format"] = response_format
+        return kwargs
 
     @staticmethod
     def _build_messages(

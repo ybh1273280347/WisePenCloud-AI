@@ -4,11 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from common.logger import info
-
-from chat.application.rag.kafka_consumers._utils import read_required_string
-from chat.application.rag.ingestion.models import RagMarkdownIngestionPayload
 from chat.application.rag.ingestion.ingester import RagMarkdownIngester, RagMarkdownIngestResult
+from chat.application.rag.ingestion.models import RagMarkdownIngestionPayload
+from chat.application.rag.kafka_consumers._utils import read_required_string
+from common.logger import info
 
 
 class DocumentReadyMessageError(ValueError):

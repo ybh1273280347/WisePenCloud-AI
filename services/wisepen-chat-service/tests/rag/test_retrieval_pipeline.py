@@ -44,8 +44,22 @@ from chat.application.rag.answerability import (  # noqa: E402
     AnswerabilityHardGate,
     AnswerabilitySoftGate,
     RagAnswerabilityInput,
+    RagAnswerabilityWarning,
     RagAnswerabilityWarningReason,
     RagHardGateReason,
+)
+from chat.application.rag.cache import (  # noqa: E402
+    RagChunkingCacheKey,
+    RagContextIndexingCacheKey,
+    RagEmbeddingCacheKey,
+    RagEvidenceMaterializationCacheScope,
+    RagGraphEnhancementCacheKey,
+    RagMaterializedEvidenceView,
+)
+from chat.application.rag.graph import (  # noqa: E402
+    RagGraphEnhancementRequest,
+    RagGraphEnhancementResult,
+    RagGraphEvidence,
 )
 from chat.application.rag.ranking import (  # noqa: E402
     RagEvidenceRankingRequest,
@@ -57,13 +71,13 @@ from chat.application.rag.context_builder import (  # noqa: E402
     RagEvidenceMaterializer,
 )
 from chat.application.rag.retrieval import (  # noqa: E402
-    RagExactFilter,
+    RagGraphEnhancement,
     RagPermissionScope,
+    RagRetrievalPipeline,
     RagRetrievalChannel,
     RagRetrievalProfile,
     ScoredChunk,
 )
-from chat.application.rag.retrieval.retrievers import RagHybridRetriever  # noqa: E402
 from chat.application.rag.knowledge_search import (  # noqa: E402
     RagKnowledgeSearcher,
     RagKnowledgeSearchRequest,
@@ -218,6 +232,8 @@ async def test_rag_ingestion_indexes_corpus_qdrant_and_elastic_with_acl_projecti
     corpus_repository = _RecordingCorpusRepository()
     qdrant_repository = _RecordingIndexRepository()
     elastic_repository = _RecordingIndexRepository()
+    graph_repository = _RecordingGraphRepository()
+    graph_builder = _RecordingKnowledgeGraphBuilder()
     service = RagMarkdownIngester(
         chunking_service=_PreparedChunkingService(
             RagChunkingResult(
@@ -234,6 +250,8 @@ async def test_rag_ingestion_indexes_corpus_qdrant_and_elastic_with_acl_projecti
         acl_repository=_RecordingAclRepository(acl_projection),
         qdrant_repository=qdrant_repository,
         elastic_repository=elastic_repository,
+        graph_repository=graph_repository,
+        knowledge_graph_builder=graph_builder,
     )
 
     result = await service.ingest_markdown(
@@ -253,6 +271,62 @@ async def test_rag_ingestion_indexes_corpus_qdrant_and_elastic_with_acl_projecti
     assert qdrant_repository.upsert_calls[0]["acl_projection"] == acl_projection
     assert elastic_repository.upsert_calls[0]["child_chunks"][0].indexing_text
     assert elastic_repository.upsert_calls[0]["acl_projection"] == acl_projection
+    assert graph_repository.delete_calls == [
+        {"resource_id": "resource-doc", "document_version": "3"}
+    ]
+    assert graph_builder.upsert_calls[0]["dense_vectors"] == {"child-1": [0.1, 0.2]}
+    assert graph_repository.acl_updates == [acl_projection]
+
+
+@pytest.mark.anyio
+async def test_rag_ingestion_uses_deterministic_cache_for_repeated_payload() -> None:
+    parent = RagParentChunk(
+        chunk_id="parent-1",
+        text="父块说明 API 鉴权要求。",
+        chunk_index=0,
+    )
+    child = RagChildChunk(
+        chunk_id="child-1",
+        text="请求必须携带 Authorization header。",
+        chunk_index=1,
+        parent_chunk_id="parent-1",
+    )
+    chunking_service = _PreparedChunkingService(
+        RagChunkingResult(
+            parent_chunks=(parent,),
+            child_chunks=(child,),
+            pipeline="parent_child_markdown",
+            resource_id="resource-doc",
+            document_version="3",
+        )
+    )
+    context_indexing_service = _RecordingContextIndexingService()
+    embedding_client = _RecordingEmbeddingClient()
+    service = RagMarkdownIngester(
+        chunking_service=chunking_service,
+        context_indexing_service=context_indexing_service,
+        embedding_client=embedding_client,
+        corpus_repository=_RecordingCorpusRepository(),
+        acl_repository=_RecordingAclRepository(None),
+        qdrant_repository=_RecordingIndexRepository(),
+        elastic_repository=_RecordingIndexRepository(),
+        ingestion_cache=_RecordingIngestionCache(),
+        summary_model="summary-model",
+        embedding_model="embedding-model",
+        embedding_dimensions=2,
+    )
+    payload = RagMarkdownIngestionPayload(
+        resource_id="resource-doc",
+        document_version="3",
+        markdown="# 鉴权\n\n请求必须携带 Authorization header。",
+    )
+
+    await service.ingest_markdown(payload)
+    await service.ingest_markdown(payload)
+
+    assert chunking_service.calls == 1
+    assert context_indexing_service.calls == 1
+    assert embedding_client.calls == 1
 
 
 @pytest.mark.anyio
@@ -278,17 +352,32 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
         )
     )
     soft_gate = _RecordingSoftGate()
+    graph_repository = _RecordingGraphRepository(
+        result=RagGraphEnhancementResult(
+            graph_evidence=(
+                RagGraphEvidence(
+                    chunk_id="child-2",
+                    document_version="3",
+                    evidence_text="Graph 补充证据说明 API Key 的申请入口。",
+                    citation_anchor="p.1 | 鉴权",
+                    path=("child-1", "child-2"),
+                ),
+            )
+        )
+    )
     service = RagKnowledgeSearcher(
-        retriever=RagHybridRetriever(
+        retrieval_pipeline=RagRetrievalPipeline(
             embedding_client=_RecordingEmbeddingClient(),
-            elastic_retriever=_RecordingElasticRepository(candidate_chunk_ids=("child-1",)),
+            elastic_filter=_RecordingElasticFilter(candidate_chunk_ids=("child-1",)),
             qdrant_retriever=qdrant_repository,
+            graph_enhancement=RagGraphEnhancement(repository=graph_repository),
         ),
         ranking_service=_RecordingRankingService(),
         hard_gate=AnswerabilityHardGate(),
         soft_gate=soft_gate,
         evidence_materializer=RagEvidenceMaterializer(
-            corpus_repository=_RecordingCorpusRepository()
+            corpus_repository=_RecordingCorpusRepository(),
+            cache=_RecordingEvidenceCache(),
         ),
         context_builder=RagContextBuilder(),
     )
@@ -297,15 +386,13 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
         RagKnowledgeSearchRequest(
             query="AppBuilder API Key",
             resource_id="resource-doc",
-            corpus_version="3",
             retrieval_profile=RagRetrievalProfile.ANCHORED_EXACT,
-            exact_filter=RagExactFilter(required_phrases=("API Key",)),
+            keywords=("API Key",),
             permission_scope=RagPermissionScope(
                 user_id="user-1",
                 group_role_map={"group-1": "MEMBER"},
             ),
-            top_k=1,
-            candidate_limit=10,
+            session_id="session-1",
         )
     )
 
@@ -314,12 +401,14 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
     assert retrieval_request.query_text == "AppBuilder API Key"
     assert retrieval_request.permission_scope is not None
     assert result.should_continue
-    assert result.elastic_candidate_chunk_ids == ("child-1",)
-    assert result.ranked[0].candidate_id == "child-1"
     assert result.direct_evidence[0].citation_id == "E1"
     assert result.direct_evidence[0].citation_anchor == "p.1 | 鉴权"
     assert result.context is not None
     assert "AppBuilder API Key" in result.context.context_text
+    assert "Graph 补充证据" in result.context.context_text
+    assert "parent_chunk_id" not in result.context.context_text
+    assert "score=" not in result.context.context_text
+    assert graph_repository.expand_calls
     assert soft_gate.calls
 
 
@@ -327,9 +416,9 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
 async def test_knowledge_search_stops_when_elastic_strict_prefilter_is_empty() -> None:
     qdrant_repository = _RecordingRetrievalRepository()
     service = RagKnowledgeSearcher(
-        retriever=RagHybridRetriever(
+        retrieval_pipeline=RagRetrievalPipeline(
             embedding_client=_RecordingEmbeddingClient(),
-            elastic_retriever=_RecordingElasticRepository(candidate_chunk_ids=()),
+            elastic_filter=_RecordingElasticFilter(candidate_chunk_ids=()),
             qdrant_retriever=qdrant_repository,
         ),
         ranking_service=_RecordingRankingService(),
@@ -345,9 +434,8 @@ async def test_knowledge_search_stops_when_elastic_strict_prefilter_is_empty() -
         RagKnowledgeSearchRequest(
             query="不存在的锚点",
             resource_id="resource-doc",
-            corpus_version="3",
             retrieval_profile=RagRetrievalProfile.ANCHORED_EXACT,
-            exact_filter=RagExactFilter(required_phrases=("不存在的锚点",)),
+            keywords=("不存在的锚点",),
         )
     )
 
@@ -415,15 +503,143 @@ async def test_evidence_materializer_uses_mongo_child_and_parent_context() -> No
                     corpus_version="3",
                 ),
             ),
-            elastic_candidate_chunk_ids=("child-1",),
         )
     )
 
     assert direct_evidence[0].text == "父块完整上下文，包含鉴权接口和调用限制。"
-    assert direct_evidence[0].matched_child_chunks[0].chunk_id == "child-1"
-    assert direct_evidence[0].matched_child_chunks[0].text == "子块原文：必须携带 AppBuilder API Key。"
+    assert direct_evidence[0].matched_child_ids == ("child-1",)
     assert direct_evidence[0].citation_anchor == "p.2 | 鉴权"
-    assert direct_evidence[0].elastic_prefiltered
+
+
+@pytest.mark.anyio
+async def test_evidence_materializer_uses_cache_without_storing_rank_score() -> None:
+    parent = RagParentChunk(
+        chunk_id="parent-1",
+        text="父块完整上下文，包含鉴权接口和调用限制。",
+        chunk_index=0,
+    )
+    child = RagChildChunk(
+        chunk_id="child-1",
+        text="子块原文：必须携带 AppBuilder API Key。",
+        chunk_index=1,
+        parent_chunk_id="parent-1",
+    )
+    corpus_repository = _RecordingCorpusRepository()
+    corpus_repository.saved = RagChunkingResult(
+        parent_chunks=(parent,),
+        child_chunks=(child,),
+        pipeline="test",
+        resource_id="resource-doc",
+        document_version="3",
+    )
+    scope = RagEvidenceMaterializationCacheScope(
+        user_id="user-1",
+        session_id="session-1",
+        resource_id="resource-doc",
+        permission_scope_key="group-1:MEMBER",
+    )
+    materializer = RagEvidenceMaterializer(
+        corpus_repository=corpus_repository,
+        cache=_RecordingEvidenceCache(),
+    )
+
+    first = await materializer.materialize(
+        RagEvidenceMaterializeRequest(
+            ranked=(
+                RankedCandidate(
+                    candidate=RankCandidate(candidate_id="child-1", text="Qdrant payload text"),
+                    rank=1,
+                    score=0.91,
+                ),
+            ),
+            retrieved_chunks=(
+                ScoredChunk(
+                    chunk_id="child-1",
+                    text="Qdrant payload text",
+                    retrieval_score=0.91,
+                    retrieval_rank=1,
+                    resource_id="resource-doc",
+                    document_version="3",
+                    corpus_version="3",
+                    parent_chunk_id="parent-1",
+                ),
+            ),
+            cache_scope=scope,
+        )
+    )
+    second = await materializer.materialize(
+        RagEvidenceMaterializeRequest(
+            ranked=(
+                RankedCandidate(
+                    candidate=RankCandidate(candidate_id="child-1", text="Qdrant payload text"),
+                    rank=2,
+                    score=0.81,
+                ),
+            ),
+            retrieved_chunks=(
+                ScoredChunk(
+                    chunk_id="child-1",
+                    text="Qdrant payload text",
+                    retrieval_score=0.91,
+                    retrieval_rank=1,
+                    resource_id="resource-doc",
+                    document_version="3",
+                    corpus_version="3",
+                    parent_chunk_id="parent-1",
+                ),
+            ),
+            cache_scope=scope,
+        )
+    )
+
+    assert first[0].citation_id == "E1"
+    assert second[0].citation_id == "E2"
+    assert second[0].matched_child_ids == ("child-1",)
+    assert corpus_repository.load_child_calls == [("child-1",), ()]
+
+
+@pytest.mark.anyio
+async def test_graph_enhancement_uses_cache_for_same_warning_scope() -> None:
+    repository = _RecordingGraphRepository(
+        result=RagGraphEnhancementResult(
+            graph_evidence=(
+                RagGraphEvidence(
+                    chunk_id="child-2",
+                    document_version="3",
+                    evidence_text="Graph 补充证据。",
+                    citation_anchor="p.1",
+                ),
+            )
+        )
+    )
+    service = RagGraphEnhancement(
+        repository=repository,
+        cache=_RecordingGraphCache(),
+        graph_version="graph-v1",
+        ontology_schema_version="ontology-v1",
+    )
+    request = RagGraphEnhancementRequest(
+        query="API Key 覆盖哪些接口？",
+        resource_id="resource-doc",
+        direct_evidence=(
+            _direct_evidence_for_graph(),
+        ),
+        answerability_warning=RagAnswerabilityWarning(
+            warnings=(RagAnswerabilityWarningReason.PARTIAL_COVERAGE,),
+            guidance="需要补充图证据。",
+        ),
+        permission_scope=RagPermissionScope(
+            user_id="user-1",
+            group_role_map={"group-1": "MEMBER"},
+        ),
+    )
+
+    first = await service.enhance(request)
+    second = await service.enhance(request)
+
+    assert first.graph_evidence[0].chunk_id == "child-2"
+    assert second.graph_evidence[0].chunk_id == "child-2"
+    assert len(repository.expand_calls) == 1
 
 
 @pytest.mark.anyio
@@ -597,6 +813,18 @@ def _retrieved_hit(
     )
 
 
+def _direct_evidence_for_graph():
+    from chat.application.rag.context_builder import RagDirectEvidence
+
+    return RagDirectEvidence(
+        citation_id="E1",
+        document_version="3",
+        text="父块证据。",
+        citation_anchor="p.1",
+        matched_child_ids=("child-1",),
+    )
+
+
 class _SoftGateClient:
     def __init__(self, *, content: str | None = None) -> None:
         self._content = content or (
@@ -637,6 +865,8 @@ class _RecordingIngestionService:
 class _RecordingCorpusRepository:
     def __init__(self) -> None:
         self.saved: RagChunkingResult | None = None
+        self.load_child_calls: list[tuple[str, ...]] = []
+        self.load_parent_calls: list[tuple[str, ...]] = []
 
     async def upsert_document(
             self,
@@ -655,6 +885,7 @@ class _RecordingCorpusRepository:
         )
 
     async def load_child_chunks(self, chunk_ids: tuple[str, ...]) -> tuple[RagChildChunk, ...]:
+        self.load_child_calls.append(chunk_ids)
         if self.saved is None:
             return ()
 
@@ -669,6 +900,7 @@ class _RecordingCorpusRepository:
         )
 
     async def load_parent_chunks(self, chunk_ids: tuple[str, ...]) -> tuple[RagParentChunk, ...]:
+        self.load_parent_calls.append(chunk_ids)
         if self.saved is None:
             return ()
 
@@ -686,13 +918,19 @@ class _RecordingCorpusRepository:
 class _PreparedChunkingService:
     def __init__(self, result: RagChunkingResult) -> None:
         self.result = result
+        self.calls = 0
 
     def chunk_payload(self, payload: RagMarkdownIngestionPayload) -> RagChunkingResult:
+        self.calls += 1
         return self.result
 
 
 class _RecordingContextIndexingService:
+    def __init__(self) -> None:
+        self.calls = 0
+
     async def build(self, payload: ContextIndexingInput) -> ContextIndexingResult:
+        self.calls += 1
         return ContextIndexingResult(
             child_chunk=payload.child_chunk.with_indexing_context(
                 indexing_context="该片段说明 API 鉴权请求头要求。",
@@ -702,7 +940,11 @@ class _RecordingContextIndexingService:
 
 
 class _RecordingEmbeddingClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
     async def aembed(self, input):
+        self.calls += 1
         values = [input] if isinstance(input, str) else list(input)
         return _EmbeddingResponse(
             embeddings=[
@@ -742,6 +984,122 @@ class _RecordingIndexRepository:
         return None
 
 
+class _RecordingGraphRepository:
+    def __init__(self, *, result: RagGraphEnhancementResult | None = None) -> None:
+        self.result = result or RagGraphEnhancementResult()
+        self.delete_calls: list[dict[str, object]] = []
+        self.acl_updates: list[RagResourceAclProjection] = []
+        self.expand_calls = []
+
+    async def delete_document_projection(self, **kwargs) -> None:
+        self.delete_calls.append(kwargs)
+
+    async def update_acl_projection(self, projection: RagResourceAclProjection) -> None:
+        self.acl_updates.append(projection)
+
+    async def expand_for_warnings(self, request):
+        self.expand_calls.append(request)
+        return self.result
+
+
+class _RecordingKnowledgeGraphBuilder:
+    def __init__(self) -> None:
+        self.upsert_calls: list[dict[str, object]] = []
+
+    async def upsert_document_graph(self, **kwargs) -> None:
+        self.upsert_calls.append(kwargs)
+
+
+class _RecordingEvidenceCache:
+    def __init__(self) -> None:
+        self.values: dict[str, RagMaterializedEvidenceView] = {}
+
+    async def get_many(
+            self,
+            *,
+            scope: RagEvidenceMaterializationCacheScope,
+            child_chunk_ids: tuple[str, ...],
+    ) -> dict[str, RagMaterializedEvidenceView]:
+        return {
+            child_id: view
+            for child_id in child_chunk_ids
+            if (view := self.values.get(child_id)) is not None
+        }
+
+    async def set_many(
+            self,
+            *,
+            scope: RagEvidenceMaterializationCacheScope,
+            views_by_child_id: dict[str, RagMaterializedEvidenceView],
+    ) -> None:
+        self.values.update(views_by_child_id)
+
+
+class _RecordingIngestionCache:
+    def __init__(self) -> None:
+        self.chunking: dict[RagChunkingCacheKey, RagChunkingResult] = {}
+        self.context_children: dict[RagContextIndexingCacheKey, RagChildChunk] = {}
+        self.embedding_vectors: dict[RagEmbeddingCacheKey, list[float]] = {}
+
+    async def get_chunking_result(self, key: RagChunkingCacheKey) -> RagChunkingResult | None:
+        return self.chunking.get(key)
+
+    async def set_chunking_result(
+            self,
+            key: RagChunkingCacheKey,
+            result: RagChunkingResult,
+    ) -> None:
+        self.chunking[key] = result
+
+    async def get_context_indexed_child(
+            self,
+            key: RagContextIndexingCacheKey,
+    ) -> RagChildChunk | None:
+        return self.context_children.get(key)
+
+    async def set_context_indexed_child(
+            self,
+            key: RagContextIndexingCacheKey,
+            child: RagChildChunk,
+    ) -> None:
+        self.context_children[key] = child
+
+    async def get_embedding_vectors(
+            self,
+            keys: dict[str, RagEmbeddingCacheKey],
+    ) -> dict[str, list[float]]:
+        return {
+            chunk_id: vector
+            for chunk_id, key in keys.items()
+            if (vector := self.embedding_vectors.get(key)) is not None
+        }
+
+    async def set_embedding_vectors(
+            self,
+            vectors: dict[str, tuple[RagEmbeddingCacheKey, list[float]]],
+    ) -> None:
+        for key, vector in vectors.values():
+            self.embedding_vectors[key] = vector
+
+
+class _RecordingGraphCache:
+    def __init__(self) -> None:
+        self.values: dict[RagGraphEnhancementCacheKey, RagGraphEnhancementResult] = {}
+
+    async def get_graph_enhancement(
+            self,
+            key: RagGraphEnhancementCacheKey,
+    ) -> RagGraphEnhancementResult | None:
+        return self.values.get(key)
+
+    async def set_graph_enhancement(
+            self,
+            key: RagGraphEnhancementCacheKey,
+            result: RagGraphEnhancementResult,
+    ) -> None:
+        self.values[key] = result
+
+
 class _RecordingRetrievalRepository:
     def __init__(self, *, chunks: tuple[ScoredChunk, ...] = ()) -> None:
         self.chunks = chunks
@@ -752,13 +1110,13 @@ class _RecordingRetrievalRepository:
         return self.chunks
 
 
-class _RecordingElasticRepository:
+class _RecordingElasticFilter:
     def __init__(self, *, candidate_chunk_ids: tuple[str, ...] | None) -> None:
         self.candidate_chunk_ids = candidate_chunk_ids
-        self.strict_prefilter_calls = []
+        self.filter_candidate_chunk_ids_calls = []
 
-    async def strict_prefilter(self, request):
-        self.strict_prefilter_calls.append(request)
+    async def filter_candidate_chunk_ids(self, request):
+        self.filter_candidate_chunk_ids_calls.append(request)
         return self.candidate_chunk_ids or ()
 
 
@@ -791,4 +1149,7 @@ class _RecordingSoftGate:
 
     async def evaluate(self, answerability_input):
         self.calls.append(answerability_input)
-        return None
+        return RagAnswerabilityWarning(
+            warnings=(RagAnswerabilityWarningReason.PARTIAL_COVERAGE,),
+            guidance="需要补充图证据。",
+        )

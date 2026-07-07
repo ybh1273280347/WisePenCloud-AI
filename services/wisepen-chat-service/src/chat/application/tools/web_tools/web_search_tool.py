@@ -26,6 +26,7 @@ from chat.application.tools.web_tools.search_services.core.errors import (
     WebSearchError,
     WebSearchNetworkError,
 )
+from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
 from chat.application.tools.web_tools.search_services.factories.custom_source_factory import (
     WebSearchCustomSourceFactory,
 )
@@ -37,7 +38,6 @@ from chat.application.tools.web_tools.search_services.result_builders.web import
     build_web_search_tool_return,
 )
 from chat.application.tools.web_tools.search_services.web_search import WebSearchService
-from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
 
 # 边界控制常量（全部通过 tool_settings 调参控制）
 DEFAULT_WEB_SEARCH_RESULTS = tool_settings.WEB_SEARCH_DEFAULT_RESULTS

@@ -1,18 +1,18 @@
 from __future__ import annotations
 
+from chat.application.tools.web_tools.search_services.core.sources import WebSearchRuntimeSource
 from chat.application.tools.web_tools.search_services.hydrators.academic import (
     OpenAlexFailureReason,
     PaperHydrator,
-)
-from chat.application.tools.web_tools.search_services.result_builders.academic import (
-    AcademicHydrationOutcome,
 )
 from chat.application.tools.web_tools.search_services.pipeline.candidates_builder import WebSearchCandidate
 from chat.application.tools.web_tools.search_services.pipeline.search_executor import (
     WebSearchResult,
     execute_provider_search,
 )
-from chat.application.tools.web_tools.search_services.core.sources import WebSearchRuntimeSource
+from chat.application.tools.web_tools.search_services.result_builders.academic import (
+    AcademicHydrationOutcome,
+)
 
 
 class AcademicSearchService:

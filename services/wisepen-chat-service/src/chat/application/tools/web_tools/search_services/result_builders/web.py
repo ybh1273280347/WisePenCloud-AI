@@ -5,7 +5,6 @@ from chat.application.tools.core.tool_return import (
     SuggestedActionPriority,
     ToolReturn,
 )
-from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse
 from chat.application.tools.web_tools.search_services.pipeline.candidates_builder import (
     VisibleWebSearchCandidate,
     WebSearchCandidate,
@@ -13,6 +12,7 @@ from chat.application.tools.web_tools.search_services.pipeline.candidates_builde
 from chat.application.tools.web_tools.search_services.pipeline.search_executor import (
     WebSearchResult,
 )
+from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse
 
 
 def build_web_search_tool_return(

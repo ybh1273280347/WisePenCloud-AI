@@ -4,8 +4,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from common.logger import info
-
 from chat.application.rag.acl import (
     RagAclProjectionError,
     RagAclProjectionProjector,
@@ -17,6 +15,7 @@ from chat.application.rag.kafka_consumers._utils import (
     read_optional_string,
     read_required_string,
 )
+from common.logger import info
 
 
 @dataclass(frozen=True, slots=True)

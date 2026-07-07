@@ -47,7 +47,7 @@
 
 ## 已注册工具
 
-当前 `ToolRegistry` 注册 16 个工具：
+当前 `ToolRegistry` 注册 17 个工具：
 
 | 分组 | 工具 |
 | --- | --- |
@@ -56,6 +56,7 @@
 | session | `tool_content_read`、`tool_content_sequential_read`、`get_historical_chat_messages` |
 | web | `web_search`、`academic_search`、`web_fetch`、`web_crawl` |
 | skill | `load_skill`、`load_skill_asset` |
+| rag | `rag_knowledge_search` |
 
 ## Runtime 信封
 
@@ -300,6 +301,19 @@ LLM selects narrow solver
 ```
 
 Math 工具的模型约束：不访问外部信息，不执行任意 Python，不使用 `cnt_*`/`tfile_*`。
+
+### RAG 工具
+
+```text
+rag_knowledge_search
+  -> RagKnowledgeSearcher
+  -> retrieval_pipeline(Elastic filter + Qdrant retriever + Graph enhancement)
+  -> RankingEngine
+  -> Answerability gates
+  -> lean citations + sanitized evidence context -> cacheable_texts -> cnt_*
+```
+
+RAG 工具的模型约束：只在已知 `resource_id` 和 `corpus_version` 时使用；输出不回显输入资源参数，不暴露 ACL projection、Qdrant point id、Neo4j node id、parent chunk id、child chunk id、rank、score、检索数量或 Elastic 预过滤状态；Hard Gate 拒绝时不得生成实质答案。
 
 ## Tool 文档模板
 

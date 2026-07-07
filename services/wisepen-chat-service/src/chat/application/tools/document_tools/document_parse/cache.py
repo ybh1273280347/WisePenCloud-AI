@@ -14,7 +14,6 @@ from chat.application.tools.common.web_content_cache._utils.metadata import (
 from chat.application.tools.utils.url import FetchedUrl
 from common.logger import warn
 
-
 _DOCUMENT_PARSE_CACHE_PARSER_VERSION = "document_parse:v1"
 
 

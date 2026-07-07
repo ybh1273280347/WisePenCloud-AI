@@ -200,6 +200,7 @@ class RagQdrantRepository:
             "start_offset": child.start_offset,
             "end_offset": child.end_offset,
         }
+        # document_version/corpus_version 只是检索投影标识，不参与模型可控过滤。
         if acl_projection is None:
             return payload
 

@@ -16,6 +16,7 @@ from chat.application.tools.web_tools._search_tool_utils import (
     select_recommended_ids,
     store_candidate_mappings,
 )
+from chat.application.tools.web_tools.search_services.academic_search import AcademicSearchService
 from chat.application.tools.web_tools.search_services.candidate_store.repository_protocol import (
     WebSearchCandidateRepository,
 )
@@ -26,21 +27,20 @@ from chat.application.tools.web_tools.search_services.core.errors import (
     WebSearchError,
     WebSearchNetworkError,
 )
+from chat.application.tools.web_tools.search_services.core.runtime_context import (
+    WebSearchRuntimeConfig,
+)
+from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
 from chat.application.tools.web_tools.search_services.factories.custom_source_factory import (
     WebSearchCustomSourceFactory,
 )
 from chat.application.tools.web_tools.search_services.factories.platform_source_factory import (
     WebSearchPlatformSourceFactory,
 )
-from chat.application.tools.web_tools.search_services.core.runtime_context import (
-    WebSearchRuntimeConfig,
-)
-from chat.application.tools.web_tools.search_services.academic_search import AcademicSearchService
+from chat.application.tools.web_tools.search_services.pipeline.candidates_builder import build_candidates
 from chat.application.tools.web_tools.search_services.result_builders.academic import (
     build_academic_search_tool_return,
 )
-from chat.application.tools.web_tools.search_services.pipeline.candidates_builder import build_candidates
-from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
 
 DEFAULT_ACADEMIC_SEARCH_RESULTS = tool_settings.WEB_SEARCH_DEFAULT_RESULTS
 MAX_ACADEMIC_SEARCH_RESULTS = tool_settings.WEB_SEARCH_MAX_RESULTS

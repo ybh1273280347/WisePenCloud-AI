@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from chat.application.tools.web_tools.search_services.pipeline.candidate_selector import select_candidate_ids
 from chat.application.tools.web_tools.search_services.candidate_store.repository_protocol import (
     WebSearchCandidateRepository,
 )
+from chat.application.tools.web_tools.search_services.pipeline.candidate_selector import select_candidate_ids
 from chat.application.tools.web_tools.search_services.pipeline.candidates_builder import (
     WebSearchCandidate,
     build_candidate_mappings,

@@ -6,7 +6,7 @@ from .models import (
     ToolContentIndexEntry,
     ToolContentReceipt,
 )
-from .protocols import ToolContentRepository
+from .repository_protocol import ToolContentRepository
 
 __all__ = [
     "Metadata",

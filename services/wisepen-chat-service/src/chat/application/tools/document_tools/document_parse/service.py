@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from chat.application.tools.utils.file_type_detect import detect_file_type
 from chat.application.tools.document_tools.document_parse.core.models import DocumentParseRequest, DocumentParseResult
+from chat.application.tools.utils.file_type_detect import detect_file_type
 from .parsers.common_document import CommonDocumentParser
 from .parsers.specialized import PdfParser
 from .parsers.specialized.spreadsheet_parser import (

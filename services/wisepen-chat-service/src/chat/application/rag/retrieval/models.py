@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
+
 class RagRetrievalChannel(StrEnum):
     DENSE = "dense"
     SPARSE = "sparse"
@@ -45,37 +46,9 @@ class RagPermissionScope:
 
 
 @dataclass(frozen=True, slots=True)
-class RagExactFilter:
-    """Elastic strict prefilter 可选精确约束。
-
-    metadata 字段走 keyword/term-level 查询；文本短语走 match_phrase。
-    """
-
-    document_version: str | None = None
-    chunk_ids: tuple[str, ...] = ()
-    page_label: str | None = None
-    anchor_labels: tuple[str, ...] = ()
-    section_path: tuple[str, ...] = ()
-    required_phrases: tuple[str, ...] = ()
-
-    @property
-    def has_constraints(self) -> bool:
-        return bool(
-            self.document_version
-            or self.chunk_ids
-            or self.page_label
-            or self.anchor_labels
-            or self.section_path
-            or self.required_phrases
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class RagElasticStrictPrefilterRequest:
-    query: str
+class RagElasticKeywordFilterRequest:
+    keywords: tuple[str, ...]
     resource_id: str
-    corpus_version: str
-    exact_filter: RagExactFilter | None = None
     permission_scope: RagPermissionScope | None = None
     limit: int = 1000
 
@@ -83,7 +56,6 @@ class RagElasticStrictPrefilterRequest:
 @dataclass(frozen=True, slots=True)
 class RagQdrantRetrievalFilterRequest:
     resource_id: str
-    corpus_version: str
     candidate_chunk_ids: tuple[str, ...] = ()
     permission_scope: RagPermissionScope | None = None
 
@@ -91,7 +63,6 @@ class RagQdrantRetrievalFilterRequest:
 @dataclass(frozen=True, slots=True)
 class RagQdrantRetrievalRequest:
     resource_id: str
-    corpus_version: str
     query_text: str
     query_vector: Sequence[float]
     candidate_chunk_ids: tuple[str, ...] = ()

@@ -11,16 +11,16 @@ from chat.application.tools.web_tools.search_services.core.errors import (
     WebSearchInternalError,
     WebSearchNetworkError,
 )
+from chat.application.tools.web_tools.search_services.core.sources import (
+    WebSearchRuntimeSource,
+    WebSearchSourceKind,
+)
 from chat.application.tools.web_tools.search_services.providers.models import ProviderSearchResponse, SearchProviderName
 from chat.application.tools.web_tools.search_services.searchers import (
     ProviderSearcher,
     SearchProviderError,
     SearchProviderCredentialError,
     SearchProviderNetworkError,
-)
-from chat.application.tools.web_tools.search_services.core.sources import (
-    WebSearchRuntimeSource,
-    WebSearchSourceKind,
 )
 from common.logger import warn
 

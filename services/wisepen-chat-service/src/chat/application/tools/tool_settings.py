@@ -17,6 +17,7 @@ class ToolSettings(BaseModel):
     LOAD_SKILL_TOOL_TIMEOUT_SECONDS: float = 20.0                # 加载技能工具超时
     LOAD_SKILL_ASSET_TOOL_TIMEOUT_SECONDS: float = 8.0           # 加载技能资产工具超时
     MATH_TOOL_TIMEOUT_SECONDS: float = 20.0                      # 数学计算工具超时
+    RAG_KNOWLEDGE_SEARCH_TOOL_TIMEOUT_SECONDS: float = 300.0     # RAG 私有知识库检索工具超时
 
     WEB_SEARCH_TIMEOUT_SECONDS: float = 15.0                     # 网页搜索底层 API 超时
     WEB_FETCH_TIMEOUT_SECONDS: float = 30.0                      # 网页单页抓取超时
@@ -72,6 +73,11 @@ class ToolSettings(BaseModel):
     TOOL_CONTENT_READ_MAX_REGEX_PATTERN_CHARS: int = 500         # 内容读取正则模式最大字符数
     TOOL_CONTENT_READ_DEFAULT_MAX_MATCHES: int = 10              # 内容读取正则默认最大匹配数
     TOOL_CONTENT_READ_MAX_WINDOW_CHARS: int = 100_000            # 内容读取最大上下文窗口字符数
+
+    # ── RAG Behavior (私有知识库检索行为参数) ─────────────────────────
+    RAG_KNOWLEDGE_SEARCH_TOP_K: int = 8                         # RAG 证据条数
+    RAG_KNOWLEDGE_SEARCH_CANDIDATE_LIMIT: int = 80              # RAG 候选召回数量
+    RAG_KNOWLEDGE_SEARCH_ELASTIC_PREFILTER_LIMIT: int = 1000    # RAG Elastic 关键词过滤上限
 
     # ── Math Behavior (数学计算行为参数) ───────────────────────────────
     MATH_TOOL_MAX_EXPRESSION_CHARS: int = 2000                   # 数学表达式最大字符数

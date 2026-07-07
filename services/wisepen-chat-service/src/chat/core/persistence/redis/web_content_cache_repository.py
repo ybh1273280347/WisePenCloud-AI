@@ -6,24 +6,21 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from typing import Any
 
-import redis.asyncio as redis
-
 from chat.application.tools.common.web_content_cache.core.models import (
     WebContentCacheMode,
     WebContentCacheValue,
 )
 from chat.core.persistence.redis._utils import to_jsonable
+from chat.core.persistence.redis.base import RedisRepository
 
 _VALUE_KEY_PREFIX = "wisepen:web_content_cache:value:"
 
 
-class RedisWebContentCacheRepository:
+class RedisWebContentCacheRepository(RedisRepository):
     """Redis 侧：URL 内容缓存读写。"""
 
-    __slots__ = ("_redis",)
-
     def __init__(self, *, redis_url: str) -> None:
-        self._redis = redis.from_url(redis_url, decode_responses=True)
+        super().__init__(redis_url=redis_url)
 
     async def get_value(
             self,

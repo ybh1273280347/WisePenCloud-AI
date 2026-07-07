@@ -44,6 +44,29 @@ def test_qdrant_permission_filter_keeps_group_acl_exceptions_nested() -> None:
     assert nested.filter.must_not[0].key == "excluded_read_users"
 
 
+def test_neo4j_permission_predicate_matches_read_acl_scope() -> None:
+    predicate, params = RagPermissionFilterBuilder().build_neo4j_predicate(
+        RagPermissionScope(
+            user_id="user-1",
+            group_role_map={
+                "managed": "OWNER",
+                "joined": "MEMBER",
+            },
+        ),
+        node_alias="candidate",
+    )
+
+    assert "candidate.owner_id = $rag_acl_user_id" in predicate
+    assert "candidate.readable_users" in predicate
+    assert "candidate.computed_group_acls" in predicate
+    assert "excluded_read_users" in predicate
+    assert params == {
+        "rag_acl_user_id": "user-1",
+        "rag_acl_managed_group_ids": ["managed"],
+        "rag_acl_joined_group_ids": ["managed", "joined"],
+    }
+
+
 def test_qdrant_retrieval_filter_appends_permission_scope() -> None:
     retriever = RagQdrantRetriever(
         client=_FakeQdrantClient(),
@@ -55,7 +78,6 @@ def test_qdrant_retrieval_filter_appends_permission_scope() -> None:
     query = retriever.build_retrieval_filter(
         RagQdrantRetrievalFilterRequest(
             resource_id="res-1",
-            corpus_version="corpus-1",
             candidate_chunk_ids=("chunk-a", "chunk-b"),
             permission_scope=RagPermissionScope(
                 user_id="user-1",
@@ -65,12 +87,11 @@ def test_qdrant_retrieval_filter_appends_permission_scope() -> None:
     )
 
     assert query.must is not None
-    assert [condition.key for condition in query.must[:3]] == [
+    assert [condition.key for condition in query.must[:2]] == [
         "resource_id",
-        "corpus_version",
         "chunk_id",
     ]
-    assert query.must[3].should is not None
+    assert query.must[2].should is not None
 
 
 @pytest.mark.anyio
@@ -146,7 +167,6 @@ async def test_qdrant_retrieve_uses_dense_sparse_rrf_prefetch() -> None:
     chunks = await retriever.retrieve(
         RagQdrantRetrievalRequest(
             resource_id="res-1",
-            corpus_version="3",
             query_text="AppBuilder API Key",
             query_vector=[0.1, 0.2],
             candidate_chunk_ids=("chunk-a",),

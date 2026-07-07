@@ -5,24 +5,21 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
-import redis.asyncio as redis
-
 from chat.application.tools.common.tool_run_file_store.core.models import ToolFileRefRecord
 from chat.application.tools.common.tool_run_file_store.core.protocols import ToolRunFileRepository
 from chat.core.persistence.redis._utils import to_jsonable
+from chat.core.persistence.redis.base import RedisRepository
 
 # --- 全局命名空间配置 ---
 _REF_KEY_PREFIX = "wisepen:tool_file_ref:item:"
 _SESSION_KEY_PREFIX = "wisepen:tool_file_ref:session:"
 
 
-class RedisToolRunFileRepository(ToolRunFileRepository):
+class RedisToolRunFileRepository(RedisRepository, ToolRunFileRepository):
     """Redis 元数据仓库，用于 `tfile_*` 引用。"""
 
-    __slots__ = ("_redis",)
-
     def __init__(self, *, redis_url: str) -> None:
-        self._redis = redis.from_url(redis_url, decode_responses=True)
+        super().__init__(redis_url=redis_url)
 
     async def put(self, record: ToolFileRefRecord, *, ttl_seconds: int) -> None:
         """写入文件引用元数据。"""

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from chat.application.tools.web_tools.search_services.core.sources import WebSearchRuntimeSource
 from chat.application.tools.web_tools.search_services.pipeline.search_executor import (
     WebSearchResult,
     execute_provider_search,
 )
-from chat.application.tools.web_tools.search_services.core.sources import WebSearchRuntimeSource
 
 
 class WebSearchService:

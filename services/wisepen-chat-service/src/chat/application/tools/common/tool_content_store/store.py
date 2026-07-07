@@ -20,7 +20,7 @@ from .core.models import (
     ToolContentIndexEntry,
     ToolContentReceipt,
 )
-from .core.protocols import ToolContentRepository
+from .core.repository_protocol import ToolContentRepository
 
 DEFAULT_TOOL_CONTENT_TTL_SECONDS = tool_settings.TOOL_CONTENT_DEFAULT_TTL_SECONDS
 DEFAULT_TOOL_CONTENT_MAX_CHARS = tool_settings.TOOL_CONTENT_MAX_CHARS

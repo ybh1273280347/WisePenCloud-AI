@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from chat.application.tools.math_tools.core.base_tool import MathSolveTool
-from chat.application.tools.math_tools.solvers.expression_solver import ExpressionSolver
 from chat.application.tools.math_tools.core.tasks import ExpressionTask
+from chat.application.tools.math_tools.solvers.expression_solver import ExpressionSolver
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",

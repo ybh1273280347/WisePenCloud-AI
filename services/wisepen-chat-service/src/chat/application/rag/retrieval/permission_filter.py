@@ -4,7 +4,7 @@ from typing import Any
 
 from qdrant_client import models as qdrant_models
 
-from ..models import RagPermissionScope
+from .models import RagPermissionScope
 
 
 class RagPermissionFilterBuilder:
@@ -119,6 +119,37 @@ class RagPermissionFilterBuilder:
             )
 
         return qdrant_models.Filter(should=should)
+
+    def build_neo4j_predicate(
+            self,
+            scope: RagPermissionScope,
+            *,
+            node_alias: str,
+    ) -> tuple[str, dict[str, Any]]:
+        """生成 Neo4j 侧和 Elastic/Qdrant 同语义的 VIEW/read ACL 谓词。"""
+        # RAG 证据会进入模型上下文，这里必须按内容读取权限过滤，不能退化为 discover 权限。
+        params = {
+            "rag_acl_user_id": scope.user_id,
+            "rag_acl_managed_group_ids": list(scope.managed_group_ids),
+            "rag_acl_joined_group_ids": list(scope.joined_group_ids),
+        }
+        predicate = f"""
+        (
+          {node_alias}.owner_id = $rag_acl_user_id
+          OR $rag_acl_user_id IN coalesce({node_alias}.readable_users, [])
+          OR any(acl IN coalesce({node_alias}.computed_group_acls, [])
+                 WHERE acl.group_id IN $rag_acl_managed_group_ids)
+          OR any(acl IN coalesce({node_alias}.computed_group_acls, [])
+                 WHERE acl.group_id IN $rag_acl_joined_group_ids
+                   AND acl.is_readable = true
+                   AND NOT $rag_acl_user_id IN coalesce(acl.excluded_read_users, []))
+          OR any(acl IN coalesce({node_alias}.computed_group_acls, [])
+                 WHERE acl.group_id IN $rag_acl_joined_group_ids
+                   AND acl.is_readable = false
+                   AND $rag_acl_user_id IN coalesce(acl.readable_users, []))
+        )
+        """
+        return predicate, params
 
     def _nested_group_acl_filter(
             self,

@@ -39,6 +39,11 @@ TOOL_CATALOG_ITEMS = (
             "expression_solver",
         ),
     ),
+    ToolCatalogItem(
+        key="rag_knowledge_search",
+        label="知识库问答",
+        tool_names=("rag_knowledge_search",),
+    ),
 )
 
 

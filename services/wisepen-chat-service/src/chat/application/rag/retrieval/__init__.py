@@ -1,12 +1,5 @@
-from .filters import RagPermissionFilterBuilder
-from .hybrid_retriever import (
-    RagHybridRetrievalRequest,
-    RagHybridRetrievalResult,
-    RagHybridRetriever,
-)
 from .models import (
-    RagElasticStrictPrefilterRequest,
-    RagExactFilter,
+    RagElasticKeywordFilterRequest,
     RagGroupRole,
     RagPermissionScope,
     RagQdrantRetrievalRequest,
@@ -15,25 +8,32 @@ from .models import (
     RagRetrievalProfile,
     ScoredChunk,
 )
-from .retrievers import (
-    RagElasticRetriever,
+from .permission_filter import RagPermissionFilterBuilder
+from .pipeline import (
+    RagElasticFilter,
+    RagGraphEnhancement,
     RagQdrantRetriever,
+)
+from .retrieval_pipeline import (
+    RagRetrievalPipeline,
+    RagRetrievalPipelineRequest,
+    RagRetrievalPipelineResult,
 )
 
 # retrieval 只表达从 Qdrant、Elastic、图谱等索引抽取出的证据候选。
 __all__ = [
-    "RagElasticStrictPrefilterRequest",
-    "RagExactFilter",
-    "RagElasticRetriever",
+    "RagElasticKeywordFilterRequest",
+    "RagElasticFilter",
+    "RagGraphEnhancement",
     "RagGroupRole",
-    "RagHybridRetrievalRequest",
-    "RagHybridRetrievalResult",
-    "RagHybridRetriever",
     "RagPermissionFilterBuilder",
     "RagPermissionScope",
     "RagQdrantRetrievalFilterRequest",
     "RagQdrantRetrievalRequest",
     "RagQdrantRetriever",
+    "RagRetrievalPipeline",
+    "RagRetrievalPipelineRequest",
+    "RagRetrievalPipelineResult",
     "RagRetrievalChannel",
     "RagRetrievalProfile",
     "ScoredChunk",
