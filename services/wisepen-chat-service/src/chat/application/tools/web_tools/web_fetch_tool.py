@@ -11,12 +11,7 @@ from chat.application.tools.core import (
     ToolPolicy,
     ToolRiskLevel,
 )
-from chat.application.tools.core.tool_return import (
-    SuggestedAction,
-    SuggestedActions,
-    SuggestedActionPriority,
-    ToolReturn,
-)
+from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
 from chat.application.tools.web_tools.fetch_services import FetchCoordinator
@@ -189,27 +184,6 @@ class WebFetchTool:
                 retryable=False,
             ) from exc
 
-        # 3. 动态计算下一步建议行为 (Suggested Actions)
-        # 始终建议 tool_content_read；若存在文件类型引用则追加 document_parse
-        has_file_ref = any(r.file_ref is not None for r in batch.items)
-        action_list = [
-            SuggestedAction(
-                tool_name="tool_content_read",
-                mode="ranked_expand",
-                reason="Search the fetched markdown for answer-relevant windows.",
-                priority=SuggestedActionPriority.HIGH,
-            ),
-        ]
-        if has_file_ref:
-            action_list.append(
-                SuggestedAction(
-                    tool_name="document_parse",
-                    reason="Parse the fetched non-HTML file(s) to extract their content.",
-                    priority=SuggestedActionPriority.HIGH,
-                ),
-            )
-        suggested = SuggestedActions(suggested_actions=tuple(action_list))
-
         cacheable_texts = tuple(r.markdown for r in batch.items if r.markdown)
 
         # visible_result 中只保留模型可直接消费的来源和下游定位符，正文走 cacheable_texts。
@@ -229,7 +203,6 @@ class WebFetchTool:
         visible_result: dict[str, object] = {
             "items": tuple(visible_items),
             "failed": batch.failed,
-            "suggested_actions": suggested,
         }
         if batch.warnings:
             visible_result["warnings"] = batch.warnings

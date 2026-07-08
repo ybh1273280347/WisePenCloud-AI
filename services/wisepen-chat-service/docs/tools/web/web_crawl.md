@@ -65,7 +65,6 @@ crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `we
 | `visible_result.seed_url` | 起点 URL。 |
 | `visible_result.pages_crawled` | 成功页面数。 |
 | `visible_result.pages` | 每页 `url`、`final_url`、`title`、`markdown_length`、`warnings`。 |
-| `visible_result.suggested_actions` | 建议用 `tool_content_read(mode="ranked_expand")` 在爬取内容中定位答案；命中单个内容后可用 `tool_content_sequential_read` 继续阅读。 |
 | `cacheable_texts` | 每个页面的 Markdown。 |
 
 如果没有任何页面可抓取，工具抛出 `web_crawl_empty_result`。
@@ -73,7 +72,7 @@ crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `we
 ## 工具链协作
 
 - `web_search -> web_fetch` 更适合开放网络找候选再读几个页面。
-- `web_crawl -> tool_content_read` 更适合同站多页采集后的跨页检索。
+- `web_crawl -> tool_content_rerank_read / tool_content_regex_read` 更适合同站多页采集后的跨页检索。
 - `web_crawl` 不产生 `search_ref`、不产生 `tfile_*`、不解析文件。
 
 ## 可插拔组件

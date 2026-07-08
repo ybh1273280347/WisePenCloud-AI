@@ -1,4 +1,5 @@
-﻿import socket
+﻿import os
+import socket
 from typing import Callable, Optional
 
 from v2.nacos import (
@@ -31,26 +32,24 @@ class NacosClientManager:
         self._naming_client: Optional[NacosNamingService] = None
 
     def _build_client_config(self):
+        builder = (
+            ClientConfigBuilder()
+            .server_address(self.bootstrap_settings.NACOS_SERVER_ADDR)
+            .namespace_id(self.bootstrap_settings.NACOS_NAMESPACE_ID)
+            .log_level("INFO")
+            .grpc_config(GRPCConfig(grpc_timeout=5000))
+        )
+        if cache_dir := os.getenv("NACOS_CACHE_DIR"):
+            builder.cache_dir(cache_dir)
+
         if self.bootstrap_settings.NACOS_USERNAME and self.bootstrap_settings.NACOS_PASSWORD:
             return (
-                ClientConfigBuilder()
-                .server_address(self.bootstrap_settings.NACOS_SERVER_ADDR)
+                builder
                 .username(self.bootstrap_settings.NACOS_USERNAME)
                 .password(self.bootstrap_settings.NACOS_PASSWORD)
-                .namespace_id(self.bootstrap_settings.NACOS_NAMESPACE_ID)
-                .log_level("INFO")
-                .grpc_config(GRPCConfig(grpc_timeout=5000))
                 .build()
             )
-        else:
-            return (
-                ClientConfigBuilder()
-                .server_address(self.bootstrap_settings.NACOS_SERVER_ADDR)
-                .namespace_id(self.bootstrap_settings.NACOS_NAMESPACE_ID)
-                .log_level("INFO")
-                .grpc_config(GRPCConfig(grpc_timeout=5000))
-                .build()
-            )
+        return builder.build()
 
     async def _get_config_client(self) -> NacosConfigService | None:
         if self._config_client is None:

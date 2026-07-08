@@ -33,7 +33,7 @@
 
 ### 大文本与文件
 
-- 大文本读取统一走 `ToolContentStore` 和 `tool_content_read`。
+- 大文本读取统一走 `ToolContentStore` 和 session 内容读取工具。
 - 工具间文件传递统一用 `tfile_*`。
 - 不要把本地路径、base64、OSS key 或工具私有缓存 ID 混进这两个协议。
 
@@ -44,7 +44,7 @@
 
 ### 统一切面
 
-- preflight、渲染、输出缓存、`ToolContentStore`、`ToolRunFileStore`、`web_content_cache`、GC 和 suggested actions 都不是单个工具的私有逻辑。
+- preflight、渲染、输出缓存、`ToolContentStore`、`ToolRunFileStore`、`web_content_cache` 和 GC 都不是单个工具的私有逻辑。
 - 工具实现前先确认这些切面能不能表达需求，再决定要不要写新业务代码。
 
 ### 文档迁移方案

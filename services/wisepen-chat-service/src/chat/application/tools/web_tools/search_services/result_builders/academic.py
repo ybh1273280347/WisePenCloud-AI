@@ -2,11 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from chat.application.tools.core.tool_return import (
-    SuggestedAction,
-    SuggestedActionPriority,
-    ToolReturn,
-)
+from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.web_tools.search_services.hydrators.academic import HydratedPaperAuthor
 from chat.application.tools.web_tools.search_services.pipeline.candidates_builder import WebSearchCandidate
 
@@ -71,11 +67,6 @@ def build_academic_search_tool_return(
                 for outcome in outcomes
             ),
             "recommended_ids": recommended_ids,
-            "suggested_action": SuggestedAction(
-                tool_name="web_fetch",
-                reason="Fetch selected academic search refs before using them as evidence.",
-                priority=SuggestedActionPriority.HIGH,
-            ),
         },
         cacheable_texts=(),
     )

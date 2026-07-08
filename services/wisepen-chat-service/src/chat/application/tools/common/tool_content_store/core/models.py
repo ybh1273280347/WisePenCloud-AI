@@ -66,4 +66,4 @@ class ToolContentReceipt:
     chunk_count: int  # 可用于 selector.chunk_indices 的 chunk 数量
     supported_selectors: tuple[
         str, ...
-    ] = ()  # 后续 tool_content_read 可支持的 selector 类型
+    ] = ()  # 后续 session 读取工具可支持的 selector 类型

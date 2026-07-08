@@ -1,18 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 
 from chat.application.tools.tool_settings import tool_settings
 
 DEFAULT_MAX_MATCHES = tool_settings.TOOL_CONTENT_READ_DEFAULT_MAX_MATCHES
-
-
-class ToolContentReadMode(StrEnum):
-    """ToolContentRead 支持的读取模式（字符串枚举）。"""
-
-    RANKED_EXPAND = "ranked_expand"  # 在候选 chunk 内排序后展开窗口
-    REGEX_MATCH = "regex_match"  # 在候选 chunk 内正则匹配后展开窗口
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +31,6 @@ class ToolContentReadRequest:
     """ToolContentRead 内部请求，包含所有读取参数。"""
 
     content_ids: tuple[str, ...]  # 要批量读取的内容 ID 集合
-    mode: ToolContentReadMode = ToolContentReadMode.RANKED_EXPAND  # 读取模式
     selector: ToolContentSelector | None = None  # 前置过滤器
     query: str | None = None  # ranked_expand 模式：排序查询文本
     top_k: int = 5  # ranked_expand 模式：返回 Top-K
@@ -80,7 +71,7 @@ class ToolContentReadMatch:
 
 @dataclass(frozen=True, slots=True)
 class ToolContentReadResult:
-    """tool_content_read 的全局有序结果。"""
+    """session 内容读取工具的全局有序结果。"""
 
     matches: tuple[ToolContentReadMatch, ...] = ()
     failed: tuple[ToolContentReadMatch, ...] = ()

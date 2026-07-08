@@ -59,7 +59,8 @@ from chat.application.tools.math_tools import (
 from chat.application.tools.rag_tools import RagKnowledgeSearchTool
 from chat.application.tools.session_tools import (
     GetHistoricalChatMessagesTool,
-    ToolContentReadTool,
+    ToolContentRegexReadTool,
+    ToolContentRerankReadTool,
     ToolContentSequentialReadTool,
 )
 from chat.application.tools.skill_tools import LoadSkillAssetTool, LoadSkillTool
@@ -739,8 +740,12 @@ class Container(containers.DeclarativeContainer):
         message_repo=message_repo,
         max_output_chars=settings.TOOL_RESULT_MAX_CHARS,
     )
-    tool_content_read_tool = providers.Singleton(
-        ToolContentReadTool,
+    tool_content_rerank_read_tool = providers.Singleton(
+        ToolContentRerankReadTool,
+        content_store=tool_content_store,
+    )
+    tool_content_regex_read_tool = providers.Singleton(
+        ToolContentRegexReadTool,
         content_store=tool_content_store,
     )
     tool_content_sequential_read_tool = providers.Singleton(
@@ -803,7 +808,8 @@ class Container(containers.DeclarativeContainer):
         equation_solver_tool,
         stats_solver_tool,
         expression_solver_tool,
-        tool_content_read_tool,
+        tool_content_rerank_read_tool,
+        tool_content_regex_read_tool,
         tool_content_sequential_read_tool,
         web_search_tool,
         academic_search_tool,

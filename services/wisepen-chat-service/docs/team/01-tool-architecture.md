@@ -176,11 +176,14 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 
 ## 当前稳定工具约定
 
-### `tool_content_read`
+### `tool_content_rerank_read` / `tool_content_regex_read`
 
 - 默认暴露。
 - 只通过 `content_ids` 批量读取 `cnt_*`。
 - 一次调用内所有 `content_ids` 共用同一组读取参数。
+- `tool_content_rerank_read` 只做自然语言重排检索，必填 `query`。
+- `tool_content_regex_read` 只做正则精确匹配，必填 `pattern`。
+- 两个工具都不再暴露 `mode` 路由字段。
 - 单项读取失败返回 failed item，不拖垮整次工具调用。
 
 ### `document_parse`

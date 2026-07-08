@@ -65,7 +65,6 @@ question
 - `candidates`
 - `recommended_ids`
 - `supplier_answers`
-- `suggested_action`
 
 候选对模型只暴露：
 
@@ -84,19 +83,11 @@ question
 - `web_fetch` 负责消费 `search_ref` 抓取正文。
 - 模型不应伪造 `search_ref`。
 
-## Suggested Actions
-
-当前建议：
-
-- `web_fetch(search_refs=[...])`
-
-补充约束：
+## 后续读取约束
 
 - `supplier_answers` 和候选摘要仍可暴露给模型作为检索提示；若摘要已经足以回答用户问题，可以不继续调用 `web_fetch`。
 - 候选选择小模型不再读取 `supplier_answers`，只看候选自身字段。
 - 候选选择小模型每次输出 1 到 5 个候选编号，宁缺勿滥，不强制凑满 5 个。
-
-不再暴露任何 hydrate 工具建议。
 
 ## 相关文件
 

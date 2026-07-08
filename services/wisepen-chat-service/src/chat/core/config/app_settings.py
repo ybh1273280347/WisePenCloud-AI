@@ -159,20 +159,20 @@ class AppSettings(BaseModel):
 
 def _run_async(coro):
     """在新线程的独立事件循环中执行协程，兼容 uvicorn 启动时已有运行中事件循环的场景。"""
-    result, e = None, None
+    result, error = None, None
 
     def _target():
-        nonlocal result, e
+        nonlocal result, error
         try:
             result = asyncio.run(coro)
-        except Exception as e:
-            e = e
+        except Exception as exc:
+            error = exc
 
     t = threading.Thread(target=_target)
     t.start()
     t.join()
-    if e:
-        raise e
+    if error:
+        raise error
     return result
 
 

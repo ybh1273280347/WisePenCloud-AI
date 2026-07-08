@@ -20,7 +20,7 @@
 
 - 不知道目标 `resource_id`。
 - 用户要实时互联网信息，应使用 `web_search` / `web_fetch`。
-- 用户要读取已有 `cnt_*` 内容，应使用 `tool_content_read` 或 `tool_content_sequential_read`。
+- 用户要读取已有 `cnt_*` 内容，应使用 `tool_content_rerank_read`、`tool_content_regex_read` 或 `tool_content_sequential_read`。
 - 不得让模型传入用户 ID、群组角色、ACL projection、Qdrant point id、Neo4j node id 或 chunk 内部 ID。
 
 ## 参数契约

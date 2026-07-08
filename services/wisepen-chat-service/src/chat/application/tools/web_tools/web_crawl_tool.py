@@ -10,11 +10,7 @@ from chat.application.tools.core import (
     ToolPolicy,
     ToolRiskLevel,
 )
-from chat.application.tools.core.tool_return import (
-    SuggestedAction,
-    SuggestedActionPriority,
-    ToolReturn,
-)
+from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
 from chat.application.tools.web_tools.fetch_services import WebCrawler
@@ -211,12 +207,6 @@ class WebCrawlTool:
                 "seed_url": seed_url,
                 "pages_crawled": len(results),
                 "pages": pages_summary,
-                "suggested_action": SuggestedAction(
-                    tool_name="tool_content_read",
-                    mode="ranked_expand",
-                    reason="Search the crawled pages' markdown for answer-relevant windows.",
-                    priority=SuggestedActionPriority.HIGH,
-                ),
             },
             cacheable_texts=cacheable_texts,
         )

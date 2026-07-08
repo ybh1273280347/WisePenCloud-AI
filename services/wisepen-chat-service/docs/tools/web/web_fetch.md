@@ -84,7 +84,6 @@ src/chat/application/tools/common/web_content_cache/
 | `visible_result.items` | 每个成功 URL 的轻量元数据，包含 `source_url`、`final_url`、`status_code`、`content_type`、`title`、`warnings`、`file_ref`、`file_label`、`source_scope`。 |
 | `visible_result.failed` | 单 URL 失败列表；批量中单项失败不阻断其它 URL。 |
 | `visible_result.warnings` | 批量级 warning。 |
-| `visible_result.suggested_actions` | 通常建议 `tool_content_read`；若有 `file_ref`，同时建议 `document_parse`。 |
 | `cacheable_texts` | HTML Markdown。超出内联阈值后变成 `cnt_*`。 |
 
 visible result 不直接携带 Markdown，避免大正文污染模型上下文。
@@ -93,7 +92,7 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 
 - `web_search -> web_fetch(search_refs=[...])`：标准搜索证据链。
 - `web_fetch -> document_parse(file_refs=[...])`：不确定 URL 命中非 HTML 文件后的解析链。
-- `web_fetch -> tool_content_read`：HTML 正文进入 `cnt_*` 后的跨文档内容检索链；命中具体内容后可继续调用 `tool_content_sequential_read`。
+- `web_fetch -> tool_content_rerank_read / tool_content_regex_read`：HTML 正文进入 `cnt_*` 后的跨文档内容检索链；命中具体内容后可继续调用 `tool_content_sequential_read`。
 - 与 `document_parse(direct_urls=[...])` 共享 URL 缓存和 fetcher 能力，这是正确的强耦合。
 
 ## 可插拔组件

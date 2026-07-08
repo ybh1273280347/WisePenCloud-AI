@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from chat.application.tools.core.tool_return import (
-    SuggestedAction,
-    SuggestedActionPriority,
-    ToolReturn,
-)
+from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.web_tools.search_services.pipeline.candidates_builder import (
     VisibleWebSearchCandidate,
     WebSearchCandidate,
@@ -30,16 +26,6 @@ def build_web_search_tool_return(
     """
     supplier_answers = tuple(dict.fromkeys(r.answer for r in responses if r.answer))
 
-    suggested_action = SuggestedAction(
-        tool_name="web_fetch",
-        reason=(
-            "Use supplier answers and candidate summaries as retrieval hints. "
-            "If those summaries fully answer the question, web_fetch is optional; "
-            "fetch selected search refs when you need stronger evidence, details, or verification."
-        ),
-        priority=SuggestedActionPriority.HIGH,
-    )
-
     visible_result: dict[str, object] = {
         "query": result.query,
         "candidates": tuple(
@@ -52,7 +38,6 @@ def build_web_search_tool_return(
             for candidate in candidates
         ),
         "recommended_ids": recommended_ids,
-        "suggested_action": suggested_action,
     }
     if supplier_answers:
         visible_result["supplier_answers"] = supplier_answers

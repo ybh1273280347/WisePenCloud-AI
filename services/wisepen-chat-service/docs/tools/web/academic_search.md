@@ -99,7 +99,6 @@ OpenAlex 只作为可选水合来源，不参与工具暴露判断。
 可见结果还包含：
 
 - `recommended_ids`
-- `suggested_action`
 
 ## 相关文件
 

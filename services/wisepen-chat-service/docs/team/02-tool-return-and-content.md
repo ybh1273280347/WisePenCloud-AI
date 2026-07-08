@@ -2,7 +2,7 @@
 
 > 一句话：普通结果交给统一渲染器；大文本交给 `ToolReturn` 和 `ToolOutputCache`。
 
-本文约束工具返回值、`ToolReturn`、输出渲染、运行时内容缓存和 `tool_content_read` 的职责边界。
+本文约束工具返回值、`ToolReturn`、输出渲染、运行时内容缓存和 session 内容读取工具的职责边界。
 
 跨工具统一切面总览见 [06-tool-cross-cutting-flow](06-tool-cross-cutting-flow.md)。本文聚焦返回值、模型可见输出和内容托管。
 
@@ -52,19 +52,7 @@ return ToolReturn(
 - `visible_result` 放模型马上需要理解的结构化信息。
 - `cacheable_texts` 只放运行时托管的大文本。
 - 不在 `visible_result` 中暴露 `cacheable_texts` 的内部下标；后续读取凭证由统一缓存切面追加 `<contents>` 或 `<content_receipt>`。
-- 通用 ToolReturn 包装能表达清楚意图时应优先使用，例如 `SuggestedAction` / `SuggestedActions`。
-
-## SuggestedAction
-
-`SuggestedAction` 用于给模型提示一个后续可选工具和 route-level mode。
-
-规则：
-
-- 可以放进 `ToolReturn.visible_result`。
-- 只有一个推荐动作时直接使用 `SuggestedAction`；多个动作时才使用 `SuggestedActions`。
-- 只放工具名、mode、原因、优先级和轻量 metadata。
-- 不放具体工具调用参数，例如 `content_ids`、`file_refs`、`query`、`offset`、`limit`。
-- 它是提示，不是强制计划，模型仍应按当前任务目标决定是否调用。
+- 不再在工具返回中提示下一步工具；工具链选择由工具描述、文档和模型当前任务目标共同决定。
 
 ## 分批缓存规则
 
@@ -122,17 +110,29 @@ return ToolReturn(
 
 `web_fetch`、`web_crawl`、`document_parse` 可以共享 URL cache，这是核心外界信息获取工具体系的正确耦合。
 
-## tool_content_read 规则
+## Session 内容读取规则
 
-`tool_content_read` 是按同一组读取参数读取 receipt-backed 内容的工具入口。
+receipt-backed 内容读取拆成三个独立工具入口：
 
-入参使用批量字段：
+- `tool_content_rerank_read`：跨一个或多个 content 做自然语言重排检索。
+- `tool_content_regex_read`：跨一个或多个 content 做正则精确匹配。
+- `tool_content_sequential_read`：按 offset 顺序读取单个 content。
+
+`tool_content_rerank_read` 入参使用批量字段：
 
 ```json
 {
   "content_ids": ["cnt_xxx", "cnt_yyy"],
-  "mode": "ranked_expand",
   "query": "..."
+}
+```
+
+`tool_content_regex_read` 入参使用批量字段：
+
+```json
+{
+  "content_ids": ["cnt_xxx", "cnt_yyy"],
+  "pattern": "..."
 }
 ```
 
@@ -140,18 +140,18 @@ return ToolReturn(
 
 - 不支持单值 `content_id` 入参。
 - `content_ids` 最多 64 个；超单批上限时由工具门面自动分批。
-- 一次调用内所有 `content_ids` 共用同一组 `mode / selector / window` 参数。
+- 一次调用内所有 `content_ids` 共用同一组 `selector / window` 参数。
 - 单个 `content_id` 不存在、过期或不可读时，该项进入 `failed`，不影响其它项。
-- 请求级错误才抛工具错误，例如缺少 `content_ids`、缺少 `mode`、模式必要参数缺失。
+- 请求级错误才抛工具错误，例如缺少 `content_ids`、`query` 或 `pattern`。
 - 返回普通结构化结果，窗口文本直接放在 `matches[*].window.text`。
-- 禁止使用 `ToolReturn.cacheable_texts` 重新缓存读取窗口；`tool_content_read` 只消费已有 `cnt_*`，不生产新的 `cnt_*`。
+- 禁止使用 `ToolReturn.cacheable_texts` 重新缓存读取窗口；session 内容读取工具只消费已有 `cnt_*`，不生产新的 `cnt_*`。
 
-支持模式：
+支持工具：
 
-| mode | 用途 | 必要参数 |
+| tool | 用途 | 必要参数 |
 | --- | --- | --- |
-| `ranked_expand` | 跨一个或多个 content 做全局语义排序后展开 | `query`, `top_k` |
-| `regex_match` | 跨一个或多个 content 做全局正则匹配后展开 | `pattern`, `max_matches` |
+| `tool_content_rerank_read` | 跨一个或多个 content 做全局语义排序后展开 | `query`, `top_k` |
+| `tool_content_regex_read` | 跨一个或多个 content 做全局正则匹配后展开 | `pattern`, `max_matches` |
 
 Selector 是候选域过滤器，应先过滤再读取或排序。多个 selector 条件取交集。
 
@@ -206,7 +206,7 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 - 普通 HTML 页面 URL 不走 `document_parse`，应使用 `web_fetch` / `web_crawl`；明显文件直链不要先包一层 `web_fetch`。
 - 工具内部并发解析，单项失败不影响其它文件。
 - 每个成功文件对应一段 `cacheable_texts`，由 `ToolOutputCache` 分批生成多个 `cnt_*`。
-- 返回中应包含单个 `SuggestedAction`，推荐后续用 `tool_content_read` 的 `ranked_expand` 读取解析后的 Markdown。
+- 后续可用 `tool_content_rerank_read` 或 `tool_content_regex_read` 读取解析后的 Markdown。
 
 `web_fetch` 和 `document_parse` 是同一核心外界信息获取工具体系里的两个阶段化入口。二者共享 URL 内容缓存、HTTP 下载能力和 `source_kind/source_scope/source_url` metadata 是正确行为：它保证网页正文、文件直链和 web_fetch 产出的非 HTML 文件都能落在统一 URL 缓存路径上。
 
@@ -233,7 +233,7 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 - 持久化开关。
 - 工具是否可读取的权限开关。
 
-如果后续需要 `tool_content_read` 的 `ranked_expand`、`regex_match` 或 `tool_content_sequential_read` 的稳定定位信息，应保持 `cache_chunked=True`。
+如果后续需要 `tool_content_rerank_read`、`tool_content_regex_read` 或 `tool_content_sequential_read` 的稳定定位信息，应保持 `cache_chunked=True`。
 
 如果内容只需要按 offset 顺序读，不需要索引，可以设置 `cache_chunked=False`。
 
@@ -249,7 +249,7 @@ Selector 是候选域过滤器，应先过滤再读取或排序。多个 selecto
 | 自定义缓存 | 是否存在工具内自定义缓存、手写 receipt 或重复读取协议。 |
 | URL 复用 | 是否把 URL 复用放进 `web_content_cache`，而不是混入 `ToolContentStore`。 |
 | 模型暴露 | 是否把 URL cache Redis key、本地路径或 object key 暴露给模型。 |
-| `tool_content_read` | 是否只返回读取窗口，未把窗口文本再次放入 `ToolReturn.cacheable_texts`。 |
+| session 内容读取 | 是否只返回读取窗口，未把窗口文本再次放入 `ToolReturn.cacheable_texts`。 |
 | `tool_content_sequential_read` | 是否保持单 `content_id` 顺序读取边界，没有把它做成跨文档搜索工具。 |
 | `cache_chunked` | 是否只用于控制 chunk/index。 |
 | `cnt_*` 隔离 | `cnt_*` 是否经过 `session_id` 隔离读取。 |

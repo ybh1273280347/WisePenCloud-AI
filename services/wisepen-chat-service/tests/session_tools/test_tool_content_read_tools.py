@@ -26,11 +26,11 @@ ranking_engine_registry_stub = types.ModuleType("chat.application.utils.ranking_
 ranking_engine_registry_stub.get_ranking_engine = lambda _: object()
 sys.modules.setdefault("chat.application.utils.ranking_engine.registry", ranking_engine_registry_stub)
 
-from chat.application.tools.core import ExactlyOneOfCheck, ToolInvocation
 from chat.application.tools.session_tools.tool_content_read.models import (
     ToolContentReadResult,
 )
-from chat.application.tools.session_tools.tool_content_read_tool import ToolContentReadTool
+from chat.application.tools.session_tools.tool_content_regex_read_tool import ToolContentRegexReadTool
+from chat.application.tools.session_tools.tool_content_rerank_read_tool import ToolContentRerankReadTool
 
 
 class _FakeReadService:
@@ -46,40 +46,35 @@ class _FakeReadService:
         return ToolContentReadResult()
 
 
-@pytest.mark.asyncio
-async def test_tool_content_read_query_pattern_one_of_preflight() -> None:
-    tool = ToolContentReadTool(content_store=object())
+def test_tool_content_rerank_read_schema_has_no_mode() -> None:
+    tool = ToolContentRerankReadTool(content_store=object())
+    schema = tool.definition.llm_spec.parameters_schema
 
-    result = await ExactlyOneOfCheck().check(
-        ToolInvocation(
-            tool_call_id="call_1",
-            tool_name="tool_content_read",
-            tool_call_arguments={
-                "content_ids": ["cnt_1"],
-                "mode": "ranked_expand",
-                "query": "what matters",
-                "pattern": "what.*",
-            },
-        ),
-        tool.definition.policy,
-        tool.definition.llm_spec.parameters_schema,
-        {"session_id": "s1"},
-    )
+    assert tool.definition.llm_spec.name == "tool_content_rerank_read"
+    assert schema.required == ("content_ids", "query")
+    assert "mode" not in schema.properties
+    assert "pattern" not in schema.properties
 
-    assert result.ok is False
-    assert result.message == "Provide exactly one of query or pattern."
+
+def test_tool_content_regex_read_schema_has_no_mode() -> None:
+    tool = ToolContentRegexReadTool(content_store=object())
+    schema = tool.definition.llm_spec.parameters_schema
+
+    assert tool.definition.llm_spec.name == "tool_content_regex_read"
+    assert schema.required == ("content_ids", "pattern")
+    assert "mode" not in schema.properties
+    assert "query" not in schema.properties
 
 
 @pytest.mark.asyncio
-async def test_tool_content_read_dispatches_ranked_expand() -> None:
+async def test_tool_content_rerank_read_dispatches_ranked_expand() -> None:
     service = _FakeReadService()
-    tool = ToolContentReadTool(content_store=object())
+    tool = ToolContentRerankReadTool(content_store=object())
     tool._service = service
 
     await tool.execute(
         {"session_id": "s1"},
         content_ids=["cnt_1"],
-        mode="ranked_expand",
         query="what matters",
     )
 
@@ -87,15 +82,14 @@ async def test_tool_content_read_dispatches_ranked_expand() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_content_read_dispatches_regex_match() -> None:
+async def test_tool_content_regex_read_dispatches_regex_match() -> None:
     service = _FakeReadService()
-    tool = ToolContentReadTool(content_store=object())
+    tool = ToolContentRegexReadTool(content_store=object())
     tool._service = service
 
     await tool.execute(
         {"session_id": "s1"},
         content_ids=["cnt_1"],
-        mode="regex_match",
         pattern="what.*",
     )
 

@@ -40,7 +40,6 @@ ToolScope disclosure
 | 内容存储 | `ToolContentStore` | 会话内短期文本存储、chunk/index、receipt。 | 不得把 `cnt_*` 当永久业务 ID。 |
 | 文件移交 | `ToolRunFileStore` | 工具间短期文件引用 `tfile_*`，按用户和会话隔离。 | 不得传本地路径、OSS key、base64 作为工具间文件协议。 |
 | URL 内容缓存 | `WebContentCacheService` + Redis content repository | URL 到 HTML/文件占位/解析 Markdown 的缓存路径。 | web/document 不得维护第二套 URL cache。 |
-| Suggested actions | `SuggestedAction(s)` | 给模型提示下一步工具链。 | 不得把完整工具参数硬塞进建议动作。 |
 
 ## 标准开发流程
 

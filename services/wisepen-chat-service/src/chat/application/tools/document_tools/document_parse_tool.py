@@ -25,11 +25,7 @@ from chat.application.tools.core import (
     ToolPolicy,
     ToolRiskLevel,
 )
-from chat.application.tools.core.tool_return import (
-    SuggestedAction,
-    SuggestedActionPriority,
-    ToolReturn,
-)
+from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.document_tools.document_parse.cache import (
     DocumentParseCache,
     direct_url_metadata,
@@ -100,7 +96,7 @@ class DocumentParseTool:
                     "  - SHOULD trigger when the user asks to read, summarize, or answer questions about an attached document.\n"
                     "DO NOT TRIGGER when:\n"
                     "  - You need to read normal HTML pages — use web_fetch or web_crawl instead.\n"
-                    "  - You already have content_ids from a previous parse — use tool_content_read or tool_content_sequential_read instead.\n"
+                    "  - You already have content_ids from a previous parse — use tool_content_rerank_read, tool_content_regex_read, or tool_content_sequential_read instead.\n"
                     "  - You need OCR for a standalone image after inspecting it — use image_ocr instead.\n"
                     "\n"
                     "INPUT RULES:\n"
@@ -113,7 +109,7 @@ class DocumentParseTool:
                     "OUTPUT RULES:\n"
                     "  - Returns one item per input file with status success or failed.\n"
                     "  - Each successfully parsed file produces a cacheable content unit; failed files return a reason code.\n"
-                    "  - Use the suggested tool_content_read action to locate answer-relevant windows in the parsed Markdown."
+                    "  - Use content receipts with session read tools to locate answer-relevant windows in the parsed Markdown."
                 ),
                 parameters_schema=ToolParametersSchema(
                     {
@@ -208,12 +204,6 @@ class DocumentParseTool:
             tag="document_parse_result",
             visible_result={
                 "items": tuple(items),
-                "suggested_action": SuggestedAction(
-                    tool_name="tool_content_read",
-                    mode="ranked_expand",
-                    reason="Search the parsed Markdown content for answer-relevant windows.",
-                    priority=SuggestedActionPriority.HIGH,
-                ),
             },
             cacheable_texts=tuple(cacheable_texts),
         )

@@ -1,0 +1,14 @@
+.git
+.idea
+.vscode
+.pytest_cache
+.ruff_cache
+.uv
+.uv-cache
+.venv
+**/__pycache__
+**/*.py[cod]
+logs
+services/wisepen-chat-service/src/chat/.cache
+services/wisepen-chat-service/src/chat/.env
+services/wisepen-chat-service/src/chat/wisepen-chat-service-dev.yaml

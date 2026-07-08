@@ -30,8 +30,6 @@ class ChunkingEngineRegistry:
                         SizeBoundedBlockPackerConfig(
                             chunk_size=DEFAULT_CHUNK_SIZE,
                             role=ChunkRole.FLAT,
-                            # Markdown 默认读取块；page marker 是硬边界，避免引用页码时跨页。
-                            hard_boundary_block_kinds=(BlockKind.PAGE_MARKER,),
                         )
                     ),
                     document_enrichers=(MarkdownSectionContextEnricher(),),

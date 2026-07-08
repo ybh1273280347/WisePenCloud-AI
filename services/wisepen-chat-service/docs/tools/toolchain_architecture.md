@@ -47,13 +47,13 @@
 
 ## 已注册工具
 
-当前 `ToolRegistry` 注册 17 个工具：
+当前 `ToolRegistry` 注册 18 个工具：
 
 | 分组 | 工具 |
 | --- | --- |
 | document | `document_parse`、`image_ocr` |
 | math | `calculus_solver`、`linear_algebra_solver`、`equation_solver`、`stats_solver`、`expression_solver` |
-| session | `tool_content_read`、`tool_content_sequential_read`、`get_historical_chat_messages` |
+| session | `tool_content_rerank_read`、`tool_content_regex_read`、`tool_content_sequential_read`、`get_historical_chat_messages` |
 | web | `web_search`、`academic_search`、`web_fetch`、`web_crawl` |
 | skill | `load_skill`、`load_skill_asset` |
 | rag | `rag_knowledge_search` |
@@ -93,7 +93,6 @@ ToolInvocation
 | Runtime File | `ToolRunFileStore` | 生产 `tfile_*`；按 `user_id/session_id` 校验作用域；模型和工具都不能传本地路径、OSS key 或 base64 作为跨工具文件协议。 |
 | URL Cache | `WebContentCacheService` + `web_content_cache/core/protocols.py` + Redis persistence implementation | web/document 共享的 URL 缓存边界；Redis 直接保存 URL cache value 和统一 TTL。 |
 | Background | GC schedulers | 主服务启动 `ToolRunFileStoreGcScheduler`；`web_content_cache` 由 Redis TTL 自然过期。 |
-| Suggested Actions | `SuggestedAction(s)` | 可写工具名、mode、原因、优先级和轻量 metadata；不写完整调用参数；不代替 schema 和提示词边界。 |
 
 ## 三类引用
 
@@ -101,7 +100,7 @@ ToolInvocation
 | --- | --- | --- | --- |
 | `search_ref` | `web_search`、`academic_search` | `web_fetch(search_refs=[...])` | 搜索候选到真实 URL 的短期映射，模型不直接拿 URL。 |
 | `tfile_*` | `web_fetch`、`document_parse` 直链下载等 | `document_parse(file_refs=[...])`、`image_ocr(file_ref=...)` | 工具运行期临时文件引用，按 `user_id/session_id` 隔离。 |
-| `cnt_*` | `ToolOutputCache` | `tool_content_read`、`tool_content_sequential_read` | 大文本缓存凭证，表示已有内容，不代表新外部抓取需求。 |
+| `cnt_*` | `ToolOutputCache` | `tool_content_rerank_read`、`tool_content_regex_read`、`tool_content_sequential_read` | 大文本缓存凭证，表示已有内容，不代表新外部抓取需求。 |
 
 模型看到这些引用后应沿协议消费，不能猜测内部 URL、文件路径或缓存文档 ID。
 
@@ -115,7 +114,7 @@ web_search
   -> web_fetch(search_refs=[...])
   -> cleaned markdown
   -> cnt_*
-  -> tool_content_read / tool_content_sequential_read
+  -> tool_content_rerank_read / tool_content_regex_read / tool_content_sequential_read
 ```
 
 ### 学术候选链
@@ -209,8 +208,8 @@ Redis 是 URL cache 的唯一正文存储。`RedisWebContentCacheRepository` 按
 
 当工具返回 `cnt_*` 后，模型应优先使用：
 
-- `tool_content_read(mode="ranked_expand")`：跨一个或多个 `cnt_*` 做全局语义检索。
-- `tool_content_read(mode="regex_match")`：跨一个或多个 `cnt_*` 做全局精确模式匹配。
+- `tool_content_rerank_read`：跨一个或多个 `cnt_*` 做全局语义检索。
+- `tool_content_regex_read`：跨一个或多个 `cnt_*` 做全局精确模式匹配。
 - `tool_content_sequential_read`：按 offset 顺序读取单个 `cnt_*`。
 
 不要因为已经拿到 `cnt_*` 又重新调用 `web_fetch`、`web_crawl` 或 `document_parse`。
@@ -272,7 +271,7 @@ Document 工具的模型约束：只解析文件，不读普通 HTML；不接本
 
 ```text
 cnt_* receipt
-  -> tool_content_read for cross-document retrieval
+  -> tool_content_rerank_read / tool_content_regex_read for cross-document retrieval
   -> tool_content_sequential_read for single-content continuation
 ```
 
@@ -363,5 +362,4 @@ RAG 工具的模型约束：只在已知 `resource_id` 和 `corpus_version` 时�
 - 给直链文件类型判断增加可配置扩展名和 MIME allowlist，辅助模型和工具双层路由。
 - 继续收敛 web/document 中非 HTML 占位、parse 回填等缓存逻辑，减少业务类里重复的缓存细节。
 - 评估 academic_search 的 OpenAlex 水合缓存是否值得引入。
-- 继续按工具实际下一步收敛 `suggested_action` 与 `suggested_actions` 的使用边界。
 - 给跨工具链加端到端回归用例：search->fetch->read、direct file->parse->read、fetch file->parse cache hit。

@@ -29,7 +29,7 @@ src/chat/application/tools/document_tools/
 - 已经有一个或多个 `tfile_*`，需要把文件内容转为可检索 Markdown。
 - 用户直接给出明显文档文件直链（PDF、Office、表格等）并要求读取文件内容时，直接传 `direct_urls`，不要先走 `web_fetch` 生成中转 `tfile_*`。
 - 同一任务有多个文件时，应一次性把同一来源字段下的所有文件传入同一调用。
-- 解析结果较长时，后续优先通过 `tool_content_read` 检索相关窗口，或通过 `tool_content_sequential_read` 顺序继续阅读单个 `cnt_*`。
+- 解析结果较长时，后续优先通过 `tool_content_rerank_read` 或 `tool_content_regex_read` 检索相关窗口，也可通过 `tool_content_sequential_read` 顺序继续阅读单个 `cnt_*`。
 
 ## 参数
 
@@ -69,7 +69,6 @@ document parse 读取缓存时不能在 public/private 域之间回退，避免�
 | 字段 | 说明 |
 | --- | --- |
 | `visible_result.items` | 按输入顺序返回每个文件的 `source`、`status`、`file_name` 和失败 `reason`。 |
-| `visible_result.suggested_action` | 建议后续用 `tool_content_read` 的 `ranked_expand` 模式读取解析结果。 |
 | `cacheable_texts` | 每个成功文件一段 Markdown；当总长度超过内联阈值时会被缓存为独立的 `cnt_*` receipt。 |
 
 ## 边界

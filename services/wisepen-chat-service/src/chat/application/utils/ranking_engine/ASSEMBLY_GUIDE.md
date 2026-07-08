@@ -335,11 +335,11 @@ diversifiers = (
 
 ## 推荐模板
 
-### tool_content_read ranked_expand
+### tool_content_rerank_read
 
 ```python
 RankingPipeline(
-    name="tool_content_read.ranked_expand",
+    name="tool_content_rerank_read",
     scorers=(
         BM25Scorer(tokenizer=tokenizer),
         FieldedBM25Scorer(

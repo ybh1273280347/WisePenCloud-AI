@@ -65,7 +65,8 @@
 
 ### session
 
-- [tool_content_read](session/tool_content_read.md)
+- [tool_content_rerank_read](session/tool_content_rerank_read.md)
+- [tool_content_regex_read](session/tool_content_regex_read.md)
 - [tool_content_sequential_read](session/tool_content_sequential_read.md)
 - [get_historical_chat_messages](session/get_historical_chat_messages.md)
 

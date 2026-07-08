@@ -59,7 +59,8 @@ class ToolContentSequentialReadTool:
                     "  - MUST trigger when you need to continue reading a single cached content from a known offset.\n"
                     "  - SHOULD trigger when the user needs nearby surrounding context rather than cross-document search.\n"
                     "DO NOT TRIGGER when:\n"
-                    "  - You need to search across one or more documents — use tool_content_read instead.\n"
+                    "  - You need natural-language retrieval across documents — use tool_content_rerank_read instead.\n"
+                    "  - You need exact pattern matching across documents — use tool_content_regex_read instead.\n"
                     "  - You need new content from the web — use web_fetch or web_crawl instead.\n"
                 ),
                 parameters_schema=ToolParametersSchema(PARAMETERS_SCHEMA),
@@ -83,7 +84,7 @@ class ToolContentSequentialReadTool:
         limit = int(kwargs.get("limit") or 4000)
 
         try:
-            # 顺序读取明确只接受单个 content_id；跨文档查找统一走 tool_content_read。
+            # 顺序读取明确只接受单个 content_id；跨文档查找统一走专用读取工具。
             loaded = await self._service.load_stored_content(
                 content_id=content_id,
                 session_id=str(context["session_id"]),

@@ -33,7 +33,7 @@
 | 文档 | 解决什么问题 | 最常查阅的章节 |
 | --- | --- | --- |
 | [01-tool-architecture](01-tool-architecture.md) | Tool 怎么注册、怎么暴露、怎么执行 | 注册规则、可见性规则、新增工具 Review 清单 |
-| [02-tool-return-and-content](02-tool-return-and-content.md) | 返回值怎么交给模型、大文本怎么缓存 | ToolReturn 使用边界、分批缓存规则、tool_content_read 规则 |
+| [02-tool-return-and-content](02-tool-return-and-content.md) | 返回值怎么交给模型、大文本怎么缓存 | ToolReturn 使用边界、分批缓存规则、session 内容读取规则 |
 | [03-shared-engines-and-dev-flow](03-shared-engines-and-dev-flow.md) | 共享引擎该做什么、新增能力放哪 | 共享引擎边界、开发流程判断顺序、review 清单 |
 | [04-container-and-settings](04-container-and-settings.md) | 什么该进 container、settings 怎么分 | Container 注册原则、Settings 边界、Review 清单 |
 | [05-utils-inventory](05-utils-inventory.md) | 现成能力在哪、能不能直接用 | 快速定位、Chunking/Ranking/LLM Clients 入口 |

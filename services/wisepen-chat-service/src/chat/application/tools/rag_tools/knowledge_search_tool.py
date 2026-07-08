@@ -32,7 +32,7 @@ WHEN TO TRIGGER:
   - SHOULD trigger before answering domain-specific questions when a resource_id is available in the current conversation context.
 DO NOT TRIGGER when:
   - The user asks for open web or real-time information; use web_search/web_fetch instead.
-  - The user asks about previously parsed cnt_* content; use tool_content_read instead.
+  - The user asks about previously parsed cnt_* content; use tool_content_rerank_read, tool_content_regex_read, or tool_content_sequential_read instead.
   - You do not know the target resource_id.
 
 INPUT RULES:

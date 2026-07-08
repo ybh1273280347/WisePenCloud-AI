@@ -1,0 +1,105 @@
+services:
+  wisepen-neo4j-local:
+    image: neo4j:5-community
+    container_name: wisepen-neo4j-local
+    restart: unless-stopped
+    networks:
+      - wisepen-net
+      - cloud-infra_cloud-net
+    # chat / fourget 共享本服务的网络命名空间；这里的 host 映射供 chat 访问 dev server 上的 Nacos / Redis / Mongo / Qdrant / ES。
+    # Neo4j 和 fourget 都由本 compose 本地部署。
+    extra_hosts:
+      - "wisepen-dev-server:10.176.44.11"
+    environment:
+      NEO4J_AUTH: neo4j/password123
+      NEO4J_server_memory_heap_initial__size: ${LOCAL_NEO4J_HEAP_INITIAL:-1G}
+      NEO4J_server_memory_heap_max__size: ${LOCAL_NEO4J_HEAP_MAX:-2G}
+      NEO4J_server_memory_pagecache_size: ${LOCAL_NEO4J_PAGECACHE:-1G}
+    ports:
+      - "${LOCAL_NEO4J_HTTP_PORT:-17474}:7474"
+      - "${LOCAL_NEO4J_BOLT_PORT:-17687}:7687"
+      - "${LOCAL_FOURGET_PORT:-18088}:8088"
+      - "${LOCAL_CHAT_PORT:-19914}:19914"
+    volumes:
+      - wisepen-neo4j-local-data:/data
+      - wisepen-neo4j-local-logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p password123 'RETURN 1' >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  wisepen-fourget-local:
+    image: luuul/4get:latest
+    container_name: wisepen-fourget-local
+    restart: unless-stopped
+    network_mode: "service:wisepen-neo4j-local"
+    depends_on:
+      wisepen-neo4j-local:
+        condition: service_started
+
+  wisepen-fourget-local-proxy:
+    image: alpine/socat:latest
+    container_name: wisepen-fourget-local-proxy
+    restart: unless-stopped
+    network_mode: "service:wisepen-neo4j-local"
+    command: ["TCP-LISTEN:8088,fork,reuseaddr", "TCP:127.0.0.1:80"]
+    depends_on:
+      wisepen-fourget-local:
+        condition: service_started
+
+  wisepen-chat-local:
+    build:
+      context: ../..
+      dockerfile: services/wisepen-chat-service/Dockerfile.local
+    image: local/wisepen-chat-service:local
+    container_name: wisepen-chat-local
+    restart: unless-stopped
+    network_mode: "service:wisepen-neo4j-local"
+    env_file:
+      - ./src/chat/.env
+    depends_on:
+      wisepen-neo4j-local:
+        condition: service_healthy
+      wisepen-fourget-local-proxy:
+        condition: service_started
+    environment:
+      TZ: Asia/Shanghai
+      PROFILE: dev
+      SERVICE_HOST: 0.0.0.0
+      SERVICE_PORT: 19914
+      NACOS_REGISTER_IP: ""
+      NACOS_CACHE_DIR: /opt/wisepen/cache/nacos
+      DEVELOPER_ENABLE: "true"
+      DEVELOPER_NAME: local-container
+      LOG_LEVEL: INFO
+      OMP_NUM_THREADS: ${LOCAL_NUM_THREADS:-4}
+      MKL_NUM_THREADS: ${LOCAL_NUM_THREADS:-4}
+      OPENBLAS_NUM_THREADS: ${LOCAL_NUM_THREADS:-4}
+      NUMEXPR_NUM_THREADS: ${LOCAL_NUM_THREADS:-4}
+      HF_HOME: /opt/wisepen/cache/huggingface
+      DOCLING_CACHE_DIR: /opt/wisepen/cache/docling
+      TORCH_HOME: /opt/wisepen/cache/torch
+      XDG_CACHE_HOME: /opt/wisepen/cache
+      NO_PROXY: localhost,127.0.0.1,wisepen-dev-server,fourget
+      no_proxy: localhost,127.0.0.1,wisepen-dev-server,fourget
+    volumes:
+      - wisepen-chat-local-cache:/opt/wisepen/cache
+      - wisepen-chat-local-files:/tmp/wisepen-tool-run-files
+      - ../../logs/chat-local:/logs
+    shm_size: ${LOCAL_CHAT_SHM_SIZE:-2g}
+    mem_limit: ${LOCAL_CHAT_MEM_LIMIT:-12g}
+
+volumes:
+  wisepen-chat-local-cache:
+  wisepen-chat-local-files:
+  wisepen-neo4j-local-data:
+  wisepen-neo4j-local-logs:
+
+networks:
+  wisepen-net:
+    external: true
+    name: wisepen-net
+  cloud-infra_cloud-net:
+    external: true
+    name: cloud-infra_cloud-net
