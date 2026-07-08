@@ -36,7 +36,6 @@ from chat.api.endpoints import chat as chat_endpoints
 from chat.api.endpoints import session as session_endpoints
 from chat.api.endpoints import memory as memory_endpoints
 from chat.api.endpoints import model as model_endpoints
-from chat.api.endpoints import tool as tool_endpoints
 from chat.api.endpoints import web_search as web_search_endpoints
 from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping
 from chat.domain.entities.rag_acl import RagAclProjectionDocument
@@ -175,7 +174,6 @@ async def _close_redis_repositories() -> None:
         ("tool content redis", container.tool_content_repository()),
         ("tool run file redis", container.tool_run_file_repository()),
         ("web content cache redis", container.web_content_cache_repository()),
-        ("web search candidate redis", container.web_search_candidate_repository()),
         ("rag ingestion cache redis", container.rag_ingestion_deterministic_cache()),
         ("rag evidence cache redis", container.rag_evidence_materialization_cache()),
         ("rag graph cache redis", container.rag_graph_enhancement_cache()),
@@ -194,7 +192,6 @@ container.wire(
         session_endpoints,
         memory_endpoints,
         model_endpoints,
-        tool_endpoints,
         web_search_endpoints,
     ]
 )  # 注入依赖到路由模块
