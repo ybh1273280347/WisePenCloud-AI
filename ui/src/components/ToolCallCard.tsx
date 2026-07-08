@@ -22,6 +22,8 @@ type ToolCallCardProps = {
   defaultExpanded?: boolean;
 };
 
+const frontendToolDurations = new Map<string, number>();
+
 function deriveStatus(part: ToolPart) {
   switch (part.state) {
     case "input-streaming":
@@ -52,6 +54,12 @@ function estimateDuration(part: ToolPart) {
   }
 
   return undefined;
+}
+
+function getToolDuration(part: ToolPart, fallback?: number) {
+  return estimateDuration(part)
+    ?? fallback
+    ?? frontendToolDurations.get(part.toolCallId);
 }
 
 function statusText(status: ReturnType<typeof deriveStatus>) {
@@ -98,21 +106,8 @@ function getMetadataRecord(part: ToolPart) {
   };
 }
 
-export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const [copied, setCopied] = useState(false);
-  const [renderedCode, setRenderedCode] = useState({ source: "", html: "" });
-  const status = deriveStatus(part);
-  const [liveDuration, setLiveDuration] = useState<number | undefined>(() => {
-    return status === "running" ? 0 : estimateDuration(part);
-  });
-  const toolName = getToolName(part);
-  const contentId = useId();
-  const outputText = getToolOutputText(part);
-  const inputText = tryStringify(part.input);
-  const metadataRecord = getMetadataRecord(part);
-  const metadataText = tryStringify(metadataRecord);
-  const rawPayload = tryStringify({
+function getRawPayloadText(part: ToolPart, toolName: string) {
+  return tryStringify({
     type: part.type,
     toolCallId: part.toolCallId,
     toolName,
@@ -122,29 +117,26 @@ export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProp
     errorText: "errorText" in part ? part.errorText : undefined,
     toolMetadata: part.toolMetadata,
   });
+}
 
-  useEffect(() => {
-    if (status !== "running") {
-      setLiveDuration(estimateDuration(part));
-      return;
-    }
-
-    const startedAt = typeof part.toolMetadata?.started_at === "string"
-      ? new Date(part.toolMetadata.started_at).getTime()
-      : Date.now();
-
-    const timer = window.setInterval(() => {
-      setLiveDuration(Date.now() - startedAt);
-    }, 120);
-
-    return () => window.clearInterval(timer);
-  }, [part, status]);
+function ToolCallDetails(
+  { contentId, liveDuration, part, status }: {
+    contentId: string;
+    liveDuration?: number;
+    part: ToolPart;
+    status: ReturnType<typeof deriveStatus>;
+  },
+) {
+  const [renderedCode, setRenderedCode] = useState({ source: "", html: "" });
+  const outputText = getToolOutputText(part);
+  const inputText = tryStringify(part.input);
+  const metadataRecord = getMetadataRecord(part);
+  const metadataText = tryStringify(metadataRecord);
 
   useEffect(() => {
     let active = true;
 
     if (!outputText) {
-      setRenderedCode({ source: "", html: "" });
       return;
     }
 
@@ -166,8 +158,190 @@ export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProp
     };
   }, [outputText]);
 
+  return (
+    <div
+      className={cn(
+        "border-t px-4 pb-4 pt-3",
+        status === "error" ? "border-red-200/80" : "border-emerald-200/80",
+      )}
+      id={contentId}
+    >
+      <Tabs.Root className="flex flex-col gap-4" defaultValue="output">
+        <Tabs.List className="inline-flex w-fit rounded-xl border border-slate-200 bg-slate-100/90 p-1 shadow-sm">
+          <Tabs.Trigger
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 outline-none transition-colors data-[state=active]:bg-white data-[state=active]:text-sky-700 data-[state=active]:shadow-sm focus-visible:ring-2 focus-visible:ring-sky-500/25"
+            value="input"
+          >
+            Input
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 outline-none transition-colors data-[state=active]:bg-white data-[state=active]:text-sky-700 data-[state=active]:shadow-sm focus-visible:ring-2 focus-visible:ring-sky-500/25"
+            value="output"
+          >
+            Output
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 outline-none transition-colors data-[state=active]:bg-white data-[state=active]:text-sky-700 data-[state=active]:shadow-sm focus-visible:ring-2 focus-visible:ring-sky-500/25"
+            value="metadata"
+          >
+            Metadata
+          </Tabs.Trigger>
+        </Tabs.List>
+
+        <Tabs.Content className="mt-0" value="input">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-700">
+                Input
+              </p>
+              <Button size="sm" variant="ghost" onClick={() => copyText(inputText)}>
+                <Copy className="h-3.5 w-3.5" />
+                复制
+              </Button>
+            </div>
+            <div className="json-tree-panel rounded-xl border border-slate-200 bg-white p-4">
+              <JsonView collapsed={2} enableClipboard src={part.input} theme="github" />
+            </div>
+          </div>
+        </Tabs.Content>
+
+        <Tabs.Content className="mt-0" value="output">
+          {"output" in part ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  Output
+                </p>
+                <Button size="sm" variant="ghost" onClick={() => copyText(outputText)}>
+                  <Copy className="h-3.5 w-3.5" />
+                  复制
+                </Button>
+              </div>
+              <div className="rendered-code-panel scrollbar-thin max-h-[460px] overflow-auto rounded-xl border border-slate-200 bg-white">
+                {renderedCode.source === outputText && renderedCode.html ? (
+                  <div dangerouslySetInnerHTML={{ __html: renderedCode.html }} />
+                ) : outputText ? (
+                  <pre className="whitespace-pre-wrap px-5 py-4 font-mono text-[13px] leading-7 text-slate-800">
+                    {outputText}
+                  </pre>
+                ) : (
+                  <p className="px-5 py-4 text-sm text-slate-500">暂无输出内容</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-red-200 bg-red-50/80 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-red-700">
+                  Output
+                </p>
+                <Button size="sm" variant="ghost" onClick={() => copyText(part.errorText ?? "")}>
+                  <Copy className="h-3.5 w-3.5" />
+                  复制
+                </Button>
+              </div>
+              <pre className="scrollbar-thin overflow-auto whitespace-pre-wrap rounded-xl border border-red-100 bg-white px-5 py-4 font-mono text-[13px] leading-7 text-red-900">
+                {part.errorText}
+              </pre>
+            </div>
+          )}
+        </Tabs.Content>
+
+        <Tabs.Content className="mt-0" value="metadata">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-700">
+                Metadata
+              </p>
+              <Button size="sm" variant="ghost" onClick={() => copyText(metadataText)}>
+                <Copy className="h-3.5 w-3.5" />
+                复制
+              </Button>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <dl className="space-y-2.5">
+                  <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
+                    <dt className="font-mono text-[12px] font-semibold text-slate-500">tool_type</dt>
+                    <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">{metadataRecord.toolType}</dd>
+                  </div>
+                  <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
+                    <dt className="font-mono text-[12px] font-semibold text-slate-500">tool_call_id</dt>
+                    <dd className="break-words font-mono text-[13px] font-semibold leading-6 text-slate-800">{metadataRecord.toolCallId}</dd>
+                  </div>
+                  <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
+                    <dt className="font-mono text-[12px] font-semibold text-slate-500">state</dt>
+                    <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">{metadataRecord.state}</dd>
+                  </div>
+                  <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
+                    <dt className="font-mono text-[12px] font-semibold text-slate-500">started_at</dt>
+                    <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">
+                      {metadataRecord.startedAt ? formatTime(metadataRecord.startedAt) : "—"}
+                    </dd>
+                  </div>
+                  <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
+                    <dt className="font-mono text-[12px] font-semibold text-slate-500">ended_at</dt>
+                    <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">
+                      {metadataRecord.endedAt ? formatTime(metadataRecord.endedAt) : status === "running" ? "running" : "—"}
+                    </dd>
+                  </div>
+                  <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
+                    <dt className="font-mono text-[12px] font-semibold text-slate-500">duration</dt>
+                    <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">
+                      {typeof liveDuration === "number" ? formatDuration(liveDuration) : "—"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="json-tree-panel rounded-xl border border-slate-200 bg-white p-4">
+                <JsonView collapsed={2} enableClipboard src={metadataRecord} theme="github" />
+              </div>
+            </div>
+          </div>
+        </Tabs.Content>
+      </Tabs.Root>
+    </div>
+  );
+}
+
+export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [copied, setCopied] = useState(false);
+  const status = deriveStatus(part);
+  const [runningDuration, setRunningDuration] = useState<number | undefined>(() => getToolDuration(part));
+  const toolName = getToolName(part);
+  const contentId = useId();
+  const duration = getToolDuration(part, runningDuration);
+
+  useEffect(() => {
+    const finalDuration = estimateDuration(part);
+
+    if (finalDuration !== undefined) {
+      frontendToolDurations.set(part.toolCallId, finalDuration);
+    }
+  }, [part]);
+
+  useEffect(() => {
+    if (status !== "running") {
+      return;
+    }
+
+    const startedAt = typeof part.toolMetadata?.started_at === "string"
+      ? new Date(part.toolMetadata.started_at).getTime()
+      : Date.now();
+
+    const timer = window.setInterval(() => {
+      const nextDuration = Date.now() - startedAt;
+      frontendToolDurations.set(part.toolCallId, nextDuration);
+      setRunningDuration(nextDuration);
+    }, 120);
+
+    return () => window.clearInterval(timer);
+  }, [part, status]);
+
   const handleCopy = () => {
-    copyText(rawPayload);
+    copyText(getRawPayloadText(part, toolName));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
   };
@@ -226,9 +400,14 @@ export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProp
             >
               {statusText(status)}
             </span>
-            <span className="font-mono text-[11px] font-semibold tabular-nums text-slate-500">
-              {formatDuration(liveDuration)}
+            <span className="rounded-full bg-white/80 px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
+              耗时 {formatDuration(duration)}
             </span>
+            {status !== "running" && estimateDuration(part) === undefined && runningDuration !== undefined ? (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                前端计时
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -278,149 +457,14 @@ export function ToolCallCard({ part, defaultExpanded = false }: ToolCallCardProp
         style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">
-          <div
-            className={cn(
-              "border-t px-4 pb-4 pt-3",
-              status === "error" ? "border-red-200/80" : "border-emerald-200/80",
-            )}
-            id={contentId}
-          >
-            <Tabs.Root className="flex flex-col gap-4" defaultValue="output">
-              <Tabs.List className="inline-flex w-fit rounded-xl border border-slate-200 bg-slate-100/90 p-1 shadow-sm">
-                <Tabs.Trigger
-                  className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 outline-none transition-colors data-[state=active]:bg-white data-[state=active]:text-sky-700 data-[state=active]:shadow-sm focus-visible:ring-2 focus-visible:ring-sky-500/25"
-                  value="input"
-                >
-                  Input
-                </Tabs.Trigger>
-                <Tabs.Trigger
-                  className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 outline-none transition-colors data-[state=active]:bg-white data-[state=active]:text-sky-700 data-[state=active]:shadow-sm focus-visible:ring-2 focus-visible:ring-sky-500/25"
-                  value="output"
-                >
-                  Output
-                </Tabs.Trigger>
-                <Tabs.Trigger
-                  className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 outline-none transition-colors data-[state=active]:bg-white data-[state=active]:text-sky-700 data-[state=active]:shadow-sm focus-visible:ring-2 focus-visible:ring-sky-500/25"
-                  value="metadata"
-                >
-                  Metadata
-                </Tabs.Trigger>
-              </Tabs.List>
-
-              <Tabs.Content className="mt-0" value="input">
-                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-700">
-                      Input
-                    </p>
-                    <Button size="sm" variant="ghost" onClick={() => copyText(inputText)}>
-                      <Copy className="h-3.5 w-3.5" />
-                      复制
-                    </Button>
-                  </div>
-                  <div className="json-tree-panel rounded-xl border border-slate-200 bg-white p-4">
-                    <JsonView collapsed={2} enableClipboard src={part.input} theme="github" />
-                  </div>
-                </div>
-              </Tabs.Content>
-
-              <Tabs.Content className="mt-0" value="output">
-                {"output" in part ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-700">
-                        Output
-                      </p>
-                      <Button size="sm" variant="ghost" onClick={() => copyText(outputText)}>
-                        <Copy className="h-3.5 w-3.5" />
-                        复制
-                      </Button>
-                    </div>
-                    <div className="rendered-code-panel scrollbar-thin max-h-[460px] overflow-auto rounded-xl border border-slate-200 bg-white">
-                      {renderedCode.source === outputText && renderedCode.html ? (
-                        <div dangerouslySetInnerHTML={{ __html: renderedCode.html }} />
-                      ) : outputText ? (
-                        <pre className="whitespace-pre-wrap px-5 py-4 font-mono text-[13px] leading-7 text-slate-800">
-                          {outputText}
-                        </pre>
-                      ) : (
-                        <p className="px-5 py-4 text-sm text-slate-500">暂无输出内容</p>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-red-200 bg-red-50/80 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-red-700">
-                        Output
-                      </p>
-                      <Button size="sm" variant="ghost" onClick={() => copyText(part.errorText ?? "")}>
-                        <Copy className="h-3.5 w-3.5" />
-                        复制
-                      </Button>
-                    </div>
-                    <pre className="scrollbar-thin overflow-auto whitespace-pre-wrap rounded-xl border border-red-100 bg-white px-5 py-4 font-mono text-[13px] leading-7 text-red-900">
-                      {part.errorText}
-                    </pre>
-                  </div>
-                )}
-              </Tabs.Content>
-
-              <Tabs.Content className="mt-0" value="metadata">
-                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-700">
-                      Metadata
-                    </p>
-                    <Button size="sm" variant="ghost" onClick={() => copyText(metadataText)}>
-                      <Copy className="h-3.5 w-3.5" />
-                      复制
-                    </Button>
-                  </div>
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <dl className="space-y-2.5">
-                        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
-                          <dt className="font-mono text-[12px] font-semibold text-slate-500">tool_type</dt>
-                          <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">{metadataRecord.toolType}</dd>
-                        </div>
-                        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
-                          <dt className="font-mono text-[12px] font-semibold text-slate-500">tool_call_id</dt>
-                          <dd className="break-words font-mono text-[13px] font-semibold leading-6 text-slate-800">{metadataRecord.toolCallId}</dd>
-                        </div>
-                        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
-                          <dt className="font-mono text-[12px] font-semibold text-slate-500">state</dt>
-                          <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">{metadataRecord.state}</dd>
-                        </div>
-                        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
-                          <dt className="font-mono text-[12px] font-semibold text-slate-500">started_at</dt>
-                          <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">
-                            {metadataRecord.startedAt ? formatTime(metadataRecord.startedAt) : "—"}
-                          </dd>
-                        </div>
-                        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
-                          <dt className="font-mono text-[12px] font-semibold text-slate-500">ended_at</dt>
-                          <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">
-                            {metadataRecord.endedAt ? formatTime(metadataRecord.endedAt) : status === "running" ? "running" : "—"}
-                          </dd>
-                        </div>
-                        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3">
-                          <dt className="font-mono text-[12px] font-semibold text-slate-500">duration</dt>
-                          <dd className="font-mono text-[13px] font-semibold leading-6 text-slate-800">
-                            {typeof liveDuration === "number" ? formatDuration(liveDuration) : "—"}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    <div className="json-tree-panel rounded-xl border border-slate-200 bg-white p-4">
-                      <JsonView collapsed={2} enableClipboard src={metadataRecord} theme="github" />
-                    </div>
-                  </div>
-                </div>
-              </Tabs.Content>
-            </Tabs.Root>
-          </div>
+          {expanded ? (
+            <ToolCallDetails
+              contentId={contentId}
+              liveDuration={duration}
+              part={part}
+              status={status}
+            />
+          ) : null}
         </div>
       </div>
     </Panel>

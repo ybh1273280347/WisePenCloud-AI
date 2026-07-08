@@ -11,6 +11,7 @@ type ChatWindowProps = {
 
 export function ChatWindow({ messages, status }: ChatWindowProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollFrameRef = useRef<number | undefined>(undefined);
   const [autoFollow, setAutoFollow] = useState(true);
 
   useEffect(() => {
@@ -20,11 +21,26 @@ export function ChatWindow({ messages, status }: ChatWindowProps) {
       return;
     }
 
-    element.scrollTo({
-      top: element.scrollHeight,
-      behavior: status === "streaming" ? "instant" : "smooth",
+    if (scrollFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(scrollFrameRef.current);
+    }
+
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = undefined;
+      element.scrollTo({
+        top: element.scrollHeight,
+        behavior: status === "streaming" ? "instant" : "smooth",
+      });
     });
   }, [autoFollow, messages, status]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+      }
+    };
+  }, []);
 
   function handleScroll() {
     const element = scrollRef.current;

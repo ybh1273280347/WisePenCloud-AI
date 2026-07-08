@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -320,7 +320,7 @@ function ToolGroupCard(
   );
 }
 
-export function MessageBubble({ message, isStreaming = false, expandAllTools = false }: MessageBubbleProps) {
+function MessageBubbleComponent({ message, isStreaming = false, expandAllTools = false }: MessageBubbleProps) {
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const [userCopied, setUserCopied] = useState(false);
@@ -448,3 +448,11 @@ export function MessageBubble({ message, isStreaming = false, expandAllTools = f
     </motion.article>
   );
 }
+
+export const MessageBubble = memo(MessageBubbleComponent, (previous, next) => {
+  return (
+    previous.message === next.message
+    && previous.isStreaming === next.isStreaming
+    && previous.expandAllTools === next.expandAllTools
+  );
+});

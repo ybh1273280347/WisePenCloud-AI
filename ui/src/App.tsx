@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
-import { randomId } from "./lib/utils";
+import { debugLog } from "./lib/debug-log";
 import { createBackendTransport } from "./lib/chat-transport";
 import {
   createSession,
@@ -19,30 +19,8 @@ import { ChatWindow } from "./components/ChatWindow";
 import { InputBox } from "./components/InputBox";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
-import {
-  defaultRuntimeSettings,
-  mockMessages,
-  mockModelOptions,
-  mockSearchCredentials,
-} from "./data/mockConversation";
+import { defaultRuntimeSettings } from "./data/runtimeSettings";
 import type { ChatAppMessage, ModelOption, RuntimeSettings, SessionSummary, WebSearchCredential } from "./types/chat";
-
-function convertMessages(messages: typeof mockMessages): ChatAppMessage[] {
-  return messages.map((message) => ({
-    ...message,
-    createdAt: message.createdAt ?? new Date().toISOString(),
-  }));
-}
-
-function maskApiKey(value: string) {
-  const trimmed = value.trim();
-
-  if (trimmed.length <= 8) {
-    return "*".repeat(trimmed.length);
-  }
-
-  return `${trimmed.slice(0, 4)}***${trimmed.slice(-4)}`;
-}
 
 export default function App() {
   const [settings, setSettings] = useState<RuntimeSettings>(defaultRuntimeSettings);
@@ -56,17 +34,17 @@ export default function App() {
   const [modelLoadError, setModelLoadError] = useState("");
   const [searchCredentials, setSearchCredentials] = useState<WebSearchCredential[]>([]);
   const [searchLoadError, setSearchLoadError] = useState("");
-  const [mockSearchCredentialState, setMockSearchCredentialState] = useState<WebSearchCredential[]>(mockSearchCredentials);
-  const [mockChatMessages, setMockChatMessages] = useState<ChatAppMessage[]>(() => convertMessages(mockMessages));
-  const backendSessionIdRef = useRef(backendSessionId);
-  backendSessionIdRef.current = backendSessionId;
-
+  const [pendingBackendInput, setPendingBackendInput] = useState("");
+  const [creatingSessionForSubmit, setCreatingSessionForSubmit] = useState(false);
+  const backendSessionIdRef = useRef("");
+  const loadedHistorySessionIdRef = useRef("");
+  const sentPendingInputRef = useRef("");
   const transport = useMemo(() => {
     return createBackendTransport({
       getSessionId: () => backendSessionIdRef.current,
       settings,
     });
-  }, [settings.baseUrl, settings.fromSource, settings.identityType, settings.modelId, settings.providerId]);
+  }, [settings]);
   const { messages, sendMessage, setMessages, status, stop } = useChat({
     transport,
   });
@@ -91,7 +69,10 @@ export default function App() {
     }
   });
   const bootstrapSession = useEffectEvent(async () => {
-    console.log("bootstrapSession called, settings:", settings);
+    debugLog.log("bootstrap session started", {
+      baseUrl: settings.baseUrl,
+      userId: settings.userId,
+    });
     try {
       // 加载已有 session 列表
       const sessionsResult = await listSessions(settings);
@@ -107,14 +88,16 @@ export default function App() {
       // 如果有已有 session，选择最近的一个；否则创建新 session
       if (sessionList.length > 0) {
         const latestSession = sessionList[0];
-        setBackendSessionId(latestSession.id);
+        applyBackendSessionId(latestSession.id);
         setActiveSessionId(latestSession.id);
         const history = await loadHistoryMessages(settings, latestSession.id);
         applyHistoryMessages(history.list);
+        loadedHistorySessionIdRef.current = latestSession.id;
       } else {
         const session = await createSession(settings);
-        setBackendSessionId(session.id);
+        applyBackendSessionId(session.id);
         setActiveSessionId(session.id);
+        loadedHistorySessionIdRef.current = session.id;
         setSessions([{
           id: session.id,
           title: session.title,
@@ -124,7 +107,7 @@ export default function App() {
         }]);
       }
     } catch (error) {
-      console.error("bootstrapSession error:", error);
+      debugLog.error("bootstrap session failed", { error });
     }
   });
 
@@ -154,11 +137,12 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
-    if (settings.mode !== "backend") {
-      return;
-    }
+  function applyBackendSessionId(sessionId: string) {
+    backendSessionIdRef.current = sessionId;
+    setBackendSessionId(sessionId);
+  }
 
+  useEffect(() => {
     let disposed = false;
     const requestSettings: RuntimeSettings = {
       ...defaultRuntimeSettings,
@@ -202,15 +186,10 @@ export default function App() {
     settings.baseUrl,
     settings.fromSource,
     settings.identityType,
-    settings.mode,
     settings.userId,
   ]);
 
   useEffect(() => {
-    if (settings.mode !== "backend") {
-      return;
-    }
-
     let disposed = false;
 
     async function run() {
@@ -218,7 +197,7 @@ export default function App() {
         await bootstrapSession();
       } catch (error) {
         if (disposed) return;
-        console.error("Failed to bootstrap session:", error);
+        debugLog.error("failed to bootstrap session", { error });
       }
     }
 
@@ -231,32 +210,38 @@ export default function App() {
     settings.baseUrl,
     settings.fromSource,
     settings.identityType,
-    settings.mode,
     settings.userId,
   ]);
 
   // 切换 session 时加载历史消息
   useEffect(() => {
-    if (settings.mode !== "backend" || !activeSessionId) {
+    if (!activeSessionId) {
       return;
     }
 
-    // 如果是当前已加载的 session，不需要重新加载
-    if (activeSessionId === backendSessionId) {
+    if (activeSessionId === loadedHistorySessionIdRef.current) {
+      if (backendSessionIdRef.current !== activeSessionId) {
+        applyBackendSessionId(activeSessionId);
+      }
+
       return;
     }
 
     let disposed = false;
+    const targetSessionId = activeSessionId;
 
     async function loadSessionHistory() {
       try {
-        setBackendSessionId(activeSessionId);
-        const history = await loadHistoryMessages(settings, activeSessionId);
+        applyBackendSessionId(targetSessionId);
+        const history = await loadHistoryMessages(settings, targetSessionId);
         if (disposed) return;
+        if (backendSessionIdRef.current !== targetSessionId) return;
+
         applyHistoryMessages(history.list);
+        loadedHistorySessionIdRef.current = targetSessionId;
       } catch (error) {
         if (disposed) return;
-        console.error("Failed to load session history:", error);
+        debugLog.error("failed to load session history", { error });
       }
     }
 
@@ -265,187 +250,159 @@ export default function App() {
     return () => {
       disposed = true;
     };
-  }, [activeSessionId, settings.mode]);
+  }, [activeSessionId, settings]);
 
-  const displayedMessages = settings.mode === "mock"
-    ? mockChatMessages
-    : (messages as ChatAppMessage[]);
-  const displayedModelOptions = settings.mode === "mock" ? mockModelOptions : modelOptions;
-  const displayedSearchCredentials = settings.mode === "mock" ? mockSearchCredentialState : searchCredentials;
-  const displayedModelLoadError = settings.mode === "mock" ? "" : modelLoadError;
-  const displayedSearchLoadError = settings.mode === "mock" ? "" : searchLoadError;
+  useEffect(() => {
+    backendSessionIdRef.current = backendSessionId;
+  }, [backendSessionId]);
 
-  function submitMockMessage() {
-    const userMessage: ChatAppMessage = {
-      id: randomId("msg_user"),
-      role: "user",
-      metadata: undefined,
-      createdAt: new Date().toISOString(),
-      parts: [{ type: "text", text: input }],
-    };
+  useEffect(() => {
+    if (
+      !pendingBackendInput
+      || !backendSessionId
+      || sentPendingInputRef.current === pendingBackendInput
+    ) {
+      return;
+    }
 
-    const assistantMessage: ChatAppMessage = {
-      ...mockMessages[1],
-      id: randomId("msg_assistant"),
-      createdAt: new Date().toISOString(),
-    };
+    sentPendingInputRef.current = pendingBackendInput;
+    void sendMessage({ text: pendingBackendInput });
 
-    setMockChatMessages((current) => [...current, userMessage, assistantMessage]);
-    setInput("");
+    window.setTimeout(() => {
+      setPendingBackendInput("");
+      sentPendingInputRef.current = "";
+    }, 0);
+  }, [backendSessionId, pendingBackendInput, sendMessage]);
+
+  async function createBackendSessionForSubmit() {
+    if (creatingSessionForSubmit) {
+      return;
+    }
+
+    setCreatingSessionForSubmit(true);
+
+    try {
+      const session = await createSession(settings);
+      const nextSession: SessionSummary = {
+        id: session.id,
+        title: session.title,
+        updatedAt: session.updated_at,
+        preview: "",
+        pinned: session.is_pinned,
+      };
+
+      setSessions((current) => {
+        if (current.some((item) => item.id === nextSession.id)) {
+          return current;
+        }
+
+        return [nextSession, ...current];
+      });
+      setActiveSessionId(session.id);
+      applyBackendSessionId(session.id);
+    } catch (error) {
+      setPendingBackendInput("");
+      debugLog.error("failed to create session before submit", { error });
+    } finally {
+      setCreatingSessionForSubmit(false);
+    }
   }
 
   function handleSubmit() {
-    console.log("handleSubmit called", { input, mode: settings.mode, backendSessionId });
+    debugLog.log("submit message", {
+      hasBackendSession: Boolean(backendSessionId),
+      inputLength: input.length,
+    });
 
     if (!input.trim()) {
       return;
     }
 
-    if (settings.mode === "mock") {
-      submitMockMessage();
-      return;
-    }
+    setPendingBackendInput(input);
+    setInput("");
 
     if (!backendSessionId) {
-      console.error("No backendSessionId, cannot send message");
-      return;
+      void createBackendSessionForSubmit();
     }
-
-    console.log("Sending message...");
-    void sendMessage({ text: input });
-    setInput("");
   }
 
   async function handleCreateSession() {
-    if (settings.mode === "backend") {
-      try {
-        const session = await createSession(settings);
-        const nextSession: SessionSummary = {
-          id: session.id,
-          title: session.title,
-          updatedAt: session.updated_at,
-          preview: "",
-          pinned: session.is_pinned,
-        };
-
-        setSessions((current) => [nextSession, ...current]);
-        setActiveSessionId(session.id);
-        setBackendSessionId(session.id);
-        setMessages([]);
-      } catch (error) {
-        console.error("Failed to create session:", error);
-      }
-    } else {
-      const sessionId = randomId("session");
+    try {
+      const session = await createSession(settings);
       const nextSession: SessionSummary = {
-        id: sessionId,
-        title: "新的对话",
-        updatedAt: new Date().toISOString(),
-        preview: "等待第一条消息",
+        id: session.id,
+        title: session.title,
+        updatedAt: session.updated_at,
+        preview: "",
+        pinned: session.is_pinned,
       };
 
       setSessions((current) => [nextSession, ...current]);
-      setActiveSessionId(sessionId);
+      setActiveSessionId(session.id);
+      applyBackendSessionId(session.id);
+      loadedHistorySessionIdRef.current = session.id;
+      setMessages([]);
+    } catch (error) {
+      debugLog.error("failed to create session", { error });
     }
   }
 
   async function handleDeleteSession(sessionId: string) {
-    if (settings.mode === "backend") {
-      try {
-        await deleteSession(settings, sessionId);
-        setSessions((current) => current.filter((s) => s.id !== sessionId));
-        if (activeSessionId === sessionId) {
-          const remaining = sessions.filter((s) => s.id !== sessionId);
-          if (remaining.length > 0) {
-            setActiveSessionId(remaining[0].id);
-          } else {
-            setActiveSessionId("");
-            setBackendSessionId("");
-            setMessages([]);
-          }
+    try {
+      await deleteSession(settings, sessionId);
+      setSessions((current) => current.filter((s) => s.id !== sessionId));
+      if (activeSessionId === sessionId) {
+        const remaining = sessions.filter((s) => s.id !== sessionId);
+        if (remaining.length > 0) {
+          setActiveSessionId(remaining[0].id);
+        } else {
+          setActiveSessionId("");
+          applyBackendSessionId("");
+          loadedHistorySessionIdRef.current = "";
+          setMessages([]);
         }
-      } catch (error) {
-        console.error("Failed to delete session:", error);
       }
+    } catch (error) {
+      debugLog.error("failed to delete session", { error });
     }
   }
 
   async function handleRenameSession(sessionId: string, newTitle: string) {
-    if (settings.mode === "backend") {
-      try {
-        await renameSession(settings, sessionId, newTitle);
-        setSessions((current) =>
-          current.map((s) => s.id === sessionId ? { ...s, title: newTitle } : s)
-        );
-      } catch (error) {
-        console.error("Failed to rename session:", error);
-      }
+    try {
+      await renameSession(settings, sessionId, newTitle);
+      setSessions((current) =>
+        current.map((s) => s.id === sessionId ? { ...s, title: newTitle } : s)
+      );
+    } catch (error) {
+      debugLog.error("failed to rename session", { error });
     }
   }
 
   async function handlePinSession(sessionId: string, setPin: boolean) {
-    if (settings.mode === "backend") {
-      try {
-        await pinSession(settings, sessionId, setPin);
-        setSessions((current) =>
-          current.map((s) => s.id === sessionId ? { ...s, pinned: setPin } : s)
-        );
-      } catch (error) {
-        console.error("Failed to pin session:", error);
-      }
+    try {
+      await pinSession(settings, sessionId, setPin);
+      setSessions((current) =>
+        current.map((s) => s.id === sessionId ? { ...s, pinned: setPin } : s)
+      );
+    } catch (error) {
+      debugLog.error("failed to pin session", { error });
     }
   }
 
   async function handleDeleteAllSessions() {
-    if (settings.mode === "backend") {
-      try {
-        await Promise.all(sessions.map((s) => deleteSession(settings, s.id)));
-        setSessions([]);
-        setActiveSessionId("");
-        setBackendSessionId("");
-        setMessages([]);
-      } catch (error) {
-        console.error("Failed to delete all sessions:", error);
-      }
+    try {
+      await Promise.all(sessions.map((s) => deleteSession(settings, s.id)));
+      setSessions([]);
+      setActiveSessionId("");
+      applyBackendSessionId("");
+      loadedHistorySessionIdRef.current = "";
+      setMessages([]);
+    } catch (error) {
+      debugLog.error("failed to delete all sessions", { error });
     }
   }
 
   async function handleCreateCustomSearchCredential(provider: string, apiKey: string) {
-    if (settings.mode === "mock") {
-      const now = new Date().toISOString();
-      const credential: WebSearchCredential = {
-        user_id: settings.userId,
-        provider,
-        source: "custom",
-        is_member: false,
-        api_key_masked: maskApiKey(apiKey),
-        api_key_fingerprint: `mock-${provider}-${Date.now()}`,
-        is_active: true,
-        created_at: now,
-        updated_at: now,
-      };
-
-      setMockSearchCredentialState((current) => {
-        const withoutSameProvider = current.filter((item) => {
-          return !(item.source === "custom" && item.provider === provider);
-        });
-
-        return [
-          ...withoutSameProvider.map((item) => (
-            { ...item, is_active: false }
-          )),
-          credential,
-        ];
-      });
-      setSettings((current) => ({
-        ...current,
-        searchProvider: credential.provider,
-        searchSource: credential.source,
-      }));
-
-      return credential;
-    }
-
     const credential = await createWebSearchCredential(settings, provider, apiKey);
     const credentials = await listWebSearchCredentials(settings);
     applySearchCredentials(credentials);
@@ -453,46 +410,6 @@ export default function App() {
   }
 
   async function handleSelectSearchCredential(source: "platform" | "custom", provider: string) {
-    if (settings.mode === "mock") {
-      const now = new Date().toISOString();
-      const existingCredential = mockSearchCredentialState.find((credential) => {
-        return credential.source === source && credential.provider === provider;
-      });
-      const selectedCredential: WebSearchCredential = existingCredential
-        ? {
-          ...existingCredential,
-          is_active: true,
-          updated_at: now,
-        }
-        : {
-          user_id: settings.userId,
-          provider,
-          source,
-          is_member: source === "platform",
-          api_key_masked: "",
-          api_key_fingerprint: "",
-          is_active: true,
-          created_at: now,
-          updated_at: now,
-        };
-
-      setMockSearchCredentialState((current) => current.map((credential) => {
-        if (credential.source !== source || credential.provider !== provider) {
-          return { ...credential, is_active: false };
-        }
-
-        return selectedCredential;
-      }));
-
-      setSettings((current) => ({
-        ...current,
-        searchProvider: selectedCredential.provider,
-        searchSource: selectedCredential.source,
-      }));
-
-      return selectedCredential;
-    }
-
     const credential = await setActiveWebSearchCredential(settings, source, provider);
     const credentials = await listWebSearchCredentials(settings);
     applySearchCredentials(credentials);
@@ -520,13 +437,13 @@ export default function App() {
           <div className="flex min-h-0 min-w-0 flex-1 justify-center px-3 md:px-8 xl:px-12">
             <div className="flex min-h-0 w-full max-w-[860px] flex-col gap-3 2xl:max-w-[920px]">
               <div className="min-h-0 flex-1">
-                <ChatWindow messages={displayedMessages} status={settings.mode === "mock" ? "ready" : status} />
+                <ChatWindow messages={messages as ChatAppMessage[]} status={status} />
               </div>
 
               <div className="relative shrink-0 pt-2 before:absolute before:inset-x-0 before:-top-8 before:h-8 before:bg-gradient-to-t before:from-[#f7f8fa] before:to-transparent before:content-['']">
                 <InputBox
-                  modelLoadError={displayedModelLoadError}
-                  modelOptions={displayedModelOptions}
+                  modelLoadError={modelLoadError}
+                  modelOptions={modelOptions}
                   onChange={setInput}
                   onCreateCustomSearchCredential={handleCreateCustomSearchCredential}
                   onSelectModel={(option) => {
@@ -539,9 +456,9 @@ export default function App() {
                   onSelectSearchCredential={handleSelectSearchCredential}
                   onStop={stop}
                   onSubmit={handleSubmit}
-                  searchCredentials={displayedSearchCredentials}
+                  searchCredentials={searchCredentials}
                   settings={settings}
-                  status={settings.mode === "mock" ? "ready" : status}
+                  status={status}
                   value={input}
                 />
               </div>
@@ -550,32 +467,15 @@ export default function App() {
         </div>
 
         <SettingsDialog
-          modelLoadError={displayedModelLoadError}
-          modelOptions={displayedModelOptions}
+          modelLoadError={modelLoadError}
+          modelOptions={modelOptions}
           onChange={setSettings}
-          onSelectMockMode={() => {
-            const activeCustom = mockSearchCredentialState.find((credential) => {
-              return credential.source === "custom" && credential.is_active;
-            });
-            const platform = mockSearchCredentialState.find((credential) => credential.source === "platform");
-            const selectedSearchCredential = activeCustom ?? platform;
-            const selectedModel = mockModelOptions[0];
-
-            setSettings((current) => ({
-              ...current,
-              mode: "mock",
-              modelId: selectedModel.modelId,
-              providerId: selectedModel.providerId,
-              searchProvider: selectedSearchCredential?.provider ?? current.searchProvider,
-              searchSource: selectedSearchCredential?.source ?? current.searchSource,
-            }));
-          }}
           onCreateCustomSearchCredential={handleCreateCustomSearchCredential}
           onOpenChange={setSettingsOpen}
           onSelectSearchCredential={handleSelectSearchCredential}
           open={settingsOpen}
-          searchCredentials={displayedSearchCredentials}
-          searchLoadError={displayedSearchLoadError}
+          searchCredentials={searchCredentials}
+          searchLoadError={searchLoadError}
           settings={settings}
         />
       </div>

@@ -11,7 +11,6 @@ export type SessionSummary = {
 };
 
 export type RuntimeSettings = {
-  mode: "mock" | "backend";
   baseUrl: string;
   fromSource: string;
   userId: string;

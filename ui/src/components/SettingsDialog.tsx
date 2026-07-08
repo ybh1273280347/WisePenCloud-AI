@@ -3,6 +3,7 @@ import * as Select from "@radix-ui/react-select";
 import { CheckCircle2, ChevronDown, DatabaseZap, KeyRound, Search, X } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useState } from "react";
+import { debugLog } from "../lib/debug-log";
 import type { ModelOption, RuntimeSettings, WebSearchCredential } from "../types/chat";
 import { Button } from "./ui/button";
 import { IconButton } from "./ui/icon-button";
@@ -16,7 +17,6 @@ type SettingsDialogProps = {
   searchLoadError: string;
   onOpenChange: (open: boolean) => void;
   onChange: (settings: RuntimeSettings | ((prev: RuntimeSettings) => RuntimeSettings)) => void;
-  onSelectMockMode: () => void;
   onSelectSearchCredential: (source: "platform" | "custom", provider: string) => Promise<WebSearchCredential>;
   onCreateCustomSearchCredential: (provider: string, apiKey: string) => Promise<WebSearchCredential>;
 };
@@ -48,7 +48,6 @@ export function SettingsDialog({
   searchLoadError,
   onOpenChange,
   onChange,
-  onSelectMockMode,
   onSelectSearchCredential,
   onCreateCustomSearchCredential,
 }: SettingsDialogProps) {
@@ -89,8 +88,11 @@ export function SettingsDialog({
   }
 
   async function handleCustomCredential() {
-    console.log("handleCustomCredential called", { customProvider, customApiKey: customApiKey ? "filled" : "empty" });
-    
+    debugLog.log("custom search credential submit", {
+      provider: customProvider,
+      hasApiKey: Boolean(customApiKey.trim()),
+    });
+
     if (!customApiKey.trim()) {
       setSaveMessage("请输入搜索源 API Key。");
       return;
@@ -100,9 +102,11 @@ export function SettingsDialog({
     setSaveMessage("");
 
     try {
-      console.log("Calling onCreateCustomSearchCredential...");
       const credential = await onCreateCustomSearchCredential(customProvider, customApiKey);
-      console.log("Credential created:", credential);
+      debugLog.log("custom search credential created", {
+        provider: credential.provider,
+        source: credential.source,
+      });
       // 使用函数式更新，避免与 applySearchCredentials 的 setSettings 竞争
       onChange((prev: RuntimeSettings) => ({
         ...prev,
@@ -112,7 +116,7 @@ export function SettingsDialog({
       setCustomApiKey("");
       setSaveMessage("自定义搜索源已保存。");
     } catch (error) {
-      console.error("handleCustomCredential error:", error);
+      debugLog.error("custom search credential failed", { error });
       const message = error instanceof Error ? error.message : "保存失败";
       setSaveMessage(message);
     } finally {
@@ -149,28 +153,6 @@ export function SettingsDialog({
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="space-y-1.5 text-sm font-semibold text-gray-700">
-                  <span>运行模式</span>
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1"
-                      onClick={onSelectMockMode}
-                      type="button"
-                      variant={settings.mode === "mock" ? "primary" : "secondary"}
-                    >
-                      演示
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      onClick={() => onChange(setField(settings, "mode", "backend"))}
-                      type="button"
-                      variant={settings.mode === "backend" ? "primary" : "secondary"}
-                    >
-                      后端
-                    </Button>
-                  </div>
-                </label>
-
                 <label className="space-y-1.5 text-sm font-semibold text-gray-700">
                   <span>模型</span>
                   <Select.Root

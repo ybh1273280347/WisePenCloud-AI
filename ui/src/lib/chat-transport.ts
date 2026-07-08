@@ -1,4 +1,5 @@
 import { DefaultChatTransport, isTextUIPart, type UIMessage } from "ai";
+import { debugLog } from "./debug-log";
 import type { RuntimeSettings } from "../types/chat";
 
 type BackendTransportOptions = {
@@ -7,7 +8,11 @@ type BackendTransportOptions = {
 };
 
 export function createBackendTransport({ getSessionId, settings }: BackendTransportOptions) {
-  console.log("createBackendTransport called", { baseUrl: settings.baseUrl, modelId: settings.modelId, providerId: settings.providerId });
+  debugLog.log("create backend transport", {
+    baseUrl: settings.baseUrl,
+    modelId: settings.modelId,
+    providerId: settings.providerId,
+  });
 
   return new DefaultChatTransport<UIMessage>({
     api: `${settings.baseUrl}/completions`,
@@ -18,37 +23,37 @@ export function createBackendTransport({ getSessionId, settings }: BackendTransp
     },
     fetch: async (url, init) => {
       const sessionId = getSessionId();
-      console.log("fetch called", { url, init, sessionId });
+      debugLog.log("chat request started", {
+        url: url.toString(),
+        hasBody: Boolean(init?.body),
+        sessionId,
+      });
 
       if (!sessionId) {
-        console.error("Session not initialized, sessionId is:", sessionId);
+        debugLog.error("session not initialized", { sessionId });
         throw new Error("Session not initialized");
       }
 
-      // 解析原始请求体中的 messages
       let messages: UIMessage[] = [];
-      if (init?.body) {
-        console.log("Parsing body, type:", typeof init.body);
+      if (typeof init?.body === "string") {
         try {
-          const bodyStr = typeof init.body === "string" ? init.body : JSON.stringify(init.body);
-          console.log("Body string:", bodyStr);
-          const originalBody = JSON.parse(bodyStr);
-          console.log("Parsed body:", originalBody);
-          messages = originalBody.messages || [];
-        } catch (e) {
-          console.error("Failed to parse body:", e);
+          const originalBody = JSON.parse(init.body) as { messages?: UIMessage[] };
+          messages = originalBody.messages ?? [];
+          debugLog.log("chat request body parsed", { messageCount: messages.length });
+        } catch (error) {
+          debugLog.error("failed to parse chat request body", { error });
         }
       }
 
-      console.log("Messages:", messages);
-
-      // 获取最新的用户消息
-      const latestUserMessage = [...messages].reverse().find((message: UIMessage) => message.role === "user");
-      console.log("Latest user message:", latestUserMessage);
+      let latestUserMessage: UIMessage | undefined;
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index]?.role === "user") {
+          latestUserMessage = messages[index];
+          break;
+        }
+      }
       const latestText = latestUserMessage?.parts?.find(isTextUIPart);
-      console.log("Latest tokenizer:", latestText);
 
-      // 构建自定义请求体
       const customBody = {
         session_id: sessionId,
         query: latestText?.text ?? "",
@@ -56,16 +61,21 @@ export function createBackendTransport({ getSessionId, settings }: BackendTransp
         provider_id: settings.providerId || undefined,
       };
 
-      console.log("Custom request body:", customBody);
+      debugLog.log("chat request payload prepared", {
+        model: customBody.model,
+        providerId: customBody.provider_id,
+        queryLength: customBody.query.length,
+      });
 
-      // 发送请求
-      console.log("Sending request to:", url);
       const response = await fetch(url, {
         ...init,
         body: JSON.stringify(customBody),
       });
 
-      console.log("Response:", response.status, response.statusText);
+      debugLog.log("chat response received", {
+        status: response.status,
+        statusText: response.statusText,
+      });
 
       return response;
     },
