@@ -80,7 +80,7 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 
 **例子**：
 
-- `academic_search` 是 `web_search` 的垂类拓展。
+- `platform_search`、`exa_search`、`tavily_search` 等是搜索工具族内的并列 provider 工具。
 - `web_crawl` 是 `web_fetch` 的递归增强。
 
 这类关系下，允许共享 runtime context、缓存协议、候选构建、排序实现、fetch / clean / mapping 等内部能力。这里的强耦合是有意设计，不应默认视为技术债。
@@ -121,7 +121,7 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 - 在工具内部创建第二套 registry、dispatcher 或 executor。
 - 绕过 `ToolRegistry.derive()` 直接把全量工具 schema 交给 LLM。
 
-**特别提醒**：`web_search` 和 `academic_search` 可以共享搜索工具族内部实现，但 `academic_search` 的编排入口必须保持在 `web_tools/` 顶层，而不是放进 `web_search/` 目录里。这条规则约束的是目录边界和编排边界，不否定工具族内部的强复用。
+**特别提醒**：搜索工具族的编排入口在 `search_tools/` 顶层并列存在；共享实现放在 `search_tools/web_search/`，不要把 provider 工具塞进另一个 provider 工具目录里。
 
 ## 可见性规则
 
@@ -134,6 +134,8 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 - 默认暴露工具受 `allow_tool_name_set` 和 `deny_tool_name_set` 过滤。
 - `ToolScope.schemas()` 是本轮稳定快照，运行期 LLM 调用必须使用它。
 
+搜索工具属于默认隐藏工具：`ChatTurnCoordinator` 只按当前用户 active 搜索凭证动态解禁一个搜索工具。平台 active 凭证解禁 `platform_search`；custom active 凭证只解禁对应 provider 工具；没有 active 搜索凭证时不暴露搜索工具。
+
 如果将来要让 deny 也能压制隐藏工具，需要先修改 `derive()`，不能只改业务调用方。
 
 ## Preflight 规则
@@ -141,11 +143,10 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 `ToolExecutor` 固定执行：
 
 1. `JsonSchemaCheck`
-2. `ExactlyOneOfCheck`
-3. `RequiredContextCheck`
-4. 工具自定义 `preflight_hooks`
+2. `RequiredContextCheck`
+3. 工具自定义 `preflight_hooks`
 
-`ExactlyOneOfCheck` 读取 `ToolParametersSchema.exactly_one_of` 中的内部规则，用于表达 OpenAI function-calling JSON Schema 不支持的 one-of 参数组约束。它不会进入模型可见 schema。
+OpenAI function-calling JSON Schema 不支持的 one-of 参数组约束不再做成框架协议；需要这类条件参数的工具在 `execute()` 入口用工具自己的错误原因校验。
 
 安全上下文必须来自 `context`，不能让模型通过参数传入。例如 `session_id`、`user_id`、权限范围、业务租户信息都应进入 `required_context_keys` 或可信上下文。
 

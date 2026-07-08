@@ -136,7 +136,6 @@ class AppSettings(BaseModel):
     WEB_SEARCH_PLATFORM_MEMBER_API_KEY: str | None = None  # 会员平台源使用的平台密钥
 
     # ── Third-Party Credentials (三方垂直领域) ─────────────────────
-    OPENALEX_BASE_URL: str = "https://api.openalex.org"  # OpenAlex API 基础 URL
 
     # ── Skill (技能召回) ───────────────────────────────────────────────
     SKILL_MATCH_TOP_K: int = 20  # 默认召回数量

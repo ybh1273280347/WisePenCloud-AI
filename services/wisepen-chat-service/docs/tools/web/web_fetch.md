@@ -10,7 +10,7 @@
 ## 何时使用
 
 - 用户给出普通网页 URL，并要求读取页面内容。
-- `web_search` 返回了 `search_ref`，需要把候选变成可验证正文。
+- 搜索工具返回了候选 URL，需要把候选变成可验证正文。
 - URL 类型不确定，需要先探测是 HTML 还是文件。
 
 ## 不要在这些场景使用
@@ -18,7 +18,7 @@
 - 用户给出明显文档文件直链并要求读文件内容：直接用 `document_parse(direct_urls=[...])`。
 - 用户给出明显图片并且需要精确抽字：用 `image_ocr(file_path=...)`。
 - 用户需要多页站点采集：用 `web_crawl`。
-- 用户只需要搜索候选：用 `web_search`。
+- 用户只需要搜索候选：用 `platform_search` 或供应商搜索工具。
 - 已有 `cnt_*`：用 session 读取工具。
 
 ## 参数
@@ -26,15 +26,13 @@
 | 参数 | 类型 | 规则 |
 | --- | --- | --- |
 | `urls` | `string[]` | 直接抓取一批完整 `http(s)` URL；超单批时工具内部自动分批。 |
-| `search_refs` | `string[]` | 来自本用户之前 `web_search` / `academic_search` 的 search_ref；工具会解析为真实 URL 并抓取。 |
-
-`urls` 与 `search_refs` 通过 `ToolParametersSchema.exactly_one_of` 统一校验：二者必须且只能提供一组，不可同时提供，也不可同时为空。`search_refs` 会先解析为真实 URL，并校验同一批次的 `source_scope` 一致，避免 public/custom 缓存串域。
+`urls` 必填；搜索工具输出的候选 URL 直接作为该参数传入。
 
 ## 内部运行机制
 
 ```text
-input urls or search_refs
-  -> direct urls or search_ref resolution
+input urls
+  -> URL validation
   -> FetchCoordinator.fetch_many
   -> per URL: WebContentCacheService.read_markdown_page
   -> httpx fetch
@@ -90,7 +88,7 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 
 ## 工具链协作
 
-- `web_search -> web_fetch(search_refs=[...])`：标准搜索证据链。
+- `platform_search/exa_search/... -> web_fetch(urls=[...])`：标准搜索证据链。
 - `web_fetch -> document_parse(file_refs=[...])`：不确定 URL 命中非 HTML 文件后的解析链。
 - `web_fetch -> tool_content_rerank_read / tool_content_regex_read`：HTML 正文进入 `cnt_*` 后的跨文档内容检索链；命中具体内容后可继续调用 `tool_content_sequential_read`。
 - 与 `document_parse(direct_urls=[...])` 共享 URL 缓存和 fetcher 能力，这是正确的强耦合。

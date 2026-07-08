@@ -30,7 +30,6 @@ def to_response(credential: WebSearchCredential) -> WebSearchCredentialResponse:
         provider=credential.provider,
         source=credential.source,
         api_key_fingerprint=credential.api_key_fingerprint,
-        support_academic=credential.support_academic,
         is_active=credential.is_active,
         created_at=credential.created_at.isoformat(),
         updated_at=credential.updated_at.isoformat(),
@@ -72,7 +71,6 @@ async def create_web_search_credential(
         user_id=user_id,
         provider=req.provider,
         api_key=req.api_key,
-        openalex_api_key=req.openalex_api_key,
     )
     return R.success(data=to_response(credential))
 

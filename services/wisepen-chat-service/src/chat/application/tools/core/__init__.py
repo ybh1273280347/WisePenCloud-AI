@@ -1,7 +1,6 @@
 from chat.application.tools.core.definition import (
     Tool,
     ToolDefinition,
-    ToolExactlyOneOf,
     ToolLLMSpec,
     ToolOutput,
     ToolParametersSchema,
@@ -20,7 +19,6 @@ from chat.application.tools.core.execution.hooks.base import (
     ToolPreflightResult,
 )
 from chat.application.tools.core.execution.hooks.builtin import (
-    ExactlyOneOfCheck,
     JsonSchemaCheck,
     RequiredContextCheck,
 )
@@ -48,7 +46,6 @@ __all__ = [
     # definition
     "Tool",
     "ToolDefinition",
-    "ToolExactlyOneOf",
     "ToolLLMSpec",
     "ToolOutput",
     "ToolParametersSchema",
@@ -82,7 +79,6 @@ __all__ = [
     # hooks
     "ToolPreflightHook",
     "ToolPreflightResult",
-    "ExactlyOneOfCheck",
     "JsonSchemaCheck",
     "RequiredContextCheck",
 ]

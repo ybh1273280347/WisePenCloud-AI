@@ -60,7 +60,7 @@ class GetHistoricalChatMessagesTool:
                     "  - SHOULD trigger when the user references 'what we discussed before', 'earlier you said', or similar phrases.\n"
                     "DO NOT TRIGGER when:\n"
                     "  - The information is already in the current context window.\n"
-                    "  - The user asks about external content — use web_search or web_fetch instead.\n"
+                    "  - The user asks about external content — use platform_search or web_fetch instead.\n"
                     "\n"
                     "INPUT RULES:\n"
                     "  - keyword MUST be in the same language as the user's chat language; otherwise the search may fail.\n"

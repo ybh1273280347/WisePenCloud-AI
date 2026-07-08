@@ -7,7 +7,7 @@ from beanie import Document
 from pydantic import Field
 from pymongo import ASCENDING, DESCENDING, IndexModel
 
-from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
+from chat.application.tools.search_tools.web_search.providers.models import SearchProviderName
 
 
 class WebSearchCredentialSource(StrEnum):
@@ -33,9 +33,6 @@ class WebSearchCredential(Document):
     )
     api_key_ciphertext: str = Field(default="", description="加密后的 API key；平台默认凭证为空字符串")
     api_key_fingerprint: str = Field(default="", description="API key 指纹，平台默认凭证为空字符串")
-    openalex_api_key_ciphertext: str = Field(default="", description="加密后的 OpenAlex API key")
-    openalex_api_key_fingerprint: str = Field(default="", description="OpenAlex API key 指纹")
-    support_academic: bool = Field(default=False, description="当前凭证是否支持显式 academic_search")
     is_active: bool = Field(default=True, description="是否启用")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

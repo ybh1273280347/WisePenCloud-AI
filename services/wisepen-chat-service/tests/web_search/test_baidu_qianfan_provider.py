@@ -9,6 +9,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 common_module = types.ModuleType("common")
 logger_module = types.ModuleType("common.logger")
+core_module = types.ModuleType("common.core")
+domain_module = types.ModuleType("common.core.domain")
+exceptions_module = types.ModuleType("common.core.exceptions")
+http_module = types.ModuleType("common.http")
+rpc_client_module = types.ModuleType("common.http.rpc_client")
 
 
 def _noop(*args, **kwargs):
@@ -19,11 +24,21 @@ logger_module.error = _noop
 logger_module.warn = _noop
 logger_module.info = _noop
 common_module.logger = logger_module
+domain_module.GroupRoleType = object
+exceptions_module.RpcError = Exception
+rpc_client_module.RpcClient = object
 sys.modules.setdefault("common", common_module)
 sys.modules["common.logger"] = logger_module
+sys.modules["common.core"] = core_module
+sys.modules["common.core.domain"] = domain_module
+sys.modules["common.core.exceptions"] = exceptions_module
+sys.modules["common.http"] = http_module
+sys.modules["common.http.rpc_client"] = rpc_client_module
 
 domain_entities_module = types.ModuleType("chat.domain.entities")
 domain_entities_module.__path__ = []
+domain_entities_module.ResourceItemInfo = object
+domain_entities_module.ResourcePermission = object
 web_search_credential_module = types.ModuleType("chat.domain.entities.web_search_credential")
 
 
@@ -37,20 +52,20 @@ web_search_credential_module.WebSearchCredentialSource = _WebSearchCredentialSou
 sys.modules["chat.domain.entities"] = domain_entities_module
 sys.modules["chat.domain.entities.web_search_credential"] = web_search_credential_module
 
-from chat.application.tools.web_tools.search_services.providers.baidu_qianfan import (
+from chat.application.tools.search_tools.web_search.providers.baidu_qianfan import (
     BaiduQianfanSearchRequest,
     map_baidu_qianfan_response,
 )
-from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
-from chat.application.tools.web_tools.search_services.factories.custom_source_factory import WebSearchCustomSourceFactory
-from chat.application.tools.web_tools.search_services.factories.integration_searcher_factory import (
+from chat.application.tools.search_tools.web_search.providers.models import SearchProviderName
+from chat.application.tools.search_tools.web_search.factories.custom_source_factory import WebSearchCustomSourceFactory
+from chat.application.tools.search_tools.web_search.factories.integration_searcher_factory import (
     IntegrationSearcherFactory,
 )
-from chat.application.tools.web_tools.search_services.core.runtime_context import (
+from chat.application.tools.search_tools.web_search.core.runtime_context import (
     WebSearchRuntimeConfig,
 )
-from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
-from chat.application.tools.web_tools.search_services.searchers import BaiduQianfanSearcher
+from chat.application.tools.search_tools.web_search.core.sources import WebSearchSourceKind
+from chat.application.tools.search_tools.web_search.searchers import BaiduQianfanSearcher
 
 
 class _FakeHttpClient:

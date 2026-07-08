@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import sys
 import types
-from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -13,18 +11,44 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 common_module = types.ModuleType("common")
 logger_module = types.ModuleType("common.logger")
+core_module = types.ModuleType("common.core")
+domain_module = types.ModuleType("common.core.domain")
+exceptions_module = types.ModuleType("common.core.exceptions")
+http_module = types.ModuleType("common.http")
+rpc_client_module = types.ModuleType("common.http.rpc_client")
 
 
 def _noop(*args, **kwargs):
     return None
 
 
+class ServiceException(Exception):
+    pass
+
+
+class RpcError(Exception):
+    pass
+
+
+class RpcClient:
+    pass
+
+
 logger_module.error = _noop
 logger_module.warn = _noop
 logger_module.info = _noop
 common_module.logger = logger_module
+domain_module.GroupRoleType = object
+exceptions_module.ServiceException = ServiceException
+exceptions_module.RpcError = RpcError
+rpc_client_module.RpcClient = RpcClient
 sys.modules.setdefault("common", common_module)
 sys.modules["common.logger"] = logger_module
+sys.modules["common.core"] = core_module
+sys.modules["common.core.domain"] = domain_module
+sys.modules["common.core.exceptions"] = exceptions_module
+sys.modules["common.http"] = http_module
+sys.modules["common.http.rpc_client"] = rpc_client_module
 
 llm_clients_module = types.ModuleType("chat.application.utils.llm_clients")
 
@@ -41,11 +65,18 @@ def _build_query_client():
 llm_clients_module.AdapterQueryClient = _AdapterQueryClient
 llm_clients_module.QueryClient = _AdapterQueryClient
 llm_clients_module.build_query_client = _build_query_client
+utils_module = types.ModuleType("chat.application.utils")
+xml_markup_module = types.ModuleType("chat.application.utils.xml_markup")
+xml_markup_module.xml_attr = lambda value: str(value)
+xml_markup_module.xml_cdata = lambda value: str(value)
+utils_module.xml_markup = xml_markup_module
+sys.modules["chat.application.utils"] = utils_module
 sys.modules["chat.application.utils.llm_clients"] = llm_clients_module
+sys.modules["chat.application.utils.xml_markup"] = xml_markup_module
 sys.modules["jieba"] = types.ModuleType("jieba")
 
 app_settings_module = types.ModuleType("chat.core.config.app_settings")
-app_settings_module.settings = SimpleNamespace(QUERY_MODEL="test-query-model")
+app_settings_module.settings = types.SimpleNamespace(QUERY_MODEL="test-query-model")
 sys.modules["chat.core.config.app_settings"] = app_settings_module
 
 beanie_module = types.ModuleType("beanie")
@@ -61,6 +92,8 @@ sys.modules["beanie"] = beanie_module
 
 domain_entities_module = types.ModuleType("chat.domain.entities")
 domain_entities_module.__path__ = []
+domain_entities_module.ResourceItemInfo = object
+domain_entities_module.ResourcePermission = object
 web_search_credential_module = types.ModuleType("chat.domain.entities.web_search_credential")
 
 
@@ -74,302 +107,191 @@ web_search_credential_module.WebSearchCredentialSource = _WebSearchCredentialSou
 sys.modules["chat.domain.entities"] = domain_entities_module
 sys.modules["chat.domain.entities.web_search_credential"] = web_search_credential_module
 
-from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
+mongo_repo_module = types.ModuleType("chat.core.persistence.mongo.web_search_credential_repository")
+mongo_repo_module.MongoWebSearchCredentialRepository = object
+sys.modules["chat.core.persistence.mongo.web_search_credential_repository"] = mongo_repo_module
+
 from chat.application.tools.core import ToolExecutionError
-from chat.application.tools.web_tools.search_services.core.errors import WebSearchEmptyResult
-from chat.application.tools.web_tools.search_services.providers.models import (
+from chat.application.tools.search_tools.exa_search_tool import ExaSearchTool
+from chat.application.tools.search_tools.platform_search_tool import PlatformSearchTool
+from chat.application.tools.search_tools.web_search.core.runtime_context import WebSearchRuntimeConfig
+from chat.application.tools.search_tools.web_search.core.sources import WebSearchSourceKind
+from chat.application.tools.search_tools.web_search.pipeline.search_executor import WebSearchResult
+from chat.application.tools.search_tools.web_search.providers.models import (
     ProviderSearchResponse,
     ProviderSearchResult,
+    SearchMode,
     SearchPreview,
     SearchProviderName,
 )
-from chat.application.tools.web_tools.search_services.core.runtime_context import (
-    WebSearchRuntimeConfig,
-)
-from chat.application.tools.web_tools.search_services.core.sources import WebSearchSourceKind
-from chat.application.tools.web_tools.search_services.hydrators.academic import (
-    HydratedPaper,
-    HydratedPaperAuthor,
-)
-from chat.application.tools.web_tools.search_services.academic_search import (
-    AcademicSearchService,
-)
-from chat.application.tools.web_tools.search_services.pipeline.search_executor import WebSearchResult
-from chat.application.tools.web_tools.web_search_tool import WebSearchTool
 
 
-@dataclass
-class FakeCandidateRepository:
-    mappings: list[object]
-
-    async def set_mapping(self, mapping, *, ttl_seconds: int) -> None:
-        self.mappings.append(mapping)
-
-    async def get_mapping(self, *, user_id: str, search_ref: str):
-        raise NotImplementedError
-
-    async def delete_mapping(self, *, user_id: str, search_ref: str) -> None:
-        raise NotImplementedError
-
-
-class FakeWebSearchService:
-    def __init__(self, responses: list[WebSearchResult]) -> None:
-        self._responses = list(responses)
-        self.calls: list[tuple[str, str]] = []
-
-    async def search(
-        self,
-        *,
-        query: str,
-        max_results: int = 10,
-        source,
-    ) -> WebSearchResult:
-        self.calls.append((query, "web"))
-        result = self._responses.pop(0)
-        if not any(response.results for response in result.responses):
-            raise WebSearchEmptyResult(
-                provider=source.provider,
-                reason="搜索源成功响应但没有返回结果",
-            )
-        return result
-
-    async def search_academic(
-        self,
-        *,
-        query: str,
-        max_results: int = 10,
-        source,
-    ) -> WebSearchResult:
-        self.calls.append((query, "academic"))
-        result = self._responses.pop(0)
-        if not any(response.results for response in result.responses):
-            raise WebSearchEmptyResult(
-                provider=source.provider,
-                reason="搜索源成功响应但没有返回结果",
-            )
-        return result
-
-
-class FakeCustomSourceFactory:
-    def __init__(self, *, searcher=None):
-        self.searcher = searcher
-
-    def build(self, config):
-        return SimpleNamespace(
-            kind=WebSearchSourceKind.CUSTOM,
-            provider=config.provider,
-            source_id=config.source_id,
-            api_key=config.api_key,
-            searcher=self.searcher,
-        )
-
-
-class FakePlatformSourceFactory:
-    def build(self, config):
-        return SimpleNamespace(
-            kind=config.source_kind,
-            provider=config.provider,
-            source_id=config.source_id,
-            api_key=config.api_key,
-            searcher=None,
-        )
-
-
-class FakePaperHydrator:
-    def __init__(self, result: HydratedPaper) -> None:
+class FakeSearchService:
+    def __init__(self, result: WebSearchResult) -> None:
         self.result = result
         self.calls: list[dict[str, object]] = []
 
-    async def hydrate(self, **kwargs) -> HydratedPaper:
+    async def search(self, **kwargs) -> WebSearchResult:
         self.calls.append(kwargs)
         return self.result
 
 
-class FakeProviderSearcher:
-    def __init__(self, responses: list[WebSearchResult]) -> None:
-        self._responses = list(responses)
-        self.calls: list[tuple[str, str]] = []
+class FakeCredentialRepository:
+    def __init__(self, api_key: str = "exa-key") -> None:
+        self.api_key = api_key
+        self.calls: list[tuple[str, SearchProviderName]] = []
 
-    async def search_web(
-        self,
-        *,
-        query: str,
-        max_results: int,
-    ) -> ProviderSearchResponse:
-        self.calls.append((query, "web"))
-        return self._responses.pop(0).responses[0]
-
-    async def search_academic(
-        self,
-        *,
-        query: str,
-        max_results: int,
-    ) -> ProviderSearchResponse:
-        self.calls.append((query, "academic"))
-        return self._responses.pop(0).responses[0]
+    async def get_custom_api_key(self, *, user_id: str, provider: SearchProviderName) -> str:
+        self.calls.append((user_id, provider))
+        return self.api_key
 
 
-def _response(
-    *,
-    query: str,
-    url: str | None = None,
-    title: str = "Sample Title",
-    source_id: str = "custom:exa:test",
-) -> WebSearchResult:
-    results = ()
-    if url is not None:
-        results = (
-            ProviderSearchResult(
-                title=title,
-                url=url,
-                preview=SearchPreview(
-                    overview="overview",
-                    highlights=("highlight",),
-                ),
-            ),
+class FakeIntegrationSearcherFactory:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def build(self, **kwargs):
+        self.calls.append(kwargs)
+        return object()
+
+
+class FakeRuntimeContextResolver:
+    async def resolve_platform(self, *, user_id: str, session_id: str) -> WebSearchRuntimeConfig:
+        return WebSearchRuntimeConfig(
+            user_id=user_id,
+            session_id=session_id,
+            search_config_id="platform_member:exa",
+            source_kind=WebSearchSourceKind.PLATFORM_MEMBER,
+            provider=SearchProviderName.EXA,
+            source_id="platform_member:exa",
+            api_key="platform-key",
         )
+
+
+class FakePlatformSourceFactory:
+    def build(self, config: WebSearchRuntimeConfig):
+        return types.SimpleNamespace(
+            kind=config.source_kind,
+            provider=config.provider,
+            source_id=config.source_id,
+            api_key=config.api_key,
+            searcher=object(),
+        )
+
+
+def _result(query: str = "rag paper") -> WebSearchResult:
     return WebSearchResult(
         query=query,
         responses=(
             ProviderSearchResponse(
                 query=query,
                 provider=SearchProviderName.EXA,
-                results=results,
-                source_id=source_id,
+                results=(
+                    ProviderSearchResult(
+                        title="Attention Is All You Need",
+                        url="https://arxiv.org/abs/1706.03762",
+                        preview=SearchPreview(
+                            overview="overview",
+                            highlights=("highlight",),
+                        ),
+                    ),
+                ),
+                source_id="custom:exa",
             ),
         ),
     )
 
 
 @pytest.mark.anyio
-async def test_web_search_empty_result_does_not_run_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_exa_search_uses_provider_credential_and_academic_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _rank_candidates(**kwargs):
-        return []
+        return ["[1]"]
 
     monkeypatch.setattr(
-        "chat.application.tools.web_tools._search_tool_utils.select_candidate_ids",
+        "chat.application.tools.search_tools.web_search.tool_utils.select_candidate_ids",
         _rank_candidates,
     )
 
-    service = FakeWebSearchService(
-        responses=[
-            _response(query="first", url=None),
-        ]
-    )
-    repository = FakeCandidateRepository(mappings=[])
-    tool = WebSearchTool(
+    credential_repository = FakeCredentialRepository()
+    integration_factory = FakeIntegrationSearcherFactory()
+    service = FakeSearchService(_result())
+    tool = ExaSearchTool(
         service=service,
-        custom_source_factory=FakeCustomSourceFactory(),
-        platform_source_factory=FakePlatformSourceFactory(),
-        candidate_repository=repository,
-    )
-    with pytest.raises(ToolExecutionError) as exc_info:
-        await tool.execute(
-            {
-                "user_id": "user-1",
-                "session_id": "session-1",
-                "search_config": WebSearchRuntimeConfig(
-                    user_id="user-1",
-                    session_id="session-1",
-                    search_config_id="platform_default",
-                    source_kind=WebSearchSourceKind.PLATFORM_DEFAULT,
-                    provider=None,
-                    source_id="platform_default",
-                ),
-            },
-            question="question",
-            query="first",
-        )
-
-    assert getattr(exc_info.value, "reason") == "web_search_empty_result"
-    assert service.calls == [("first", "web")]
-    assert repository.mappings == []
-
-
-@pytest.mark.anyio
-async def test_academic_search_keeps_exa_url_after_openalex_hydration(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _rank_candidates(**kwargs):
-        return []
-
-    monkeypatch.setattr(
-        "chat.application.tools.web_tools._search_tool_utils.select_candidate_ids",
-        _rank_candidates,
-    )
-
-    repository = FakeCandidateRepository(mappings=[])
-    provider_searcher = FakeProviderSearcher(
-        responses=[
-            WebSearchResult(
-                query="rag paper",
-                responses=(
-                    ProviderSearchResponse(
-                        query="rag paper",
-                        provider=SearchProviderName.EXA,
-                        results=(
-                            ProviderSearchResult(
-                                title="Attention Is All You Need",
-                                url="https://arxiv.org/abs/1706.03762",
-                                preview=SearchPreview(
-                                    overview="overview",
-                                    highlights=("highlight",),
-                                ),
-                            ),
-                        ),
-                        source_id="custom:exa:test",
-                    ),
-                ),
-            ),
-        ]
-    )
-    hydrator = FakePaperHydrator(
-        HydratedPaper(
-            doi="10.1000/test",
-            publication_year=2020,
-            cited_by_count=42,
-            authors=(
-                HydratedPaperAuthor(
-                    name="Patrick Lewis",
-                    institutions=("Meta AI",),
-                ),
-            ),
-            institutions=("Meta AI",),
-        )
-    )
-    academic_service = AcademicSearchService(
-        paper_hydrator=hydrator,
-    )
-    tool = AcademicSearchTool(
-        service=academic_service,
-        custom_source_factory=FakeCustomSourceFactory(searcher=provider_searcher),
-        platform_source_factory=FakePlatformSourceFactory(),
-        candidate_repository=repository,
+        integration_searcher_factory=integration_factory,
+        credential_repository=credential_repository,
     )
 
     result = await tool.execute(
-        {
-            "user_id": "user-1",
-            "session_id": "session-1",
-            "search_config": WebSearchRuntimeConfig(
-                user_id="user-1",
-                session_id="session-1",
-                search_config_id="custom:exa",
-                source_kind=WebSearchSourceKind.CUSTOM,
-                provider=SearchProviderName.EXA,
-                source_id="custom:exa:test",
-                api_key="exa-key",
-                openalex_api_key="openalex-key",
-                supports_academic=True,
-            ),
-        },
+        {"user_id": "user-1", "session_id": "session-1"},
         question="find rag papers",
         query="rag paper",
+        mode="academic",
     )
 
-    candidate = result.visible_result["candidates"][0]
-    assert result.visible_result["query"] == "rag paper"
-    assert provider_searcher.calls == [("rag paper", "academic")]
-    assert not hasattr(candidate, "url")
-    assert not hasattr(candidate, "final_url_source")
-    assert not hasattr(candidate, "open_access")
-    assert candidate.doi == "10.1000/test"
-    assert repository.mappings[0].url == "https://arxiv.org/abs/1706.03762"
+    assert credential_repository.calls == [("user-1", SearchProviderName.EXA)]
+    assert integration_factory.calls[0]["provider"] == SearchProviderName.EXA
+    assert service.calls[0]["mode"] == SearchMode.ACADEMIC
+    assert result.tag == "exa_search_result"
+    assert result.visible_result["mode"] == "academic"
+    assert result.visible_result["recommended_ids"] == ("[1]",)
+    assert result.visible_result["candidates"][0].url == "https://arxiv.org/abs/1706.03762"
+
+
+@pytest.mark.anyio
+async def test_platform_search_resolves_platform_source_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _rank_candidates(**kwargs):
+        return []
+
+    monkeypatch.setattr(
+        "chat.application.tools.search_tools.web_search.tool_utils.select_candidate_ids",
+        _rank_candidates,
+    )
+
+    service = FakeSearchService(_result("platform query"))
+    tool = PlatformSearchTool(
+        service=service,
+        platform_source_factory=FakePlatformSourceFactory(),
+        runtime_context_resolver=FakeRuntimeContextResolver(),
+    )
+
+    result = await tool.execute(
+        {"user_id": "user-1", "session_id": "session-1"},
+        question="question",
+        query="platform query",
+    )
+
+    assert service.calls[0]["source"].source_id == "platform_member:exa"
+    assert service.calls[0]["mode"] == SearchMode.WEB
+    assert result.tag == "platform_search_result"
+    assert result.visible_result["mode"] == "web"
+    assert result.visible_result["candidates"][0].url == "https://arxiv.org/abs/1706.03762"
+
+
+@pytest.mark.anyio
+async def test_platform_academic_mode_requires_academic_provider() -> None:
+    class NonAcademicResolver:
+        async def resolve_platform(self, *, user_id: str, session_id: str) -> WebSearchRuntimeConfig:
+            return WebSearchRuntimeConfig(
+                user_id=user_id,
+                session_id=session_id,
+                search_config_id="platform_default",
+                source_kind=WebSearchSourceKind.PLATFORM_DEFAULT,
+                provider=None,
+                source_id="platform_default",
+            )
+
+    tool = PlatformSearchTool(
+        service=FakeSearchService(_result()),
+        platform_source_factory=FakePlatformSourceFactory(),
+        runtime_context_resolver=NonAcademicResolver(),
+    )
+
+    with pytest.raises(ToolExecutionError) as exc_info:
+        await tool.execute(
+            {"user_id": "user-1", "session_id": "session-1"},
+            question="papers",
+            query="papers",
+            mode="academic",
+        )
+
+    assert getattr(exc_info.value, "reason") == "platform_search_academic_unavailable"

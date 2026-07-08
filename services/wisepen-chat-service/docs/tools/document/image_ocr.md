@@ -26,7 +26,7 @@ OCR provider：`src/chat/application/tools/document_tools/ocr/`
 | `file_ref` | `string` | 内部 `tfile_*` 图片引用。 |
 | `file_path` | `string` | 用户直接给出的图片 URL/路径，或可信上游工具路径。 |
 
-`file_ref` 和 `file_path` 通过 `ToolParametersSchema.exactly_one_of` 统一校验：二者必须且只能提供一组。`file_ref` 通过 `ToolRunFileStore.resolve_ref(...)` 校验 `user_id/session_id` 作用域；URL 形式的 `file_path` 使用工具层共享 URL fetcher 下载。
+`file_ref` 和 `file_path` 在工具 `execute()` 入口校验：二者必须且只能提供一组。`file_ref` 通过 `ToolRunFileStore.resolve_ref(...)` 校验 `user_id/session_id` 作用域；URL 形式的 `file_path` 使用工具层共享 URL fetcher 下载。
 
 ## 输出
 

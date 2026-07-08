@@ -6,7 +6,7 @@ from hashlib import sha256
 from beanie.operators import In
 from pymongo.errors import DuplicateKeyError
 
-from chat.application.tools.web_tools.search_services.providers.models import SearchProviderName
+from chat.application.tools.search_tools.web_search.providers.models import SearchProviderName
 from chat.core.security import SecretCipher, SecretCipherError
 from chat.domain.entities.web_search_credential import (
     WebSearchCredential,
@@ -56,7 +56,6 @@ class MongoWebSearchCredentialRepository:
             user_id: str,
             provider: SearchProviderName,
             api_key: str,
-            openalex_api_key: str | None = None,
     ) -> WebSearchCredential:
         # 1. 前置业务策略校验
         if not provider.supports_custom_credential:
@@ -81,17 +80,6 @@ class MongoWebSearchCredentialRepository:
                 custom_msg=str(exc),
             ) from exc
 
-        normalized_openalex_key = (openalex_api_key or "").strip()
-        openalex_api_key_ciphertext = ""
-        if normalized_openalex_key:
-            try:
-                openalex_api_key_ciphertext = self._secret_cipher.encrypt(normalized_openalex_key)
-            except SecretCipherError as exc:
-                raise ServiceException(
-                    ChatErrorCode.WEB_SEARCH_CREDENTIAL_INVALID,
-                    custom_msg=str(exc),
-                ) from exc
-
         # 3. 检索旧的自定义凭证并进行 upsert 路由
         now = datetime.now(timezone.utc)
         credential = await WebSearchCredential.find_one(
@@ -108,9 +96,6 @@ class MongoWebSearchCredentialRepository:
                 source=WebSearchCredentialSource.CUSTOM,
                 api_key_ciphertext=api_key_ciphertext,
                 api_key_fingerprint=self._fingerprint_api_key(api_key),
-                openalex_api_key_ciphertext=openalex_api_key_ciphertext,
-                openalex_api_key_fingerprint=self._fingerprint_optional_api_key(normalized_openalex_key),
-                support_academic=provider.supports_academic_search,
                 created_at=now,
                 updated_at=now,
             )
@@ -120,9 +105,6 @@ class MongoWebSearchCredentialRepository:
         # 分支 B: 覆盖旧凭证
         credential.api_key_ciphertext = api_key_ciphertext
         credential.api_key_fingerprint = self._fingerprint_api_key(api_key)
-        credential.openalex_api_key_ciphertext = openalex_api_key_ciphertext
-        credential.openalex_api_key_fingerprint = self._fingerprint_optional_api_key(normalized_openalex_key)
-        credential.support_academic = provider.supports_academic_search
         credential.updated_at = now
 
         return await self._ensure_single_active(user_id=user_id, target=credential)
@@ -137,7 +119,6 @@ class MongoWebSearchCredentialRepository:
             WebSearchCredential.user_id == user_id,
             WebSearchCredential.source == WebSearchCredentialSource.CUSTOM,
             WebSearchCredential.provider == provider,
-            WebSearchCredential.is_active == True,  # noqa: E712
         )
         if credential is None or not credential.api_key_ciphertext:
             raise ServiceException(
@@ -238,12 +219,6 @@ class MongoWebSearchCredentialRepository:
         """计算秘钥摘要，以便在不解密明文的情况下比对凭证是否发生变更。"""
         return sha256(api_key.encode("utf-8")).hexdigest()
 
-    @staticmethod
-    def _fingerprint_optional_api_key(api_key: str) -> str:
-        if not api_key:
-            return ""
-        return sha256(api_key.encode("utf-8")).hexdigest()
-
     async def _get_or_create_platform_credential(
             self,
             *,
@@ -268,9 +243,6 @@ class MongoWebSearchCredentialRepository:
             is_active=is_active_default,
             api_key_ciphertext="",
             api_key_fingerprint="",
-            openalex_api_key_ciphertext="",
-            openalex_api_key_fingerprint="",
-            support_academic=False,
             created_at=now,
             updated_at=now,
         )

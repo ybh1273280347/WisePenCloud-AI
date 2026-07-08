@@ -13,10 +13,11 @@ from chat.application.query_loop_runtime import QueryLoopRuntime
 from chat.application.token_counter import TokenCounter
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
-from chat.application.tools.skill_tools.utils.skill_matcher import SkillMatcher
-from chat.application.tools.web_tools.search_services.core.runtime_context import (
-    WebSearchRuntimeContextResolver,
+from chat.application.tools.search_tools.exposure import (
+    WebSearchCredentialExposureRepository,
+    active_search_tool_names,
 )
+from chat.application.tools.skill_tools.utils.skill_matcher import SkillMatcher
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
 from chat.domain.interfaces.llm import TextCompletionProvider
@@ -36,7 +37,6 @@ from common.logger import error
 _SKILL_TOOL_NAMES = frozenset({"load_skill", "load_skill_asset"})
 # Session 工具默认不暴露；仅在本轮存在存在不可见的上下文历史时解禁（有summary）
 _SESSION_TOOL_NAMES = frozenset({"get_historical_chat_messages"})
-_ACADEMIC_TOOL_NAMES = frozenset({"academic_search"})
 
 
 class ChatTurnCoordinator:
@@ -58,9 +58,9 @@ class ChatTurnCoordinator:
             hot_context_repo: HotContextRepository,
             tool_registry: ToolRegistry,
             tool_dispatcher: ToolDispatcher,
+            web_search_credential_repo: WebSearchCredentialExposureRepository,
             kafka_producer: KafkaProducerClient,
             skill_matcher: SkillMatcher,
-            web_search_runtime_context_resolver: WebSearchRuntimeContextResolver,
             agent_resolver: AgentResolver | None = None,
     ):
         self._memory = memory
@@ -70,6 +70,7 @@ class ChatTurnCoordinator:
             message_repo=message_repo, session_repo=session_repo, hot_context_repo=hot_context_repo
         )
         self._tool_registry = tool_registry
+        self._web_search_credential_repo = web_search_credential_repo
         self._query_loop_runtime = QueryLoopRuntime(
             llm_provider_resolver=llm_provider_resolver,
             token_counter=token_counter,
@@ -84,7 +85,6 @@ class ChatTurnCoordinator:
             kafka_producer=kafka_producer
         )
         self._skill_matcher = skill_matcher
-        self._web_search_runtime_context_resolver = web_search_runtime_context_resolver
         self._agent_resolver = agent_resolver or DefaultAgentResolver()
 
     # -------------------------------------------------------------------------
@@ -171,16 +171,10 @@ class ChatTurnCoordinator:
                 low_watermark_ratio=memory_policy.low_watermark_ratio,
             )
 
-        search_config = await self._web_search_runtime_context_resolver.resolve(
-            user_id=user_id,
-            session_id=session_id,
-        )
-
         # 构建工具上下文
         tool_context: dict[str, Any] = {
             "session_id": session_id,
             "user_id": user_id,
-            "search_config": search_config
         }
 
         # 构建Skill视图
@@ -202,19 +196,22 @@ class ChatTurnCoordinator:
             # allowed_skill_ids 表示本轮展示给 LLM 的 Skill 白名单，工具执行前仍会校验
             tool_context["allowed_skill_ids"] = [s.skill_id for s in available_skills]
 
-        if search_config.supports_academic:
-            expose_tool_name_set.update(_ACADEMIC_TOOL_NAMES)
-
         if session_summary is not None:
             expose_tool_name_set.update(_SESSION_TOOL_NAMES)
 
         # 构建工具视图
-        # expose_tool_name_set 仅在有可展示 Skill 时解禁 Skill 工具
+        # expose_tool_name_set 仅用于按运行期事实解禁默认隐藏工具
 
         if not tool_and_skill_policy.enable_use_tool:
             # 若不启用Tool，则allow_tool_name_set为空
             allow_tool_name_set: Set[str] = set()
         else:
+            expose_tool_name_set.update(
+                await active_search_tool_names(
+                    user_id=user_id,
+                    credential_repository=self._web_search_credential_repo,
+                )
+            )
             # 若用户指定了 user_defined_allow_tool_names，则覆盖 agent 预设的 allow_tool_names
             allow_tool_name_set = user_defined_allow_tool_names or tool_and_skill_policy.allow_tool_names or None
 

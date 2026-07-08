@@ -5,7 +5,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
-from chat.application.tools.core.definition import ToolExactlyOneOf, ToolParametersSchema, ToolPolicy
+from chat.application.tools.core.definition import ToolParametersSchema, ToolPolicy
 from chat.application.tools.core.execution.hooks.base import ToolPreflightHook, ToolPreflightResult
 from chat.application.tools.core.llm.invocation import ToolInvocation
 
@@ -71,66 +71,11 @@ class JsonSchemaCheck(ToolPreflightHook):
         return ToolPreflightResult(ok=False, message=_format_error(error, invocation.tool_name))
 
 
-class ExactlyOneOfCheck(ToolPreflightHook):
-    """校验内部参数组 one-of 约束。
-
-    这类规则不能放进 OpenAI 可见 JSON Schema，但适合在 schema preflight 后统一执行。
-    """
-
-    name = "exactly_one_of"
-
-    async def check(
-            self,
-            invocation: ToolInvocation,
-            policy: ToolPolicy,
-            parameters_schema: ToolParametersSchema,
-            context: dict[str, Any],
-    ) -> ToolPreflightResult:
-        for rule in parameters_schema.exactly_one_of:
-            matched_group = _matched_exactly_one_group(rule, invocation.tool_call_arguments)
-            if matched_group is None:
-                return ToolPreflightResult(
-                    ok=False,
-                    message=rule.message or _format_exactly_one_of_error(rule, invocation.tool_name),
-                )
-
-        return ToolPreflightResult(ok=True)
-
-
 def _format_error(error: ValidationError, tool_name: str) -> str:
     """将 jsonschema 的 ValidationError 转为人类可读提示，仅拼接路径前缀。"""
     # absolute_path 是 deque，形如 deque(['a', 'b', 0])；点号拼接成 JSON Pointer 风格路径
     path = ".".join(str(part) for part in error.absolute_path) or "arguments"
     return f"Invalid arguments for '{tool_name}' at {path}: {error.message}"
-
-
-def _matched_exactly_one_group(
-        rule: ToolExactlyOneOf,
-        arguments: dict[str, Any],
-) -> tuple[str, ...] | None:
-    argument_keys = set(arguments)
-    matched_group: tuple[str, ...] | None = None
-
-    for group in rule.groups:
-        group_keys = set(group)
-        # 参数组必须完整出现；只出现组内一部分字段时属于半组命中，直接判失败。
-        if group_keys <= argument_keys:
-            if matched_group is not None:
-                return None
-            matched_group = group
-            continue
-        if group_keys & argument_keys:
-            return None
-
-    return matched_group
-
-
-def _format_exactly_one_of_error(rule: ToolExactlyOneOf, tool_name: str) -> str:
-    groups = [
-        " + ".join(group)
-        for group in rule.groups
-    ]
-    return f"Invalid arguments for '{tool_name}': provide exactly one of {', '.join(groups)}."
 
 
 def _blank_min_length_string_path_at(

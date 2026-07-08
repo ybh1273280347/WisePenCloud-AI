@@ -16,7 +16,7 @@
 ## 不要在这些场景使用
 
 - 只需要一个页面：用 `web_fetch`。
-- 只需要搜索候选：用 `web_search`。
+- 只需要搜索候选：用 `platform_search` 或供应商搜索工具。
 - 目标是 PDF、图片或 Office 文件：用 `document_parse` 或先用 `web_fetch` 探测。
 
 ## 参数
@@ -71,9 +71,9 @@ crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `we
 
 ## 工具链协作
 
-- `web_search -> web_fetch` 更适合开放网络找候选再读几个页面。
+- `platform_search/exa_search/... -> web_fetch` 更适合开放网络找候选再读几个页面。
 - `web_crawl -> tool_content_rerank_read / tool_content_regex_read` 更适合同站多页采集后的跨页检索。
-- `web_crawl` 不产生 `search_ref`、不产生 `tfile_*`、不解析文件。
+- `web_crawl` 不产生 `tfile_*`、不解析文件。
 
 ## 可插拔组件
 

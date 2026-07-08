@@ -3,7 +3,7 @@
 本目录记录当前已注册工具的使用边界、内部运行机制、工具链协作方式、模型约束和后续优化方向。工具按业务域分组；每个具体工具一个文件，跨工具公共机制见 [toolchain_architecture](toolchain_architecture.md)。
 
 > 第一次读？建议按下面顺序：
-> 1. 先读 [toolchain_architecture](toolchain_architecture.md)，理解 `ToolReturn`、`cnt_*`、`tfile_*`、URL 缓存、search_ref 和模型约束。
+> 1. 先读 [toolchain_architecture](toolchain_architecture.md)，理解 `ToolReturn`、`cnt_*`、`tfile_*`、URL 缓存和模型约束。
 > 2. 再读目标工具页面，确认何时触发、何时禁止触发，以及输出如何交给下一个工具。
 > 3. Review 或扩展工具时，同时检查单工具提示词和跨工具协议是否仍然一致。
 
@@ -14,7 +14,7 @@
 - `rag/`：WisePen 私有知识库检索工具。
 - `session/`：会话历史与 `cnt_*` 内容读取工具。
 - `skill/`：Skill 指令和文本资产懒加载工具。
-- `web/`：搜索、学术搜索、抓取和站点爬取工具。
+- `web/`：供应商搜索、抓取和站点爬取工具。
 
 ## 全局机制
 
@@ -81,7 +81,6 @@
 
 ### web
 
-- [academic_search](web/academic_search.md)
-- [web_search](web/web_search.md)
+- [search tools](web/web_search.md)
 - [web_fetch](web/web_fetch.md)
 - [web_crawl](web/web_crawl.md)

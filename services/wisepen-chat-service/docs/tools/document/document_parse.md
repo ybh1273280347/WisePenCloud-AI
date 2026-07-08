@@ -38,7 +38,7 @@ src/chat/application/tools/document_tools/
 | `file_refs` | `string[]` | 支持批量 `tfile_*`；超单批时工具内部自动分批。 |
 | `direct_urls` | `string[]` | 支持批量完整 `http(s)` 文档文件直链；超单批时工具内部自动分批。 |
 
-`file_refs` 和 `direct_urls` 通过 `ToolParametersSchema.exactly_one_of` 统一校验：二者必须且只能提供一组。执行上下文必须包含 `user_id` 和 `session_id`。工具会用这两个值解析并校验 `tfile_*` 的作用域；直链会先下载到短期工具文件，再复用同一解析链路。
+`file_refs` 和 `direct_urls` 在工具 `execute()` 入口校验：二者必须且只能提供一组。执行上下文必须包含 `user_id` 和 `session_id`。工具会用这两个值解析并校验 `tfile_*` 的作用域；直链会先下载到短期工具文件，再复用同一解析链路。
 
 `direct_urls` 会先经过 `tools/utils/url/security.validate_public_http_url` 校验。该校验只判断 URL 本身是否适合作为外部抓取目标，不做页面内容阻断。
 

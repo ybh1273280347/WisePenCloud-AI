@@ -65,13 +65,16 @@ from chat.application.tools.session_tools import (
 )
 from chat.application.tools.skill_tools import LoadSkillAssetTool, LoadSkillTool
 from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillMatcher
+from chat.application.tools.search_tools.anysearch_search_tool import AnySearchSearchTool
+from chat.application.tools.search_tools.baidu_qianfan_search_tool import BaiduQianfanSearchTool
+from chat.application.tools.search_tools.exa_search_tool import ExaSearchTool
+from chat.application.tools.search_tools.platform_search_tool import PlatformSearchTool
+from chat.application.tools.search_tools.tavily_search_tool import TavilySearchTool
 from chat.application.tools.tool_output_cache import ToolOutputCache
 from chat.application.tools.tool_output_renderer import ToolOutputRenderer
 from chat.application.tools.tool_settings import tool_settings
-from chat.application.tools.web_tools.academic_search_tool import AcademicSearchTool
 from chat.application.tools.web_tools.web_crawl_tool import WebCrawlTool
 from chat.application.tools.web_tools.web_fetch_tool import WebFetchTool
-from chat.application.tools.web_tools.web_search_tool import WebSearchTool
 from chat.application.tools.web_tools.fetch_services import (
     FetchCoordinator,
     WebCrawler,
@@ -83,28 +86,23 @@ from chat.application.tools.web_tools.fetch_services.fetchers import (
     HttpxFetcher,
     ScraplingFetcher,
 )
-from chat.application.tools.web_tools.search_services.academic_search import AcademicSearchService
-from chat.application.tools.web_tools.search_services.core.runtime_context import (
+from chat.application.tools.search_tools.web_search.runtime_context_resolver import (
     WebSearchRuntimeContextResolver,
 )
-from chat.application.tools.web_tools.search_services.factories.custom_source_factory import (
-    WebSearchCustomSourceFactory,
-)
-from chat.application.tools.web_tools.search_services.factories.integration_searcher_factory import (
+from chat.application.tools.search_tools.web_search.factories.integration_searcher_factory import (
     IntegrationSearcherFactory,
 )
-from chat.application.tools.web_tools.search_services.factories.platform_source_factory import (
+from chat.application.tools.search_tools.web_search.factories.platform_source_factory import (
     WebSearchPlatformSourceFactory,
 )
-from chat.application.tools.web_tools.search_services.hydrators.academic import PaperHydrator
-from chat.application.tools.web_tools.search_services.searchers import (
+from chat.application.tools.search_tools.web_search.searchers import (
     DdgSearcher,
     FourGetSearcher,
     PlatformDefaultSearcher,
     ProviderSearcher,
     SearchProviderConfig,
 )
-from chat.application.tools.web_tools.search_services.web_search import WebSearchService
+from chat.application.tools.search_tools.web_search.service import SearchService
 from chat.application.utils.llm_clients import build_query_client
 from chat.application.utils.llm_clients.embedding import build_embedding_client
 from chat.core.config.app_settings import settings
@@ -136,9 +134,6 @@ from chat.core.persistence.redis.tool_content_repository import RedisToolContent
 from chat.core.persistence.redis.tool_run_file_repository import RedisToolRunFileRepository
 from chat.core.persistence.redis.web_content_cache_repository import (
     RedisWebContentCacheRepository,
-)
-from chat.core.persistence.redis.web_search_candidate_repository import (
-    RedisWebSearchCandidateRepository,
 )
 from chat.core.providers import (
     AnthropicAdapter,
@@ -637,21 +632,13 @@ class Container(containers.DeclarativeContainer):
         anysearch_base_url=settings.WEB_SEARCH_ANYSEARCH_BASE_URL,
         baidu_qianfan_base_url=settings.WEB_SEARCH_BAIDU_QIANFAN_BASE_URL,
     )
-    web_search_custom_source_factory = providers.Singleton(
-        WebSearchCustomSourceFactory,
-        integration_searcher_factory=web_search_integration_searcher_factory,
-    )
     web_search_platform_source_factory = providers.Singleton(
         WebSearchPlatformSourceFactory,
         platform_default_searcher=platform_default_searcher,
         integration_searcher_factory=web_search_integration_searcher_factory,
     )
-    web_search_candidate_repository = providers.Singleton(
-        RedisWebSearchCandidateRepository,
-        redis_url=settings.REDIS_URL,
-    )
     web_search_service = providers.Singleton(
-        WebSearchService,
+        SearchService,
     )
 
     # --- Web Fetch / Crawl 组件 ---
@@ -695,17 +682,6 @@ class Container(containers.DeclarativeContainer):
         batch_concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
         scrapling_concurrency=tool_settings.WEB_FETCH_SCRAPLING_CONCURRENCY,
         max_scrapling_fallbacks=tool_settings.WEB_FETCH_MAX_SCRAPLING_FALLBACKS,
-    )
-
-    # --- Hydrator 组件 ---
-    openalex_paper_hydrator = providers.Singleton(
-        PaperHydrator,
-        http_client=web_search_http_client,
-        base_url=settings.OPENALEX_BASE_URL,
-    )
-    academic_search_service = providers.Singleton(
-        AcademicSearchService,
-        paper_hydrator=openalex_paper_hydrator,
     )
 
     # ==================================================================
@@ -754,19 +730,35 @@ class Container(containers.DeclarativeContainer):
     )
 
     # --- Web Tools ---
-    web_search_tool = providers.Singleton(
-        WebSearchTool,
+    platform_search_tool = providers.Singleton(
+        PlatformSearchTool,
         service=web_search_service,
-        custom_source_factory=web_search_custom_source_factory,
         platform_source_factory=web_search_platform_source_factory,
-        candidate_repository=web_search_candidate_repository,
+        runtime_context_resolver=web_search_runtime_context_resolver,
     )
-    academic_search_tool = providers.Singleton(
-        AcademicSearchTool,
-        service=academic_search_service,
-        custom_source_factory=web_search_custom_source_factory,
-        platform_source_factory=web_search_platform_source_factory,
-        candidate_repository=web_search_candidate_repository,
+    exa_search_tool = providers.Singleton(
+        ExaSearchTool,
+        service=web_search_service,
+        integration_searcher_factory=web_search_integration_searcher_factory,
+        credential_repository=web_search_credential_repo,
+    )
+    tavily_search_tool = providers.Singleton(
+        TavilySearchTool,
+        service=web_search_service,
+        integration_searcher_factory=web_search_integration_searcher_factory,
+        credential_repository=web_search_credential_repo,
+    )
+    anysearch_search_tool = providers.Singleton(
+        AnySearchSearchTool,
+        service=web_search_service,
+        integration_searcher_factory=web_search_integration_searcher_factory,
+        credential_repository=web_search_credential_repo,
+    )
+    baidu_qianfan_search_tool = providers.Singleton(
+        BaiduQianfanSearchTool,
+        service=web_search_service,
+        integration_searcher_factory=web_search_integration_searcher_factory,
+        credential_repository=web_search_credential_repo,
     )
     web_crawl_tool = providers.Singleton(
         WebCrawlTool,
@@ -775,7 +767,6 @@ class Container(containers.DeclarativeContainer):
     web_fetch_tool = providers.Singleton(
         WebFetchTool,
         service=web_fetch_coordinator,
-        candidate_repository=web_search_candidate_repository,
     )
 
     # --- RAG Tools ---
@@ -811,8 +802,11 @@ class Container(containers.DeclarativeContainer):
         tool_content_rerank_read_tool,
         tool_content_regex_read_tool,
         tool_content_sequential_read_tool,
-        web_search_tool,
-        academic_search_tool,
+        platform_search_tool,
+        exa_search_tool,
+        tavily_search_tool,
+        anysearch_search_tool,
+        baidu_qianfan_search_tool,
         web_crawl_tool,
         web_fetch_tool,
         rag_knowledge_search_tool,
@@ -839,10 +833,10 @@ class Container(containers.DeclarativeContainer):
         hot_context_repo=hot_context_repo,
         tool_registry=tool_registry,
         tool_dispatcher=tool_dispatcher,
+        web_search_credential_repo=web_search_credential_repo,
         kafka_producer=kafka_producer,
         skill_matcher=skill_matcher,
         agent_resolver=agent_resolver,
-        web_search_runtime_context_resolver=web_search_runtime_context_resolver,
     )
 
 

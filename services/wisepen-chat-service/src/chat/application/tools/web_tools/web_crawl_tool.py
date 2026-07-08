@@ -101,7 +101,7 @@ class WebCrawlTool:
                     "  - SHOULD trigger when a single web_fetch is insufficient and the user points at an entry page for deeper content.\n"
                     "DO NOT TRIGGER when:\n"
                     "  - A single page is enough — use web_fetch instead.\n"
-                    "  - The user only needs search candidates — use web_search instead.\n"
+                    "  - The user only needs search candidates — use platform_search or a provider search tool instead.\n"
                     "  - The target is a known non-HTML file (PDF/image) — use web_fetch instead.\n"
                     "\n"
                     "INPUT RULES:\n"

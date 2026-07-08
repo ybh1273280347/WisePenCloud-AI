@@ -160,4 +160,3 @@ RAG 缓存只优化中间步骤，不缓存最终答案，也不替代权限判�
 
 - `tests/rag/test_knowledge_search_tool.py`
 - `tests/rag/test_retrieval_pipeline.py`
-- `tests/api/test_tool_catalog.py`

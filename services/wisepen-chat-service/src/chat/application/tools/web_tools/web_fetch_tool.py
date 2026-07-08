@@ -4,7 +4,6 @@ from typing import Any
 
 from chat.application.tools.core import (
     ToolDefinition,
-    ToolExactlyOneOf,
     ToolExecutionError,
     ToolLLMSpec,
     ToolParametersSchema,
@@ -16,9 +15,6 @@ from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
 from chat.application.tools.web_tools.fetch_services import FetchCoordinator
 from chat.application.tools.web_tools.fetch_services.core.errors import UrlFetchError
-from chat.application.tools.web_tools.search_services.candidate_store.repository_protocol import (
-    WebSearchCandidateRepository,
-)
 from common.logger import warn
 
 # --- 全局常量定义 ---
@@ -34,22 +30,11 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
             "maxItems": MAX_URLS,
             "description": (
                 "Target URLs to fetch. Each MUST be a full http(s) URL. "
-                "Provide either urls or search_refs, not both. "
-                "Large sets are handled by an internal scheduler."
-            ),
-        },
-        "search_refs": {
-            "type": "array",
-            "items": {"type": "string", "minLength": 1},
-            "minItems": 1,
-            "maxItems": MAX_URLS,
-            "description": (
-                "Search refs returned by a prior web_search / academic_search in this session. "
-                "Provide either urls or search_refs, not both. "
                 "Large sets are handled by an internal scheduler."
             ),
         },
     },
+    "required": ["urls"],
     "additionalProperties": False,
 }
 
@@ -66,16 +51,14 @@ class WebFetchTool:
     - web_crawl 从种子 URL 出发递归爬取，自动发现并跟进链接
     """
 
-    __slots__ = ("_candidate_repository", "_definition", "_service")
+    __slots__ = ("_definition", "_service")
 
     def __init__(
             self,
             *,
             service: FetchCoordinator,
-            candidate_repository: WebSearchCandidateRepository,
     ) -> None:
         self._service = service
-        self._candidate_repository = candidate_repository
 
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
@@ -88,15 +71,13 @@ class WebFetchTool:
                     "  - SHOULD trigger when search results surface concrete URLs that need to be read.\n"
                     "  - SHOULD trigger for normal HTML pages or when you are unsure whether a URL is HTML or a file.\n"
                     "DO NOT TRIGGER when:\n"
-                    "  - The user only needs search candidates — use web_search instead.\n"
+                    "  - The user only needs search candidates — use platform_search or a provider search tool instead.\n"
                     "  - Multiple related pages on the same site are needed — use web_crawl instead.\n"
                     "  - The target is an obvious direct document file URL (PDF/Office/spreadsheet/etc.) and the user needs document content — call document_parse with direct_urls instead.\n"
                     "  - The URL is already fetched in this session — reuse the cached result instead of re-fetching.\n"
                     "\n"
                     "INPUT RULES:\n"
                     "  - Provide urls to fetch full http(s) URLs directly.\n"
-                    "  - Provide search_refs to resolve refs from a prior web_search / academic_search result in this session.\n"
-                    "  - Provide exactly one of urls or search_refs; providing both or neither is an error.\n"
                     "  - Large sets are handled by an internal scheduler with separate fast and fallback resource pools.\n"
                     "\n"
                     "OUTPUT RULES:\n"
@@ -106,15 +87,7 @@ class WebFetchTool:
                     "  - Per-URL failure is returned in the failed list with a reason; do NOT silently drop failed URLs.\n"
                     "  - Within one session, do NOT re-fetch the same url unless new information is required.\n"
                 ),
-                parameters_schema=ToolParametersSchema(
-                    PARAMETERS_SCHEMA,
-                    exactly_one_of=(
-                        ToolExactlyOneOf(
-                            groups=(("urls",), ("search_refs",)),
-                            message="Provide exactly one of urls or search_refs.",
-                        ),
-                    ),
-                ),
+                parameters_schema=ToolParametersSchema(PARAMETERS_SCHEMA),
             ),
             policy=ToolPolicy(
                 expose_by_default=True,
@@ -134,24 +107,16 @@ class WebFetchTool:
         urls: list[str] = []
         source_scope = "web_public"
 
-        # 1. 根据输入自然路由：urls 直接抓取，search_refs 解析为真实 URL
-        if "urls" in kwargs:
-            for u in kwargs["urls"]:
-                url = u.strip()
-                try:
-                    urls.append(validate_public_http_url(url))
-                except UrlSecurityError as exc:
-                    raise ToolExecutionError(
-                        reason="invalid_url",
-                        detail_reason=str(exc),
-                        retryable=False,
-                    ) from exc
-        else:
-            search_refs = tuple(item.strip() for item in kwargs["search_refs"])
-            urls, source_scope = await self._resolve_search_urls(
-                user_id=str(context["user_id"]),
-                search_refs=search_refs,
-            )
+        for u in kwargs["urls"]:
+            url = u.strip()
+            try:
+                urls.append(validate_public_http_url(url))
+            except UrlSecurityError as exc:
+                raise ToolExecutionError(
+                    reason="invalid_url",
+                    detail_reason=str(exc),
+                    retryable=False,
+                ) from exc
 
         # 2. 调用批量异步核心抓取服务
         user_id = str(context["user_id"])
@@ -212,44 +177,3 @@ class WebFetchTool:
             visible_result=visible_result,
             cacheable_texts=cacheable_texts,
         )
-
-    async def _resolve_search_urls(
-            self,
-            *,
-            user_id: str,
-            search_refs: tuple[str, ...],
-    ) -> tuple[list[str], str]:
-        """将检索引用换算为实际抓取的真实 URL 路径。"""
-        urls: list[str] = []
-        source_scope: str | None = None
-
-        for search_ref in search_refs:
-            mapping = await self._candidate_repository.get_mapping(
-                user_id=user_id,
-                search_ref=search_ref,
-            )
-            if mapping is None:
-                raise ToolExecutionError(
-                    reason="search_ref_not_found",
-                    detail_reason="search_refs must come from a prior web_search result for this user.",
-                    retryable=False,
-                )
-            try:
-                urls.append(validate_public_http_url(mapping.url))
-            except UrlSecurityError as exc:
-                raise ToolExecutionError(
-                    reason="invalid_search_ref_url",
-                    detail_reason=str(exc),
-                    retryable=False,
-                ) from exc
-            if source_scope is None:
-                source_scope = mapping.source_scope
-            elif source_scope != mapping.source_scope:
-                # 同一批抓取只允许一个缓存访问域，避免 public/custom 混写污染缓存。
-                raise ToolExecutionError(
-                    reason="mixed_search_ref_source_scope",
-                    detail_reason="search_refs in one web_fetch call must share the same source scope.",
-                    retryable=False,
-                )
-
-        return urls, source_scope or "web_public"

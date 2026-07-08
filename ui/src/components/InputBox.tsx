@@ -18,7 +18,7 @@ type InputBoxProps = {
   onChange: (value: string) => void;
   onSelectModel: (option: ModelOption) => void;
   onSelectSearchCredential: (source: "platform" | "custom", provider: string) => Promise<WebSearchCredential>;
-  onCreateCustomSearchCredential: (provider: string, apiKey: string, openalexApiKey?: string) => Promise<WebSearchCredential>;
+  onCreateCustomSearchCredential: (provider: string, apiKey: string) => Promise<WebSearchCredential>;
   onSubmit: () => void;
   onStop: () => void;
 };
@@ -46,12 +46,11 @@ export function InputBox({
   const [savingSearch, setSavingSearch] = useState(false);
   const [selectedCustomProvider, setSelectedCustomProvider] = useState("exa");
   const [customApiKey, setCustomApiKey] = useState("");
-  const [customOpenAlexApiKey, setCustomOpenAlexApiKey] = useState("");
   const selectedModelValue = `${settings.modelId}:${settings.providerId}`;
   const platformCredential = searchCredentials.find((credential) => credential.source === "platform");
   const activeSearchSource = settings.searchSource;
   const selectedModel = modelOptions.find((option) => option.value === selectedModelValue);
-  const customProviders = ["exa", "tavily", "anysearch"];
+  const customProviders = ["exa", "tavily", "anysearch", "baidu_qianfan"];
   const advancedModels = modelOptions.filter((option) => option.billingRatio > 1);
   const basicModels = modelOptions.filter((option) => option.billingRatio <= 1);
   const hasDraft = value.trim().length > 0;
@@ -174,15 +173,7 @@ export function InputBox({
                               type="password"
                               value={customApiKey}
                             />
-                            <div className="flex gap-1.5">
-                              <input
-                                aria-label="OpenAlex API Key"
-                                className="h-8 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-2.5 font-mono text-xs font-semibold text-gray-900 outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-sky-500/20"
-                                onChange={(event) => setCustomOpenAlexApiKey(event.target.value)}
-                                placeholder="OpenAlex Key（可选）"
-                                type="password"
-                                value={customOpenAlexApiKey}
-                              />
+                            <div className="flex justify-end">
                               <button
                                 aria-label="启用自定义搜索源"
                                 className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sky-200 bg-sky-500 text-white transition-colors hover:bg-sky-600 disabled:pointer-events-none disabled:opacity-50"
@@ -192,10 +183,8 @@ export function InputBox({
                                   void onCreateCustomSearchCredential(
                                     selectedCustomProvider,
                                     customApiKey,
-                                    customOpenAlexApiKey,
                                   ).then(() => {
                                     setCustomApiKey("");
-                                    setCustomOpenAlexApiKey("");
                                   }).finally(() => {
                                     setSavingSearch(false);
                                   });

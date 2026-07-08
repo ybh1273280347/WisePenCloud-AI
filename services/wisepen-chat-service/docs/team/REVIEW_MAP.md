@@ -47,7 +47,6 @@
 | `ToolReturn` | 需要托管大文本时用的返回值包装 | [02](02-tool-return-and-content.md)、[06](06-tool-cross-cutting-flow.md) |
 | `cnt_*` | 会话内短期大文本读取凭证 | [02](02-tool-return-and-content.md)、[toolchain](../tools/toolchain_architecture.md) |
 | `tfile_*` | 工具间临时文件引用 | [02](02-tool-return-and-content.md)、[06](06-tool-cross-cutting-flow.md) |
-| `search_ref` | 搜索候选到真实 URL 的短期映射 | [07](07-web-search-extension.md)、[toolchain](../tools/toolchain_architecture.md) |
 | `web_content_cache` | URL 内容的跨工具复用缓存 | [06](06-tool-cross-cutting-flow.md)、[toolchain](../tools/toolchain_architecture.md) |
 | 工具族 | 围绕同一类外界交互形成稳定边界的一组工具 | [01](01-tool-architecture.md)、[toolchain](../tools/toolchain_architecture.md) |
 | 统一切面 | 所有工具共享的渲染、缓存、校验、存储等横切逻辑 | [06](06-tool-cross-cutting-flow.md) |

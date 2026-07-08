@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from chat.application.tools.core.execution.hooks.builtin import (
-    ExactlyOneOfCheck,
     JsonSchemaCheck,
     RequiredContextCheck,
 )
@@ -60,7 +59,6 @@ class ToolExecutor:
 
             preflight_hooks = [
                 JsonSchemaCheck(),
-                ExactlyOneOfCheck(),
                 RequiredContextCheck(),
                 *tool.definition.preflight_hooks,
             ]

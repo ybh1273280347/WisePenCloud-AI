@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 const TOOL_META = {
-  web_search: { icon: Search, label: "web_search" },
+  platform_search: { icon: Search, label: "platform_search" },
   web_fetch: { icon: Globe, label: "web_fetch" },
   document_parse: { icon: FileText, label: "document_parse" },
   tool_content_read: { icon: FileSearch, label: "tool_content_read" },
@@ -46,7 +46,7 @@ const READ_SOURCES_3 = [
 const STEPS = [
   {
     id: 1,
-    tool: "web_search",
+    tool: "platform_search",
     type: "group",
     count: 9,
     items: SEARCH_QUERIES.map((q, i) => ({

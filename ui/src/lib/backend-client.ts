@@ -102,14 +102,12 @@ export async function createWebSearchCredential(
   settings: RuntimeSettings,
   provider: string,
   apiKey: string,
-  openalexApiKey?: string,
 ) {
   return request<WebSearchCredential>(settings, "/webSearch/createWebSearchCredential", {
     body: {
       provider,
       source: "custom",
       api_key: apiKey,
-      openalex_api_key: openalexApiKey || null,
     },
     method: "POST",
   });

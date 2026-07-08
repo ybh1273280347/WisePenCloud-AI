@@ -103,7 +103,7 @@ function deriveInputSummary(part: ToolPart): string {
     return toolName;
   }
 
-  if (toolName === "web_search" && typeof inputRecord.query === "string") {
+  if (toolName.endsWith("_search") && typeof inputRecord.query === "string") {
     return inputRecord.query;
   }
 

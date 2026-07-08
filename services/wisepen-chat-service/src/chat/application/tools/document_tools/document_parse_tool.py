@@ -19,7 +19,7 @@ from chat.application.tools.common.web_content_cache._utils.metadata import (
 )
 from chat.application.tools.core import (
     ToolDefinition,
-    ToolExactlyOneOf,
+    ToolExecutionError,
     ToolLLMSpec,
     ToolParametersSchema,
     ToolPolicy,
@@ -144,13 +144,7 @@ class DocumentParseTool:
                             },
                         },
                         "additionalProperties": False,
-                    },
-                    exactly_one_of=(
-                        ToolExactlyOneOf(
-                            groups=(("file_refs",), ("direct_urls",)),
-                            message="Provide exactly one of file_refs or direct_urls.",
-                        ),
-                    ),
+                    }
                 ),
             ),
             policy=ToolPolicy(
@@ -174,6 +168,13 @@ class DocumentParseTool:
         session_id = str(context["session_id"])
         file_refs = tuple(str(value).strip() for value in kwargs.get("file_refs", ()))
         direct_urls = tuple(str(value).strip() for value in kwargs.get("direct_urls", ()))
+
+        if bool(file_refs) == bool(direct_urls):
+            raise ToolExecutionError(
+                reason="invalid_document_parse_input",
+                detail_reason="Provide exactly one of file_refs or direct_urls.",
+                retryable=False,
+            )
 
         if file_refs:
             item_results = await self._parse_file_ref_batches(

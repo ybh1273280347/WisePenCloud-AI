@@ -410,7 +410,7 @@ export default function App() {
     }
   }
 
-  async function handleCreateCustomSearchCredential(provider: string, apiKey: string, openalexApiKey?: string) {
+  async function handleCreateCustomSearchCredential(provider: string, apiKey: string) {
     if (settings.mode === "mock") {
       const now = new Date().toISOString();
       const credential: WebSearchCredential = {
@@ -420,7 +420,6 @@ export default function App() {
         is_member: false,
         api_key_masked: maskApiKey(apiKey),
         api_key_fingerprint: `mock-${provider}-${Date.now()}`,
-        openalex_api_key_masked: openalexApiKey ? maskApiKey(openalexApiKey) : "",
         is_active: true,
         created_at: now,
         updated_at: now,
@@ -447,7 +446,7 @@ export default function App() {
       return credential;
     }
 
-    const credential = await createWebSearchCredential(settings, provider, apiKey, openalexApiKey);
+    const credential = await createWebSearchCredential(settings, provider, apiKey);
     const credentials = await listWebSearchCredentials(settings);
     applySearchCredentials(credentials);
     return credential;
@@ -472,7 +471,6 @@ export default function App() {
           is_member: source === "platform",
           api_key_masked: "",
           api_key_fingerprint: "",
-          openalex_api_key_masked: "",
           is_active: true,
           created_at: now,
           updated_at: now,
