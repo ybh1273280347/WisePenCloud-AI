@@ -5,7 +5,7 @@ from typing import Any
 
 from chat.application.tools.document_tools.document_parse.core.models import DocumentParseRequest, DocumentParseResult
 from chat.application.tools.utils.file_type_detect import detect_file_type
-from .parsers.common_document import CommonDocumentParser
+from .parsers.generic import GenericDocumentParser
 from .parsers.specialized import PdfParser
 from .parsers.specialized.spreadsheet_parser import (
     PandasSpreadsheetParser,
@@ -39,4 +39,4 @@ class DocumentParseService:
             parser_request = replace(request, mime_type=mime_type)
             return await PandasSpreadsheetParser().parse(parser_request)
 
-        return await CommonDocumentParser().parse(request)
+        return await GenericDocumentParser().parse(request)

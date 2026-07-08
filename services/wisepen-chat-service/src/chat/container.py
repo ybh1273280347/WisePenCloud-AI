@@ -449,11 +449,6 @@ class Container(containers.DeclarativeContainer):
         collection_name=settings.QDRANT_RAG_COLLECTION_NAME,
         permission_filter_builder=rag_permission_filter_builder,
         bm25_config=rag_qdrant_bm25_config,
-        weighted_rrf_k=settings.RAG_QDRANT_WEIGHTED_RRF_K,
-        semantic_dense_rrf_weight=settings.RAG_QDRANT_SEMANTIC_DENSE_RRF_WEIGHT,
-        semantic_sparse_rrf_weight=settings.RAG_QDRANT_SEMANTIC_SPARSE_RRF_WEIGHT,
-        lexical_dense_rrf_weight=settings.RAG_QDRANT_LEXICAL_DENSE_RRF_WEIGHT,
-        lexical_sparse_rrf_weight=settings.RAG_QDRANT_LEXICAL_SPARSE_RRF_WEIGHT,
     )
     rag_elastic_filter = providers.Singleton(
         RagElasticFilter,
@@ -479,6 +474,10 @@ class Container(containers.DeclarativeContainer):
     )
     rag_evidence_ranking_service = providers.Singleton(
         RagEvidenceRankingService,
+        semantic_dense_rrf_weight=settings.RAG_QDRANT_SEMANTIC_DENSE_RRF_WEIGHT,
+        semantic_sparse_rrf_weight=settings.RAG_QDRANT_SEMANTIC_SPARSE_RRF_WEIGHT,
+        lexical_dense_rrf_weight=settings.RAG_QDRANT_LEXICAL_DENSE_RRF_WEIGHT,
+        lexical_sparse_rrf_weight=settings.RAG_QDRANT_LEXICAL_SPARSE_RRF_WEIGHT,
     )
     rag_evidence_materialization_cache = providers.Singleton(
         RedisRagEvidenceMaterializationCache,

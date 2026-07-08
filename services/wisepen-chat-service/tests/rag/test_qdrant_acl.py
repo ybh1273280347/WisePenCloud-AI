@@ -17,7 +17,6 @@ from chat.application.rag.retrieval.models import (  # noqa: E402
     RagQdrantRetrievalFilterRequest,
     RagQdrantRetrievalRequest,
     RagRetrievalChannel,
-    RagRetrievalProfile,
 )
 from chat.application.rag.retrieval.permission_filter import RagPermissionFilterBuilder  # noqa: E402
 from chat.application.rag.retrieval.pipeline.qdrant_retrieve import RagQdrantRetriever  # noqa: E402
@@ -139,27 +138,31 @@ async def test_qdrant_acl_projection_updates_payload_by_resource_filter() -> Non
 
 
 @pytest.mark.anyio
-async def test_qdrant_retrieve_uses_dense_sparse_rrf_prefetch() -> None:
+async def test_qdrant_retrieve_queries_dense_and_sparse_channels() -> None:
     client = _FakeQdrantClient()
-    client.query_response = qdrant_types.QueryResponse(
-        points=[
-            _scored_point(
-                "chunk-a",
-                score=0.82,
-                payload={
-                    "chunk_id": "chunk-a",
-                    "parent_chunk_id": "parent-a",
-                    "resource_id": "res-1",
-                    "document_version": "3",
-                    "corpus_version": "3",
-                    "evidence_text": "AppBuilder API Key 用于鉴权。",
-                    "page_label": "1",
-                    "section_path": ["鉴权"],
-                    "anchor_labels": ["表 1"],
-                },
-            )
-        ]
-    )
+    payload = {
+        "chunk_id": "chunk-a",
+        "parent_chunk_id": "parent-a",
+        "resource_id": "res-1",
+        "document_version": "3",
+        "corpus_version": "3",
+        "evidence_text": "AppBuilder API Key 用于鉴权。",
+        "page_label": "1",
+        "section_path": ["鉴权"],
+        "anchor_labels": ["表 1"],
+    }
+    client.query_responses = [
+        qdrant_types.QueryResponse(
+            points=[
+                _scored_point("chunk-a", score=0.82, payload=payload),
+            ]
+        ),
+        qdrant_types.QueryResponse(
+            points=[
+                _scored_point("chunk-a", score=0.77, payload=payload),
+            ]
+        ),
+    ]
     retriever = RagQdrantRetriever(
         client=client,
         collection_name="rag-test",
@@ -177,12 +180,11 @@ async def test_qdrant_retrieve_uses_dense_sparse_rrf_prefetch() -> None:
         )
     )
 
-    call = client.query_points_calls[0]
-    assert call["collection_name"] == "rag-test"
-    assert len(call["prefetch"]) == 2
-    assert call["query"].fusion == qdrant_models.Fusion.RRF
-    assert [item.using for item in call["prefetch"]] == ["dense", "sparse"]
-    sparse_query = call["prefetch"][1].query
+    dense_call, sparse_call = client.query_points_calls
+    assert dense_call["collection_name"] == "rag-test"
+    assert [call["using"] for call in client.query_points_calls] == ["dense", "sparse"]
+    assert all("prefetch" not in call for call in client.query_points_calls)
+    sparse_query = sparse_call["query"]
     assert isinstance(sparse_query, qdrant_models.Document)
     assert sparse_query.model == "Qdrant/bm25"
     assert sparse_query.text == "AppBuilder API Key"
@@ -191,10 +193,14 @@ async def test_qdrant_retrieve_uses_dense_sparse_rrf_prefetch() -> None:
         RagRetrievalChannel.DENSE,
         RagRetrievalChannel.SPARSE,
     )
+    assert [(signal.channel, signal.rank) for signal in chunks[0].retrieval_signals] == [
+        (RagRetrievalChannel.DENSE, 1),
+        (RagRetrievalChannel.SPARSE, 1),
+    ]
 
 
 @pytest.mark.anyio
-async def test_qdrant_semantic_profile_uses_weighted_dense_sparse_rrf() -> None:
+async def test_qdrant_retrieve_returns_dense_sparse_channel_signals() -> None:
     client = _FakeQdrantClient()
     client.query_responses = [
         qdrant_types.QueryResponse(
@@ -215,9 +221,6 @@ async def test_qdrant_semantic_profile_uses_weighted_dense_sparse_rrf() -> None:
         collection_name="rag-test",
         permission_filter_builder=RagPermissionFilterBuilder(),
         bm25_config=_bm25_config(),
-        weighted_rrf_k=0.0,
-        semantic_dense_rrf_weight=3.0,
-        semantic_sparse_rrf_weight=1.0,
     )
 
     chunks = await retriever.retrieve(
@@ -225,7 +228,6 @@ async def test_qdrant_semantic_profile_uses_weighted_dense_sparse_rrf() -> None:
             resource_id="res-1",
             query_text="概念性问题",
             query_vector=[0.1, 0.2],
-            retrieval_profile=RagRetrievalProfile.SEMANTIC,
             top_k=10,
         )
     )
@@ -238,46 +240,38 @@ async def test_qdrant_semantic_profile_uses_weighted_dense_sparse_rrf() -> None:
         RagRetrievalChannel.DENSE,
         RagRetrievalChannel.SPARSE,
     )
+    assert [(signal.channel, signal.rank) for signal in chunks[1].retrieval_signals] == [
+        (RagRetrievalChannel.DENSE, 2),
+        (RagRetrievalChannel.SPARSE, 2),
+    ]
 
 
 @pytest.mark.anyio
-async def test_qdrant_lexical_profile_uses_sparse_weighted_rrf() -> None:
+async def test_qdrant_retrieve_uses_dense_only_when_query_text_is_empty() -> None:
     client = _FakeQdrantClient()
-    client.query_responses = [
-        qdrant_types.QueryResponse(
-            points=[
-                _scored_point("dense-a", score=0.91),
-            ]
-        ),
-        qdrant_types.QueryResponse(
-            points=[
-                _scored_point("sparse-a", score=0.93),
-                _scored_point("dense-a", score=0.87),
-            ]
-        ),
-    ]
+    client.query_response = qdrant_types.QueryResponse(
+        points=[
+            _scored_point("dense-a", score=0.91),
+        ]
+    )
     retriever = RagQdrantRetriever(
         client=client,
         collection_name="rag-test",
         permission_filter_builder=RagPermissionFilterBuilder(),
         bm25_config=_bm25_config(),
-        weighted_rrf_k=0.0,
-        lexical_dense_rrf_weight=1.0,
-        lexical_sparse_rrf_weight=3.0,
     )
 
     chunks = await retriever.retrieve(
         RagQdrantRetrievalRequest(
             resource_id="res-1",
-            query_text="错误码 E401",
+            query_text="",
             query_vector=[0.1, 0.2],
-            retrieval_profile=RagRetrievalProfile.LEXICAL,
             top_k=10,
         )
     )
 
-    assert [call["using"] for call in client.query_points_calls] == ["dense", "sparse"]
-    assert [chunk.chunk_id for chunk in chunks] == ["sparse-a", "dense-a"]
+    assert [call["using"] for call in client.query_points_calls] == ["dense"]
+    assert chunks[0].retrieval_channels == (RagRetrievalChannel.DENSE,)
 
 
 @pytest.mark.anyio

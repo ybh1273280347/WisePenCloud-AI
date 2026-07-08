@@ -66,10 +66,16 @@ class RagQdrantRetrievalRequest:
     resource_id: str
     query_text: str
     query_vector: Sequence[float]
-    retrieval_profile: RagRetrievalProfile = RagRetrievalProfile.BALANCED
     candidate_chunk_ids: tuple[str, ...] = ()
     permission_scope: RagPermissionScope | None = None
     top_k: int = 100
+
+
+@dataclass(frozen=True, slots=True)
+class RagRetrievalSignal:
+    channel: RagRetrievalChannel
+    rank: int
+    score: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +95,7 @@ class ScoredChunk:
     section_path: tuple[str, ...] = ()  # 章节路径
     anchor_labels: tuple[str, ...] = ()  # 表格、图片、公式等锚点标签
     retrieval_channels: tuple[RagRetrievalChannel, ...] = ()  # 命中的主召回通道
+    retrieval_signals: tuple[RagRetrievalSignal, ...] = ()  # dense/sparse 原始通道排名信号
 
 
 @dataclass(frozen=True, slots=True)

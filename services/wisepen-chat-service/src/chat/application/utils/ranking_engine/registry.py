@@ -44,6 +44,7 @@ class RankingEngineRegistry:
             "rag.knowledge_search": RankingEngine(
                 pipeline=RankingPipeline(
                     name="rag.knowledge_search",
+                    fusion=WeightedRrfFusion(),
                     reranker=reranker,
                     diversifiers=(
                         MmrDiversifier(

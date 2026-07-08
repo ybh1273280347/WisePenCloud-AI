@@ -46,7 +46,7 @@ class RankCandidate:
     candidate_id: str  # 候选唯一 ID
     text: str = ""  # 候选主文本，用于全文相关性、模型重排或相似度计算
     fields: dict[str, str] = field(default_factory=dict)  # 候选字段文本，例如 title、body、heading、summary
-    prior_rank: int | None = None  # 外部系统给出的原始排名，可作为先验信号
+    prior_rank: int | None = None  # 外部系统给出的原始排名，只表达先验顺序或同分兜底
     group_key: str | None = None  # 多样性控制分组键，例如同文档、同来源、同域名、同父块
     metadata: Metadata = field(default_factory=dict)  # 候选附加元数据，ranking engine 不解释其含义
 
@@ -90,6 +90,7 @@ class RankRequest:
     candidates: tuple[RankCandidate, ...]  # 待排序候选集
     top_k: int  # 最终最多返回数量
     candidate_limit: int = 100  # 进入 reranker / diversifier 前的候选上限
+    signals: tuple[ScoreSignal, ...] = ()  # 调用方已经计算好的排序信号；存在时跳过 scorer
 
 
 @dataclass(frozen=True, slots=True)

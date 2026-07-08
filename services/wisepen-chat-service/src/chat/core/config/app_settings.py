@@ -111,7 +111,6 @@ class AppSettings(BaseModel):
     RAG_KNOWLEDGE_SEARCH_TOP_K: int = 8  # RAG 返回给 answerability 的证据条数
     RAG_KNOWLEDGE_SEARCH_CANDIDATE_LIMIT: int = 80  # RAG 召回和排序中间窗口
     RAG_KNOWLEDGE_SEARCH_ELASTIC_PREFILTER_LIMIT: int = 1000  # RAG Elastic 关键词前置过滤窗口
-    RAG_QDRANT_WEIGHTED_RRF_K: float = 60.0  # Qdrant profile 本地加权 RRF 平滑参数
     RAG_QDRANT_SEMANTIC_DENSE_RRF_WEIGHT: float = 2.0  # semantic profile dense 通道权重
     RAG_QDRANT_SEMANTIC_SPARSE_RRF_WEIGHT: float = 0.75  # semantic profile sparse 通道权重
     RAG_QDRANT_LEXICAL_DENSE_RRF_WEIGHT: float = 0.75  # lexical profile dense 通道权重

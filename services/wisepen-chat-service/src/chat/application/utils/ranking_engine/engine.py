@@ -126,6 +126,17 @@ class RankingEngine:
             candidates: tuple[RankCandidate, ...],
     ) -> tuple[RankedCandidate, ...]:
         """构造进入 reranker/diversifier 前的初始排序。"""
+        if request.signals:
+            if pipeline.fusion is None:
+                raise RuntimeError("RankRequest has external signals but pipeline has no fusion.")
+
+            return RankingEngine._assign_rank(
+                pipeline.fusion.fuse(
+                    candidates=candidates,
+                    signals=request.signals,
+                )
+            )
+
         if not pipeline.scorers:
             return RankingEngine._assign_rank(
                 tuple(

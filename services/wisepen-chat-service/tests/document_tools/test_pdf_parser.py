@@ -6,7 +6,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from chat.application.tools.document_tools.ocr import OcrPageResult
-from chat.application.tools.document_tools.document_parse.parsers.common_document.docling_parser import (
+from chat.application.tools.document_tools.document_parse.parsers.generic.docling_parser import (
     _export_docling_markdown,
 )
 from chat.application.tools.document_tools.document_parse.parsers.specialized.pdf_parser import PdfParser

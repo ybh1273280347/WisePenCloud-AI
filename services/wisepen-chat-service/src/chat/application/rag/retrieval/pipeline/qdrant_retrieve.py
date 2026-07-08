@@ -12,7 +12,7 @@ from chat.application.rag.retrieval.models import (
     RagQdrantRetrievalFilterRequest,
     RagQdrantRetrievalRequest,
     RagRetrievalChannel,
-    RagRetrievalProfile,
+    RagRetrievalSignal,
     ScoredChunk,
 )
 from chat.application.rag.retrieval.permission_filter import RagPermissionFilterBuilder
@@ -23,6 +23,7 @@ class _RetrievedPoint:
     point: qdrant_types.ScoredPoint
     score: float
     channels: tuple[RagRetrievalChannel, ...]
+    signals: tuple[RagRetrievalSignal, ...]
 
 
 class RagQdrantRetriever:
@@ -37,13 +38,8 @@ class RagQdrantRetriever:
         "_client",
         "_collection_name",
         "_dense_vector_name",
-        "_lexical_dense_rrf_weight",
-        "_lexical_sparse_rrf_weight",
         "_permission_filter_builder",
-        "_semantic_dense_rrf_weight",
-        "_semantic_sparse_rrf_weight",
         "_sparse_vector_name",
-        "_weighted_rrf_k",
     )
 
     def __init__(
@@ -55,11 +51,6 @@ class RagQdrantRetriever:
             bm25_config: qdrant_models.Bm25Config,
             dense_vector_name: str = "dense",
             sparse_vector_name: str = "sparse",
-            weighted_rrf_k: float = 60.0,
-            semantic_dense_rrf_weight: float = 2.0,
-            semantic_sparse_rrf_weight: float = 0.75,
-            lexical_dense_rrf_weight: float = 0.75,
-            lexical_sparse_rrf_weight: float = 2.0,
     ) -> None:
         self._client = client
         self._collection_name = collection_name
@@ -67,11 +58,6 @@ class RagQdrantRetriever:
         self._bm25_config = bm25_config
         self._dense_vector_name = dense_vector_name
         self._sparse_vector_name = sparse_vector_name
-        self._weighted_rrf_k = weighted_rrf_k
-        self._semantic_dense_rrf_weight = semantic_dense_rrf_weight
-        self._semantic_sparse_rrf_weight = semantic_sparse_rrf_weight
-        self._lexical_dense_rrf_weight = lexical_dense_rrf_weight
-        self._lexical_sparse_rrf_weight = lexical_sparse_rrf_weight
 
     async def retrieve(self, request: RagQdrantRetrievalRequest) -> tuple[ScoredChunk, ...]:
         if self._client is None:
@@ -97,6 +83,7 @@ class RagQdrantRetriever:
                     rank=rank,
                     retrieval_score=item.score,
                     channels=item.channels,
+                    signals=item.signals,
                 )
             ) is not None
         )
@@ -138,64 +125,16 @@ class RagQdrantRetriever:
                     request=request,
                     query_filter=query_filter,
                 ),
-                channels=(RagRetrievalChannel.DENSE,),
+                channel=RagRetrievalChannel.DENSE,
             )
 
-        # ---- SEMANTIC：双通道加权 RRF，dense 权重 > sparse，偏重语义相似度 ----
-        if request.retrieval_profile == RagRetrievalProfile.SEMANTIC:
-            dense_response, sparse_response = await asyncio.gather(
-                self._query_dense_points(request=request, query_filter=query_filter),
-                self._query_sparse_points(request=request, query_filter=query_filter),
-            )
-            return _fuse_weighted_rrf_points(
-                dense_points=tuple(dense_response.points),
-                sparse_points=tuple(sparse_response.points),
-                dense_weight=self._semantic_dense_rrf_weight,
-                sparse_weight=self._semantic_sparse_rrf_weight,
-                rrf_k=self._weighted_rrf_k,
-            )
-
-        # ---- LEXICAL：双通道加权 RRF，sparse 权重 > dense，偏重关键词匹配 ----
-        if request.retrieval_profile == RagRetrievalProfile.LEXICAL:
-            dense_response, sparse_response = await asyncio.gather(
-                self._query_dense_points(request=request, query_filter=query_filter),
-                self._query_sparse_points(request=request, query_filter=query_filter),
-            )
-            return _fuse_weighted_rrf_points(
-                dense_points=tuple(dense_response.points),
-                sparse_points=tuple(sparse_response.points),
-                dense_weight=self._lexical_dense_rrf_weight,
-                sparse_weight=self._lexical_sparse_rrf_weight,
-                rrf_k=self._weighted_rrf_k,
-            )
-
-        # ---- BALANCED（默认）：Qdrant 原生 RRF 等权融合 ----
-        return _wrap_response_points(
-            await self._client.query_points(
-                collection_name=self._collection_name,
-                prefetch=[
-                    qdrant_models.Prefetch(
-                        query=list(request.query_vector),
-                        using=self._dense_vector_name,
-                        filter=query_filter,
-                        limit=request.top_k,
-                    ),
-                    qdrant_models.Prefetch(
-                        query=qdrant_models.Document(
-                            text=request.query_text,
-                            model="Qdrant/bm25",
-                            options=self._bm25_config,
-                        ),
-                        using=self._sparse_vector_name,
-                        filter=query_filter,
-                        limit=request.top_k,
-                    ),
-                ],
-                query=qdrant_models.FusionQuery(fusion=qdrant_models.Fusion.RRF),
-                limit=request.top_k,
-                with_payload=True,
-            ),
-            channels=(RagRetrievalChannel.DENSE, RagRetrievalChannel.SPARSE),
+        dense_response, sparse_response = await asyncio.gather(
+            self._query_dense_points(request=request, query_filter=query_filter),
+            self._query_sparse_points(request=request, query_filter=query_filter),
+        )
+        return _merge_channel_points(
+            dense_points=tuple(dense_response.points),
+            sparse_points=tuple(sparse_response.points),
         )
 
     async def _query_dense_points(
@@ -236,34 +175,39 @@ class RagQdrantRetriever:
 def _wrap_response_points(
         response: qdrant_types.QueryResponse,
         *,
-        channels: tuple[RagRetrievalChannel, ...],
+        channel: RagRetrievalChannel,
 ) -> tuple[_RetrievedPoint, ...]:
     return tuple(
         _RetrievedPoint(
             point=point,
             score=point.score,
-            channels=channels,
+            channels=(channel,),
+            signals=(
+                RagRetrievalSignal(
+                    channel=channel,
+                    rank=rank,
+                    score=point.score,
+                ),
+            ),
         )
-        for point in response.points
+        for rank, point in enumerate(response.points, start=1)
     )
 
 
-def _fuse_weighted_rrf_points(
+def _merge_channel_points(
         *,
         dense_points: tuple[qdrant_types.ScoredPoint, ...],
         sparse_points: tuple[qdrant_types.ScoredPoint, ...],
-        dense_weight: float,
-        sparse_weight: float,
-        rrf_k: float,
 ) -> tuple[_RetrievedPoint, ...]:
     points_by_chunk_id: dict[str, qdrant_types.ScoredPoint] = {}
     scores_by_chunk_id: dict[str, float] = {}
     channels_by_chunk_id: dict[str, set[RagRetrievalChannel]] = {}
+    signals_by_chunk_id: dict[str, list[RagRetrievalSignal]] = {}
     first_seen_order: dict[str, int] = {}
 
-    for channel, points, weight in (
-            (RagRetrievalChannel.DENSE, dense_points, dense_weight),
-            (RagRetrievalChannel.SPARSE, sparse_points, sparse_weight),
+    for channel, points in (
+            (RagRetrievalChannel.DENSE, dense_points),
+            (RagRetrievalChannel.SPARSE, sparse_points),
     ):
         for rank, point in enumerate(points, start=1):
             chunk_id = _read_optional_payload_str(
@@ -278,9 +222,17 @@ def _fuse_weighted_rrf_points(
                 points_by_chunk_id[chunk_id] = point
                 scores_by_chunk_id[chunk_id] = 0.0
                 channels_by_chunk_id[chunk_id] = set()
+                signals_by_chunk_id[chunk_id] = []
 
-            scores_by_chunk_id[chunk_id] += weight / (rrf_k + rank)
+            scores_by_chunk_id[chunk_id] = max(scores_by_chunk_id[chunk_id], point.score)
             channels_by_chunk_id[chunk_id].add(channel)
+            signals_by_chunk_id[chunk_id].append(
+                RagRetrievalSignal(
+                    channel=channel,
+                    rank=rank,
+                    score=point.score,
+                )
+            )
 
     return tuple(
         _RetrievedPoint(
@@ -291,10 +243,11 @@ def _fuse_weighted_rrf_points(
                 for channel in (RagRetrievalChannel.DENSE, RagRetrievalChannel.SPARSE)
                 if channel in channels_by_chunk_id[chunk_id]
             ),
+            signals=tuple(signals_by_chunk_id[chunk_id]),
         )
         for chunk_id in sorted(
             scores_by_chunk_id,
-            key=lambda item: (-scores_by_chunk_id[item], first_seen_order[item]),
+            key=lambda item: first_seen_order[item],
         )
     )
 
@@ -305,6 +258,7 @@ def _to_scored_chunk(
         rank: int,
         retrieval_score: float,
         channels: tuple[RagRetrievalChannel, ...],
+        signals: tuple[RagRetrievalSignal, ...],
 ) -> ScoredChunk | None:
     payload = point.payload or {}
     chunk_id = _read_optional_payload_str(
@@ -332,6 +286,7 @@ def _to_scored_chunk(
         section_path=_read_payload_str_sequence(payload.get("section_path")),
         anchor_labels=_read_payload_str_sequence(payload.get("anchor_labels")),
         retrieval_channels=channels,
+        retrieval_signals=signals,
     )
 
 

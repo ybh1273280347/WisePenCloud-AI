@@ -35,8 +35,6 @@ class Scorer(Protocol):
     典型实现：
     - BM25Scorer
     - FieldedBM25Scorer
-    - OriginalRankPriorScorer
-    - VectorSimilarityScorer
     """
 
     name: str  # 打分器名称
@@ -55,9 +53,7 @@ class Fusion(Protocol):
     """融合插件协议，负责把多路 ScoreSignal 合成初始 RankedCandidate。
 
     典型实现：
-    - WeightedSumFusion
     - WeightedRrfFusion
-    - RuleBasedFusion
     """
 
     name: str  # 融合器名称

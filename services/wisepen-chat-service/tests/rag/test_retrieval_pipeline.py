@@ -79,6 +79,7 @@ from chat.application.rag.retrieval.models import (  # noqa: E402
     RagRankedChunk,
     RagRetrievalChannel,
     RagRetrievalProfile,
+    RagRetrievalSignal,
     ScoredChunk,
 )
 from chat.application.rag.retrieval.pipeline.graph_enhancement import RagGraphEnhancement  # noqa: E402
@@ -119,13 +120,15 @@ from chat.application.utils.ranking_engine.models import (  # noqa: E402
     RankedCandidate,
 )
 from chat.application.utils.ranking_engine.engine import RankingEngine  # noqa: E402
+from chat.application.utils.ranking_engine.fusion import WeightedRrfFusion  # noqa: E402
 from chat.application.utils.ranking_engine.pipeline import RankingPipeline  # noqa: E402
 
 
-def _ranking_engine_without_reranker() -> RankingEngine:
+def _ranking_engine_with_external_rrf() -> RankingEngine:
     return RankingEngine(
         pipeline=RankingPipeline(
             name="test.rag.knowledge_search",
+            fusion=WeightedRrfFusion(),
         )
     )
 
@@ -426,12 +429,13 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
             )
         )
     )
+    ranking_service = _RecordingRankingService()
     service = RagKnowledgeSearcher(
         retrieval_pipeline=RagRetrievalPipeline(
             embedding_client=_RecordingEmbeddingClient(),
             elastic_filter=_RecordingElasticFilter(candidate_chunk_ids=("child-1",)),
             qdrant_retriever=qdrant_repository,
-            ranking_service=_RecordingRankingService(),
+            ranking_service=ranking_service,
             hard_gate=AnswerabilityHardGate(),
             soft_gate=soft_gate,
             evidence_materializer=RagEvidenceMaterializer(
@@ -460,7 +464,7 @@ async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates
     retrieval_request = qdrant_repository.retrieve_calls[0]
     assert retrieval_request.candidate_chunk_ids == ("child-1",)
     assert retrieval_request.query_text == "AppBuilder API Key"
-    assert retrieval_request.retrieval_profile == RagRetrievalProfile.LEXICAL
+    assert ranking_service.calls[0].retrieval_profile == RagRetrievalProfile.LEXICAL
     assert retrieval_request.permission_scope is not None
     assert result.should_continue
     assert result.direct_evidence[0].citation_id == "E1"
@@ -751,9 +755,11 @@ async def test_document_ready_ingestion_rethrows_retryable_ingestion_failure() -
 
 
 @pytest.mark.anyio
-async def test_qdrant_rrf_order_is_passed_to_rerank_stage_without_fusion() -> None:
+async def test_rag_ranking_converts_qdrant_channel_ranks_to_external_rrf_signals() -> None:
     service = RagEvidenceRankingService(
-        ranking_engine=_ranking_engine_without_reranker()
+        ranking_engine=_ranking_engine_with_external_rrf(),
+        lexical_dense_rrf_weight=1.0,
+        lexical_sparse_rrf_weight=3.0,
     )
 
     ranking_result = await service.rank(
@@ -763,30 +769,56 @@ async def test_qdrant_rrf_order_is_passed_to_rerank_stage_without_fusion() -> No
                 _retrieved_hit(
                     chunk_id="chunk-a",
                     text="AppBuilder API Key 用于接口鉴权。",
-                    retrieval_score=0.71,
+                    retrieval_score=0.40,
                     retrieval_rank=1,
+                    retrieval_signals=(
+                        RagRetrievalSignal(
+                            channel=RagRetrievalChannel.DENSE,
+                            rank=1,
+                            score=0.40,
+                        ),
+                    ),
                 ),
                 _retrieved_hit(
                     chunk_id="chunk-b",
                     text="另一个接口说明 Bearer token。",
-                    retrieval_score=0.69,
+                    retrieval_score=0.90,
                     retrieval_rank=2,
+                    retrieval_signals=(
+                        RagRetrievalSignal(
+                            channel=RagRetrievalChannel.SPARSE,
+                            rank=1,
+                            score=0.90,
+                        ),
+                    ),
                 ),
                 _retrieved_hit(
                     chunk_id="chunk-a",
                     text="AppBuilder API Key 用于接口鉴权。",
-                    retrieval_score=0.64,
+                    retrieval_score=0.99,
                     retrieval_rank=3,
+                    retrieval_signals=(
+                        RagRetrievalSignal(
+                            channel=RagRetrievalChannel.SPARSE,
+                            rank=1,
+                            score=0.99,
+                        ),
+                    ),
                 ),
             ),
+            retrieval_profile=RagRetrievalProfile.LEXICAL,
             top_k=2,
         )
     )
 
-    assert [item.candidate_id for item in ranking_result.ranked] == ["chunk-a", "chunk-b"]
-    assert [item.candidate.prior_rank for item in ranking_result.ranked] == [1, 2]
-    assert ranking_result.ranked[0].candidate.metadata == {"retrieval_score": 0.71}
-    assert all(not item.signals for item in ranking_result.ranked)
+    assert [item.candidate_id for item in ranking_result.ranked] == ["chunk-b", "chunk-a"]
+    assert [item.candidate.prior_rank for item in ranking_result.ranked] == [2, 1]
+    assert [item.signals[0].value for item in ranking_result.ranked] == [0.90, 0.40]
+    assert [item.signals[0].rank for item in ranking_result.ranked] == [1, 1]
+    assert [item.score for item in ranking_result.ranked] == pytest.approx([
+        3.0 / 61.0,
+        1.0 / 61.0,
+    ])
 
 
 def test_hard_gate_rejects_empty_retrieval() -> None:
@@ -947,12 +979,14 @@ def _retrieved_hit(
     text: str,
     retrieval_score: float,
     retrieval_rank: int,
+    retrieval_signals: tuple[RagRetrievalSignal, ...] = (),
 ) -> ScoredChunk:
     return ScoredChunk(
         chunk_id=chunk_id,
         text=text,
         retrieval_score=retrieval_score,
         retrieval_rank=retrieval_rank,
+        retrieval_signals=retrieval_signals,
     )
 
 
@@ -1311,7 +1345,11 @@ class _RecordingElasticFilter:
 
 
 class _RecordingRankingService:
+    def __init__(self) -> None:
+        self.calls = []
+
     async def rank(self, request):
+        self.calls.append(request)
         ranked = tuple(
             RankedCandidate(
                 candidate=RankCandidate(
