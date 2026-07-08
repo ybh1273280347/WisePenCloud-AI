@@ -69,6 +69,7 @@ utils_module = types.ModuleType("chat.application.utils")
 xml_markup_module = types.ModuleType("chat.application.utils.xml_markup")
 xml_markup_module.xml_attr = lambda value: str(value)
 xml_markup_module.xml_cdata = lambda value: str(value)
+xml_markup_module.xml_text = lambda value: str(value)
 utils_module.xml_markup = xml_markup_module
 sys.modules["chat.application.utils"] = utils_module
 sys.modules["chat.application.utils.llm_clients"] = llm_clients_module
@@ -156,11 +157,8 @@ class FakeIntegrationSearcherFactory:
 
 
 class FakeRuntimeContextResolver:
-    async def resolve_platform(self, *, user_id: str, session_id: str) -> WebSearchRuntimeConfig:
+    async def resolve_platform(self, *, user_id: str) -> WebSearchRuntimeConfig:
         return WebSearchRuntimeConfig(
-            user_id=user_id,
-            session_id=session_id,
-            search_config_id="platform_member:exa",
             source_kind=WebSearchSourceKind.PLATFORM_MEMBER,
             provider=SearchProviderName.EXA,
             source_id="platform_member:exa",
@@ -223,7 +221,6 @@ async def test_exa_search_uses_provider_credential_and_academic_mode(monkeypatch
 
     result = await tool.execute(
         {"user_id": "user-1", "session_id": "session-1"},
-        question="find rag papers",
         query="rag paper",
         mode="academic",
     )
@@ -256,7 +253,6 @@ async def test_platform_search_resolves_platform_source_only(monkeypatch: pytest
 
     result = await tool.execute(
         {"user_id": "user-1", "session_id": "session-1"},
-        question="question",
         query="platform query",
     )
 
@@ -270,11 +266,8 @@ async def test_platform_search_resolves_platform_source_only(monkeypatch: pytest
 @pytest.mark.anyio
 async def test_platform_academic_mode_requires_academic_provider() -> None:
     class NonAcademicResolver:
-        async def resolve_platform(self, *, user_id: str, session_id: str) -> WebSearchRuntimeConfig:
+        async def resolve_platform(self, *, user_id: str) -> WebSearchRuntimeConfig:
             return WebSearchRuntimeConfig(
-                user_id=user_id,
-                session_id=session_id,
-                search_config_id="platform_default",
                 source_kind=WebSearchSourceKind.PLATFORM_DEFAULT,
                 provider=None,
                 source_id="platform_default",
@@ -289,7 +282,6 @@ async def test_platform_academic_mode_requires_academic_provider() -> None:
     with pytest.raises(ToolExecutionError) as exc_info:
         await tool.execute(
             {"user_id": "user-1", "session_id": "session-1"},
-            question="papers",
             query="papers",
             mode="academic",
         )

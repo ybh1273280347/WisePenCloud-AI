@@ -12,7 +12,8 @@ from chat.application.tools.core import (
     ToolRiskLevel,
 )
 from chat.application.tools.session_tools.tool_content_read.service import ToolContentReadService
-from chat.application.tools.tool_settings import tool_settings
+
+TOOL_CONTENT_READ_TIMEOUT_SECONDS = 300.0
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -70,7 +71,7 @@ class ToolContentSequentialReadTool:
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 required_context_keys=("session_id",),
-                timeout_seconds=tool_settings.TOOL_CONTENT_READ_TIMEOUT_SECONDS,
+                timeout_seconds=TOOL_CONTENT_READ_TIMEOUT_SECONDS,
             ),
         )
 

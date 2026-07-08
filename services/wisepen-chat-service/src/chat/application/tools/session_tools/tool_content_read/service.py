@@ -12,8 +12,9 @@ from chat.application.tools.session_tools.tool_content_read.content_window_build
 )
 from chat.application.tools.session_tools.tool_content_read.models import (
     ToolContentReadMatch,
-    ToolContentReadRequest,
     ToolContentReadResult,
+    ToolContentRegexReadRequest,
+    ToolContentRerankReadRequest,
     ToolContentSelector,
     ToolContentWindow,
 )
@@ -54,7 +55,7 @@ class ToolContentReadService:
     async def read_ranked_expand(
         self,
         *,
-        request: ToolContentReadRequest,
+        request: ToolContentRerankReadRequest,
         session_id: str,
     ) -> ToolContentReadResult:
         """跨文档语义检索并展开窗口。"""
@@ -75,7 +76,7 @@ class ToolContentReadService:
     async def read_regex_match(
         self,
         *,
-        request: ToolContentReadRequest,
+        request: ToolContentRegexReadRequest,
         session_id: str,
     ) -> ToolContentReadResult:
         """跨文档正则匹配并展开窗口。"""
@@ -145,30 +146,6 @@ class ToolContentReadService:
             anchor_labels=locator["anchor_labels"],
         )
 
-    async def _load_one(
-        self,
-        *,
-        content_id: str,
-        session_id: str,
-    ) -> tuple[str, StoredToolContent] | ToolContentReadMatch:
-        """单体文档加载，带异常捕获"""
-        try:
-            loaded = await self.load_stored_content(
-                content_id=content_id,
-                session_id=session_id,
-            )
-            if loaded is None:
-                return ToolContentReadMatch(
-                    content_id=content_id,
-                    reason="content_not_found",
-                )
-            return loaded
-        except Exception as exc:
-            return ToolContentReadMatch(
-                content_id=content_id,
-                reason=exc.__class__.__name__,
-            )
-
     async def _load_contents(
         self,
         *,
@@ -181,9 +158,27 @@ class ToolContentReadService:
         failed: list[ToolContentReadMatch] = []
 
         for content_id in content_ids:
-            loaded = await self._load_one(content_id=content_id, session_id=session_id)
-            if isinstance(loaded, ToolContentReadMatch):
-                failed.append(loaded)
+            try:
+                loaded = await self.load_stored_content(
+                    content_id=content_id,
+                    session_id=session_id,
+                )
+            except Exception as exc:
+                failed.append(
+                    ToolContentReadMatch(
+                        content_id=content_id,
+                        reason=exc.__class__.__name__,
+                    )
+                )
+                continue
+
+            if loaded is None:
+                failed.append(
+                    ToolContentReadMatch(
+                        content_id=content_id,
+                        reason="content_not_found",
+                    )
+                )
                 continue
             stored_items.append(loaded)
 
@@ -193,10 +188,10 @@ class ToolContentReadService:
         self,
         *,
         stored_items: tuple[tuple[str, StoredToolContent], ...],
-        request: ToolContentReadRequest,
+        request: ToolContentRerankReadRequest,
     ) -> tuple[ToolContentReadMatch, ...]:
         """跨文档语义检索：聚合多文档 Chunk 后调用重排引擎，并对 Top-K 结果进行上下文扩展"""
-        query = (request.query or "").strip()
+        query = request.query.strip()
 
         candidates: list[RankCandidate] = []
         source_by_candidate_id: dict[str, tuple[str, StoredToolContent, int]] = {}
@@ -265,12 +260,14 @@ class ToolContentReadService:
         self,
         *,
         stored_items: tuple[tuple[str, StoredToolContent], ...],
-        request: ToolContentReadRequest,
+        request: ToolContentRegexReadRequest,
     ) -> tuple[ToolContentReadMatch, ...]:
         """跨文档正则匹配：线性扫描文本，命中后执行窗口扩展，支持最大匹配数熔断"""
-        pattern = request.pattern or ""
-        regex = re.compile(pattern)
+        max_matches = max(request.max_matches, 0)
+        if max_matches == 0:
+            return ()
 
+        regex = re.compile(request.pattern)
         matches: list[ToolContentReadMatch] = []
         try:
             for canonical_id, stored in stored_items:
@@ -297,7 +294,7 @@ class ToolContentReadService:
                             )
                         )
                         # 达到全局最大匹配上限时触发熔断
-                        if len(matches) >= max(request.max_matches, 0):
+                        if len(matches) >= max_matches:
                             raise _RegexLimitReached
         except _RegexLimitReached:
             pass

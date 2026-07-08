@@ -24,7 +24,7 @@
 | 参数 | 类型 | 规则 |
 | --- | --- | --- |
 | `seed_url` | `string` | 必填，完整 `http(s)` URL。 |
-| `max_pages` | `integer` | 可选，默认由 `tool_settings.WEB_CRAWL_DEFAULT_MAX_PAGES` 控制。 |
+| `max_pages` | `integer` | 可选，默认 20，最大 100。 |
 | `max_depth` | `integer` | 可选，种子页深度为 0。 |
 | `same_domain` | `boolean` | 可选，默认 `true`。除非用户明确要求跨域，否则保持默认。 |
 

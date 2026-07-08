@@ -33,10 +33,6 @@ class ToolContentIndexEntry:
     page_label: str | None = None  # page 定位对应的页码标签
     anchor_label: str | None = None  # anchor 定位对应的锚点标签
 
-    @property
-    def name(self) -> str:
-        return self.locator_name
-
 
 @dataclass(frozen=True, slots=True)
 class ToolContentIndex:

@@ -58,7 +58,7 @@ class WebCrawler:
             cleaner: BaseCleaner,
             content_cache_repository: WebContentCacheRepository | None = None,
             min_text_length: int = 200,
-            concurrency: int = 5,
+            concurrency: int = 16,
     ) -> None:
         self._httpx_fetcher = httpx_fetcher
         self._scrapling_fetcher = scrapling_fetcher

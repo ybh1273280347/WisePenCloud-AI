@@ -1,8 +1,8 @@
 # Container 与 Settings 边界规范
 
-> 一句话：只有带生命周期、成本高或应用级共享协调器的对象才进 container；settings 按“全局基础设施”和“工具行为参数”分层。
+> 一句话：只有带生命周期、成本高或应用级共享协调器的对象才进 container；settings 只承载真正需要运行期配置的应用和基础设施参数。
 
-本文约束依赖注入容器、应用配置和工具配置的职责边界。
+本文约束依赖注入容器、应用配置和工具局部行为常量的职责边界。
 
 ## Container 注册原则
 
@@ -39,7 +39,7 @@ HTTP client 必须按外部集成命名，不能使用笼统名称。
 
 异步请求路径使用 `httpx.AsyncClient`。拥有连接池的 integration client 不应自行创建 HTTP client，应由 container 注入。
 
-## Settings 边界
+## Settings 与局部常量边界
 
 `app_settings` 承载全局应用和基础设施配置：
 
@@ -48,27 +48,19 @@ HTTP client 必须按外部集成命名，不能使用笼统名称。
 - 全局限制，例如 `TOOL_RESULT_MAX_CHARS`。
 - 服务发现、部署、运行期配置。
 
-`tool_settings` 只承载工具专属行为参数：
+工具行为已经稳定时，不再维护聚合式 `tool_settings` 门面。工具专属默认值应就近放在拥有该行为的模块中：
 
 - 单个工具的 timeout。
 - 单个工具的 retry。
 - 只影响工具行为的解析阈值或策略开关。
 
-如果同一配置同时出现在 `app_settings` 和 `tool_settings`，说明边界错误，应删除重复项并重新归类。
+只有确实需要部署期或运行期调整的值，才应进入 `app_settings`。不要因为某个值“看起来像配置”就把稳定行为常量集中到一个大 settings 文件。
 
 ## Nacos 规则
 
 当前服务保持 `container` 作为唯一运行入口。
 
-不要为了 `tool_settings` 增加第二套 Nacos 加载路径，除非服务先完成清晰的多源配置设计。
-
-`tool_settings` 可以暴露模块级实例：
-
-```python
-tool_settings = ToolSettings()
-```
-
-但不能创建新的容器、bootstrap 流程或运行入口。
+不要为了工具行为常量增加第二套 Nacos 加载路径，除非服务先完成清晰的多源配置设计。
 
 ## Review 清单
 
@@ -86,6 +78,6 @@ tool_settings = ToolSettings()
 
 | 问题 | 为什么问这个 |
 | --- | --- |
-| 它是全局基础设施配置，还是某个工具的行为参数 | 确认放在 `app_settings` 还是 `tool_settings`。 |
+| 它是否真的需要运行期配置 | 确认放进 `app_settings`，还是保留为工具/组件局部常量。 |
 | 是否复制了已有 setting | 避免同一配置出现两处。 |
-| 是否让 `tool_settings` 变成了 `app_settings` facade | 确认没有越界承载全局配置。 |
+| 是否正在形成聚合式工具 settings 门面 | 稳定工具行为值应就近内联，避免集中转发参数。 |

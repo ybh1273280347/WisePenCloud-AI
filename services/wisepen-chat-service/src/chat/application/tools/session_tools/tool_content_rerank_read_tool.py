@@ -18,11 +18,10 @@ from chat.application.tools.session_tools._tool_content_read_common import (
     selector_from_payload,
 )
 from chat.application.tools.session_tools.tool_content_read.models import (
-    ToolContentReadRequest,
+    ToolContentRerankReadRequest,
     ToolContentReadResult,
 )
 from chat.application.tools.session_tools.tool_content_read.service import ToolContentReadService
-from chat.application.tools.tool_settings import tool_settings
 
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
@@ -55,7 +54,8 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
-MAX_CONTENT_IDS = tool_settings.TOOL_CONTENT_READ_MAX_CONTENT_IDS
+MAX_CONTENT_IDS = 16
+TOOL_CONTENT_READ_TIMEOUT_SECONDS = 300.0
 
 
 class ToolContentRerankReadTool:
@@ -84,7 +84,7 @@ class ToolContentRerankReadTool:
                     "  - You need new content from the web — use web_fetch or web_crawl instead.\n"
                     "\n"
                     "INPUT RULES:\n"
-                    "  - content_ids MUST be cnt_* ids from previous content receipts; large sets are auto-batched internally.\n"
+                    "  - content_ids MUST be cnt_* ids from previous content receipts; multiple ids are read in bounded internal batches.\n"
                     "  - query is required and is used to rerank candidate chunks.\n"
                     "  - selector optionally prefilters chunks by block_kinds, sections, page_labels, anchor_labels, or chunk_indices.\n"
                     "  - merge_before/merge_after expand windows around center chunks.\n"
@@ -100,7 +100,7 @@ class ToolContentRerankReadTool:
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 required_context_keys=("session_id",),
-                timeout_seconds=tool_settings.TOOL_CONTENT_READ_TIMEOUT_SECONDS,
+                timeout_seconds=TOOL_CONTENT_READ_TIMEOUT_SECONDS,
             ),
         )
 
@@ -117,10 +117,10 @@ class ToolContentRerankReadTool:
                 retryable=False,
             )
 
-        request = ToolContentReadRequest(
+        request = ToolContentRerankReadRequest(
             content_ids=tuple(str(value) for value in kwargs["content_ids"]),
-            selector=selector_from_payload(kwargs.get("selector")),
             query=query,
+            selector=selector_from_payload(kwargs.get("selector")),
             top_k=int(kwargs.get("top_k") or 5),
             merge_before=int(kwargs.get("merge_before") or 0),
             merge_after=int(kwargs.get("merge_after") or 0),

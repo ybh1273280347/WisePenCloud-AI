@@ -32,7 +32,6 @@ from chat.application.tools.document_tools.document_parse.cache import (
 )
 from chat.application.tools.document_tools.document_parse.core.models import DocumentParseRequest
 from chat.application.tools.document_tools.document_parse.service import DocumentParseService
-from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.batching import batched
 from chat.application.tools.utils.url import (
     FetchedUrl,
@@ -45,8 +44,10 @@ from chat.application.tools.utils.url import (
 )
 
 MAX_DOCUMENT_PARSE_FILE_REFS = 64
-SERVICE_BATCH_SIZE = tool_settings.DOCUMENT_PARSE_MAX_FILE_REFS
-DOCUMENT_PARSE_CONCURRENCY = tool_settings.DOCUMENT_PARSE_CONCURRENCY
+SERVICE_BATCH_SIZE = 16
+DOCUMENT_PARSE_CONCURRENCY = 16
+DOCUMENT_PARSE_TOOL_TIMEOUT_SECONDS = 300.0
+DOCUMENT_PARSE_MAX_DOWNLOAD_BYTES = 52_428_800
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +81,7 @@ class DocumentParseTool:
         self._file_store = file_store
         self._parse_service = parse_service
         self._url_download_http_client = url_download_http_client
-        self._max_download_bytes = tool_settings.DOCUMENT_PARSE_MAX_DOWNLOAD_BYTES
+        self._max_download_bytes = DOCUMENT_PARSE_MAX_DOWNLOAD_BYTES
         self._cache = DocumentParseCache(
             content_cache_repository=content_cache_repository,
         )
@@ -152,7 +153,7 @@ class DocumentParseTool:
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 required_context_keys=("user_id", "session_id"),
-                timeout_seconds=tool_settings.DOCUMENT_PARSE_TOOL_TIMEOUT_SECONDS,
+                timeout_seconds=DOCUMENT_PARSE_TOOL_TIMEOUT_SECONDS,
                 cache_chunked=True,
             ),
         )

@@ -153,7 +153,7 @@ class AppSettings(BaseModel):
 
     # ── Tool Run File Store (工具产出临时文件工作区) ────────────────────
     TOOL_RUN_FILE_ROOT: str = "/tmp/wisepen-tool-run-files"  # 工作区根目录
-    # 行为参数（TTL / 容量 / 宽限期）由 tool_settings.py 统一管控
+    # TTL / 容量 / 宽限期等稳定行为默认值由 ToolRunFileStore 就近定义。
 
 
 def _run_async(coro):

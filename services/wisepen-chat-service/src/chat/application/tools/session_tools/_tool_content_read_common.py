@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from dataclasses import replace
+from typing import Any, Awaitable, Callable, TypeVar
 
 from chat.application.tools.session_tools.tool_content_read.models import (
-    ToolContentReadRequest,
     ToolContentReadResult,
+    ToolContentRegexReadRequest,
+    ToolContentRerankReadRequest,
     ToolContentSelector,
 )
 from chat.application.tools.utils.batching import batched
@@ -12,6 +14,11 @@ from chat.application.utils.chunking_engine import BlockKind
 
 
 BLOCK_KIND_ENUM = [block_kind.value for block_kind in BlockKind]
+ToolContentBatchRequest = TypeVar(
+    "ToolContentBatchRequest",
+    ToolContentRerankReadRequest,
+    ToolContentRegexReadRequest,
+)
 CONTENT_IDS_SCHEMA: dict[str, Any] = {
     "type": "array",
     "items": {
@@ -22,7 +29,7 @@ CONTENT_IDS_SCHEMA: dict[str, Any] = {
     "maxItems": 64,
     "description": (
         "Required. One or more cnt_* ids from previous <content_receipt> values. "
-        "Large sets are automatically split into internal batches."
+        "Multiple ids are split into bounded internal read batches."
     ),
 }
 SELECTOR_SCHEMA: dict[str, Any] = {
@@ -100,26 +107,18 @@ def selector_from_payload(payload: dict[str, Any] | None) -> ToolContentSelector
 
 
 async def read_content_id_batches(
-        *,
-        request: ToolContentReadRequest,
-        batch_size: int,
-        read_batch: Callable[[ToolContentReadRequest], Awaitable[ToolContentReadResult]],
+    *,
+    request: ToolContentBatchRequest,
+    batch_size: int,
+    read_batch: Callable[[ToolContentBatchRequest], Awaitable[ToolContentReadResult]],
 ) -> ToolContentReadResult:
     matches = []
     failed = []
-    for batch_content_ids in batched(request.content_ids, batch_size=max(1, int(batch_size))):
-        batch_result = await read_batch(
-            ToolContentReadRequest(
-                content_ids=batch_content_ids,
-                selector=request.selector,
-                query=request.query,
-                top_k=request.top_k,
-                pattern=request.pattern,
-                max_matches=request.max_matches,
-                merge_before=request.merge_before,
-                merge_after=request.merge_after,
-            )
-        )
+    for batch_content_ids in batched(
+        request.content_ids,
+        batch_size=int(batch_size),
+    ):
+        batch_result = await read_batch(replace(request, content_ids=batch_content_ids))
         matches.extend(batch_result.matches)
         failed.extend(batch_result.failed)
 

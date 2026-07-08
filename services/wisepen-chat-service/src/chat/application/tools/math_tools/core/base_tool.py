@@ -12,8 +12,9 @@ from chat.application.tools.core import (
 )
 from chat.application.tools.math_tools.core.errors import MathSolverError
 from chat.application.tools.math_tools.solvers.base import MathSolver
-from chat.application.tools.tool_settings import tool_settings
 from common.logger import error
+
+MATH_TOOL_TIMEOUT_SECONDS = 20.0
 
 
 class MathSolveTool:
@@ -44,7 +45,7 @@ class MathSolveTool:
                 expose_by_default=True,
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
-                timeout_seconds=tool_settings.MATH_TOOL_TIMEOUT_SECONDS,
+                timeout_seconds=MATH_TOOL_TIMEOUT_SECONDS,
             ),
         )
 

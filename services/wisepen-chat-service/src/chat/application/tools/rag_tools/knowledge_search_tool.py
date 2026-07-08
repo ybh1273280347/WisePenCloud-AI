@@ -19,10 +19,10 @@ from chat.application.tools.core import (
     ToolRiskLevel,
 )
 from chat.application.tools.core.tool_return import ToolReturn
-from chat.application.tools.tool_settings import tool_settings
 from chat.core.config.app_settings import settings
 
 MAX_RAG_STRING_ITEMS = 16
+RAG_KNOWLEDGE_SEARCH_TOOL_TIMEOUT_SECONDS = 300.0
 
 RAG_KNOWLEDGE_SEARCH_TOOL_DESCRIPTION = """\
 Search the attached WisePen private knowledge base with ACL-safe RAG retrieval.
@@ -104,7 +104,7 @@ class RagKnowledgeSearchTool:
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 required_context_keys=("user_id", "session_id"),
-                timeout_seconds=tool_settings.RAG_KNOWLEDGE_SEARCH_TOOL_TIMEOUT_SECONDS,
+                timeout_seconds=RAG_KNOWLEDGE_SEARCH_TOOL_TIMEOUT_SECONDS,
                 cache_chunked=True,
             ),
         )

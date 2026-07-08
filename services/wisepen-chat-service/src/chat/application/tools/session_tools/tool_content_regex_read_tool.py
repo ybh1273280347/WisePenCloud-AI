@@ -18,16 +18,16 @@ from chat.application.tools.session_tools._tool_content_read_common import (
     selector_from_payload,
 )
 from chat.application.tools.session_tools.tool_content_read.models import (
-    ToolContentReadRequest,
+    ToolContentRegexReadRequest,
     ToolContentReadResult,
 )
 from chat.application.tools.session_tools.tool_content_read.service import ToolContentReadService
-from chat.application.tools.tool_settings import tool_settings
 
 
-DEFAULT_MAX_MATCHES = tool_settings.TOOL_CONTENT_READ_DEFAULT_MAX_MATCHES
-MAX_CONTENT_IDS = tool_settings.TOOL_CONTENT_READ_MAX_CONTENT_IDS
-MAX_REGEX_PATTERN_CHARS = tool_settings.TOOL_CONTENT_READ_MAX_REGEX_PATTERN_CHARS
+DEFAULT_MAX_MATCHES = 10
+MAX_CONTENT_IDS = 16
+MAX_REGEX_PATTERN_CHARS = 500
+TOOL_CONTENT_READ_TIMEOUT_SECONDS = 300.0
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -87,7 +87,7 @@ class ToolContentRegexReadTool:
                     "  - You need new content from the web — use web_fetch or web_crawl instead.\n"
                     "\n"
                     "INPUT RULES:\n"
-                    "  - content_ids MUST be cnt_* ids from previous content receipts; large sets are auto-batched internally.\n"
+                    "  - content_ids MUST be cnt_* ids from previous content receipts; multiple ids are read in bounded internal batches.\n"
                     "  - pattern is required and must be a Python regular expression.\n"
                     "  - selector optionally prefilters chunks by block_kinds, sections, page_labels, anchor_labels, or chunk_indices.\n"
                     "  - merge_before/merge_after expand windows around center chunks.\n"
@@ -103,7 +103,7 @@ class ToolContentRegexReadTool:
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 required_context_keys=("session_id",),
-                timeout_seconds=tool_settings.TOOL_CONTENT_READ_TIMEOUT_SECONDS,
+                timeout_seconds=TOOL_CONTENT_READ_TIMEOUT_SECONDS,
             ),
         )
 
@@ -126,10 +126,10 @@ class ToolContentRegexReadTool:
                 retryable=False,
             )
 
-        request = ToolContentReadRequest(
+        request = ToolContentRegexReadRequest(
             content_ids=tuple(str(value) for value in kwargs["content_ids"]),
-            selector=selector_from_payload(kwargs.get("selector")),
             pattern=pattern,
+            selector=selector_from_payload(kwargs.get("selector")),
             max_matches=int(kwargs.get("max_matches") or DEFAULT_MAX_MATCHES),
             merge_before=int(kwargs.get("merge_before") or 0),
             merge_after=int(kwargs.get("merge_after") or 0),

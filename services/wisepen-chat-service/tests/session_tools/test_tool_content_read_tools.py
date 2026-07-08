@@ -27,8 +27,11 @@ ranking_engine_registry_stub.get_ranking_engine = lambda _: object()
 sys.modules.setdefault("chat.application.utils.ranking_engine.registry", ranking_engine_registry_stub)
 
 from chat.application.tools.session_tools.tool_content_read.models import (
+    ToolContentReadMatch,
     ToolContentReadResult,
+    ToolContentRerankReadRequest,
 )
+from chat.application.tools.session_tools._tool_content_read_common import read_content_id_batches
 from chat.application.tools.session_tools.tool_content_regex_read_tool import ToolContentRegexReadTool
 from chat.application.tools.session_tools.tool_content_rerank_read_tool import ToolContentRerankReadTool
 
@@ -94,3 +97,33 @@ async def test_tool_content_regex_read_dispatches_regex_match() -> None:
     )
 
     assert service.called == "regex_match"
+
+
+@pytest.mark.asyncio
+async def test_tool_content_read_batches_multiple_content_ids() -> None:
+    seen_batches: list[tuple[str, ...]] = []
+
+    async def read_batch(request: ToolContentRerankReadRequest) -> ToolContentReadResult:
+        seen_batches.append(request.content_ids)
+        return ToolContentReadResult(
+            matches=tuple(
+                ToolContentReadMatch(content_id=content_id)
+                for content_id in request.content_ids
+            )
+        )
+
+    result = await read_content_id_batches(
+        request=ToolContentRerankReadRequest(
+            content_ids=("cnt_1", "cnt_2", "cnt_3"),
+            query="what matters",
+        ),
+        batch_size=2,
+        read_batch=read_batch,
+    )
+
+    assert seen_batches == [("cnt_1", "cnt_2"), ("cnt_3",)]
+    assert tuple(match.content_id for match in result.matches) == (
+        "cnt_1",
+        "cnt_2",
+        "cnt_3",
+    )

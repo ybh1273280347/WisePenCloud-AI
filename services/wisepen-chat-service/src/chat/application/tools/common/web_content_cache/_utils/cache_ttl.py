@@ -8,10 +8,8 @@ from hishel._core._headers import Headers, parse_cache_control
 from hishel._core._spec import get_freshness_lifetime
 from hishel._core.models import Response
 
-from chat.application.tools.tool_settings import tool_settings
-
-_DEFAULT_TTL = timedelta(seconds=tool_settings.CACHE_DEFAULT_TTL_SECONDS)
-_MAX_TTL = timedelta(seconds=tool_settings.CACHE_MAX_TTL_SECONDS)
+_DEFAULT_TTL = timedelta(seconds=7200)
+_MAX_TTL = timedelta(seconds=86400)
 
 
 @dataclass(frozen=True, slots=True)

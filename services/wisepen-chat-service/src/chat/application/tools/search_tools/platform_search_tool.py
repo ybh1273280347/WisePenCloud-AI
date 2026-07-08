@@ -11,12 +11,6 @@ from chat.application.tools.core import (
     ToolRiskLevel,
 )
 from chat.application.tools.core.tool_return import ToolReturn
-from chat.application.tools.search_tools.provider_search_tool import (
-    DEFAULT_SEARCH_RESULTS,
-    FALLBACK_CANDIDATES_COUNT,
-    MAX_RECOMMENDED_CANDIDATES,
-    MAX_SEARCH_RESULTS,
-)
 from chat.application.tools.search_tools.web_search.core.errors import (
     WebSearchEmptyResult,
     WebSearchError,
@@ -34,16 +28,16 @@ from chat.application.tools.search_tools.web_search.providers.models import Sear
 from chat.application.tools.search_tools.web_search.result_builder import build_search_tool_return
 from chat.application.tools.search_tools.web_search.service import SearchService
 from chat.application.tools.search_tools.web_search.tool_utils import select_recommended_ids
-from chat.application.tools.tool_settings import tool_settings
+
+DEFAULT_SEARCH_RESULTS = 10
+MAX_SEARCH_RESULTS = 20
+MAX_RECOMMENDED_CANDIDATES = 5
+FALLBACK_CANDIDATES_COUNT = 3
+WEB_SEARCH_TOOL_TIMEOUT_SECONDS = 300.0
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "question": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Required. The user's original information need, in the user's own language.",
-        },
         "query": {
             "type": "string",
             "minLength": 1,
@@ -63,7 +57,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
             "description": "Maximum candidate results per search request.",
         },
     },
-    "required": ["question", "query"],
+    "required": ["query"],
     "additionalProperties": False,
 }
 
@@ -106,9 +100,9 @@ class PlatformSearchTool:
                 expose_by_default=False,
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
-                timeout_seconds=tool_settings.WEB_SEARCH_TOOL_TIMEOUT_SECONDS,
+                timeout_seconds=WEB_SEARCH_TOOL_TIMEOUT_SECONDS,
                 cache_chunked=False,
-                required_context_keys=("user_id", "session_id"),
+                required_context_keys=("user_id",),
             ),
         )
 
@@ -123,7 +117,6 @@ class PlatformSearchTool:
 
         search_config = await self._runtime_context_resolver.resolve_platform(
             user_id=str(context["user_id"]),
-            session_id=str(context["session_id"]),
         )
         if (
                 mode == SearchMode.ACADEMIC

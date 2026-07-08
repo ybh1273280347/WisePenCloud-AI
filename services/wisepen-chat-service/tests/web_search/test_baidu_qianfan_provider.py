@@ -57,14 +57,9 @@ from chat.application.tools.search_tools.web_search.providers.baidu_qianfan impo
     map_baidu_qianfan_response,
 )
 from chat.application.tools.search_tools.web_search.providers.models import SearchProviderName
-from chat.application.tools.search_tools.web_search.factories.custom_source_factory import WebSearchCustomSourceFactory
 from chat.application.tools.search_tools.web_search.factories.integration_searcher_factory import (
     IntegrationSearcherFactory,
 )
-from chat.application.tools.search_tools.web_search.core.runtime_context import (
-    WebSearchRuntimeConfig,
-)
-from chat.application.tools.search_tools.web_search.core.sources import WebSearchSourceKind
 from chat.application.tools.search_tools.web_search.searchers import BaiduQianfanSearcher
 
 
@@ -141,29 +136,19 @@ def test_baidu_qianfan_response_maps_web_references_only() -> None:
     assert response.results[1].preview.overview == "兼容未返回 type 的结果"
 
 
-def test_custom_source_factory_builds_baidu_qianfan_searcher() -> None:
-    factory = WebSearchCustomSourceFactory(
-        integration_searcher_factory=IntegrationSearcherFactory(
-            http_client=_FakeHttpClient(),
-            exa_base_url="https://api.exa.ai",
-            tavily_base_url="https://api.tavily.com",
-            anysearch_base_url="https://api.anysearch.com",
-            baidu_qianfan_base_url="https://qianfan.baidubce.com",
-        ),
+def test_integration_factory_builds_baidu_qianfan_searcher() -> None:
+    factory = IntegrationSearcherFactory(
+        http_client=_FakeHttpClient(),
+        exa_base_url="https://api.exa.ai",
+        tavily_base_url="https://api.tavily.com",
+        anysearch_base_url="https://api.anysearch.com",
+        baidu_qianfan_base_url="https://qianfan.baidubce.com",
     )
 
-    source = factory.build(
-        WebSearchRuntimeConfig(
-            user_id="user-1",
-            session_id="session-1",
-            search_config_id="custom:baidu_qianfan",
-            source_kind=WebSearchSourceKind.CUSTOM,
-            provider=SearchProviderName.BAIDU_QIANFAN,
-            source_id="custom:baidu_qianfan:test",
-            api_key="qianfan-key",
-        )
+    searcher = factory.build(
+        provider=SearchProviderName.BAIDU_QIANFAN,
+        api_key="qianfan-key",
+        source_id="custom:baidu_qianfan:test",
     )
 
-    assert source.provider == SearchProviderName.BAIDU_QIANFAN
-    assert source.api_key == "qianfan-key"
-    assert isinstance(source.searcher, BaiduQianfanSearcher)
+    assert isinstance(searcher, BaiduQianfanSearcher)

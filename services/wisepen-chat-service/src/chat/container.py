@@ -72,7 +72,6 @@ from chat.application.tools.search_tools.platform_search_tool import PlatformSea
 from chat.application.tools.search_tools.tavily_search_tool import TavilySearchTool
 from chat.application.tools.tool_output_cache import ToolOutputCache
 from chat.application.tools.tool_output_renderer import ToolOutputRenderer
-from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.web_tools.web_crawl_tool import WebCrawlTool
 from chat.application.tools.web_tools.web_fetch_tool import WebFetchTool
 from chat.application.tools.web_tools.fetch_services import (
@@ -151,6 +150,10 @@ from common.http.rpc_client import RpcClient
 from common.kafka.consumer import KafkaConsumerClient
 from common.kafka.producer import KafkaProducerClient
 
+PADDLE_OCR_HTTP_TIMEOUT_SECONDS = 300.0
+WEB_SEARCH_HTTP_TIMEOUT_SECONDS = 15.0
+WEB_FETCH_HTTP_TIMEOUT_SECONDS = 30.0
+
 
 async def _provide_nacos_naming() -> NacosNamingService:
     """延迟到首次 await，避免在 import 阶段触发 async Nacos 建连。"""
@@ -176,9 +179,6 @@ def _build_paddle_ocr_client(
             api_url=settings.PADDLE_OCR_API_URL,
             token=settings.PADDLE_OCR_TOKEN,
             model=settings.PADDLE_OCR_MODEL,
-            timeout_seconds=tool_settings.PADDLE_OCR_TIMEOUT_SECONDS,
-            poll_interval_seconds=tool_settings.PADDLE_OCR_POLL_INTERVAL_SECONDS,
-            max_poll_attempts=tool_settings.PADDLE_OCR_MAX_POLL_ATTEMPTS,
         ),
         http_client=http_client,
     )
@@ -284,7 +284,7 @@ def _build_web_fetch_http_client() -> httpx.AsyncClient:
         next_transport=httpx.AsyncHTTPTransport(retries=0, trust_env=False),
     )
     return httpx.AsyncClient(
-        timeout=httpx.Timeout(tool_settings.WEB_FETCH_TIMEOUT_SECONDS),
+        timeout=httpx.Timeout(WEB_FETCH_HTTP_TIMEOUT_SECONDS),
         transport=transport,
         trust_env=False,
     )
@@ -569,9 +569,6 @@ class Container(containers.DeclarativeContainer):
         ToolRunFileStore,
         repository=tool_run_file_repository,
         root_dir=settings.TOOL_RUN_FILE_ROOT,
-        ref_ttl_seconds=tool_settings.TOOL_RUN_FILE_REF_TTL_SECONDS,
-        cleanup_grace_seconds=tool_settings.TOOL_RUN_FILE_CLEANUP_GRACE_SECONDS,
-        max_file_size_bytes=tool_settings.TOOL_RUN_FILE_MAX_BYTES,
     )
     tool_run_file_store_gc_scheduler = providers.Singleton(
         ToolRunFileStoreGcScheduler,
@@ -596,7 +593,7 @@ class Container(containers.DeclarativeContainer):
     # --- Document Parse 组件 ---
     paddle_ocr_http_client = providers.Singleton(
         httpx.AsyncClient,
-        timeout=httpx.Timeout(tool_settings.PADDLE_OCR_TIMEOUT_SECONDS),
+        timeout=httpx.Timeout(PADDLE_OCR_HTTP_TIMEOUT_SECONDS),
     )
     paddle_ocr_client = providers.Singleton(
         _build_paddle_ocr_client,
@@ -610,7 +607,7 @@ class Container(containers.DeclarativeContainer):
     # --- Web Search 组件 ---
     web_search_http_client = providers.Singleton(
         httpx.AsyncClient,
-        timeout=httpx.Timeout(tool_settings.WEB_SEARCH_TIMEOUT_SECONDS),
+        timeout=httpx.Timeout(WEB_SEARCH_HTTP_TIMEOUT_SECONDS),
         trust_env=False,
     )
     platform_default_searcher = providers.Singleton(
@@ -620,7 +617,6 @@ class Container(containers.DeclarativeContainer):
     web_search_runtime_context_resolver = providers.Singleton(
         WebSearchRuntimeContextResolver,
         credential_repository=web_search_credential_repo,
-        cipher=secret_cipher,
         platform_member_provider=settings.WEB_SEARCH_PLATFORM_MEMBER_PROVIDER,
         platform_member_api_key=settings.WEB_SEARCH_PLATFORM_MEMBER_API_KEY,
     )
@@ -652,12 +648,9 @@ class Container(containers.DeclarativeContainer):
     web_fetch_httpx_fetcher = providers.Singleton(
         HttpxFetcher,
         http_client=web_fetch_http_client,
-        max_response_bytes=tool_settings.WEB_FETCH_MAX_RESPONSE_BYTES,
     )
     web_fetch_scrapling_fetcher = providers.Singleton(
         ScraplingFetcher,
-        timeout_ms=int(tool_settings.WEB_FETCH_TIMEOUT_SECONDS * 1000),
-        max_response_bytes=tool_settings.WEB_FETCH_MAX_RESPONSE_BYTES,
     )
     web_fetch_cleaner = providers.Singleton(
         TrafilaturaCleaner,
@@ -668,8 +661,6 @@ class Container(containers.DeclarativeContainer):
         scrapling_fetcher=web_fetch_scrapling_fetcher,
         cleaner=web_fetch_cleaner,
         content_cache_repository=web_content_cache_repository,
-        min_text_length=tool_settings.WEB_FETCH_MIN_TEXT_LENGTH,
-        concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
     )
     web_fetch_coordinator = providers.Singleton(
         FetchCoordinator,
@@ -678,10 +669,6 @@ class Container(containers.DeclarativeContainer):
         cleaner=web_fetch_cleaner,
         file_store=tool_run_file_store,
         content_cache_repository=web_content_cache_repository,
-        min_text_length=tool_settings.WEB_FETCH_MIN_TEXT_LENGTH,
-        batch_concurrency=tool_settings.WEB_FETCH_BATCH_CONCURRENCY,
-        scrapling_concurrency=tool_settings.WEB_FETCH_SCRAPLING_CONCURRENCY,
-        max_scrapling_fallbacks=tool_settings.WEB_FETCH_MAX_SCRAPLING_FALLBACKS,
     )
 
     # ==================================================================

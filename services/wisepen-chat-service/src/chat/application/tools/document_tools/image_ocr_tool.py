@@ -19,7 +19,6 @@ from chat.application.tools.core import (
 )
 from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.document_tools.ocr import OcrPageResult
-from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.file_type_detect import detect_mime_type
 from chat.application.tools.utils.url import (
     FetchedUrl,
@@ -30,6 +29,9 @@ from chat.application.tools.utils.url import (
     filename_from_url,
     validate_public_http_url,
 )
+
+IMAGE_OCR_TOOL_TIMEOUT_SECONDS = 300.0
+IMAGE_OCR_MAX_DOWNLOAD_BYTES = 52_428_800
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +63,7 @@ class ImageOcrTool:
         self._file_store = file_store
         self._ocr_client = ocr_client
         self._url_download_http_client = url_download_http_client
-        self._max_download_bytes = tool_settings.IMAGE_OCR_MAX_DOWNLOAD_BYTES
+        self._max_download_bytes = IMAGE_OCR_MAX_DOWNLOAD_BYTES
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="image_ocr",
@@ -109,7 +111,7 @@ class ImageOcrTool:
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 required_context_keys=("user_id", "session_id"),
-                timeout_seconds=tool_settings.PADDLE_OCR_TIMEOUT_SECONDS,
+                timeout_seconds=IMAGE_OCR_TOOL_TIMEOUT_SECONDS,
                 cache_chunked=True,
             ),
         )

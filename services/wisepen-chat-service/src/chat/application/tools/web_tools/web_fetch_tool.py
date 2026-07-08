@@ -11,7 +11,6 @@ from chat.application.tools.core import (
     ToolRiskLevel,
 )
 from chat.application.tools.core.tool_return import ToolReturn
-from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
 from chat.application.tools.web_tools.fetch_services import FetchCoordinator
 from chat.application.tools.web_tools.fetch_services.core.errors import UrlFetchError
@@ -19,6 +18,7 @@ from common.logger import warn
 
 # --- 全局常量定义 ---
 MAX_URLS = 64
+WEB_FETCH_TOOL_TIMEOUT_SECONDS = 300.0
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -93,7 +93,7 @@ class WebFetchTool:
                 expose_by_default=True,
                 persist_output=True,
                 risk_level=ToolRiskLevel.MEDIUM,
-                timeout_seconds=tool_settings.WEB_FETCH_TOOL_TIMEOUT_SECONDS,
+                timeout_seconds=WEB_FETCH_TOOL_TIMEOUT_SECONDS,
                 cache_chunked=True,
                 required_context_keys=("user_id", "session_id"),
             ),

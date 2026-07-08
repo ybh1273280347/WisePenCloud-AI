@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from chat.application.tools.tool_settings import tool_settings
-
-DEFAULT_MAX_MATCHES = tool_settings.TOOL_CONTENT_READ_DEFAULT_MAX_MATCHES
+DEFAULT_MAX_MATCHES = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,17 +25,27 @@ class ToolContentSelector:
 
 
 @dataclass(frozen=True, slots=True)
-class ToolContentReadRequest:
-    """ToolContentRead 内部请求，包含所有读取参数。"""
+class ToolContentRerankReadRequest:
+    """rerank 读取内部请求。"""
 
-    content_ids: tuple[str, ...]  # 要批量读取的内容 ID 集合
-    selector: ToolContentSelector | None = None  # 前置过滤器
-    query: str | None = None  # ranked_expand 模式：排序查询文本
-    top_k: int = 5  # ranked_expand 模式：返回 Top-K
-    pattern: str | None = None  # regex_match 模式：正则模式串
-    max_matches: int = DEFAULT_MAX_MATCHES  # regex_match 模式：最大匹配数
-    merge_before: int = 0  # 窗口向前合并的 chunk 数
-    merge_after: int = 0  # 窗口向后合并的 chunk 数
+    content_ids: tuple[str, ...]
+    query: str
+    selector: ToolContentSelector | None = None
+    top_k: int = 5
+    merge_before: int = 0
+    merge_after: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ToolContentRegexReadRequest:
+    """regex 读取内部请求。"""
+
+    content_ids: tuple[str, ...]
+    pattern: str
+    selector: ToolContentSelector | None = None
+    max_matches: int = DEFAULT_MAX_MATCHES
+    merge_before: int = 0
+    merge_after: int = 0
 
 
 @dataclass(frozen=True, slots=True)

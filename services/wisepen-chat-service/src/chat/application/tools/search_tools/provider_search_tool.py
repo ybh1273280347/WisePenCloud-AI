@@ -27,14 +27,14 @@ from chat.application.tools.search_tools.web_search.providers.models import Sear
 from chat.application.tools.search_tools.web_search.result_builder import build_search_tool_return
 from chat.application.tools.search_tools.web_search.service import SearchService
 from chat.application.tools.search_tools.web_search.tool_utils import select_recommended_ids
-from chat.application.tools.tool_settings import tool_settings
 from chat.core.persistence.mongo.web_search_credential_repository import MongoWebSearchCredentialRepository
 from common.core.exceptions import ServiceException
 
-DEFAULT_SEARCH_RESULTS = tool_settings.WEB_SEARCH_DEFAULT_RESULTS
-MAX_SEARCH_RESULTS = tool_settings.WEB_SEARCH_MAX_RESULTS
-MAX_RECOMMENDED_CANDIDATES = tool_settings.WEB_SEARCH_MAX_RECOMMENDED_CANDIDATES
-FALLBACK_CANDIDATES_COUNT = tool_settings.WEB_SEARCH_FALLBACK_CANDIDATES_COUNT
+DEFAULT_SEARCH_RESULTS = 10
+MAX_SEARCH_RESULTS = 20
+MAX_RECOMMENDED_CANDIDATES = 5
+FALLBACK_CANDIDATES_COUNT = 3
+WEB_SEARCH_TOOL_TIMEOUT_SECONDS = 300.0
 
 
 class ProviderSearchTool:
@@ -73,9 +73,9 @@ class ProviderSearchTool:
                 expose_by_default=False,
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
-                timeout_seconds=tool_settings.WEB_SEARCH_TOOL_TIMEOUT_SECONDS,
+                timeout_seconds=WEB_SEARCH_TOOL_TIMEOUT_SECONDS,
                 cache_chunked=False,
-                required_context_keys=("user_id", "session_id"),
+                required_context_keys=("user_id",),
             ),
         )
 
@@ -85,7 +85,7 @@ class ProviderSearchTool:
 
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
         query = kwargs["query"].strip()
-        mode = _parse_mode(kwargs.get("mode"))
+        mode = SearchMode(str(kwargs.get("mode") or SearchMode.WEB.value))
         max_results = max(1, min(kwargs.get("max_results") or DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS))
         if mode == SearchMode.ACADEMIC and not self._provider.supports_academic_mode:
             raise ToolExecutionError(
@@ -95,17 +95,18 @@ class ProviderSearchTool:
             )
 
         try:
+            source_id = f"custom:{self._provider.value}"
             api_key = await self._credential_repository.get_custom_api_key(
                 user_id=str(context["user_id"]),
                 provider=self._provider,
             )
             source = CustomSearchSource(
                 provider=self._provider,
-                source_id=f"custom:{self._provider.value}",
+                source_id=source_id,
                 searcher=self._integration_searcher_factory.build(
                     provider=self._provider,
                     api_key=api_key,
-                    source_id=f"custom:{self._provider.value}",
+                    source_id=source_id,
                 ),
                 api_key=api_key,
             )
@@ -173,11 +174,6 @@ class ProviderSearchTool:
 
 def _parameters_schema(provider: SearchProviderName) -> dict[str, Any]:
     properties: dict[str, Any] = {
-        "question": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Required. The user's original information need, in the user's own language.",
-        },
         "query": {
             "type": "string",
             "minLength": 1,
@@ -201,15 +197,9 @@ def _parameters_schema(provider: SearchProviderName) -> dict[str, Any]:
     return {
         "type": "object",
         "properties": properties,
-        "required": ["question", "query"],
+        "required": ["query"],
         "additionalProperties": False,
     }
-
-
-def _parse_mode(value: object) -> SearchMode:
-    if value is None:
-        return SearchMode.WEB
-    return SearchMode(str(value))
 
 
 def _tool_description(provider: SearchProviderName) -> str:

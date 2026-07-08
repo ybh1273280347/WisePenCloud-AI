@@ -12,7 +12,7 @@ from .engine import ChunkingEngine
 from .models import BlockKind, ChunkRole
 from .pipeline import ChunkingPipeline
 
-DEFAULT_CHUNK_SIZE: int = 4000
+DEFAULT_CHUNK_SIZE: int = 6000
 
 
 class ChunkingEngineRegistry:

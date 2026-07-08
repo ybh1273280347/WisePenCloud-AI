@@ -52,8 +52,8 @@ class FetchCoordinator:
             file_store: ToolRunFileStore,
             content_cache_repository: WebContentCacheRepository | None = None,
             min_text_length: int = 200,
-            batch_concurrency: int = 5,
-            scrapling_concurrency: int = 2,
+            batch_concurrency: int = 16,
+            scrapling_concurrency: int = 3,
             max_scrapling_fallbacks: int = 6,
     ) -> None:
         self._httpx_fetcher = httpx_fetcher

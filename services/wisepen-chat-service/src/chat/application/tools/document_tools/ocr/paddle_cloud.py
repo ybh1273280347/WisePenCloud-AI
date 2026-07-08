@@ -13,7 +13,9 @@ import httpx
 
 from chat.application.tools.document_tools.ocr.core.errors import OcrError
 from chat.application.tools.document_tools.ocr.core.models import OcrPageResult
-from chat.application.tools.tool_settings import tool_settings
+
+_POLL_HTTP_TIMEOUT_SECONDS = 30.0
+_RESULT_HTTP_TIMEOUT_SECONDS = 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,7 +111,7 @@ class PaddleCloudClient:
             resp = await self._http.get(
                 f"{self._config.api_url}/{job_id}",
                 headers=self._headers,
-                timeout=tool_settings.PADDLE_OCR_POLL_HTTP_TIMEOUT,
+                timeout=_POLL_HTTP_TIMEOUT_SECONDS,
             )
             resp.raise_for_status()
 
@@ -134,7 +136,7 @@ class PaddleCloudClient:
         raise OcrError("PaddleOCR job polling timeout")
 
     async def _download_results(self, json_url: str) -> list[dict[str, Any]]:
-        resp = await self._http.get(json_url, timeout=tool_settings.PADDLE_OCR_RESULT_HTTP_TIMEOUT)
+        resp = await self._http.get(json_url, timeout=_RESULT_HTTP_TIMEOUT_SECONDS)
         resp.raise_for_status()
         return [json.loads(line) for line in resp.text.strip().splitlines() if line.strip()]
 

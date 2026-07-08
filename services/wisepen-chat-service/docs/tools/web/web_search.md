@@ -36,7 +36,6 @@
 
 | 参数 | 类型 | 规则 |
 | --- | --- | --- |
-| `question` | `string` | 用户原始问题。 |
 | `query` | `string` | 本次执行的搜索 query；无结果时由模型改写后再次调用。 |
 | `max_results` | `integer` | 可选，默认 10，最大 20。 |
 | `mode` | `web \| academic` | 仅支持 academic mode 的工具暴露该参数。 |

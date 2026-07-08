@@ -9,10 +9,9 @@ from chat.application.tools.common.tool_content_store.core.models import (
 from chat.application.tools.session_tools.tool_content_read.models import (
     ToolContentWindow,
 )
-from chat.application.tools.tool_settings import tool_settings
 
 # 聚合窗口的最大允许硬字符上限，超出则执行安全裁剪
-MAX_TOOL_CONTENT_WINDOW_CHARS = tool_settings.TOOL_CONTENT_READ_MAX_WINDOW_CHARS
+MAX_TOOL_CONTENT_WINDOW_CHARS = 100_000
 
 
 class ToolContentWindowBuilder:

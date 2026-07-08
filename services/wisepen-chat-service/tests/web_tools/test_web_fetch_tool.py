@@ -60,16 +60,9 @@ class _FakeFetchService:
         )
 
 
-class _UnusedCandidateRepository:
-    pass
-
-
 @pytest.mark.asyncio
 async def test_web_fetch_visible_result_hides_internal_fetch_metadata() -> None:
-    tool = WebFetchTool(
-        service=_FakeFetchService(),
-        candidate_repository=_UnusedCandidateRepository(),
-    )
+    tool = WebFetchTool(service=_FakeFetchService())
 
     result = await tool.execute(
         {"user_id": "u1", "session_id": "s1"},
@@ -98,10 +91,7 @@ async def test_web_fetch_visible_result_hides_internal_fetch_metadata() -> None:
 
 @pytest.mark.asyncio
 async def test_web_fetch_rejects_unsafe_direct_url() -> None:
-    tool = WebFetchTool(
-        service=_FakeFetchService(),
-        candidate_repository=_UnusedCandidateRepository(),
-    )
+    tool = WebFetchTool(service=_FakeFetchService())
 
     with pytest.raises(ToolExecutionError) as exc_info:
         await tool.execute(
