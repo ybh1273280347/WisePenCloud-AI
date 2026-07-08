@@ -127,8 +127,13 @@ class WebCrawler:
                 if depth >= max_depth or len(results) >= max_pages or page.raw_html is None:
                     continue
 
-                # 提取链接入队
-                child_urls = _extract_links(page.raw_html, url, base_domain, same_domain)
+                # 页面里的畸形 href 不能打断已抓到的结果，只影响该页面的后续扩展。
+                try:
+                    child_urls = _extract_links(page.raw_html, url, base_domain, same_domain)
+                except Exception as exc:
+                    warn("web_crawl extract links failed", url=url, reason=str(exc))
+                    continue
+
                 for child_url in child_urls:
                     if child_url not in visited:
                         queue.append((child_url, depth + 1))
@@ -234,12 +239,22 @@ def _extract_links(
         href = href.split("#", 1)[0].strip()
         if not href:
             continue
-        # 相对路径转绝对
-        absolute = urljoin(base_url, href)
+        try:
+            # 相对路径转绝对。urllib 会对非法 IPv6 host 等畸形 URL 抛 ValueError。
+            absolute = urljoin(base_url, href)
+        except ValueError:
+            continue
+
         if not absolute.startswith(("http://", "https://")):
             continue
+
+        try:
+            parsed = urlparse(absolute)
+        except ValueError:
+            continue
+
         # 同域过滤
-        if same_domain and urlparse(absolute).netloc != base_domain:
+        if same_domain and parsed.netloc != base_domain:
             continue
         if absolute not in seen:
             seen.add(absolute)

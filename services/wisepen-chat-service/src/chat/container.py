@@ -235,6 +235,7 @@ def _build_qdrant_client() -> AsyncQdrantClient | None:
         host=host,
         port=settings.QDRANT_PORT,
         api_key=settings.QDRANT_PASSWORD or None,
+        check_compatibility=False,
     )
 
 

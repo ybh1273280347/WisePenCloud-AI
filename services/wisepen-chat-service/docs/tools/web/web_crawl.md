@@ -41,6 +41,7 @@ seed_url
   -> cleaner -> markdown
   -> lxml extract links
   -> same-domain filter
+  -> skip malformed links / failed pages
   -> max_pages / max_depth stop
   -> ToolReturn(cacheable_texts=page markdowns)
 ```
@@ -48,6 +49,8 @@ seed_url
 `WebCrawler` 直接使用底层 fetcher，而不是调用 `FetchCoordinator.fetch_one`，因为 crawl 需要 raw HTML 来提取链接。非 HTML 文件会被跳过，不生成 `tfile_*`，因为 crawl 的目标是 HTML 页面集合。
 
 crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `web_content_cache`；命中时直接返回缓存 Markdown，并使用缓存中的 `raw_html` 继续抽取链接。未命中或 Redis value 过期时执行物理抓取，清洗后的 Markdown 和 raw HTML 通过 `WebContentCacheService` 写回同一 URL 缓存路径。
+
+单个页面抓取失败、非 HTML 响应、页面内畸形链接或单页链接提取失败，都只影响该 URL 或该页面的后续扩展，不应丢弃本次已经成功抓取的页面。只有最终没有任何页面成功时，才抛出 `web_crawl_empty_result`。
 
 这与 `web_fetch` 共享缓存服务，是正确行为：两者都是 HTML 页面内容获取工具，差异只在 frontier 策略（单页/批量 URL vs BFS crawl），不应维护两套 URL 缓存协议。
 

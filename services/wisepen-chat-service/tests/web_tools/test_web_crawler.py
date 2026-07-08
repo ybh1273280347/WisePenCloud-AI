@@ -46,7 +46,10 @@ from chat.application.tools.common.web_content_cache import (  # noqa: E402
     WebContentCacheMode,
     WebContentCacheValue,
 )
-from chat.application.tools.web_tools.fetch_services.web_crawl import WebCrawler  # noqa: E402
+from chat.application.tools.web_tools.fetch_services.web_crawl import (  # noqa: E402
+    WebCrawler,
+    _extract_links,
+)
 
 
 class _UnusedFetcher:
@@ -135,6 +138,64 @@ async def test_web_crawler_reuses_fetch_cache_and_cached_raw_html_for_links() ->
     assert [result.markdown for result in results] == ["# Seed", "# Child"]
     assert httpx_fetcher.calls == 0
     assert scrapling_fetcher.calls == 0
+
+
+def test_extract_links_skips_malformed_ipv6_urls() -> None:
+    raw_html = """
+    <html>
+      <body>
+        <a href="/valid">Valid</a>
+        <a href="https://[broken">Broken</a>
+        <a href="https://example.test/other">Other</a>
+      </body>
+    </html>
+    """
+
+    links = _extract_links(
+        raw_html,
+        "https://example.test/start",
+        "example.test",
+        same_domain=True,
+    )
+
+    assert links == [
+        "https://example.test/valid",
+        "https://example.test/other",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_web_crawler_keeps_successful_pages_when_cached_html_has_bad_link() -> None:
+    user_id = "u1"
+    seed_url = "https://example.test/start"
+
+    values = {
+        (user_id, seed_url, WebContentCacheMode.PUBLIC): _cache_value(
+            user_id=user_id,
+            url=seed_url,
+            raw_html='<html><body><a href="https://[broken">Broken</a></body></html>',
+            markdown="# Seed",
+            title="Seed",
+        ),
+    }
+    crawler = WebCrawler(
+        httpx_fetcher=_UnusedFetcher(),
+        scrapling_fetcher=_UnusedFetcher(),
+        cleaner=_UnusedCleaner(),
+        content_cache_repository=_CacheRepository(values),
+        concurrency=1,
+    )
+
+    results = await crawler.crawl(
+        seed_url,
+        user_id=user_id,
+        session_id="s1",
+        max_pages=2,
+        max_depth=1,
+    )
+
+    assert [result.source_url for result in results] == [seed_url]
+    assert [result.markdown for result in results] == ["# Seed"]
 
 
 def _cache_value(

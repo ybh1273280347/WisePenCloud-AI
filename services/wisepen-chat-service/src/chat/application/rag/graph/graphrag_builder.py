@@ -14,9 +14,8 @@ from neo4j_graphrag.experimental.components.types import (
     TextChunk,
     TextChunks,
 )
-from neo4j_graphrag.llm import LLMInterface
-from neo4j_graphrag.llm.types import LLMResponse
 
+from chat.application.rag.graph.graphrag_llm import WisePenGraphRagLLM
 from chat.application.utils.llm_clients import QueryClient
 
 _DOCUMENT_NODE_LABEL = "RagDocument"
@@ -67,9 +66,10 @@ class Neo4jGraphRagKnowledgeGraphBuilder:
 
         # Neo4jWriter 初始化会读取 driver 状态，因此只在 driver 存在时构造 SDK 组件。
         self._extractor = LLMEntityRelationExtractor(
-            llm=_WisePenGraphRagLLM(llm_client),
+            llm=WisePenGraphRagLLM(llm_client),
             create_lexical_graph=True,
             on_error=OnError.IGNORE,
+            use_structured_output=True,
         )
         self._writer = Neo4jWriter(
             driver=driver,
@@ -122,48 +122,6 @@ class Neo4jGraphRagKnowledgeGraphBuilder:
             lexical_graph_config=self._lexical_graph_config,
         )
 
-
-class _WisePenGraphRagLLM(LLMInterface):
-    """把 WisePen QueryClient 适配成 neo4j-graphrag LLM 边界。
-
-    当前 SDK 1.18.0 仍支持 LLMInterface；后续如升级到 V2 接口，只需要替换该适配层。
-    """
-
-    __slots__ = ("_client",)
-
-    def __init__(self, client: QueryClient) -> None:
-        super().__init__(model_name=client.model)
-        self._client = client
-
-    def invoke(
-            self,
-            input: str,
-            message_history: Any = None,
-            system_instruction: str | None = None,
-    ) -> LLMResponse:
-        response = self._client.query(
-            input,
-            system_prompt=system_instruction,
-            messages=_to_messages(message_history),
-            response_format={"type": "json_object"},
-        )
-        return LLMResponse(content=response.content)
-
-    async def ainvoke(
-            self,
-            input: str,
-            message_history: Any = None,
-            system_instruction: str | None = None,
-    ) -> LLMResponse:
-        response = await self._client.aquery(
-            input,
-            system_prompt=system_instruction,
-            messages=_to_messages(message_history),
-            response_format={"type": "json_object"},
-        )
-        return LLMResponse(content=response.content)
-
-
 def _build_text_chunks(
         *,
         child_chunks: tuple[Any, ...],
@@ -198,23 +156,3 @@ def _build_text_chunks(
             ]
         }
     )
-
-
-def _to_messages(message_history: Any) -> list[dict[str, str]]:
-    if message_history is None:
-        return []
-    messages = getattr(message_history, "messages", message_history)
-    result: list[dict[str, str]] = []
-    for message in messages or []:
-        role = getattr(message, "role", None)
-        content = getattr(message, "content", None)
-        if isinstance(message, dict):
-            role = message.get("role")
-            content = message.get("content")
-        result.append(
-            {
-                "role": str(role or "user"),
-                "content": str(content or ""),
-            }
-        )
-    return result
