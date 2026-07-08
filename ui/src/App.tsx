@@ -39,12 +39,18 @@ export default function App() {
   const backendSessionIdRef = useRef("");
   const loadedHistorySessionIdRef = useRef("");
   const sentPendingInputRef = useRef("");
+  const settingsRef = useRef(settings);
+
+  useEffect(() => {
+  settingsRef.current = settings;
+}, [settings]);
+
   const transport = useMemo(() => {
-    return createBackendTransport({
-      getSessionId: () => backendSessionIdRef.current,
-      settings,
-    });
-  }, [settings]);
+  return createBackendTransport({
+    getSessionId: () => backendSessionIdRef.current,
+    getSettings: () => settingsRef.current,
+  });
+}, []);
   const { messages, sendMessage, setMessages, status, stop } = useChat({
     transport,
   });
