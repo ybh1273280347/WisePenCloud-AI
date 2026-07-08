@@ -47,9 +47,9 @@ from chat.application.rag.ingestion.context_indexing import (
 from chat.application.rag.ingestion.models import (
     ContextIndexingInput,
     RagChildChunk,
-    RagChunkExtraIndex,
+    RagChunkLocator,
 )
-from chat.application.utils.chunking_engine.models import IndexKind
+from chat.application.utils.chunking_engine.models import LocatorKind
 
 
 class _FakeClient:
@@ -80,10 +80,10 @@ async def test_context_indexing_service_uses_llm_json_payload() -> None:
                 text="volatile-lru 只淘汰设置了过期时间的 key。",
                 chunk_index=1,
                 parent_chunk_id="parent-redis",
-                extra_indexes=(
-                    RagChunkExtraIndex(
-                        index_name="section:内存管理",
-                        index_kind=IndexKind.SECTION,
+                locators=(
+                    RagChunkLocator(
+                        locator_name="section:内存管理",
+                        locator_kind=LocatorKind.SECTION,
                         section_path=("内存管理",),
                     ),
                 ),
@@ -94,10 +94,16 @@ async def test_context_indexing_service_uses_llm_json_payload() -> None:
     assert result.child_chunk.chunk_id == "chunk-redis-1"
     assert result.child_chunk.parent_chunk_id == "parent-redis"
     assert result.evidence_text == "volatile-lru 只淘汰设置了过期时间的 key。"
-    assert result.indexing_context == "该片段说明 Redis volatile-lru 策略只作用于设置过期时间的 key。"
+    assert (
+        result.indexing_context
+        == "该片段说明 Redis volatile-lru 策略只作用于设置过期时间的 key。"
+    )
     assert result.child_chunk.indexing_context == result.indexing_context
     assert result.child_chunk.indexing_text == result.indexing_text
-    assert "上下文补充: 该片段说明 Redis volatile-lru 策略只作用于设置过期时间的 key。" in result.indexing_text
+    assert (
+        "上下文补充: 该片段说明 Redis volatile-lru 策略只作用于设置过期时间的 key。"
+        in result.indexing_text
+    )
     assert "正文: volatile-lru 只淘汰设置了过期时间的 key。" in result.indexing_text
     assert "<context_indexing_input>" in client.calls[0]["prompt"]
     assert "Redis 内存管理章节介绍 maxmemory-policy" in client.calls[0]["prompt"]
@@ -116,10 +122,10 @@ async def test_context_indexing_service_rejects_bad_llm_response() -> None:
                     text="请求必须携带 Authorization header。",
                     chunk_index=1,
                     parent_chunk_id="parent-auth",
-                    extra_indexes=(
-                        RagChunkExtraIndex(
-                            index_name="section:鉴权",
-                            index_kind=IndexKind.SECTION,
+                    locators=(
+                        RagChunkLocator(
+                            locator_name="section:鉴权",
+                            locator_kind=LocatorKind.SECTION,
                             section_path=("鉴权",),
                         ),
                     ),
@@ -141,10 +147,10 @@ async def test_context_indexing_service_requires_parent_text() -> None:
                 text="请求必须携带 Authorization header。",
                 chunk_index=1,
                 parent_chunk_id="parent-auth",
-                extra_indexes=(
-                    RagChunkExtraIndex(
-                        index_name="section:鉴权",
-                        index_kind=IndexKind.SECTION,
+                locators=(
+                    RagChunkLocator(
+                        locator_name="section:鉴权",
+                        locator_kind=LocatorKind.SECTION,
                         section_path=("鉴权",),
                     ),
                 ),

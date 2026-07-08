@@ -63,7 +63,7 @@ class ZeroEntropyReranker:
             raise ZeroEntropyRerankerError(f"ZeroEntropy rerank failed: {e}") from e
 
         reranked: list[RankedCandidate] = []
-        seen_indexes: set[int] = set()
+        seen_locators: set[int] = set()
 
         for item in response.results:
             index = item.index
@@ -77,10 +77,10 @@ class ZeroEntropyReranker:
                 raise ZeroEntropyRerankerError(
                     "ZeroEntropy rerank relevance_score must be in [0, 1]."
                 )
-            if index in seen_indexes:
+            if index in seen_locators:
                 continue
 
-            seen_indexes.add(index)
+            seen_locators.add(index)
             source = ranked[index]
             reranked.append(
                 RankedCandidate(
@@ -99,7 +99,7 @@ class ZeroEntropyReranker:
             )
 
         for index, source in enumerate(ranked):
-            if index in seen_indexes:
+            if index in seen_locators:
                 continue
             reranked.append(
                 RankedCandidate(

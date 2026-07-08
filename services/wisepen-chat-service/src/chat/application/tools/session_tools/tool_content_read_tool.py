@@ -21,9 +21,9 @@ from chat.application.tools.session_tools.tool_content_read.models import (
 from chat.application.tools.session_tools.tool_content_read.service import ToolContentReadService
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.tools.utils.batching import batched
-from chat.application.utils.chunking_engine import UnitType
+from chat.application.utils.chunking_engine import BlockKind
 
-_UNIT_TYPE_ENUM = [unit_type.value for unit_type in UnitType]
+_BLOCK_KIND_ENUM = [block_kind.value for block_kind in BlockKind]
 DEFAULT_MAX_MATCHES = tool_settings.TOOL_CONTENT_READ_DEFAULT_MAX_MATCHES
 MAX_REGEX_PATTERN_CHARS = tool_settings.TOOL_CONTENT_READ_MAX_REGEX_PATTERN_CHARS
 
@@ -59,14 +59,14 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
                 "Multiple selector groups are intersected."
             ),
             "properties": {
-                "unit_types": {
+                "block_kinds": {
                     "type": "array",
                     "items": {
                         "type": "string",
-                        "enum": _UNIT_TYPE_ENUM,
-                        "description": "One structural unit type value from the chunking engine UnitType enum.",
+                        "enum": _BLOCK_KIND_ENUM,
+                        "description": "One structural block kind value from the chunking engine BlockKind enum.",
                     },
-                    "description": "Optional. Restrict search to chunks carrying these structural unit types.",
+                    "description": "Optional. Restrict search to chunks carrying these structural block kinds.",
                 },
                 "sections": {
                     "type": "array",
@@ -106,7 +106,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
                 "include_unknown": {
                     "type": "boolean",
                     "default": False,
-                    "description": "Optional. When unit_types is used, keep chunks that do not carry unit_type metadata.",
+                    "description": "Optional. When block_kinds is used, keep chunks that do not carry structural type metadata.",
                 },
             },
         },
@@ -174,7 +174,7 @@ class ToolContentReadTool:
                     "  - content_ids MUST be cnt_* ids from previous content receipts; large sets are auto-batched internally.\n"
                     "  - mode MUST be one of: ranked_expand (semantic search), regex_match (exact pattern).\n"
                     "  - query is required for ranked_expand; pattern is required for regex_match.\n"
-                    "  - selector optionally prefilters chunks by unit_types, sections, page_labels, anchor_labels, or chunk_indices.\n"
+                    "  - selector optionally prefilters chunks by block_kinds, sections, page_labels, anchor_labels, or chunk_indices.\n"
                     "  - merge_before/merge_after expand windows around center chunks.\n"
                     "\n"
                     "OUTPUT RULES:\n"
@@ -210,7 +210,7 @@ class ToolContentReadTool:
         try:
             selector_payload = kwargs.get("selector") or {}
             selector = ToolContentSelector(
-                unit_types=tuple(selector_payload.get("unit_types") or ()),
+                block_kinds=tuple(selector_payload.get("block_kinds") or ()),
                 sections=tuple(selector_payload.get("sections") or ()),
                 page_labels=tuple(selector_payload.get("page_labels") or ()),
                 anchor_labels=tuple(selector_payload.get("anchor_labels") or ()),

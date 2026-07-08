@@ -20,13 +20,13 @@ class ToolContentSelector:
     """读取前置候选域过滤器。
 
     所有条件同时存在时取交集（AND 逻辑）；为空则表示不过滤。
-    - unit_types: 按块内单元类型过滤（如 code/table/formula）
+    - block_kinds: 按块内结构类型过滤（如 code/table/formula）
     - sections/page_labels/anchor_labels: 按结构化索引值过滤
     - chunk_indices: 显式指定 chunk 序号（精准定位）
     - include_unknown: 是否保留"无结构元数据"的 chunk，默认 False
     """
 
-    unit_types: tuple[str, ...] = ()
+    block_kinds: tuple[str, ...] = ()
     sections: tuple[str, ...] = ()
     page_labels: tuple[str, ...] = ()
     anchor_labels: tuple[str, ...] = ()

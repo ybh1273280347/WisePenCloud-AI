@@ -4,11 +4,11 @@ from dataclasses import dataclass
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter as LangchainSplitter
 
-from ..models import ChunkDocument, TextUnit, UnitType
+from ..models import ChunkDocument, TextBlock, BlockKind
 
 
 @dataclass(frozen=True, slots=True)
-class RecursiveTextSplitterConfig:
+class RecursiveTextBlockSplitterConfig:
     """递归文本切分器配置，透传至 langchain RecursiveCharacterTextSplitter。
 
     原理：按 separators 列表依次尝试切分，优先用大分隔符（如双换行），
@@ -28,7 +28,7 @@ class RecursiveTextSplitterConfig:
             *,
             chunk_size: int = 4000,
             chunk_overlap: int = 100,
-    ) -> RecursiveTextSplitterConfig:
+    ) -> RecursiveTextBlockSplitterConfig:
         """Markdown 专用分隔符配置，优先按标题切分。"""
         return cls(
             chunk_size=chunk_size,
@@ -37,19 +37,19 @@ class RecursiveTextSplitterConfig:
         )
 
 
-class RecursiveTextSplitter:
+class RecursiveTextBlockSplitter:
     """基于 langchain RecursiveCharacterTextSplitter 的切分器。
 
     适用于无结构文本（纯文本、日志等），直接按目标大小切分，
-    不需要再经过 packer 聚合（pipeline 中 packer 设为 None 即可）。
+    不需要再经过 block_packer 聚合（pipeline 中 block_packer 设为 None 即可）。
     """
 
-    __slots__ = ("config", "name", "_splitter")
+    __slots__ = ("config", "name", "_block_splitter")
 
-    def __init__(self, config: RecursiveTextSplitterConfig | None = None) -> None:
-        self.config = config or RecursiveTextSplitterConfig()
-        self.name = "recursive_text_splitter"
-        self._splitter = LangchainSplitter(
+    def __init__(self, config: RecursiveTextBlockSplitterConfig | None = None) -> None:
+        self.config = config or RecursiveTextBlockSplitterConfig()
+        self.name = "recursive_text_block_splitter"
+        self._block_splitter = LangchainSplitter(
             chunk_size=self.config.chunk_size,
             chunk_overlap=self.config.chunk_overlap,
             separators=list(self.config.separators),
@@ -59,30 +59,30 @@ class RecursiveTextSplitter:
             self,
             *,
             document: ChunkDocument,
-    ) -> tuple[TextUnit, ...]:
-        """将文本按递归分隔符切分为 TextUnit 列表。"""
+    ) -> tuple[TextBlock, ...]:
+        """将文本按递归分隔符切分为 TextBlock 列表。"""
         text = document.text
         if not text:
             return ()
 
-        raw_chunks = self._splitter.split_text(text)
-        units: list[TextUnit] = []
+        raw_chunks = self._block_splitter.split_text(text)
+        blocks: list[TextBlock] = []
         cursor = 0  # 用于在原文中定位每个 chunk 的 offset
         for index, chunk_text in enumerate(raw_chunks):
             start = text.find(chunk_text, cursor)
             if start < 0:
                 start = cursor
             end = start + len(chunk_text)
-            units.append(
-                TextUnit(
-                    unit_id=f"unit-{index}",
+            blocks.append(
+                TextBlock(
+                    block_id=f"block-{index}",
                     text=chunk_text,
-                    unit_type=UnitType.PARAGRAPH,
-                    unit_index=index,
+                    block_kind=BlockKind.PARAGRAPH,
+                    block_index=index,
                     start_offset=start,
                     end_offset=end,
                 )
             )
             cursor = end
 
-        return tuple(units)
+        return tuple(blocks)

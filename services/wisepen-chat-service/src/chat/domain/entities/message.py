@@ -91,7 +91,7 @@ class ChatMessage(Document):
 
     class Settings:
         name = "wisepen_chat_message"  # MongoDB 集合名
-        indexes = [
+        locators = [
             # 按会话拉取历史记录的核心查询路径，防全表扫描
             IndexModel([("session_id", ASCENDING), ("created_at", ASCENDING)]),
             IndexModel([("content_search_tokens", "text")]),

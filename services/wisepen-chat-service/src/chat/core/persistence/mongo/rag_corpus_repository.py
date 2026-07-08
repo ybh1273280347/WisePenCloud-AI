@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 
 from chat.application.rag.ingestion.models import (
     RagChildChunk,
-    RagChunkExtraIndex,
+    RagChunkLocator,
     RagParentChunk,
 )
 from chat.domain.entities.rag_corpus import (
     RagChildChunkDocument,
-    RagChunkExtraIndexDocument,
+    RagChunkLocatorDocument,
     RagParentChunkDocument,
 )
 
@@ -18,12 +18,12 @@ class MongoRagCorpusRepository:
     """MongoDB RAG Corpus 事实仓储。"""
 
     async def upsert_document(
-            self,
-            *,
-            resource_id: str,
-            document_version: str,
-            parent_chunks: tuple[RagParentChunk, ...],
-            child_chunks: tuple[RagChildChunk, ...],
+        self,
+        *,
+        resource_id: str,
+        document_version: str,
+        parent_chunks: tuple[RagParentChunk, ...],
+        child_chunks: tuple[RagChildChunk, ...],
     ) -> None:
         now = datetime.now(timezone.utc)
         await RagParentChunkDocument.find(
@@ -44,7 +44,7 @@ class MongoRagCorpusRepository:
                 chunk_index=chunk.chunk_index,
                 start_offset=chunk.start_offset,
                 end_offset=chunk.end_offset,
-                extra_indexes=_to_extra_index_documents(chunk.extra_indexes),
+                locators=_to_locator_documents(chunk.locators),
                 content_hash=chunk.content_hash,
                 created_at=now,
                 updated_at=now,
@@ -61,7 +61,7 @@ class MongoRagCorpusRepository:
                 chunk_index=chunk.chunk_index,
                 start_offset=chunk.start_offset,
                 end_offset=chunk.end_offset,
-                extra_indexes=_to_extra_index_documents(chunk.extra_indexes),
+                locators=_to_locator_documents(chunk.locators),
                 content_hash=chunk.content_hash,
                 indexing_context=chunk.indexing_context,
                 indexing_text=chunk.indexing_text,
@@ -77,8 +77,8 @@ class MongoRagCorpusRepository:
             await RagChildChunkDocument.insert_many(child_documents)
 
     async def load_child_chunks(
-            self,
-            chunk_ids: tuple[str, ...],
+        self,
+        chunk_ids: tuple[str, ...],
     ) -> tuple[RagChildChunk, ...]:
         if not chunk_ids:
             return ()
@@ -95,7 +95,7 @@ class MongoRagCorpusRepository:
                 parent_chunk_id=document.parent_chunk_id,
                 start_offset=document.start_offset,
                 end_offset=document.end_offset,
-                extra_indexes=_to_extra_indexes(document.extra_indexes),
+                locators=_to_locators(document.locators),
                 content_hash=document.content_hash,
                 indexing_context=document.indexing_context,
                 indexing_text=document.indexing_text,
@@ -105,8 +105,8 @@ class MongoRagCorpusRepository:
         )
 
     async def load_parent_chunks(
-            self,
-            chunk_ids: tuple[str, ...],
+        self,
+        chunk_ids: tuple[str, ...],
     ) -> tuple[RagParentChunk, ...]:
         if not chunk_ids:
             return ()
@@ -122,7 +122,7 @@ class MongoRagCorpusRepository:
                 chunk_index=document.chunk_index,
                 start_offset=document.start_offset,
                 end_offset=document.end_offset,
-                extra_indexes=_to_extra_indexes(document.extra_indexes),
+                locators=_to_locators(document.locators),
                 content_hash=document.content_hash,
             )
             for chunk_id in chunk_ids
@@ -130,30 +130,30 @@ class MongoRagCorpusRepository:
         )
 
 
-def _to_extra_index_documents(
-        indexes: tuple[RagChunkExtraIndex, ...],
-) -> list[RagChunkExtraIndexDocument]:
+def _to_locator_documents(
+    locators: tuple[RagChunkLocator, ...],
+) -> list[RagChunkLocatorDocument]:
     return [
-        RagChunkExtraIndexDocument(
-            index_name=index.index_name,
-            index_kind=index.index_kind,
-            start_offset=index.start_offset,
-            end_offset=index.end_offset,
-            section_path=list(index.section_path),
-            page_label=index.page_label,
-            anchor_label=index.anchor_label,
+        RagChunkLocatorDocument(
+            locator_name=locator.locator_name,
+            locator_kind=locator.locator_kind,
+            start_offset=locator.start_offset,
+            end_offset=locator.end_offset,
+            section_path=list(locator.section_path),
+            page_label=locator.page_label,
+            anchor_label=locator.anchor_label,
         )
-        for index in indexes
+        for locator in locators
     ]
 
 
-def _to_extra_indexes(
-        documents: list[RagChunkExtraIndexDocument],
-) -> tuple[RagChunkExtraIndex, ...]:
+def _to_locators(
+    documents: list[RagChunkLocatorDocument],
+) -> tuple[RagChunkLocator, ...]:
     return tuple(
-        RagChunkExtraIndex(
-            index_name=document.index_name,
-            index_kind=document.index_kind,
+        RagChunkLocator(
+            locator_name=document.locator_name,
+            locator_kind=document.locator_kind,
             start_offset=document.start_offset,
             end_offset=document.end_offset,
             section_path=tuple(document.section_path),

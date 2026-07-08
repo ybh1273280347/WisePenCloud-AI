@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from chat.application.tools.common.tool_content_store.core.models import StoredToolContent
+from chat.application.tools.common.tool_content_store.core.models import (
+    StoredToolContent,
+)
 from chat.application.tools.common.tool_content_store.store import ToolContentStore
 
 
@@ -20,7 +22,7 @@ class _RepositoryStub:
 
 
 @pytest.mark.anyio
-async def test_tool_content_store_projects_explicit_index_fields() -> None:
+async def test_tool_content_store_projects_explicit_locator_fields() -> None:
     repository = _RepositoryStub()
     store = ToolContentStore(repository=repository)
 
@@ -45,9 +47,9 @@ async def test_tool_content_store_projects_explicit_index_fields() -> None:
     page_entry = next(
         entry
         for entry in repository.stored.index.entries
-        if entry.index_kind == "page"
+        if entry.locator_kind == "page"
     )
 
-    assert page_entry.index_name == "page:1"
+    assert page_entry.locator_name == "page:1"
     assert page_entry.page_label == "1"
     assert page_entry.chunk_indices == (chunk.chunk_index,)

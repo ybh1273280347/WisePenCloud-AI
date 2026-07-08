@@ -32,7 +32,7 @@ class RagAclProjectionDocument(Document):
 
     class Settings:
         name = "wisepen_rag_acl_projections"
-        indexes = [
+        locators = [
             IndexModel(
                 [("resource_id", ASCENDING)],
                 name="idx_rag_acl_projection_resource_id",

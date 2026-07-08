@@ -7,9 +7,9 @@ from typing import cast
 from chat.application.tools.tool_settings import tool_settings
 from chat.application.utils.chunking_engine import (
     Chunk,
-    ChunkIndex,
+    ChunkLocator,
     ChunkDocument,
-    IndexKind,
+    LocatorKind,
 )
 from chat.application.utils.chunking_engine.registry import get_chunking_engine
 from .core.models import (
@@ -32,21 +32,21 @@ class ToolContentStore:
     __slots__ = ("_repository",)
 
     def __init__(
-            self,
-            *,
-            repository: ToolContentRepository,
+        self,
+        *,
+        repository: ToolContentRepository,
     ) -> None:
         self._repository = repository
 
     async def put(
-            self,
-            *,
-            session_id: str,
-            text: str,
-            content_type: str = "text/markdown",
-            metadata: Metadata | None = None,
-            chunking_engine_name: str | None = None,
-            chunked: bool = True,
+        self,
+        *,
+        session_id: str,
+        text: str,
+        content_type: str = "text/markdown",
+        metadata: Metadata | None = None,
+        chunking_engine_name: str | None = None,
+        chunked: bool = True,
     ) -> ToolContentReceipt | None:
         """写入内容并返回 receipt；空文本或超长返回 None。"""
         normalized_text = text.strip()
@@ -54,7 +54,9 @@ class ToolContentStore:
             return None
 
         safe_metadata: Metadata = dict(metadata or {})
-        safe_metadata["content_hash"] = hashlib.sha256(normalized_text.encode()).hexdigest()
+        safe_metadata["content_hash"] = hashlib.sha256(
+            normalized_text.encode()
+        ).hexdigest()
 
         chunks: tuple[ToolContentChunk, ...] = ()
         index = ToolContentIndex()
@@ -63,9 +65,7 @@ class ToolContentStore:
 
         if chunked:
             engine_name = chunking_engine_name or (
-                "markdown"
-                if content_type == "text/markdown"
-                else "plain_text"
+                "markdown" if content_type == "text/markdown" else "plain_text"
             )
             chunking_engine = get_chunking_engine(engine_name)
 
@@ -77,31 +77,35 @@ class ToolContentStore:
                 ),
             )
 
-            chunk_extra_index_view = _chunk_extra_index_view(result.indexes)
+            chunk_locator_view = _chunk_locator_view(result.locators)
             chunks = tuple(
                 _to_tool_chunk(
                     chunk,
-                    extra_index_view=chunk_extra_index_view.get(chunk.chunk_id),
+                    locator_view=chunk_locator_view.get(chunk.chunk_id),
                 )
                 for chunk in result.chunks
             )
 
-            index = ToolContentIndex(entries=tuple(
-                ToolContentIndexEntry(
-                    index_name=idx.name,
-                    index_kind=idx.kind.value,
-                    chunk_indices=idx.chunk_indices,
-                    start_offset=idx.start_offset,
-                    end_offset=idx.end_offset,
-                    section_path=(
-                        cast(tuple[str, ...] | None, idx.metadata.get("section_path"))
-                        or ()
-                    ),
-                    page_label=cast(str | None, idx.metadata.get("page_label")),
-                    anchor_label=cast(str | None, idx.metadata.get("anchor_label")),
+            index = ToolContentIndex(
+                entries=tuple(
+                    ToolContentIndexEntry(
+                        locator_name=idx.name,
+                        locator_kind=idx.kind.value,
+                        chunk_indices=idx.chunk_indices,
+                        start_offset=idx.start_offset,
+                        end_offset=idx.end_offset,
+                        section_path=(
+                            cast(
+                                tuple[str, ...] | None, idx.metadata.get("section_path")
+                            )
+                            or ()
+                        ),
+                        page_label=cast(str | None, idx.metadata.get("page_label")),
+                        anchor_label=cast(str | None, idx.metadata.get("anchor_label")),
+                    )
+                    for idx in result.locators
                 )
-                for idx in result.indexes
-            ))
+            )
             chunk_metadata = dict(result.metadata)
             used_chunking_engine_name = result.pipeline
 
@@ -126,7 +130,9 @@ class ToolContentStore:
             supported_selectors=_selectors(stored),
         )
 
-    async def get(self, *, content_id: str, session_id: str) -> StoredToolContent | None:
+    async def get(
+        self, *, content_id: str, session_id: str
+    ) -> StoredToolContent | None:
         """按 content_id 读取；不存在或 session_id 不匹配返回 None。"""
         stored = await self._repository.get(content_id)
         if stored is None or stored.session_id != session_id:
@@ -134,10 +140,10 @@ class ToolContentStore:
         return stored
 
     async def canonicalize_content_id(
-            self,
-            *,
-            content_id: str,
-            session_id: str,
+        self,
+        *,
+        content_id: str,
+        session_id: str,
     ) -> tuple[str, str | None]:
         """将重定向 receipt 解析为可读的 canonical content_id。"""
         stored = await self.get(content_id=content_id, session_id=session_id)
@@ -161,24 +167,23 @@ class ToolContentStore:
 # 模块级辅助函数
 # ---------------------------------------------------------------------------
 
+
 def _to_tool_chunk(
-        chunk: Chunk,
-        *,
-        extra_index_view: dict[str, object] | None,
+    chunk: Chunk,
+    *,
+    locator_view: dict[str, object] | None,
 ) -> ToolContentChunk:
     section_path = (
-        cast(tuple[str, ...] | None, extra_index_view.get("section_path"))
-        if extra_index_view
+        cast(tuple[str, ...] | None, locator_view.get("section_path"))
+        if locator_view
         else None
     )
     page_label = (
-        cast(str | None, extra_index_view.get("page_label"))
-        if extra_index_view
-        else None
+        cast(str | None, locator_view.get("page_label")) if locator_view else None
     )
     anchor_labels = (
-        cast(tuple[str, ...] | None, extra_index_view.get("anchor_labels"))
-        if extra_index_view
+        cast(tuple[str, ...] | None, locator_view.get("anchor_labels"))
+        if locator_view
         else None
     )
 
@@ -186,10 +191,13 @@ def _to_tool_chunk(
         chunk_index=chunk.chunk_index,
         start_offset=chunk.start_offset,
         end_offset=chunk.end_offset,
-        unit_types=tuple(str(v) for v in chunk.metadata.get("unit_types", ())),
-        section_path=section_path or _first_section_path(chunk.metadata.get("section_paths")),
+        block_kinds=tuple(str(v) for v in chunk.metadata.get("block_kinds", ())),
+        section_path=section_path
+        or _first_section_path(chunk.metadata.get("section_paths")),
         page_label=page_label or cast(str | None, chunk.metadata.get("page_label")),
-        anchor_labels=anchor_labels or cast(tuple[str, ...] | None, chunk.metadata.get("anchor_labels")) or (),
+        anchor_labels=anchor_labels
+        or cast(tuple[str, ...] | None, chunk.metadata.get("anchor_labels"))
+        or (),
     )
 
 
@@ -203,36 +211,40 @@ def _first_section_path(value: object) -> tuple[str, ...]:
     return tuple(value)
 
 
-def _chunk_extra_index_view(indexes: tuple[ChunkIndex, ...]) -> dict[str, dict[str, object]]:
+def _chunk_locator_view(
+    locators: tuple[ChunkLocator, ...],
+) -> dict[str, dict[str, object]]:
     chunk_view: dict[str, dict[str, object]] = {}
 
-    for index in indexes:
-        if index.kind == IndexKind.SECTION:
-            section_path = cast(tuple[str, ...] | None, index.metadata.get("section_path"))
+    for locator in locators:
+        if locator.kind == LocatorKind.SECTION:
+            section_path = cast(
+                tuple[str, ...] | None, locator.metadata.get("section_path")
+            )
             if not section_path:
                 continue
-            for chunk_id in index.chunk_ids:
+            for chunk_id in locator.chunk_ids:
                 entry = chunk_view.setdefault(chunk_id, {})
                 current = entry.get("section_path")
                 if not isinstance(current, tuple) or len(section_path) > len(current):
                     entry["section_path"] = section_path
             continue
 
-        if index.kind == IndexKind.PAGE:
-            page_label = cast(str | None, index.metadata.get("page_label"))
+        if locator.kind == LocatorKind.PAGE:
+            page_label = cast(str | None, locator.metadata.get("page_label"))
             if not page_label:
                 continue
-            for chunk_id in index.chunk_ids:
+            for chunk_id in locator.chunk_ids:
                 chunk_view.setdefault(chunk_id, {}).setdefault("page_label", page_label)
             continue
 
-        if index.kind != IndexKind.ANCHOR:
+        if locator.kind != LocatorKind.ANCHOR:
             continue
 
-        anchor_label = cast(str | None, index.metadata.get("anchor_label"))
+        anchor_label = cast(str | None, locator.metadata.get("anchor_label"))
         if not anchor_label:
             continue
-        for chunk_id in index.chunk_ids:
+        for chunk_id in locator.chunk_ids:
             entry = chunk_view.setdefault(chunk_id, {})
             labels = entry.setdefault("anchor_labels", [])
             if isinstance(labels, list) and anchor_label not in labels:
@@ -255,8 +267,8 @@ def _selectors(stored: StoredToolContent) -> tuple[str, ...]:
     selectors: list[str] = []
     if stored.chunks:
         selectors.append("chunk_indices")
-    if any(chunk.unit_types for chunk in stored.chunks):
-        selectors.append("unit_type")
+    if any(chunk.block_kinds for chunk in stored.chunks):
+        selectors.append("block_kind")
     if stored.index is not None and stored.index.entries:
         selectors.extend(("section", "page_label", "anchor_label"))
     return tuple(selectors)

@@ -26,64 +26,69 @@ class ChunkingEngine:
     ) -> ChunkingResult:
         """执行一次分块，返回分块结果。
 
-        流程：文档转换 → 切分 → 聚合 → chunk 转换 → 索引
+        流程：文档增强 → block 切分 → chunk 聚合 → chunk 派生 → chunk 规范化 → 定位
         """
         pipeline = self._pipeline
 
-        # 1. 文档转换：按顺序执行所有转换器，逐步转换文档
-        for transformer in pipeline.document_transformers:
-            document = transformer.process(document=document)
+        # 1. 文档增强：按顺序执行所有增强器，逐步转换文档
+        for enricher in pipeline.document_enrichers:
+            document = enricher.process(document=document)
 
-        # 2. 切分：将文档拆成 TextUnit 列表
-        units = pipeline.splitter.split(document=document)
+        # 2. 切分：将文档拆成 TextBlock 列表
+        blocks = pipeline.block_splitter.split(document=document)
 
-        # 3. 聚合：将 TextUnit 聚合成 Chunk
-        if pipeline.packer is not None:
-            # 有聚合器时，按 packer 逻辑聚合（如 SizeBoundedUnitPacker 按大小合并相邻 unit）
-            chunks = pipeline.packer.pack(units=units)
+        # 3. 聚合：将 TextBlock 聚合成 Chunk
+        if pipeline.block_packer is not None:
+            # 有聚合器时，按 block_packer 逻辑聚合（如 SizeBoundedBlockPacker 按大小合并相邻 block）
+            chunks = pipeline.block_packer.pack(blocks=blocks)
         else:
-            # 无聚合器时，每个 unit 一对一映射为 chunk（适用于 RecursiveTextSplitter 等已按目标大小切分的场景）
+            # 无聚合器时，每个 block 一对一映射为 chunk（适用于 RecursiveTextBlockSplitter 等已按目标大小切分的场景）
             chunks = tuple(
                 Chunk(
                     chunk_id=f"chunk-{i}",
-                    text=unit.text,
+                    text=block.text,
                     chunk_index=i,
                     role=ChunkRole.FLAT,
-                    start_offset=unit.start_offset,
-                    end_offset=unit.end_offset,
-                    start_unit=unit.unit_index,
-                    end_unit=unit.unit_index,
+                    start_offset=block.start_offset,
+                    end_offset=block.end_offset,
+                    start_block=block.block_index,
+                    end_block=block.block_index,
                 )
-                for i, unit in enumerate(units)
+                for i, block in enumerate(blocks)
             )
         # 聚合后重新分配 chunk_index
         chunks = self._assign_chunk_indices(chunks)
 
-        # 4. chunk 转换：按顺序执行所有转换器，每步后重新分配 chunk_index
-        for transformer in pipeline.chunk_transformers:
-            chunks = transformer.process(chunks=chunks)
+        # 4. chunk 派生：从已有 chunk 生成关联 chunk，每步后重新分配 chunk_index
+        for deriver in pipeline.chunk_derivers:
+            chunks = deriver.process(chunks=chunks)
             chunks = self._assign_chunk_indices(chunks)
 
-        # 5. 索引：基于最终 chunk 构建语义定位索引
-        indexes = (
-            pipeline.index_builder.index(
+        # 5. chunk 规范化：按顺序执行所有规范化器，每步后重新分配 chunk_index
+        for normalizer in pipeline.chunk_normalizers:
+            chunks = normalizer.process(chunks=chunks)
+            chunks = self._assign_chunk_indices(chunks)
+
+        # 6. 定位：基于最终 chunk 构建语义定位信息
+        locators = (
+            pipeline.chunk_locator.index(
                 document=document,
-                units=units,
+                blocks=blocks,
                 chunks=chunks,
             )
-            if pipeline.index_builder is not None
+            if pipeline.chunk_locator is not None
             else ()
         )
 
         return ChunkingResult(
             chunks=chunks,
-            units=units,
-            indexes=indexes,
+            blocks=blocks,
+            locators=locators,
             pipeline=pipeline.name,
             metadata={
-                "unit_count": len(units),
+                "block_count": len(blocks),
                 "chunk_count": len(chunks),
-                "index_count": len(indexes),
+                "locator_count": len(locators),
             },
         )
 
@@ -91,7 +96,7 @@ class ChunkingEngine:
     def _assign_chunk_indices(chunks: tuple[Chunk, ...]) -> tuple[Chunk, ...]:
         """全局连续重新分配 chunk_index。
 
-        chunk 转换器可能增删 chunk（如 ChildChunkGenerator 追加子 chunk），
+        chunk 派生器或规范化器可能增删 chunk（如 ChildChunkDeriver 追加子 chunk），
         导致 chunk_index 不连续。此方法全局从 0 重新编号，
         确保父子 chunk 不会出现 chunk_index 冲突。
         """

@@ -12,11 +12,11 @@ from chat.application.rag.cache.ingestion_deterministic import (
 )
 from chat.application.rag.ingestion.models import (
     RagChildChunk,
-    RagChunkExtraIndex,
+    RagChunkLocator,
     RagChunkingResult,
     RagParentChunk,
 )
-from chat.application.utils.chunking_engine.models import IndexKind
+from chat.application.utils.chunking_engine.models import LocatorKind
 from chat.core.persistence.redis._utils.jsonable import to_jsonable
 from chat.core.persistence._utils.payload_readers import (
     read_optional_int,
@@ -40,8 +40,8 @@ class RedisRagIngestionDeterministicCache(RedisRepository):
         self._ttl_seconds = ttl_seconds
 
     async def get_chunking_result(
-            self,
-            key: RagChunkingCacheKey,
+        self,
+        key: RagChunkingCacheKey,
     ) -> RagChunkingResult | None:
         raw = await self._get(self._chunking_key(key))
         if raw is None:
@@ -49,15 +49,15 @@ class RedisRagIngestionDeterministicCache(RedisRepository):
         return _decode_chunking_result(json.loads(raw))
 
     async def set_chunking_result(
-            self,
-            key: RagChunkingCacheKey,
-            result: RagChunkingResult,
+        self,
+        key: RagChunkingCacheKey,
+        result: RagChunkingResult,
     ) -> None:
         await self._set(self._chunking_key(key), _encode(result))
 
     async def get_context_indexed_child(
-            self,
-            key: RagContextIndexingCacheKey,
+        self,
+        key: RagContextIndexingCacheKey,
     ) -> RagChildChunk | None:
         raw = await self._get(self._context_indexing_key(key))
         if raw is None:
@@ -65,24 +65,23 @@ class RedisRagIngestionDeterministicCache(RedisRepository):
         return _decode_child_chunk(json.loads(raw))
 
     async def set_context_indexed_child(
-            self,
-            key: RagContextIndexingCacheKey,
-            child: RagChildChunk,
+        self,
+        key: RagContextIndexingCacheKey,
+        child: RagChildChunk,
     ) -> None:
         await self._set(self._context_indexing_key(key), _encode(child))
 
     async def get_embedding_vectors(
-            self,
-            keys: dict[str, RagEmbeddingCacheKey],
+        self,
+        keys: dict[str, RagEmbeddingCacheKey],
     ) -> dict[str, list[float]]:
         if not keys:
             return {}
 
         chunk_ids = tuple(keys)
-        values = await self._redis.mget([
-            self._embedding_key(keys[chunk_id])
-            for chunk_id in chunk_ids
-        ])
+        values = await self._redis.mget(
+            [self._embedding_key(keys[chunk_id]) for chunk_id in chunk_ids]
+        )
         return {
             chunk_id: [float(item) for item in json.loads(raw)]
             for chunk_id, raw in zip(chunk_ids, values, strict=True)
@@ -90,8 +89,8 @@ class RedisRagIngestionDeterministicCache(RedisRepository):
         }
 
     async def set_embedding_vectors(
-            self,
-            vectors: dict[str, tuple[RagEmbeddingCacheKey, list[float]]],
+        self,
+        vectors: dict[str, tuple[RagEmbeddingCacheKey, list[float]]],
     ) -> None:
         if self._ttl_seconds <= 0 or not vectors:
             return
@@ -138,8 +137,12 @@ def _encode(value: object) -> str:
 
 def _decode_chunking_result(payload: dict[str, Any]) -> RagChunkingResult:
     return RagChunkingResult(
-        parent_chunks=tuple(_decode_parent_chunk(item) for item in payload.get("parent_chunks", [])),
-        child_chunks=tuple(_decode_child_chunk(item) for item in payload.get("child_chunks", [])),
+        parent_chunks=tuple(
+            _decode_parent_chunk(item) for item in payload.get("parent_chunks", [])
+        ),
+        child_chunks=tuple(
+            _decode_child_chunk(item) for item in payload.get("child_chunks", [])
+        ),
         pipeline=str(payload["pipeline"]),
         resource_id=str(payload.get("resource_id") or ""),
         document_version=str(payload.get("document_version") or ""),
@@ -153,7 +156,7 @@ def _decode_parent_chunk(payload: dict[str, Any]) -> RagParentChunk:
         chunk_index=int(payload["chunk_index"]),
         start_offset=read_optional_int(payload.get("start_offset")),
         end_offset=read_optional_int(payload.get("end_offset")),
-        extra_indexes=_decode_extra_indexes(payload.get("extra_indexes")),
+        locators=_decode_locators(payload.get("locators")),
         content_hash=str(payload.get("content_hash") or ""),
     )
 
@@ -166,20 +169,20 @@ def _decode_child_chunk(payload: dict[str, Any]) -> RagChildChunk:
         parent_chunk_id=str(payload["parent_chunk_id"]),
         start_offset=read_optional_int(payload.get("start_offset")),
         end_offset=read_optional_int(payload.get("end_offset")),
-        extra_indexes=_decode_extra_indexes(payload.get("extra_indexes")),
+        locators=_decode_locators(payload.get("locators")),
         content_hash=str(payload.get("content_hash") or ""),
         indexing_context=str(payload.get("indexing_context") or ""),
         indexing_text=str(payload.get("indexing_text") or ""),
     )
 
 
-def _decode_extra_indexes(value: object) -> tuple[RagChunkExtraIndex, ...]:
+def _decode_locators(value: object) -> tuple[RagChunkLocator, ...]:
     if not isinstance(value, list | tuple):
         return ()
     return tuple(
-        RagChunkExtraIndex(
-            index_name=str(item["index_name"]),
-            index_kind=IndexKind(str(item["index_kind"])),
+        RagChunkLocator(
+            locator_name=str(item["locator_name"]),
+            locator_kind=LocatorKind(str(item["locator_kind"])),
             start_offset=read_optional_int(item.get("start_offset")),
             end_offset=read_optional_int(item.get("end_offset")),
             section_path=read_trimmed_str_sequence(item.get("section_path")),

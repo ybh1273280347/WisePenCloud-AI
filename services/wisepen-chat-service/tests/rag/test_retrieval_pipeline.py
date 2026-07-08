@@ -82,7 +82,9 @@ from chat.application.rag.retrieval.models import (  # noqa: E402
     RagRetrievalSignal,
     ScoredChunk,
 )
-from chat.application.rag.retrieval.pipeline.graph_enhancement import RagGraphEnhancement  # noqa: E402
+from chat.application.rag.retrieval.pipeline.graph_enhancement import (
+    RagGraphEnhancement,
+)  # noqa: E402
 from chat.application.rag.retrieval.retrieval_pipeline import (  # noqa: E402
     RagRetrievalPipeline,
     RagRetrievalPipelineRequest,
@@ -104,7 +106,7 @@ from chat.application.rag.ingestion.context_indexing import (  # noqa: E402
 )
 from chat.application.rag.ingestion.models import (  # noqa: E402
     RagChildChunk,
-    RagChunkExtraIndex,
+    RagChunkLocator,
     RagChunkingResult,
     RagMarkdownIngestionPayload,
     RagParentChunk,
@@ -114,7 +116,7 @@ from chat.application.rag.ingestion.ingester import (  # noqa: E402
     RagMarkdownIngester,
     RagMarkdownIngestResult,
 )
-from chat.application.utils.chunking_engine.models import IndexKind  # noqa: E402
+from chat.application.utils.chunking_engine.models import LocatorKind  # noqa: E402
 from chat.application.utils.ranking_engine.models import (  # noqa: E402
     RankCandidate,
     RankedCandidate,
@@ -163,7 +165,7 @@ def test_chunking_service_produces_parent_and_child_chunks() -> None:
     assert all(chunk.parent_chunk_id for chunk in result.child_chunks)
 
 
-def test_chunking_service_persists_extra_indexes_for_evidence_location() -> None:
+def test_chunking_service_persists_locators_for_evidence_location() -> None:
     markdown = "\n\n".join(
         [
             "<!-- page 1 -->",
@@ -179,18 +181,22 @@ def test_chunking_service_persists_extra_indexes_for_evidence_location() -> None
         markdown=markdown,
     )
 
-    all_extra_indexes = tuple(
-        extra_index
+    all_locators = tuple(
+        locator
         for chunk in (*result.parent_chunks, *result.child_chunks)
-        for extra_index in chunk.extra_indexes
+        for locator in chunk.locators
     )
-    assert all_extra_indexes
-    assert {index.index_name for index in all_extra_indexes} >= {"page:1", "page:2"}
+    assert all_locators
+    assert {locator.locator_name for locator in all_locators} >= {"page:1", "page:2"}
 
-    page_one = next(index for index in all_extra_indexes if index.index_name == "page:1")
-    page_two = next(index for index in all_extra_indexes if index.index_name == "page:2")
-    assert page_one.index_kind == IndexKind.PAGE
-    assert page_two.index_kind == IndexKind.PAGE
+    page_one = next(
+        locator for locator in all_locators if locator.locator_name == "page:1"
+    )
+    page_two = next(
+        locator for locator in all_locators if locator.locator_name == "page:2"
+    )
+    assert page_one.locator_kind == LocatorKind.PAGE
+    assert page_two.locator_kind == LocatorKind.PAGE
     assert page_one.start_offset == 0
     assert page_one.end_offset is not None
     assert page_two.start_offset == page_one.end_offset
@@ -198,7 +204,7 @@ def test_chunking_service_persists_extra_indexes_for_evidence_location() -> None
     page_one_chunks = [
         chunk
         for chunk in result.child_chunks
-        if any(extra_index.index_name == "page:1" for extra_index in chunk.extra_indexes)
+        if any(locator.locator_name == "page:1" for locator in chunk.locators)
     ]
     assert page_one_chunks
     assert all(chunk.page_label == "1" for chunk in page_one_chunks)
@@ -228,7 +234,9 @@ async def test_document_ready_ingestion_maps_kafka_payload_to_rag_payload() -> N
 
 
 @pytest.mark.anyio
-async def test_rag_ingestion_indexes_corpus_qdrant_and_elastic_with_acl_projection() -> None:
+async def test_rag_ingestion_locators_corpus_qdrant_and_elastic_with_acl_projection() -> (
+    None
+):
     parent = RagParentChunk(
         chunk_id="parent-1",
         text="父块说明 API 鉴权要求。",
@@ -280,7 +288,10 @@ async def test_rag_ingestion_indexes_corpus_qdrant_and_elastic_with_acl_projecti
     assert result.indexed_child_count == 1
     assert result.acl_projection == acl_projection
     assert corpus_repository.saved is not None
-    assert corpus_repository.saved.child_chunks[0].indexing_context == "该片段说明 API 鉴权请求头要求。"
+    assert (
+        corpus_repository.saved.child_chunks[0].indexing_context
+        == "该片段说明 API 鉴权请求头要求。"
+    )
     assert qdrant_repository.upsert_calls[0]["dense_vectors"] == {"child-1": [0.1, 0.2]}
     assert "sparse_vectors" not in qdrant_repository.upsert_calls[0]
     assert qdrant_repository.upsert_calls[0]["acl_projection"] == acl_projection
@@ -294,7 +305,9 @@ async def test_rag_ingestion_indexes_corpus_qdrant_and_elastic_with_acl_projecti
 
 
 @pytest.mark.anyio
-async def test_rag_ingestion_retries_context_indexing_failure_without_writing_indexes() -> None:
+async def test_rag_ingestion_retries_context_indexing_failure_without_writing_locators() -> (
+    None
+):
     parent = RagParentChunk(
         chunk_id="parent-1",
         text="父块说明 API 鉴权要求。",
@@ -393,7 +406,9 @@ async def test_rag_ingestion_uses_deterministic_cache_for_repeated_payload() -> 
 
 
 @pytest.mark.anyio
-async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates() -> None:
+async def test_knowledge_search_runs_elastic_scope_qdrant_bm25_ranking_and_gates() -> (
+    None
+):
     qdrant_repository = _RecordingRetrievalRepository(
         chunks=(
             ScoredChunk(
@@ -523,15 +538,15 @@ async def test_evidence_materializer_uses_mongo_child_and_parent_context() -> No
         text="子块原文：必须携带 AppBuilder API Key。",
         chunk_index=1,
         parent_chunk_id="parent-1",
-        extra_indexes=(
-            RagChunkExtraIndex(
-                index_name="page:2",
-                index_kind=IndexKind.PAGE,
+        locators=(
+            RagChunkLocator(
+                locator_name="page:2",
+                locator_kind=LocatorKind.PAGE,
                 page_label="2",
             ),
-            RagChunkExtraIndex(
-                index_name="section:鉴权",
-                index_kind=IndexKind.SECTION,
+            RagChunkLocator(
+                locator_name="section:鉴权",
+                locator_kind=LocatorKind.SECTION,
                 section_path=("鉴权",),
             ),
         ),
@@ -671,9 +686,7 @@ async def test_graph_enhancement_uses_cache_for_same_warning_scope() -> None:
     request = RagGraphEnhancementRequest(
         query="API Key 覆盖哪些接口？",
         resource_id="resource-doc",
-        direct_evidence=(
-            _direct_evidence_for_graph(),
-        ),
+        direct_evidence=(_direct_evidence_for_graph(),),
         answerability_warning=RagAnswerabilityWarning(
             warnings=(RagAnswerabilityWarningReason.PARTIAL_COVERAGE,),
             guidance="需要补充图证据。",
@@ -755,7 +768,9 @@ async def test_document_ready_ingestion_rethrows_retryable_ingestion_failure() -
 
 
 @pytest.mark.anyio
-async def test_rag_ranking_converts_qdrant_channel_ranks_to_external_rrf_signals() -> None:
+async def test_rag_ranking_converts_qdrant_channel_ranks_to_external_rrf_signals() -> (
+    None
+):
     service = RagEvidenceRankingService(
         ranking_engine=_ranking_engine_with_external_rrf(),
         lexical_dense_rrf_weight=1.0,
@@ -811,14 +826,19 @@ async def test_rag_ranking_converts_qdrant_channel_ranks_to_external_rrf_signals
         )
     )
 
-    assert [item.candidate_id for item in ranking_result.ranked] == ["chunk-b", "chunk-a"]
+    assert [item.candidate_id for item in ranking_result.ranked] == [
+        "chunk-b",
+        "chunk-a",
+    ]
     assert [item.candidate.prior_rank for item in ranking_result.ranked] == [2, 1]
     assert [item.signals[0].value for item in ranking_result.ranked] == [0.90, 0.40]
     assert [item.signals[0].rank for item in ranking_result.ranked] == [1, 1]
-    assert [item.score for item in ranking_result.ranked] == pytest.approx([
-        3.0 / 61.0,
-        1.0 / 61.0,
-    ])
+    assert [item.score for item in ranking_result.ranked] == pytest.approx(
+        [
+            3.0 / 61.0,
+            1.0 / 61.0,
+        ]
+    )
 
 
 def test_hard_gate_rejects_empty_retrieval() -> None:
@@ -864,7 +884,9 @@ def test_hard_gate_accepts_only_candidates_above_absolute_threshold() -> None:
 
 
 @pytest.mark.anyio
-async def test_retrieval_pipeline_filters_low_score_candidates_before_materialization() -> None:
+async def test_retrieval_pipeline_filters_low_score_candidates_before_materialization() -> (
+    None
+):
     soft_gate = _RecordingSoftGate()
     pipeline = RagRetrievalPipeline(
         embedding_client=_RecordingEmbeddingClient(),
@@ -917,7 +939,9 @@ async def test_retrieval_pipeline_filters_low_score_candidates_before_materializ
     assert result.hard_gate is not None
     assert result.hard_gate.should_continue
     assert [item.chunk.chunk_id for item in result.candidates] == ["child-strong"]
-    assert [item.matched_child_ids for item in result.direct_evidence] == [("child-strong",)]
+    assert [item.matched_child_ids for item in result.direct_evidence] == [
+        ("child-strong",)
+    ]
     assert [item.candidate_id for item in soft_gate.calls[0].ranked] == ["child-strong"]
 
 
@@ -946,12 +970,14 @@ async def test_soft_gate_returns_warning_and_triggers_graph_enhancement() -> Non
 
 @pytest.mark.anyio
 async def test_soft_gate_filters_unknown_warning_reason() -> None:
-    service = AnswerabilitySoftGate(client=_SoftGateClient(
-        content=(
-            '{"warnings":["NOT_A_REAL_WARNING","PARTIAL_COVERAGE","PARTIAL_COVERAGE"],'
-            '"guidance":"只保留有效 warning。"}'
+    service = AnswerabilitySoftGate(
+        client=_SoftGateClient(
+            content=(
+                '{"warnings":["NOT_A_REAL_WARNING","PARTIAL_COVERAGE","PARTIAL_COVERAGE"],'
+                '"guidance":"只保留有效 warning。"}'
+            )
         )
-    ))
+    )
 
     warning = await service.evaluate(
         RagAnswerabilityInput(
@@ -991,17 +1017,17 @@ def _retrieved_hit(
 
 
 def _ranked_chunk(
-        *,
-        chunk_id: str,
-        text: str,
-        rank: int,
-        score: float,
-        retrieval_score: float,
-        retrieval_rank: int,
-        resource_id: str = "",
-        document_version: str = "",
-        corpus_version: str = "",
-        parent_chunk_id: str = "",
+    *,
+    chunk_id: str,
+    text: str,
+    rank: int,
+    score: float,
+    retrieval_score: float,
+    retrieval_rank: int,
+    resource_id: str = "",
+    document_version: str = "",
+    corpus_version: str = "",
+    parent_chunk_id: str = "",
 ) -> RagRankedChunk:
     chunk = ScoredChunk(
         chunk_id=chunk_id,
@@ -1047,9 +1073,7 @@ class _SoftGateClient:
         )
 
     async def aquery(self, *args, **kwargs):
-        return _SoftGateResponse(
-            content=self._content
-        )
+        return _SoftGateResponse(content=self._content)
 
 
 class _SoftGateResponse:
@@ -1062,7 +1086,9 @@ class _RecordingIngestionService:
     def __init__(self) -> None:
         self.payload: RagMarkdownIngestionPayload | None = None
 
-    async def ingest_markdown(self, payload: RagMarkdownIngestionPayload) -> RagMarkdownIngestResult:
+    async def ingest_markdown(
+        self, payload: RagMarkdownIngestionPayload
+    ) -> RagMarkdownIngestResult:
         self.payload = payload
         return RagMarkdownIngestResult(
             parent_chunks=(),
@@ -1077,7 +1103,9 @@ class _RecordingIngestionService:
 
 
 class _FailingIngestionService:
-    async def ingest_markdown(self, payload: RagMarkdownIngestionPayload) -> RagMarkdownIngestResult:
+    async def ingest_markdown(
+        self, payload: RagMarkdownIngestionPayload
+    ) -> RagMarkdownIngestResult:
         raise RagIngestionRetryableError("retry ingestion")
 
 
@@ -1088,12 +1116,12 @@ class _RecordingCorpusRepository:
         self.load_parent_calls: list[tuple[str, ...]] = []
 
     async def upsert_document(
-            self,
-            *,
-            resource_id: str,
-            document_version: str,
-            parent_chunks: tuple[RagParentChunk, ...],
-            child_chunks: tuple[RagChildChunk, ...],
+        self,
+        *,
+        resource_id: str,
+        document_version: str,
+        parent_chunks: tuple[RagParentChunk, ...],
+        child_chunks: tuple[RagChildChunk, ...],
     ) -> None:
         self.saved = RagChunkingResult(
             parent_chunks=parent_chunks,
@@ -1103,30 +1131,28 @@ class _RecordingCorpusRepository:
             document_version=document_version,
         )
 
-    async def load_child_chunks(self, chunk_ids: tuple[str, ...]) -> tuple[RagChildChunk, ...]:
+    async def load_child_chunks(
+        self, chunk_ids: tuple[str, ...]
+    ) -> tuple[RagChildChunk, ...]:
         self.load_child_calls.append(chunk_ids)
         if self.saved is None:
             return ()
 
-        by_id = {
-            chunk.chunk_id: chunk
-            for chunk in self.saved.child_chunks
-        }
+        by_id = {chunk.chunk_id: chunk for chunk in self.saved.child_chunks}
         return tuple(
             chunk
             for chunk_id in chunk_ids
             if (chunk := by_id.get(chunk_id)) is not None
         )
 
-    async def load_parent_chunks(self, chunk_ids: tuple[str, ...]) -> tuple[RagParentChunk, ...]:
+    async def load_parent_chunks(
+        self, chunk_ids: tuple[str, ...]
+    ) -> tuple[RagParentChunk, ...]:
         self.load_parent_calls.append(chunk_ids)
         if self.saved is None:
             return ()
 
-        by_id = {
-            chunk.chunk_id: chunk
-            for chunk in self.saved.parent_chunks
-        }
+        by_id = {chunk.chunk_id: chunk for chunk in self.saved.parent_chunks}
         return tuple(
             chunk
             for chunk_id in chunk_ids
@@ -1170,12 +1196,7 @@ class _RecordingEmbeddingClient:
     async def aembed(self, input):
         self.calls += 1
         values = [input] if isinstance(input, str) else list(input)
-        return _EmbeddingResponse(
-            embeddings=[
-                [0.1, 0.2]
-                for _ in values
-            ]
-        )
+        return _EmbeddingResponse(embeddings=[[0.1, 0.2] for _ in values])
 
 
 class _EmbeddingResponse:
@@ -1193,7 +1214,9 @@ class _RecordingAclRepository:
     async def get_projection(self, resource_id: str) -> RagResourceAclProjection | None:
         return self.projection
 
-    async def load_resource_projection(self, resource_id: str) -> RagResourceAclProjection | None:
+    async def load_resource_projection(
+        self, resource_id: str
+    ) -> RagResourceAclProjection | None:
         return self.projection
 
 
@@ -1239,10 +1262,10 @@ class _RecordingEvidenceCache:
         self.values: dict[str, RagMaterializedEvidenceView] = {}
 
     async def get_many(
-            self,
-            *,
-            scope: RagEvidenceMaterializationCacheScope,
-            child_chunk_ids: tuple[str, ...],
+        self,
+        *,
+        scope: RagEvidenceMaterializationCacheScope,
+        child_chunk_ids: tuple[str, ...],
     ) -> dict[str, RagMaterializedEvidenceView]:
         return {
             child_id: view
@@ -1251,10 +1274,10 @@ class _RecordingEvidenceCache:
         }
 
     async def set_many(
-            self,
-            *,
-            scope: RagEvidenceMaterializationCacheScope,
-            views_by_child_id: dict[str, RagMaterializedEvidenceView],
+        self,
+        *,
+        scope: RagEvidenceMaterializationCacheScope,
+        views_by_child_id: dict[str, RagMaterializedEvidenceView],
     ) -> None:
         self.values.update(views_by_child_id)
 
@@ -1265,32 +1288,34 @@ class _RecordingIngestionCache:
         self.context_children: dict[RagContextIndexingCacheKey, RagChildChunk] = {}
         self.embedding_vectors: dict[RagEmbeddingCacheKey, list[float]] = {}
 
-    async def get_chunking_result(self, key: RagChunkingCacheKey) -> RagChunkingResult | None:
+    async def get_chunking_result(
+        self, key: RagChunkingCacheKey
+    ) -> RagChunkingResult | None:
         return self.chunking.get(key)
 
     async def set_chunking_result(
-            self,
-            key: RagChunkingCacheKey,
-            result: RagChunkingResult,
+        self,
+        key: RagChunkingCacheKey,
+        result: RagChunkingResult,
     ) -> None:
         self.chunking[key] = result
 
     async def get_context_indexed_child(
-            self,
-            key: RagContextIndexingCacheKey,
+        self,
+        key: RagContextIndexingCacheKey,
     ) -> RagChildChunk | None:
         return self.context_children.get(key)
 
     async def set_context_indexed_child(
-            self,
-            key: RagContextIndexingCacheKey,
-            child: RagChildChunk,
+        self,
+        key: RagContextIndexingCacheKey,
+        child: RagChildChunk,
     ) -> None:
         self.context_children[key] = child
 
     async def get_embedding_vectors(
-            self,
-            keys: dict[str, RagEmbeddingCacheKey],
+        self,
+        keys: dict[str, RagEmbeddingCacheKey],
     ) -> dict[str, list[float]]:
         return {
             chunk_id: vector
@@ -1299,8 +1324,8 @@ class _RecordingIngestionCache:
         }
 
     async def set_embedding_vectors(
-            self,
-            vectors: dict[str, tuple[RagEmbeddingCacheKey, list[float]]],
+        self,
+        vectors: dict[str, tuple[RagEmbeddingCacheKey, list[float]]],
     ) -> None:
         for key, vector in vectors.values():
             self.embedding_vectors[key] = vector
@@ -1311,15 +1336,15 @@ class _RecordingGraphCache:
         self.values: dict[RagGraphEnhancementCacheKey, RagGraphEnhancementResult] = {}
 
     async def get_graph_enhancement(
-            self,
-            key: RagGraphEnhancementCacheKey,
+        self,
+        key: RagGraphEnhancementCacheKey,
     ) -> RagGraphEnhancementResult | None:
         return self.values.get(key)
 
     async def set_graph_enhancement(
-            self,
-            key: RagGraphEnhancementCacheKey,
-            result: RagGraphEnhancementResult,
+        self,
+        key: RagGraphEnhancementCacheKey,
+        result: RagGraphEnhancementResult,
     ) -> None:
         self.values[key] = result
 

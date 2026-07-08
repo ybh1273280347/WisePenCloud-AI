@@ -6,8 +6,8 @@ from enum import StrEnum
 Metadata = dict[str, object]
 
 
-class UnitType(StrEnum):
-    """TextUnit 的语义块类型。"""
+class BlockKind(StrEnum):
+    """TextBlock 的语义块类型。"""
 
     HEADING = "heading"  # 标题（# ~ ######）
     PARAGRAPH = "paragraph"  # 普通段落
@@ -29,11 +29,11 @@ class ChunkRole(StrEnum):
     CHILD = "child"  # 父子分块中的子 chunk，用于精准检索
 
 
-class IndexKind(StrEnum):
-    """ChunkIndex 的索引类型，提供按不同维度查找 chunk 的能力。
+class LocatorKind(StrEnum):
+    """ChunkLocator 的定位类型，提供按不同维度查找 chunk 的能力。
 
     Chunk 本身已有 chunk_index（顺序）和 start_offset/end_offset（位置），
-    构成天然的连续索引。IndexKind 提供的是语义定位索引。
+    构成天然的连续定位。LocatorKind 提供的是语义定位维度。
     """
 
     SECTION = "section"  # 按章节名定位 chunk
@@ -56,18 +56,18 @@ class ChunkDocument:
 
 
 @dataclass(frozen=True, slots=True)
-class TextUnit:
+class TextBlock:
     """切分过程中的结构/语义单元。
 
-    splitter 的输出，代表文档中一个不可再分的语义块，
+    block_splitter 的输出，代表文档中一个不可再分的语义块，
     如一个标题、一个段落、一个代码块、一个表格等。
-    packer 会把多个 TextUnit 聚合成最终的 Chunk。
+    block_packer 会把多个 TextBlock 聚合成最终的 Chunk。
     """
 
-    unit_id: str  # unit 唯一标识
-    text: str  # unit 文本内容
-    unit_type: UnitType = UnitType.PARAGRAPH  # 语义块类型
-    unit_index: int = 0  # unit 在文档中的顺序（从 0 开始）
+    block_id: str  # block 唯一标识
+    text: str  # block 文本内容
+    block_kind: BlockKind = BlockKind.PARAGRAPH  # 语义块类型
+    block_index: int = 0  # block 在文档中的顺序（从 0 开始）
     start_offset: int | None = None  # 在原文中的起始字符偏移量
     end_offset: int | None = None  # 在原文中的结束字符偏移量
     section_path: tuple[str, ...] = ()  # 所属标题路径，如 ("快速开始", "安装")
@@ -78,8 +78,8 @@ class TextUnit:
 class Chunk:
     """最终输出的分块。
 
-    分块流程的核心输出，由 packer 将多个 TextUnit 聚合而成，
-    或由 engine 在无 packer 时从 TextUnit 一对一映射而来。
+    分块流程的核心输出，由 block_packer 将多个 TextBlock 聚合而成，
+    或由 engine 在无 block_packer 时从 TextBlock 一对一映射而来。
 
     父子分块时，父 chunk（role=PARENT）用于上下文注入，
     子 chunk（role=CHILD）用于精准检索，通过 parent_chunk_id 关联。
@@ -92,23 +92,23 @@ class Chunk:
     parent_chunk_id: str | None = None  # 父 chunk ID（嵌套分块时，子 chunk 指向父 chunk）
     start_offset: int | None = None  # 在原文中的起始字符偏移量
     end_offset: int | None = None  # 在原文中的结束字符偏移量
-    start_unit: int | None = None  # 起始 unit index
-    end_unit: int | None = None  # 结束 unit index
-    content_hash: str = ""  # 内容 SHA-256 哈希（由 finalizer 填充）
+    start_block: int | None = None  # 起始 block index
+    end_block: int | None = None  # 结束 block index
+    content_hash: str = ""  # 内容 SHA-256 哈希（由 normalizer 填充）
     metadata: Metadata = field(default_factory=dict)  # 额外元信息
 
 
 @dataclass(frozen=True, slots=True)
-class ChunkIndex:
-    """chunk 语义定位索引，提供按不同维度查找 chunk 的能力。
+class ChunkLocator:
+    """chunk 语义定位项，提供按不同维度查找 chunk 的能力。
 
     Chunk 本身已有 chunk_index（顺序）和 start_offset/end_offset（位置），
-    构成天然的连续索引。ChunkIndex 提供语义定位索引，
+    构成天然的连续定位。ChunkLocator 提供语义定位项，
     如按章节名、页码、锚标等定位 chunk。
     """
 
-    name: str  # 索引名称，如 "section:快速开始 > 安装"、"page:3"
-    kind: IndexKind  # 索引类型
+    name: str  # 定位名称，如 "section:快速开始 > 安装"、"page:3"
+    kind: LocatorKind  # 定位类型
     chunk_indices: tuple[int, ...]  # 命中的 chunk index 列表
     chunk_ids: tuple[str, ...] = ()  # 命中的 chunk ID 列表
     start_offset: int | None = None  # 索引覆盖的起始 offset
@@ -121,7 +121,7 @@ class ChunkingResult:
     """分块流程的最终结果。"""
 
     chunks: tuple[Chunk, ...]  # 输出的 chunk 列表
-    units: tuple[TextUnit, ...] = ()  # 中间产生的 unit 列表（供索引器使用）
-    indexes: tuple[ChunkIndex, ...] = ()  # 定位索引列表
+    blocks: tuple[TextBlock, ...] = ()  # 中间产生的 block 列表（供定位器使用）
+    locators: tuple[ChunkLocator, ...] = ()  # 定位项列表
     pipeline: str = ""  # 使用的 pipeline 名称
-    metadata: Metadata = field(default_factory=dict)  # 额外元信息（含 unit_count / chunk_count / index_count）
+    metadata: Metadata = field(default_factory=dict)  # 额外元信息（含 block_count / chunk_count / locator_count）

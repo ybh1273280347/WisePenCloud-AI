@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ._chunk_merge_utils import assign_chunk_ids, merge_heading_only, merge_short_tails
+from .chunk_merge import assign_chunk_ids, merge_heading_only, merge_short_tails
 from ..models import Chunk
 
 
-class ParentChildChunkFinalizer:
-    """父子 chunk 终态器，对父 chunk 做合并并维护父子引用关系。
+class ParentChildChunkNormalizer:
+    """父子 chunk 规范化器，对父 chunk 做合并并维护父子引用关系。
 
-    与 FlatChunkFinalizer 的区别：
-    - FlatChunkFinalizer 适用于单层分块，合并所有 chunk 不区分父子关系。
-    - ParentChildChunkFinalizer 适用于父子分块，分离父子后只对父 chunk
-      做合并，子 chunk 由 RecursiveTextSplitter 精切，不参与合并。
+    与 FlatChunkNormalizer 的区别：
+    - FlatChunkNormalizer 适用于单层分块，合并所有 chunk 不区分父子关系。
+    - ParentChildChunkNormalizer 适用于父子分块，分离父子后只对父 chunk
+      做合并，子 chunk 由 RecursiveTextBlockSplitter 精切，不参与合并。
 
     合并后的引用维护：
     父 chunk 合并会导致被合并父 chunk 的 chunk_id 消失。此时指向它的子 chunk
@@ -31,7 +31,7 @@ class ParentChildChunkFinalizer:
     __slots__ = ("name", "id_prefix", "min_size")
 
     def __init__(self, *, id_prefix: str = "", min_size: int = 320) -> None:
-        self.name = "parent_child_chunk_finalizer"
+        self.name = "parent_child_chunk_normalizer"
         self.id_prefix = id_prefix
         self.min_size = min_size
 

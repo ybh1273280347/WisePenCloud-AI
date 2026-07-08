@@ -44,7 +44,7 @@ class ChatSession(Document):
 
     class Settings:
         name = "wisepen_chat_session"  # MongoDB 集合名
-        indexes = [
+        locators = [
             # 按用户列出会话列表的核心查询路径，防全表扫描
             IndexModel([("user_id", ASCENDING), ("updated_at", DESCENDING)]),
         ]

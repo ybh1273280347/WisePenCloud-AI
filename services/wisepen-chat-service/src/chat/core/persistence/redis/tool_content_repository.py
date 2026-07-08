@@ -10,7 +10,9 @@ from chat.application.tools.common.tool_content_store.core.models import (
     ToolContentIndex,
     ToolContentIndexEntry,
 )
-from chat.application.tools.common.tool_content_store.core.repository_protocol import ToolContentRepository
+from chat.application.tools.common.tool_content_store.core.repository_protocol import (
+    ToolContentRepository,
+)
 from chat.core.persistence.redis._utils.jsonable import to_jsonable
 from chat.core.persistence.redis.base import RedisRepository
 
@@ -58,17 +60,14 @@ class RedisToolContentRepository(RedisRepository, ToolContentRepository):
                 chunk_index=int(chunk["chunk_index"]),
                 start_offset=chunk.get("start_offset"),
                 end_offset=chunk.get("end_offset"),
-                unit_types=tuple(str(v) for v in chunk.get("unit_types", [])),
+                block_kinds=tuple(str(v) for v in chunk.get("block_kinds", [])),
                 section_path=tuple(str(v) for v in chunk.get("section_path", [])),
                 page_label=(
                     str(chunk["page_label"]).strip()
                     if chunk.get("page_label") is not None
                     else None
                 ),
-                anchor_labels=tuple(
-                    str(v)
-                    for v in chunk.get("anchor_labels", [])
-                ),
+                anchor_labels=tuple(str(v) for v in chunk.get("anchor_labels", [])),
             )
             for chunk in payload.get("chunks", [])
         )
@@ -77,8 +76,8 @@ class RedisToolContentRepository(RedisRepository, ToolContentRepository):
         index_payload: dict[str, Any] = payload.get("index") or {}
         entries = tuple(
             ToolContentIndexEntry(
-                index_name=str(entry["index_name"]),
-                index_kind=str(entry["index_kind"]),
+                locator_name=str(entry["locator_name"]),
+                locator_kind=str(entry["locator_kind"]),
                 chunk_indices=tuple(int(idx) for idx in entry.get("chunk_indices", [])),
                 start_offset=entry.get("start_offset"),
                 end_offset=entry.get("end_offset"),

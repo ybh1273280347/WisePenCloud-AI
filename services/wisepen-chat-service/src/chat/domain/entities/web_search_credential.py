@@ -42,7 +42,7 @@ class WebSearchCredential(Document):
 
     class Settings:
         name = "wisepen_web_search_credentials"
-        indexes = [
+        locators = [
             IndexModel(
                 [("user_id", ASCENDING), ("source", ASCENDING), ("provider", ASCENDING)],
                 unique=True,

@@ -54,7 +54,7 @@ class Model(Document):
 
     class Settings:
         name = "wisepen_models"
-        indexes = [
+        locators = [
             IndexModel(
                 [("scope", ASCENDING), ("owner_user_id", ASCENDING), ("is_active", ASCENDING),
                  ("updated_at", DESCENDING)],
@@ -92,7 +92,7 @@ class ModelProviderMapping(Document):
 
     class Settings:
         name = "wisepen_model_provider_mappings"
-        indexes = [
+        locators = [
             IndexModel(
                 [("model_id", ASCENDING), ("owner_user_id", ASCENDING), ("is_active", ASCENDING),
                  ("priority", ASCENDING), ("created_at", ASCENDING)],

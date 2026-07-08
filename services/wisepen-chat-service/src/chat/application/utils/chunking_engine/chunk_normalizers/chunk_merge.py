@@ -26,7 +26,7 @@ def assign_chunk_ids(chunks: tuple[Chunk, ...], *, id_prefix: str = "") -> tuple
     hash 保证相同内容产生相同 ID，支持幂等处理。
 
     嵌套分块场景下，子 chunk 的 parent_chunk_id 引用的是父 chunk 的旧 ID
-    （packer 分配的临时 ID 或合并后存活的旧 ID），
+    （block_packer 分配的临时 ID 或合并后存活的旧 ID），
     此函数基于 old_id → new_id 映射重写 parent_chunk_id，保证父子关系正确。
     """
     # 第一遍：生成新 ID 和 content_hash，建立 old_id → new_id 映射
@@ -120,7 +120,7 @@ def merge_short_tails(chunks: tuple[Chunk, ...], *, min_size: int) -> ChunkMerge
                 prev,
                 text=f"{prev.text}\n\n{chunk.text}",
                 end_offset=chunk.end_offset,
-                end_unit=chunk.end_unit,
+                end_block=chunk.end_block,
                 content_hash="",
             )
         else:
@@ -135,7 +135,7 @@ def _merge_pair(head: Chunk, body: Chunk) -> Chunk:
         head,
         text=f"{head.text}\n{body.text}",
         end_offset=body.end_offset,
-        end_unit=body.end_unit,
+        end_block=body.end_block,
         content_hash="",
     )
 

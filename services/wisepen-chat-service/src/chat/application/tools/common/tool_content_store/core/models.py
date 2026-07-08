@@ -12,7 +12,9 @@ class ToolContentChunk:
     chunk_index: int  # 当前 content 内的连续序号，从 0 开始
     start_offset: int | None = None  # 在 StoredToolContent.text 中的起始字符偏移
     end_offset: int | None = None  # 在 StoredToolContent.text 中的结束字符偏移
-    unit_types: tuple[str, ...] = ()  # 该 chunk 覆盖的 unit 类型，如 paragraph/code/table
+    block_kinds: tuple[
+        str, ...
+    ] = ()  # 该 chunk 覆盖的结构块类型，如 paragraph/code/table
     section_path: tuple[str, ...] = ()  # 所在章节路径，如 ("一级标题", "二级标题")
     page_label: str | None = None  # 所在页码标签，如 "3"
     anchor_labels: tuple[str, ...] = ()  # 表格、图片、公式等可定位锚点标签
@@ -22,18 +24,18 @@ class ToolContentChunk:
 class ToolContentIndexEntry:
     """ToolContent 读取索引项。"""
 
-    index_name: str  # 完整索引名，如 section:快速开始 > 安装 / page:3
-    index_kind: str  # 索引类型，如 section / page / anchor
+    locator_name: str  # 完整定位名，如 section:快速开始 > 安装 / page:3
+    locator_kind: str  # 定位类型，如 section / page / anchor
     chunk_indices: tuple[int, ...]  # 命中的 chunk 序号集合
-    start_offset: int | None = None  # 索引覆盖的原文起始 offset
-    end_offset: int | None = None  # 索引覆盖的原文结束 offset
-    section_path: tuple[str, ...] = ()  # section 索引对应的章节路径
-    page_label: str | None = None  # page 索引对应的页码标签
-    anchor_label: str | None = None  # anchor 索引对应的锚点标签
+    start_offset: int | None = None  # 定位覆盖的原文起始 offset
+    end_offset: int | None = None  # 定位覆盖的原文结束 offset
+    section_path: tuple[str, ...] = ()  # section 定位对应的章节路径
+    page_label: str | None = None  # page 定位对应的页码标签
+    anchor_label: str | None = None  # anchor 定位对应的锚点标签
 
     @property
     def name(self) -> str:
-        return self.index_name
+        return self.locator_name
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,4 +64,6 @@ class ToolContentReceipt:
 
     content_id: str  # 后续读取使用的 content_id
     chunk_count: int  # 可用于 selector.chunk_indices 的 chunk 数量
-    supported_selectors: tuple[str, ...] = ()  # 后续 tool_content_read 可支持的 selector 类型
+    supported_selectors: tuple[
+        str, ...
+    ] = ()  # 后续 tool_content_read 可支持的 selector 类型

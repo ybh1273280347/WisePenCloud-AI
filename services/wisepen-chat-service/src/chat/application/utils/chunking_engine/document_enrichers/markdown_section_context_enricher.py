@@ -10,7 +10,7 @@ from ..models import ChunkDocument
 _md = MarkdownIt().use(dollarmath_plugin)
 
 
-class MarkdownSectionPathInjector:
+class MarkdownSectionContextEnricher:
     """为 Markdown 正文块注入所属标题路径。"""
 
     __slots__ = ("name",)

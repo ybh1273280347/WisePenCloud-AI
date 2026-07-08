@@ -44,7 +44,7 @@ class Provider(Document):
 
     class Settings:
         name = "wisepen_providers"
-        indexes = [
+        locators = [
             IndexModel(
                 [("scope", ASCENDING), ("owner_user_id", ASCENDING), ("is_active", ASCENDING),
                  ("updated_at", DESCENDING)],
