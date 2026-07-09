@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from markdown_it import MarkdownIt
+
 from chat.application.tools.common.tool_content_store import ToolContentStore
 from chat.application.tools.common.tool_content_store.core.models import (
     StoredToolContent,
@@ -25,6 +27,8 @@ from chat.application.utils.ranking_engine.models import (
     RankRequest,
 )
 from chat.application.utils.ranking_engine.registry import get_ranking_engine
+
+_MARKDOWN = MarkdownIt("commonmark")
 
 
 class ToolContentInvalidRegexError(ValueError):
@@ -100,17 +104,12 @@ class ToolContentReadService:
         content_id: str,
         session_id: str,
     ) -> tuple[str, StoredToolContent] | None:
-        """从存储层获取规范化后的文档对象"""
-        canonical_id, _ = await self._store.canonicalize_content_id(
-            content_id=content_id,
-            session_id=session_id,
-        )
-
-        stored = await self._store.get(content_id=canonical_id, session_id=session_id)
+        """从存储层获取文档对象。"""
+        stored = await self._store.get(content_id=content_id, session_id=session_id)
         if stored is None:
             return None
 
-        return canonical_id, stored
+        return content_id, stored
 
     def build_continuous_window(
         self,
@@ -195,10 +194,12 @@ class ToolContentReadService:
 
         candidates: list[RankCandidate] = []
         source_by_candidate_id: dict[str, tuple[str, StoredToolContent, int]] = {}
+        chunks_by_content_id: dict[str, tuple[ToolContentChunk, ...]] = {}
 
         # 1. 提取并组装所有满足过滤条件的候选 Chunk
         for canonical_id, stored in stored_items:
             candidate_chunks = self._select_chunks(stored, request.selector)
+            chunks_by_content_id[canonical_id] = candidate_chunks
             for chunk in candidate_chunks:
                 text = ToolContentWindowBuilder.chunk_text(stored, chunk)
                 if not text:
@@ -243,18 +244,27 @@ class ToolContentReadService:
         ).ranked
 
         # 3. 构造扩展后的文本窗口结果
-        return tuple(
-            ToolContentReadMatch(
-                content_id=source_by_candidate_id[item.candidate_id][0],
-                window=self._window_builder.expand(
-                    source_by_candidate_id[item.candidate_id][1],
-                    center_chunk=source_by_candidate_id[item.candidate_id][2],
-                    merge_before=request.merge_before,
-                    merge_after=request.merge_after,
-                ),
+        matches: list[ToolContentReadMatch] = []
+        for item in ranked:
+            source = source_by_candidate_id.get(item.candidate_id)
+            if source is None:
+                continue
+
+            content_id, stored, chunk_index = source
+            matches.append(
+                ToolContentReadMatch(
+                    content_id=content_id,
+                    window=self._window_builder.expand(
+                        stored,
+                        chunks=chunks_by_content_id[content_id],
+                        center_chunk=chunk_index,
+                        merge_before=request.merge_before,
+                        merge_after=request.merge_after,
+                    ),
+                )
             )
-            for item in ranked
-        )
+
+        return tuple(matches)
 
     def _read_regex_match_across_contents(
         self,
@@ -280,25 +290,28 @@ class ToolContentReadService:
             for chunk in candidate_chunks:
                 text = ToolContentWindowBuilder.chunk_text(stored, chunk)
 
-                for _ in regex.finditer(text):
-                    match_key = (canonical_id, chunk.chunk_index)
-                    if match_key in seen_windows:
-                        continue
-                    seen_windows.add(match_key)
+                if not _regex_matches(regex, text):
+                    continue
 
-                    matches.append(
-                        ToolContentReadMatch(
-                            content_id=canonical_id,
-                            window=self._window_builder.expand(
-                                stored,
-                                center_chunk=chunk.chunk_index,
-                                merge_before=request.merge_before,
-                                merge_after=request.merge_after,
-                            ),
-                        )
+                match_key = (canonical_id, chunk.chunk_index)
+                if match_key in seen_windows:
+                    continue
+                seen_windows.add(match_key)
+
+                matches.append(
+                    ToolContentReadMatch(
+                        content_id=canonical_id,
+                        window=self._window_builder.expand(
+                            stored,
+                            chunks=candidate_chunks,
+                            center_chunk=chunk.chunk_index,
+                            merge_before=request.merge_before,
+                            merge_after=request.merge_after,
+                        ),
                     )
-                    if len(matches) >= max_matches:
-                        return tuple(matches)
+                )
+                if len(matches) >= max_matches:
+                    return tuple(matches)
 
         return tuple(matches)
 
@@ -340,20 +353,7 @@ class ToolContentReadService:
         if selected is None:
             selected = {c.chunk_index for c in chunks}
 
-        # 4. 后置清洗：处理未知类型的白名单控制
-        result = []
-        for chunk in chunks:
-            if chunk.chunk_index not in selected:
-                continue
-            if (
-                selector.block_kinds
-                and not selector.include_unknown
-                and not chunk.block_kinds
-            ):
-                continue
-            result.append(chunk)
-
-        return tuple(result)
+        return tuple(chunk for chunk in chunks if chunk.chunk_index in selected)
 
     def _index_selected_chunks(
         self,
@@ -384,19 +384,30 @@ class ToolContentReadService:
 
 
 def _matches_selector_value(entry, values: tuple[str, ...]) -> bool:
-    locator_name = entry.locator_name
-    match_values = [locator_name]
-
-    if entry.locator_kind == "section":
-        match_values.append(" > ".join(entry.section_path))
-    elif entry.locator_kind == "page" and entry.page_label:
-        match_values.append(entry.page_label)
-    elif entry.locator_kind == "anchor" and entry.anchor_label:
-        match_values.append(entry.anchor_label)
-
     normalized_values = tuple(
         value.strip() for value in values if value and value.strip()
     )
+    if entry.locator_kind == "page":
+        locator_label = (
+            entry.locator_name.removeprefix("page:")
+            if entry.locator_name.startswith("page:")
+            else entry.locator_name
+        )
+        # 页码必须按标签精确匹配，避免 page_labels=["4"] 误命中 page:14。
+        page_values = (entry.page_label, locator_label)
+        return any(
+            target == candidate_text
+            for target in normalized_values
+            for candidate in page_values
+            if (candidate_text := str(candidate or "").strip())
+        )
+
+    match_values = [entry.locator_name]
+    if entry.locator_kind == "section":
+        match_values.append(" > ".join(entry.section_path))
+    elif entry.locator_kind == "anchor" and entry.anchor_label:
+        match_values.append(entry.anchor_label)
+
     for target in normalized_values:
         for candidate in match_values:
             candidate_text = str(candidate).strip()
@@ -405,3 +416,102 @@ def _matches_selector_value(entry, values: tuple[str, ...]) -> bool:
             ):
                 return True
     return False
+
+
+def _regex_matches(regex: re.Pattern[str], text: str) -> bool:
+    if regex.search(text) is not None:
+        return True
+
+    # PDF 解析后的 Markdown 源码可能把同一个标识符拆成 emphasis token。
+    rendered_texts = tuple(
+        dict.fromkeys(
+            candidate
+            for candidate in (
+                _markdown_plain_text(text),
+                _remove_markdown_word_markers(text),
+            )
+            if candidate and candidate != text
+        )
+    )
+    for candidate_text in rendered_texts:
+        if regex.search(candidate_text) is not None:
+            return True
+
+    markdown_pattern = _markdown_underscore_pattern(regex)
+    if markdown_pattern is None:
+        return False
+
+    for candidate_text in rendered_texts:
+        if markdown_pattern.search(candidate_text) is not None:
+            return True
+    return False
+
+
+def _markdown_underscore_pattern(regex: re.Pattern[str]) -> re.Pattern[str] | None:
+    relaxed_pattern = _relax_literal_underscores(regex.pattern)
+    if relaxed_pattern == regex.pattern:
+        return None
+
+    try:
+        return re.compile(relaxed_pattern, regex.flags)
+    except re.error:
+        return None
+
+
+def _markdown_plain_text(text: str) -> str:
+    try:
+        tokens = _MARKDOWN.parse(text)
+    except Exception:
+        return text
+
+    parts: list[str] = []
+    _append_markdown_token_text(tokens, parts)
+    return "".join(parts)
+
+
+def _append_markdown_token_text(tokens, parts: list[str]) -> None:
+    for token in tokens:
+        if token.type in {"text", "code_inline", "code_block", "fence"}:
+            parts.append(token.content)
+        elif token.type in {"softbreak", "hardbreak"}:
+            parts.append("\n")
+        elif token.children:
+            _append_markdown_token_text(token.children, parts)
+
+
+def _remove_markdown_word_markers(text: str) -> str:
+    return re.sub(r"(?<=\w)[*_]+(?=\w)", "", text)
+
+
+def _relax_literal_underscores(pattern: str) -> str:
+    parts: list[str] = []
+    escaped = False
+    in_class = False
+
+    for char in pattern:
+        if escaped:
+            parts.append(char)
+            escaped = False
+            continue
+
+        if char == "\\":
+            parts.append(char)
+            escaped = True
+            continue
+
+        if char == "[":
+            in_class = True
+            parts.append(char)
+            continue
+        if char == "]" and in_class:
+            in_class = False
+            parts.append(char)
+            continue
+
+        if char == "_" and not in_class:
+            parts.append(r"[_\s]+")
+            continue
+
+        parts.append(char)
+
+    return "".join(parts)

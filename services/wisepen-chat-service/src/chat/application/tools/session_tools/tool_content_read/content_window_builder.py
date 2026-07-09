@@ -34,37 +34,43 @@ class ToolContentWindowBuilder:
         self,
         stored: StoredToolContent,
         *,
+        chunks: tuple[ToolContentChunk, ...],
         center_chunk: int,
         merge_before: int,
         merge_after: int,
     ) -> ToolContentWindow:
         """以核心块为中心，向两侧滑动混叠相邻分块文本，生成高内聚的上下文窗口。"""
-        by_index = {c.chunk_index: c for c in stored.chunks}
+        by_index = {c.chunk_index: c for c in chunks}
 
         start_idx = max(center_chunk - max(merge_before, 0), 0)
         end_idx = min(
             center_chunk + max(merge_after, 0), max(by_index.keys(), default=0)
         )
 
-        chunks = tuple(
-            by_index[idx] for idx in range(start_idx, end_idx + 1) if idx in by_index
+        window_chunks = tuple(
+            by_index[idx]
+            for idx in range(start_idx, end_idx + 1)
+            if idx in by_index
         )
+        if window_chunks:
+            start_idx = window_chunks[0].chunk_index
+            end_idx = window_chunks[-1].chunk_index
 
         parts = tuple(
             text
-            for c in chunks
+            for c in window_chunks
             if (text := ToolContentWindowBuilder.chunk_text(stored, c))
         )
         text = self.truncate("\n\n".join(parts))
 
         offsets = tuple(
             offset
-            for c in chunks
+            for c in window_chunks
             for offset in (c.start_offset, c.end_offset)
             if offset is not None
         )
 
-        locator = ToolContentWindowBuilder.locator(stored, chunks)
+        locator = ToolContentWindowBuilder.locator(stored, window_chunks)
         return ToolContentWindow(
             text=text,
             start_offset=min(offsets) if offsets else None,

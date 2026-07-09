@@ -138,6 +138,9 @@ class AppSettings(BaseModel):
                                          ] | None = None  # 会员平台源当前路由到的 provider；None 表示未启用
     WEB_SEARCH_PLATFORM_MEMBER_API_KEY: str | None = None  # 会员平台源使用的平台密钥
 
+    # ── Internal Service Gateways (内部服务网关) ────────────────────────
+    NOTE_COLLAB_GATEWAY_BASE_URL: str  # Note Collab 服务内部网关 base URL
+
     # ── Third-Party Credentials (三方垂直领域) ─────────────────────
 
     # ── Skill (技能召回) ───────────────────────────────────────────────

@@ -4,14 +4,13 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from hashlib import sha256
 
-import msgspec
 from redis.asyncio import Redis
 
 from chat.application.tools.common.web_content_cache.core.models import (
     WebContentCacheMode,
     WebContentCacheValue,
 )
-from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache
+from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache_or_none
 from chat.core.persistence.redis.base import RedisRepository
 
 _VALUE_KEY_PREFIX = "wisepen:web_content_cache:value:"
@@ -35,10 +34,7 @@ class RedisWebContentCacheRepository(RedisRepository):
         if raw is None:
             return None
 
-        try:
-            return loads_cache(raw, WebContentCacheValue)
-        except (msgspec.DecodeError, msgspec.ValidationError):
-            return None
+        return loads_cache_or_none(raw, WebContentCacheValue)
 
     async def set_value(self, value: WebContentCacheValue) -> None:
         canonical_url = value.canonical_url.strip()

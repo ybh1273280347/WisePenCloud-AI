@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
 
 from chat.application.utils.chunking_engine.models import (
     Chunk,
     ChunkLocator,
     LocatorKind,
+)
+from chat.core.persistence._utils.payload_readers import (
+    read_optional_trimmed_str,
+    read_trimmed_str_sequence,
 )
 
 
@@ -43,10 +46,9 @@ class RagChunkLocator:
             locator_kind=locator.kind,
             start_offset=locator.start_offset,
             end_offset=locator.end_offset,
-            section_path=cast(tuple[str, ...] | None, metadata.get("section_path"))
-            or (),
-            page_label=cast(str | None, metadata.get("page_label")),
-            anchor_label=cast(str | None, metadata.get("anchor_label")),
+            section_path=read_trimmed_str_sequence(metadata.get("section_path")),
+            page_label=read_optional_trimmed_str(metadata.get("page_label")),
+            anchor_label=read_optional_trimmed_str(metadata.get("anchor_label")),
         )
 
 

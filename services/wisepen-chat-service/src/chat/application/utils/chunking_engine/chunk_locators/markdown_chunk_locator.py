@@ -8,7 +8,10 @@ from ..models import BlockKind, Chunk, ChunkDocument, ChunkLocator, LocatorKind,
 _PAGE_MARKER_RE = re.compile(r"^<!--\s*page\s+(\d+)\s*-->$")
 
 # 从 Markdown 表格/公式 block 中提取编号：Table 1: / Equation (3) 等
-_TABLE_CAPTION_RE = re.compile(r"^(?:Table|表格)\s+(\d+(?:\.\d+)*)", re.IGNORECASE)
+_TABLE_CAPTION_RE = re.compile(
+    r"^(?:[·•]\s*|[-*+]\s+)?[*_`~\s]*(?:Table|表格|表)\s+(\d+(?:\.\d+)*)",
+    re.IGNORECASE,
+)
 _FORMULA_LABEL_RE = re.compile(r"(?:Equation|Eq\.?|公式)\s+[\(]?(\d+(?:\.\d+)*)[\)]?", re.IGNORECASE)
 
 # 从图片 alt 文本中提取图号：Figure 1 / Fig. 2 / 图 3
@@ -146,7 +149,7 @@ class MarkdownChunkLocator:
 
         for block in blocks:
             if block.block_kind == BlockKind.TABLE:
-                anchor_name = self._extract_table_anchor(block.text)
+                anchor_name = self._extract_table_anchor(block)
             elif block.block_kind == BlockKind.FORMULA:
                 anchor_name = self._extract_formula_anchor(block.text)
             elif block.block_kind == BlockKind.IMAGE:
@@ -172,9 +175,13 @@ class MarkdownChunkLocator:
         return locators
 
     @staticmethod
-    def _extract_table_anchor(text: str) -> str | None:
+    def _extract_table_anchor(block: TextBlock) -> str | None:
         """从 TABLE block 首行提取表格锚标，如 'Table 1: 用户表' → 'Table 1'。"""
-        first_line = text.split("\n", 1)[0]
+        anchor_label = block.metadata.get("anchor_label")
+        if isinstance(anchor_label, str) and anchor_label:
+            return anchor_label
+
+        first_line = block.text.split("\n", 1)[0]
         m = _TABLE_CAPTION_RE.match(first_line.strip())
         if m:
             return f"Table {m.group(1)}"

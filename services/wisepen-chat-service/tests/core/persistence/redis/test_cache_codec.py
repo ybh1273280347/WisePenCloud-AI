@@ -11,7 +11,11 @@ from chat.application.tools.common.tool_content_store.core.models import (
     StoredToolContent,
     ToolContentChunk,
 )
-from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache
+from chat.core.persistence.redis._utils.cache_codec import (
+    dumps_cache,
+    loads_cache,
+    loads_cache_or_none,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +60,12 @@ def test_cache_codec_rejects_invalid_typed_payload() -> None:
 
     with pytest.raises(msgspec.ValidationError):
         loads_cache(raw, StoredToolContent)
+
+
+def test_cache_codec_returns_none_for_invalid_typed_payload() -> None:
+    raw = b'{"content_id":"cnt_1","session_id":"s1","content_type":"text/markdown","text":"hello","chunks":[{"chunk_index":"not-an-int"}]}'
+
+    assert loads_cache_or_none(raw, StoredToolContent) is None
 
 
 def test_cache_codec_encodes_non_finite_float_as_null() -> None:

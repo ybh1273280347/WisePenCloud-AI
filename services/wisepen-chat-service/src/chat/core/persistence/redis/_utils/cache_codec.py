@@ -27,6 +27,17 @@ def loads_cache(payload: bytes | bytearray | memoryview | str, model_type: type[
     return _decoder(model_type).decode(_normalize_payload(payload))
 
 
+def loads_cache_or_none(
+    payload: bytes | bytearray | memoryview | str,
+    model_type: type[T] | Any,
+) -> T | None:
+    """将 Redis payload 解码为目标类型；损坏或 schema 不匹配时按 cache miss 处理。"""
+    try:
+        return loads_cache(payload, model_type)
+    except (msgspec.DecodeError, msgspec.ValidationError, TypeError, ValueError):
+        return None
+
+
 @lru_cache(maxsize=128)
 def _decoder(model_type: Any) -> msgspec.json.Decoder:
     return msgspec.json.Decoder(model_type)

@@ -85,6 +85,54 @@ async def test_tool_content_store_preserves_nested_section_path() -> None:
 
 
 @pytest.mark.anyio
+async def test_tool_content_store_marks_markdown_tables() -> None:
+    repository = _RepositoryStub()
+    store = ToolContentStore(repository=repository)
+
+    put_result = await store.put(
+        session_id="session-1",
+        text="<!-- page 2 -->\n\n# 指标\n\n| A | B |\n|---|---|\n| 1 | 2 |",
+    )
+
+    assert put_result.status == ToolContentPutStatus.STORED
+    assert repository.stored is not None
+    table_chunk = next(
+        chunk for chunk in repository.stored.chunks
+        if "table" in chunk.block_kinds
+    )
+    assert table_chunk.page_label == "2"
+    assert table_chunk.section_path == ("指标",)
+
+
+@pytest.mark.anyio
+async def test_tool_content_store_exposes_captioned_table_anchor() -> None:
+    repository = _RepositoryStub()
+    store = ToolContentStore(repository=repository)
+
+    put_result = await store.put(
+        session_id="session-1",
+        text=(
+            "<!-- page 4 -->\n\n"
+            "·  Table 1: Maximum path lengths, per-layer complexity and minimum "
+            "number of sequential operations for different layer types.\n\n"
+            "|Layer Type|Complexity per Layer|Sequential|Maximum Path Length|\n"
+            "|---|---|---|---|\n"
+            "|||Operations||\n"
+            "|Self-Attention|_O_(_n_2 _· d_)|_O_(1)|_O_(1)|\n"
+        ),
+    )
+
+    assert put_result.status == ToolContentPutStatus.STORED
+    assert repository.stored is not None
+    table_chunk = next(
+        chunk for chunk in repository.stored.chunks
+        if "table" in chunk.block_kinds
+    )
+    assert table_chunk.page_label == "4"
+    assert table_chunk.anchor_labels == ("Table 1",)
+
+
+@pytest.mark.anyio
 async def test_tool_content_store_put_distinguishes_empty_text() -> None:
     repository = _RepositoryStub()
     store = ToolContentStore(repository=repository)

@@ -10,6 +10,10 @@ from ..models import ChunkDocument, TextBlock, BlockKind
 
 # 统一页码标记格式：<!-- page N -->
 _PAGE_MARKER_RE = re.compile(r"^<!--\s*page\s+(\d+)\s*-->\s*$")
+_TABLE_CAPTION_RE = re.compile(
+    r"^(?:[·•]\s*|[-*+]\s+)?[*_`~\s]*(?:Table|表格|表)\s+(\d+(?:\.\d+)*)",
+    re.IGNORECASE,
+)
 
 _TOKEN_TO_BLOCK_KIND: dict[str, BlockKind] = {
     "heading_open": BlockKind.HEADING,
@@ -23,7 +27,7 @@ _TOKEN_TO_BLOCK_KIND: dict[str, BlockKind] = {
     "math_block": BlockKind.FORMULA,
 }
 
-_BLOCK_OPENERS = frozenset(_TOKEN_TO_BLOCK_KIND)
+_BLOCK_OPENERS = frozenset((*_TOKEN_TO_BLOCK_KIND, "html_block"))
 
 
 class MarkdownBlockSplitter:
@@ -39,7 +43,7 @@ class MarkdownBlockSplitter:
 
     def __init__(self) -> None:
         self.name = "markdown_block_splitter"
-        self._md = MarkdownIt().use(dollarmath_plugin)
+        self._md = MarkdownIt("commonmark").enable("table").use(dollarmath_plugin)
 
     def split(self, *, document: ChunkDocument) -> tuple[TextBlock, ...]:
         text = document.text
@@ -141,7 +145,12 @@ class MarkdownBlockSplitter:
                 if not block_text:
                     continue
 
-            block_kind = _TOKEN_TO_BLOCK_KIND[token.type]
+            if token.type == "html_block":
+                if not block_text.lstrip().lower().startswith("<table"):
+                    continue
+                block_kind = BlockKind.TABLE
+            else:
+                block_kind = _TOKEN_TO_BLOCK_KIND[token.type]
 
             heading_title: str | None = None
             section_path = tuple(title for _, title in heading_stack)
@@ -177,6 +186,8 @@ class MarkdownBlockSplitter:
                 )
             )
 
+        blocks = _merge_captioned_tables(blocks, text)
+
         # 合并所有 blocks，按 start_offset 排序，统一重编号
         all_blocks = blocks + page_marker_blocks + image_blocks
         if not all_blocks:
@@ -197,3 +208,58 @@ class MarkdownBlockSplitter:
             result.append(replace(block, block_id=f"block-{i}", block_index=i))
 
         return tuple(result)
+
+
+def _merge_captioned_tables(blocks: list[TextBlock], text: str) -> list[TextBlock]:
+    merged: list[TextBlock] = []
+    i = 0
+
+    while i < len(blocks):
+        caption = blocks[i]
+        table = blocks[i + 1] if i + 1 < len(blocks) else None
+        anchor_label = _table_caption_label(caption.text)
+        if (
+            table is None
+            or caption.block_kind != BlockKind.PARAGRAPH
+            or table.block_kind != BlockKind.TABLE
+            or anchor_label is None
+            or caption.end_offset is None
+            or table.start_offset is None
+            or text[caption.end_offset:table.start_offset].strip()
+        ):
+            merged.append(caption)
+            i += 1
+            continue
+
+        start = caption.start_offset
+        end = table.end_offset
+        merged.append(
+            replace(
+                table,
+                text=(
+                    text[start:end].strip()
+                    if start is not None and end is not None
+                    else f"{caption.text}\n\n{table.text}".strip()
+                ),
+                start_offset=start,
+                end_offset=end,
+                section_path=table.section_path or caption.section_path,
+                metadata={
+                    **table.metadata,
+                    "block_type": BlockKind.TABLE,
+                    "caption": caption.text,
+                    "anchor_label": anchor_label,
+                },
+            )
+        )
+        i += 2
+
+    return merged
+
+
+def _table_caption_label(text: str) -> str | None:
+    first_line = text.split("\n", 1)[0].strip()
+    match = _TABLE_CAPTION_RE.match(first_line)
+    if match:
+        return f"Table {match.group(1)}"
+    return None

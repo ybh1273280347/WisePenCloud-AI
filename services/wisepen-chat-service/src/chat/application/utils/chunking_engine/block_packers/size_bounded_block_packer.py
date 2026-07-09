@@ -52,6 +52,24 @@ class SizeBoundedBlockPacker:
         for block in blocks:
             block_chars = len(block.text)
             if block.block_kind in self.config.hard_boundary_block_kinds:
+                if block.block_kind == BlockKind.PAGE_MARKER:
+                    if block.block_index > chunk_start and chunk_chars > 0:
+                        chunks.append(
+                            self._build_chunk(
+                                blocks,
+                                chunk_start,
+                                block.block_index - 1,
+                                len(chunks),
+                                page_label=chunk_page_label,
+                            )
+                        )
+                    if page_label := _extract_page_label(block):
+                        active_page_label = page_label
+                    chunk_page_label = active_page_label
+                    chunk_start = block.block_index + 1
+                    chunk_chars = 0
+                    continue
+
                 if block.block_index > chunk_start and chunk_chars > 0:
                     chunks.append(
                         self._build_chunk(

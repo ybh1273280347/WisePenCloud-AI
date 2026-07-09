@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import msgspec
 from redis.asyncio import Redis
 
 from chat.application.tools.common.tool_content_store.core.models import (
@@ -9,7 +8,7 @@ from chat.application.tools.common.tool_content_store.core.models import (
 from chat.application.tools.common.tool_content_store.core.repository_protocol import (
     ToolContentRepository,
 )
-from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache
+from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache_or_none
 from chat.core.persistence.redis.base import RedisRepository
 
 # --- 全局命名空间配置 ---
@@ -44,10 +43,7 @@ class RedisToolContentRepository(RedisRepository, ToolContentRepository):
         if raw is None:
             return None
 
-        try:
-            return loads_cache(raw, StoredToolContent)
-        except (msgspec.DecodeError, msgspec.ValidationError):
-            return None
+        return loads_cache_or_none(raw, StoredToolContent)
 
     @staticmethod
     def _item_key(content_id: str) -> str:

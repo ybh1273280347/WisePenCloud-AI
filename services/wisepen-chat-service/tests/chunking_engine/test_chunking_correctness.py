@@ -1,4 +1,5 @@
 from chat.application.utils.chunking_engine import Chunk, ChunkDocument, ChunkRole
+from chat.application.utils.chunking_engine.models import BlockKind
 from chat.application.utils.chunking_engine.block_splitters.recursive_text_block_splitter import (
     RecursiveTextBlockSplitter,
     RecursiveTextBlockSplitterConfig,
@@ -36,6 +37,54 @@ def test_markdown_block_splitter_keeps_full_section_path() -> None:
         locator.name == "section:一级 > 二级"
         for locator in result.locators
     )
+
+
+def test_markdown_block_splitter_marks_pipe_table_blocks() -> None:
+    text = "# 指标\n\n| A | B |\n|---|---|\n| 1 | 2 |"
+
+    result = get_chunking_engine("markdown").chunk(
+        document=ChunkDocument(text=text, content_type="text/markdown"),
+    )
+
+    table = next(block for block in result.blocks if block.text.startswith("| A | B |"))
+    assert table.block_kind == BlockKind.TABLE
+    assert table.section_path == ("指标",)
+    assert text[table.start_offset:table.end_offset].strip() == table.text
+    assert any(
+        BlockKind.TABLE in chunk.metadata.get("block_kinds", ())
+        for chunk in result.chunks
+    )
+
+
+def test_markdown_block_splitter_marks_html_table_blocks() -> None:
+    text = "<table>\n<tr><td>A</td></tr>\n</table>"
+
+    result = get_chunking_engine("markdown").chunk(
+        document=ChunkDocument(text=text, content_type="text/markdown"),
+    )
+
+    assert len(result.blocks) == 1
+    assert result.blocks[0].block_kind == BlockKind.TABLE
+    assert text[result.blocks[0].start_offset:result.blocks[0].end_offset].strip() == text
+
+
+def test_markdown_block_splitter_merges_pdf_table_caption_with_table() -> None:
+    text = _captioned_transformer_table_sample()
+
+    result = get_chunking_engine("markdown").chunk(
+        document=ChunkDocument(text=text, content_type="text/markdown"),
+    )
+
+    table = next(block for block in result.blocks if "Layer Type" in block.text)
+    assert table.block_kind == BlockKind.TABLE
+    assert table.text.startswith("·  Table 1: Maximum path lengths")
+    assert text[table.start_offset:table.end_offset].strip() == table.text
+    assert not any(
+        block.block_kind == BlockKind.PARAGRAPH
+        and block.text.startswith("·  Table 1: Maximum path lengths")
+        for block in result.blocks
+    )
+    assert any(locator.name == "anchor:Table 1" for locator in result.locators)
 
 
 def test_parent_child_normalizer_remaps_children_after_heading_only_merge() -> None:
@@ -91,3 +140,21 @@ def test_recursive_splitter_offsets_handle_overlap() -> None:
         assert block.start_offset is not None
         assert block.end_offset is not None
         assert text[block.start_offset:block.end_offset] == block.text
+
+
+def _captioned_transformer_table_sample() -> str:
+    return (
+        "·  Table 1: Maximum path lengths, per-layer complexity and minimum number "
+        "of sequential operations for different layer types. _n_ is the sequence "
+        "length, _d_ is the representation dimension, _k_ is the kernel size of "
+        "convolutions and _r_ the size of the neighborhood in restricted "
+        "self-attention. \n\n"
+        "|Layer Type|Complexity per Layer|Sequential|Maximum Path Length|\n"
+        "|---|---|---|---|\n"
+        "|||Operations||\n"
+        "|Self-Attention|_O_(_n_2 _· d_)|_O_(1)|_O_(1)|\n"
+        "|Recurrent|_O_(_n · d_2)|_O_(_n_)|_O_(_n_)|\n"
+        "|Convolutional|_O_(_k · n · d_2)|_O_(1)|_O_(_logk_(_n_))|\n"
+        "|Self-Attention (restricted)|_O_(_r · n · d_)|_O_(1)|_O_(_n/r_)|\n\n\n\n"
+        "## **3.5 Positional Encoding** \n"
+    )

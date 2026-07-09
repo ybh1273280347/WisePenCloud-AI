@@ -45,6 +45,7 @@ class _FakeFetchService:
                     content_type="text/html",
                     title="Example Page",
                     markdown="# Example Page",
+                    warnings=("httpx_fallback: http 403",),
                 ),
                 WebFetchResult(
                     source_url="https://example.test/file.pdf",
@@ -55,8 +56,10 @@ class _FakeFetchService:
                     markdown=None,
                     file_ref="tfile_abc",
                     file_label="pdf",
+                    warnings=("file handoff",),
                 ),
             ),
+            warnings=("1/2 urls used fallback",),
         )
 
 
@@ -86,6 +89,7 @@ async def test_web_fetch_visible_result_hides_internal_fetch_metadata() -> None:
         assert "status_code" not in item
         assert "content_type" not in item
         assert "source_scope" not in item
+        assert "warnings" not in item
     assert result.cacheable_texts == ("# Example Page",)
 
 

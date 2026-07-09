@@ -22,7 +22,7 @@
 | `max_matches` | `integer` | 跨全部 `content_ids` 的最大匹配窗口数，默认 10。 |
 | `merge_before` / `merge_after` | `integer` | 对中心 chunk 前后扩展的 chunk 数。 |
 
-`selector` 支持 `block_kinds`、`sections`、`page_labels`、`anchor_labels`、`chunk_indices` 和 `include_unknown`。多个 selector 组之间取交集。
+`selector` 支持 `block_kinds`、`sections`、`page_labels`、`anchor_labels` 和 `chunk_indices`。多个 selector 组之间取交集。
 
 执行上下文必须包含 `session_id`。
 

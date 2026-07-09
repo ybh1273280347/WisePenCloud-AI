@@ -24,15 +24,6 @@ from .core.repository_protocol import ToolContentRepository
 
 _DEFAULT_TOOL_CONTENT_MAX_CHARS = 20_000_000
 
-# 重定向 receipt 场景下的固定提示语，抽到模块级避免每次调用重复构造字符串
-_REDIRECT_NOTE = (
-    "The requested content_id was a redirect receipt; "
-    "the readable content_id was used automatically for this call."
-)
-# canonicalize 时依次尝试的 metadata key：canonical_content_id 是显式指定的规范 ID，
-# parsed_content_id 是解析产物的兜底命名，前者优先级更高
-_REDIRECT_KEYS = ("canonical_content_id", "parsed_content_id")
-
 
 class ToolContentPutStatus(StrEnum):
     STORED = "stored"
@@ -45,6 +36,38 @@ class ToolContentPutResult:
     status: ToolContentPutStatus
     receipt: ToolContentReceipt | None = None
     reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _ToolContentMetadataView:
+    section_path: tuple[str, ...] = ()
+    page_label: str | None = None
+    anchor_label: str | None = None
+    anchor_labels: tuple[str, ...] = ()
+
+    @classmethod
+    def from_metadata(cls, metadata: Metadata) -> "_ToolContentMetadataView":
+        return cls(
+            section_path=cls._str_tuple(metadata.get("section_path")),
+            page_label=cls._str(metadata.get("page_label")),
+            anchor_label=cls._str(metadata.get("anchor_label")),
+            anchor_labels=cls._str_tuple(metadata.get("anchor_labels")),
+        )
+
+    @staticmethod
+    def _str(value: object) -> str | None:
+        return value if isinstance(value, str) else None
+
+    @staticmethod
+    def _str_tuple(value: object) -> tuple[str, ...]:
+        if not isinstance(value, list | tuple):
+            return ()
+        values: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                return ()
+            values.append(item)
+        return tuple(values)
 
 
 class ToolContentStore:
@@ -143,19 +166,7 @@ class ToolContentStore:
             for chunk in result.chunks
         )
         index = ToolContentIndex(
-            entries=tuple(
-                ToolContentIndexEntry(
-                    locator_name=idx.name,
-                    locator_kind=idx.kind.value,
-                    chunk_indices=idx.chunk_indices,
-                    start_offset=idx.start_offset,
-                    end_offset=idx.end_offset,
-                    section_path=_metadata_str_tuple(idx.metadata.get("section_path")),
-                    page_label=_metadata_str(idx.metadata.get("page_label")),
-                    anchor_label=_metadata_str(idx.metadata.get("anchor_label")),
-                )
-                for idx in result.locators
-            )
+            entries=tuple(_to_tool_index_entry(locator) for locator in result.locators)
         )
         return chunks, index, dict(result.metadata), result.pipeline
 
@@ -168,25 +179,6 @@ class ToolContentStore:
             return None
         return stored
 
-    async def canonicalize_content_id(
-        self,
-        *,
-        content_id: str,
-        session_id: str,
-    ) -> tuple[str, str | None]:
-        """将重定向 receipt 解析为可读的 canonical content_id。"""
-        stored = await self.get(content_id=content_id, session_id=session_id)
-        if stored is None:
-            return content_id, None
-
-        for key in _REDIRECT_KEYS:
-            target = stored.metadata.get(key)
-            if isinstance(target, str) and target:
-                return target, _REDIRECT_NOTE
-
-        return content_id, None
-
-
 # ---------------------------------------------------------------------------
 # 模块级辅助函数
 # ---------------------------------------------------------------------------
@@ -197,53 +189,34 @@ def _to_tool_chunk(
     *,
     locator_view: dict[str, object] | None,
 ) -> ToolContentChunk:
-    """将底层 Chunk 转为对外的 ToolContentChunk；locator_view 缺失或字段缺失时回退到 chunk 自带 metadata。"""
-    locator_view = locator_view or {}
-    section_path = _metadata_str_tuple(
-        locator_view.get("section_path")
-    ) or _first_section_path(chunk.metadata.get("section_paths"))
-    page_label = _metadata_str(locator_view.get("page_label")) or _metadata_str(
-        chunk.metadata.get("page_label")
-    )
-    anchor_labels = _metadata_str_tuple(
-        locator_view.get("anchor_labels")
-    ) or _metadata_str_tuple(chunk.metadata.get("anchor_labels"))
+    """将底层 Chunk 转为对外的 ToolContentChunk。"""
+    locator_metadata = _ToolContentMetadataView.from_metadata(locator_view or {})
 
     return ToolContentChunk(
         chunk_index=chunk.chunk_index,
         start_offset=chunk.start_offset,
         end_offset=chunk.end_offset,
-        block_kinds=tuple(str(v) for v in chunk.metadata.get("block_kinds", ())),
-        section_path=section_path,
-        page_label=page_label,
-        anchor_labels=anchor_labels,
+        block_kinds=_ToolContentMetadataView._str_tuple(
+            chunk.metadata.get("block_kinds")
+        ),
+        section_path=locator_metadata.section_path,
+        page_label=locator_metadata.page_label,
+        anchor_labels=locator_metadata.anchor_labels,
     )
 
 
-def _first_section_path(value: object) -> tuple[str, ...]:
-    """从 section_paths 取第一条路径；兼容嵌套 [["H1","H2"]] 和扁平 ["H1","H2"] 两种结构。"""
-    if not isinstance(value, list | tuple) or not value:
-        return ()
-    first = value[0]
-    if isinstance(first, list | tuple):
-        return _metadata_str_tuple(first)
-    return _metadata_str_tuple(value)
-
-
-def _metadata_str(value: object) -> str | None:
-    return value if isinstance(value, str) else None
-
-
-def _metadata_str_tuple(value: object) -> tuple[str, ...]:
-    """只要列表中出现非 str 元素就整体丢弃，避免脏数据混入下游而不是静默过滤。"""
-    if not isinstance(value, list | tuple):
-        return ()
-    values: list[str] = []
-    for item in value:
-        if not isinstance(item, str):
-            return ()
-        values.append(item)
-    return tuple(values)
+def _to_tool_index_entry(locator: ChunkLocator) -> ToolContentIndexEntry:
+    metadata = _ToolContentMetadataView.from_metadata(locator.metadata)
+    return ToolContentIndexEntry(
+        locator_name=locator.name,
+        locator_kind=locator.kind.value,
+        chunk_indices=locator.chunk_indices,
+        start_offset=locator.start_offset,
+        end_offset=locator.end_offset,
+        section_path=metadata.section_path,
+        page_label=metadata.page_label,
+        anchor_label=metadata.anchor_label,
+    )
 
 
 def _chunk_locator_view(
@@ -253,31 +226,35 @@ def _chunk_locator_view(
     chunk_view: dict[str, dict[str, object]] = {}
 
     for locator in locators:
+        metadata = _ToolContentMetadataView.from_metadata(locator.metadata)
         if locator.kind == LocatorKind.SECTION:
-            section_path = _metadata_str_tuple(locator.metadata.get("section_path"))
-            if not section_path:
+            if not metadata.section_path:
                 continue
             for chunk_id in locator.chunk_ids:
                 entry = chunk_view.setdefault(chunk_id, {})
                 current = entry.get("section_path")
                 # 同一 chunk 可能命中多层 section locator，保留路径最深（信息量最大）的一条
-                if not isinstance(current, tuple) or len(section_path) > len(current):
-                    entry["section_path"] = section_path
+                if (
+                    not isinstance(current, tuple)
+                    or len(metadata.section_path) > len(current)
+                ):
+                    entry["section_path"] = metadata.section_path
 
         elif locator.kind == LocatorKind.PAGE:
-            page_label = _metadata_str(locator.metadata.get("page_label"))
-            if page_label:
+            if metadata.page_label:
                 for chunk_id in locator.chunk_ids:
-                    chunk_view.setdefault(chunk_id, {}).setdefault("page_label", page_label)
+                    chunk_view.setdefault(chunk_id, {}).setdefault(
+                        "page_label",
+                        metadata.page_label,
+                    )
 
         elif locator.kind == LocatorKind.ANCHOR:
-            anchor_label = _metadata_str(locator.metadata.get("anchor_label"))
-            if not anchor_label:
+            if not metadata.anchor_label:
                 continue
             for chunk_id in locator.chunk_ids:
                 labels = chunk_view.setdefault(chunk_id, {}).setdefault("anchor_labels", [])
-                if anchor_label not in labels:
-                    labels.append(anchor_label)
+                if metadata.anchor_label not in labels:
+                    labels.append(metadata.anchor_label)
 
     # anchor_labels 在聚合期间用 list（需要去重判断），出参前统一冻结为 tuple
     for values in chunk_view.values():

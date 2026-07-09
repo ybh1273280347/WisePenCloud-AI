@@ -161,16 +161,12 @@ class WebFetchTool:
                 item["file_ref"] = r.file_ref
             if r.file_label:
                 item["file_label"] = r.file_label
-            if r.warnings:
-                item["warnings"] = r.warnings
             visible_items.append(item)
 
         visible_result: dict[str, object] = {
             "items": tuple(visible_items),
             "failed": batch.failed,
         }
-        if batch.warnings:
-            visible_result["warnings"] = batch.warnings
 
         return ToolReturn(
             tag="web_fetch_result",

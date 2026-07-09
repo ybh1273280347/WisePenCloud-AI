@@ -12,11 +12,11 @@ export default defineConfig({
     },
   },
   server: {
-    host: "0.0.0.0",
+    host: "127.0.0.1",
     port: 3001,
     proxy: {
       "/api": {
-        target: "http://0.0.0.0:19914/chat",
+        target: "http://127.0.0.1:8000/chat",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },

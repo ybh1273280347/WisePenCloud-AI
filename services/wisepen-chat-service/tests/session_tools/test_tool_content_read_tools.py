@@ -50,6 +50,7 @@ from chat.application.tools.session_tools._tool_content_read_common import selec
 from chat.application.tools.session_tools.tool_content_regex_read_tool import ToolContentRegexReadTool
 from chat.application.tools.session_tools.tool_content_rerank_read_tool import ToolContentRerankReadTool
 from chat.application.tools.session_tools.tool_content_read.service import ToolContentReadService
+from chat.application.utils.ranking_engine.models import RankRequest, RankResult, RankedCandidate
 
 
 class _FakeReadService:
@@ -77,13 +78,22 @@ class _StoredContentStore:
     def __init__(self, stored: StoredToolContent) -> None:
         self._stored = stored
 
-    async def canonicalize_content_id(self, *, content_id: str, session_id: str) -> tuple[str, str | None]:
-        return content_id, None
-
     async def get(self, *, content_id: str, session_id: str) -> StoredToolContent | None:
         if content_id != self._stored.content_id or session_id != self._stored.session_id:
             return None
         return self._stored
+
+
+class _InputOrderRankingEngine:
+    async def rank_async(self, request: RankRequest) -> RankResult:
+        return RankResult(
+            ranked=tuple(
+                RankedCandidate(candidate=candidate, rank=index + 1, score=0.0)
+                for index, candidate in enumerate(request.candidates[: request.top_k])
+            ),
+            total_candidates=len(request.candidates),
+            pipeline="test",
+        )
 
 
 def test_tool_content_rerank_read_schema_has_no_mode() -> None:
@@ -94,6 +104,7 @@ def test_tool_content_rerank_read_schema_has_no_mode() -> None:
     assert schema.required == ("content_ids", "query")
     assert "mode" not in schema.properties
     assert "pattern" not in schema.properties
+    assert "include_unknown" not in schema.properties["selector"]["properties"]
 
 
 def test_tool_content_rerank_read_schema_uses_default_top_k() -> None:
@@ -203,6 +214,243 @@ async def test_tool_content_regex_read_deduplicates_matches_by_chunk() -> None:
     assert [match.window.center_chunk for match in result.matches if match.window] == [0]
 
 
+@pytest.mark.asyncio
+async def test_tool_content_regex_read_matches_markdown_emphasis_variants() -> None:
+    text = "The _BRCA_1 marker appears in parsed PDF markdown."
+    stored = StoredToolContent(
+        content_id="cnt_1",
+        session_id="s1",
+        content_type="text/markdown",
+        text=text,
+        chunks=(
+            ToolContentChunk(
+                chunk_index=0,
+                start_offset=0,
+                end_offset=len(text),
+                block_kinds=("paragraph",),
+            ),
+        ),
+    )
+    service = ToolContentReadService(
+        store=_StoredContentStore(stored),
+        ranking_engine=object(),
+    )
+
+    result = await service.read_regex_match(
+        request=ToolContentRegexReadRequest(
+            content_ids=("cnt_1",),
+            pattern="BRCA1",
+            max_matches=10,
+        ),
+        session_id="s1",
+    )
+
+    assert [match.window.center_chunk for match in result.matches if match.window] == [0]
+
+
+@pytest.mark.asyncio
+async def test_tool_content_regex_read_matches_markdown_rendered_identifier_variants() -> None:
+    text = "\n\n".join(
+        (
+            "_d_ model = 512",
+            "dmodel = 1024",
+            "_d_model_ = 2048",
+        )
+    )
+    stored = StoredToolContent(
+        content_id="cnt_1",
+        session_id="s1",
+        content_type="text/markdown",
+        text=text,
+        chunks=(
+            ToolContentChunk(
+                chunk_index=0,
+                start_offset=0,
+                end_offset=14,
+                block_kinds=("paragraph",),
+            ),
+            ToolContentChunk(
+                chunk_index=1,
+                start_offset=16,
+                end_offset=29,
+                block_kinds=("paragraph",),
+            ),
+            ToolContentChunk(
+                chunk_index=2,
+                start_offset=31,
+                end_offset=len(text),
+                block_kinds=("paragraph",),
+            ),
+        ),
+    )
+    service = ToolContentReadService(
+        store=_StoredContentStore(stored),
+        ranking_engine=object(),
+    )
+
+    result = await service.read_regex_match(
+        request=ToolContentRegexReadRequest(
+            content_ids=("cnt_1",),
+            pattern=r"d_model\s*=\s*\d+",
+            max_matches=10,
+        ),
+        session_id="s1",
+    )
+
+    assert [match.window.center_chunk for match in result.matches if match.window] == [
+        0,
+        2,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_tool_content_selector_bounds_expanded_ranked_window() -> None:
+    text = "page one text\n\npage two target\n\npage three text"
+    stored = StoredToolContent(
+        content_id="cnt_1",
+        session_id="s1",
+        content_type="text/markdown",
+        text=text,
+        chunks=(
+            ToolContentChunk(
+                chunk_index=0,
+                start_offset=0,
+                end_offset=13,
+                block_kinds=("paragraph",),
+                page_label="1",
+            ),
+            ToolContentChunk(
+                chunk_index=1,
+                start_offset=15,
+                end_offset=30,
+                block_kinds=("paragraph",),
+                page_label="2",
+            ),
+            ToolContentChunk(
+                chunk_index=2,
+                start_offset=32,
+                end_offset=len(text),
+                block_kinds=("paragraph",),
+                page_label="3",
+            ),
+        ),
+        index=ToolContentIndex(
+            entries=(
+                ToolContentIndexEntry(
+                    locator_name="page:1",
+                    locator_kind="page",
+                    chunk_indices=(0,),
+                    page_label="1",
+                ),
+                ToolContentIndexEntry(
+                    locator_name="page:2",
+                    locator_kind="page",
+                    chunk_indices=(1,),
+                    page_label="2",
+                ),
+                ToolContentIndexEntry(
+                    locator_name="page:3",
+                    locator_kind="page",
+                    chunk_indices=(2,),
+                    page_label="3",
+                ),
+            )
+        ),
+    )
+    service = ToolContentReadService(
+        store=_StoredContentStore(stored),
+        ranking_engine=_InputOrderRankingEngine(),
+    )
+
+    result = await service.read_ranked_expand(
+        request=ToolContentRerankReadRequest(
+            content_ids=("cnt_1",),
+            query="target",
+            selector=ToolContentSelector(page_labels=("2",)),
+            top_k=5,
+            merge_before=1,
+            merge_after=1,
+        ),
+        session_id="s1",
+    )
+
+    assert len(result.matches) == 1
+    assert result.matches[0].window is not None
+    assert result.matches[0].window.text == "page two target"
+    assert result.matches[0].window.chunk_start == 1
+    assert result.matches[0].window.chunk_end == 1
+
+
+def test_tool_content_selector_page_label_requires_exact_match() -> None:
+    stored = StoredToolContent(
+        content_id="cnt_1",
+        session_id="s1",
+        content_type="text/markdown",
+        text="page four\n\npage fourteen",
+        chunks=(
+            ToolContentChunk(chunk_index=3, page_label="4"),
+            ToolContentChunk(chunk_index=13, page_label="14"),
+        ),
+        index=ToolContentIndex(
+            entries=(
+                ToolContentIndexEntry(
+                    locator_name="page:4",
+                    locator_kind="page",
+                    chunk_indices=(3,),
+                    page_label="4",
+                ),
+                ToolContentIndexEntry(
+                    locator_name="page:14",
+                    locator_kind="page",
+                    chunk_indices=(13,),
+                    page_label="14",
+                ),
+            )
+        ),
+    )
+    service = ToolContentReadService(
+        store=_StoredContentStore(stored),
+        ranking_engine=object(),
+    )
+
+    selected = service._select_chunks(
+        stored,
+        ToolContentSelector(page_labels=("4",)),
+    )
+
+    assert [chunk.chunk_index for chunk in selected] == [3]
+
+
+def test_tool_content_selector_page_label_can_use_page_locator_name() -> None:
+    stored = StoredToolContent(
+        content_id="cnt_1",
+        session_id="s1",
+        content_type="text/markdown",
+        text="page four",
+        chunks=(ToolContentChunk(chunk_index=3),),
+        index=ToolContentIndex(
+            entries=(
+                ToolContentIndexEntry(
+                    locator_name="page:4",
+                    locator_kind="page",
+                    chunk_indices=(3,),
+                ),
+            )
+        ),
+    )
+    service = ToolContentReadService(
+        store=_StoredContentStore(stored),
+        ranking_engine=object(),
+    )
+
+    selected = service._select_chunks(
+        stored,
+        ToolContentSelector(page_labels=("4",)),
+    )
+
+    assert [chunk.chunk_index for chunk in selected] == [3]
+
+
 def test_tool_content_selector_intersects_chunk_indices_and_block_kinds() -> None:
     service = ToolContentReadService(
         store=_StoredContentStore(_stored_content()),
@@ -263,14 +511,12 @@ def test_tool_content_selector_payload_ignores_invalid_coercions() -> None:
             "block_kinds": "code",
             "sections": [" Intro ", "", 123, True],
             "chunk_indices": [0, "1", True, 2],
-            "include_unknown": "true",
         }
     )
 
     assert selector.block_kinds == ()
     assert selector.sections == ("Intro",)
     assert selector.chunk_indices == (0, 2)
-    assert selector.include_unknown is False
 
 
 @pytest.mark.asyncio

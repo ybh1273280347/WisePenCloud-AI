@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
 from dataclasses import dataclass
 
 from qdrant_client import AsyncQdrantClient
@@ -16,6 +15,10 @@ from chat.application.rag.retrieval.models import (
     ScoredChunk,
 )
 from chat.application.rag.retrieval.permission_filter import RagPermissionFilterBuilder
+from chat.core.persistence._utils.payload_readers import (
+    read_optional_trimmed_str,
+    read_trimmed_str_sequence,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,9 +213,9 @@ def _merge_channel_points(
             (RagRetrievalChannel.SPARSE, sparse_points),
     ):
         for rank, point in enumerate(points, start=1):
-            chunk_id = _read_optional_payload_str(
+            chunk_id = read_optional_trimmed_str(
                 (point.payload or {}).get("chunk_id"),
-            ) or _read_optional_payload_str(point.id)
+            ) or read_optional_trimmed_str(point.id)
 
             if not chunk_id:
                 continue
@@ -261,47 +264,30 @@ def _to_scored_chunk(
         signals: tuple[RagRetrievalSignal, ...],
 ) -> ScoredChunk | None:
     payload = point.payload or {}
-    chunk_id = _read_optional_payload_str(
+    chunk_id = read_optional_trimmed_str(
         payload.get("chunk_id")
-    ) or _read_optional_payload_str(
+    ) or read_optional_trimmed_str(
         point.id
     )
     if not chunk_id:
         return None
 
-    parent_chunk_id = _read_optional_payload_str(payload.get("parent_chunk_id"))
+    parent_chunk_id = read_optional_trimmed_str(payload.get("parent_chunk_id"))
     return ScoredChunk(
         chunk_id=chunk_id,
-        text=_read_optional_payload_str(payload.get("evidence_text")) or "",
+        text=read_optional_trimmed_str(payload.get("evidence_text")) or "",
         retrieval_score=retrieval_score,
         retrieval_rank=rank,
         group_key=parent_chunk_id or None,
-        resource_id=_read_optional_payload_str(payload.get("resource_id")) or "",
-        document_version=_read_optional_payload_str(
+        resource_id=read_optional_trimmed_str(payload.get("resource_id")) or "",
+        document_version=read_optional_trimmed_str(
             payload.get("document_version")
         ) or "",
-        corpus_version=_read_optional_payload_str(payload.get("corpus_version")) or "",
+        corpus_version=read_optional_trimmed_str(payload.get("corpus_version")) or "",
         parent_chunk_id=parent_chunk_id or "",
-        page_label=_read_optional_payload_str(payload.get("page_label")),
-        section_path=_read_payload_str_sequence(payload.get("section_path")),
-        anchor_labels=_read_payload_str_sequence(payload.get("anchor_labels")),
+        page_label=read_optional_trimmed_str(payload.get("page_label")),
+        section_path=read_trimmed_str_sequence(payload.get("section_path")),
+        anchor_labels=read_trimmed_str_sequence(payload.get("anchor_labels")),
         retrieval_channels=channels,
         retrieval_signals=signals,
-    )
-
-
-def _read_optional_payload_str(value: object) -> str | None:
-    if value is None:
-        return None
-    candidate = str(value).strip()
-    return candidate or None
-
-
-def _read_payload_str_sequence(value: object) -> tuple[str, ...]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
-        return ()
-    return tuple(
-        candidate
-        for item in value
-        if (candidate := str(item).strip())
     )

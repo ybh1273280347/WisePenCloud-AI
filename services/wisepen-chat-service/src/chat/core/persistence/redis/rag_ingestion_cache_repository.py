@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from hashlib import sha256
 
-import msgspec
 from redis.asyncio import Redis
 
 from chat.application.rag.cache.ingestion_deterministic import (
@@ -14,7 +13,7 @@ from chat.application.rag.ingestion.models import (
     RagChildChunk,
     RagChunkingResult,
 )
-from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache
+from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache_or_none
 from chat.core.persistence.redis.base import RedisRepository
 
 _CHUNKING_KEY_PREFIX = "wisepen:rag:ingestion:chunking:"
@@ -38,10 +37,7 @@ class RedisRagIngestionDeterministicCache(RedisRepository):
         raw = await self._get(self._chunking_key(key))
         if raw is None:
             return None
-        try:
-            return loads_cache(raw, RagChunkingResult)
-        except (msgspec.DecodeError, msgspec.ValidationError):
-            return None
+        return loads_cache_or_none(raw, RagChunkingResult)
 
     async def set_chunking_result(
         self,
@@ -57,10 +53,7 @@ class RedisRagIngestionDeterministicCache(RedisRepository):
         raw = await self._get(self._context_indexing_key(key))
         if raw is None:
             return None
-        try:
-            return loads_cache(raw, RagChildChunk)
-        except (msgspec.DecodeError, msgspec.ValidationError):
-            return None
+        return loads_cache_or_none(raw, RagChildChunk)
 
     async def set_context_indexed_child(
         self,
@@ -84,10 +77,9 @@ class RedisRagIngestionDeterministicCache(RedisRepository):
         for chunk_id, raw in zip(chunk_ids, values, strict=True):
             if raw is None:
                 continue
-            try:
-                result[chunk_id] = loads_cache(raw, list[float])
-            except (msgspec.DecodeError, msgspec.ValidationError):
-                continue
+            vector = loads_cache_or_none(raw, list[float])
+            if vector is not None:
+                result[chunk_id] = vector
         return result
 
     async def set_embedding_vectors(

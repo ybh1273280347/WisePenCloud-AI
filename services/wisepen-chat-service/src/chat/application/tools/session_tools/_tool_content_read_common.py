@@ -84,13 +84,6 @@ SELECTOR_SCHEMA: dict[str, Any] = {
             },
             "description": "Optional prefilter to restrict search to known chunk indices.",
         },
-        "include_unknown": {
-            "type": "boolean",
-            "default": False,
-            "description": (
-                "Optional. When block_kinds is used, keep chunks that do not carry structural type metadata."
-            ),
-        },
     },
     "additionalProperties": False,
 }
@@ -104,7 +97,6 @@ def selector_from_payload(payload: dict[str, Any] | None) -> ToolContentSelector
         page_labels=_read_str_tuple(payload.get("page_labels")),
         anchor_labels=_read_str_tuple(payload.get("anchor_labels")),
         chunk_indices=_read_int_tuple(payload.get("chunk_indices")),
-        include_unknown=payload.get("include_unknown") is True,
     )
 
 
@@ -143,6 +135,7 @@ async def read_content_id_batches(
         try:
             batch_result = await read_batch(replace(request, content_ids=batch_content_ids))
         except Exception as exc:
+            # 容灾机制，防止超时时结果被全部截断，会返回已成功读取结果
             failed.extend(
                 ToolContentReadMatch(
                     content_id=content_id,

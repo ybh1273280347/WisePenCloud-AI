@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from hashlib import sha256
 
-import msgspec
 from redis.asyncio import Redis
 
 from chat.application.rag.cache.evidence_materialization import (
     RagEvidenceMaterializationCacheScope,
     RagMaterializedEvidenceView,
 )
-from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache
+from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache_or_none
 from chat.core.persistence.redis.base import RedisRepository
 
 _KEY_PREFIX = "wisepen:rag:evidence_materialized:"
@@ -39,10 +38,9 @@ class RedisRagEvidenceMaterializationCache(RedisRepository):
         for chunk_id, raw in zip(child_chunk_ids, values, strict=True):
             if raw is None:
                 continue
-            try:
-                result[chunk_id] = loads_cache(raw, RagMaterializedEvidenceView)
-            except (msgspec.DecodeError, msgspec.ValidationError):
-                continue
+            view = loads_cache_or_none(raw, RagMaterializedEvidenceView)
+            if view is not None:
+                result[chunk_id] = view
         return result
 
     async def set_many(

@@ -10,7 +10,6 @@ class ToolContentSelector:
     - block_kinds: 按块内结构类型过滤（如 code/table/formula）
     - sections/page_labels/anchor_labels: 按结构化索引值过滤
     - chunk_indices: 显式指定 chunk 序号（精准定位）
-    - include_unknown: 是否保留"无结构元数据"的 chunk，默认 False
     """
 
     block_kinds: tuple[str, ...] = ()
@@ -18,7 +17,6 @@ class ToolContentSelector:
     page_labels: tuple[str, ...] = ()
     anchor_labels: tuple[str, ...] = ()
     chunk_indices: tuple[int, ...] = ()
-    include_unknown: bool = False
 
 
 @dataclass(frozen=True, slots=True)
