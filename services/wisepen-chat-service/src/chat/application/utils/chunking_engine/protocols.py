@@ -5,20 +5,6 @@ from typing import Protocol
 from .models import Chunk, ChunkDocument, ChunkLocator, TextBlock
 
 
-class DocumentEnricher(Protocol):
-    """文档转换器协议，在切分前对原始文档进行转换。
-
-    典型用途：为 Markdown 标题下的正文注入标题路径前缀，
-    使后续切分出的 chunk 自带上下文信息。
-    """
-
-    name: str  # 转换器名称
-
-    def process(self, *, document: ChunkDocument) -> ChunkDocument:
-        """处理待分块文档，返回转换后的文档。"""
-        ...
-
-
 class BlockSplitter(Protocol):
     """block 切分器协议，把文档拆成结构/语义块（TextBlock）。
 

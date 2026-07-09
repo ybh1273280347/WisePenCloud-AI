@@ -11,6 +11,9 @@ from chat.application.tools.core import (
     ToolPolicy,
     ToolRiskLevel,
 )
+from chat.application.tools.session_tools.tool_content_read.models import (
+    ToolContentSequentialReadResult,
+)
 from chat.application.tools.session_tools.tool_content_read.service import ToolContentReadService
 
 TOOL_CONTENT_READ_TIMEOUT_SECONDS = 300.0
@@ -48,8 +51,12 @@ class ToolContentSequentialReadTool:
             self,
             *,
             content_store: ToolContentStore,
+            max_window_chars: int | None = None,
     ) -> None:
-        self._service = ToolContentReadService(store=content_store)
+        self._service = ToolContentReadService(
+            store=content_store,
+            max_window_chars=max_window_chars,
+        )
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="tool_content_sequential_read",
@@ -79,7 +86,7 @@ class ToolContentSequentialReadTool:
     def definition(self) -> ToolDefinition:
         return self._definition
 
-    async def execute(self, context: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+    async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolContentSequentialReadResult:
         content_id = str(kwargs["content_id"])
         offset = int(kwargs.get("offset") or 0)
         limit = int(kwargs.get("limit") or 4000)
@@ -91,22 +98,22 @@ class ToolContentSequentialReadTool:
                 session_id=str(context["session_id"]),
             )
             if loaded is None:
-                return {
-                    "content_id": content_id,
-                    "status": "failed",
-                    "reason": "content_not_found",
-                }
+                return ToolContentSequentialReadResult(
+                    content_id=content_id,
+                    status="failed",
+                    reason="content_not_found",
+                )
 
             canonical_id, stored = loaded
-            return {
-                "content_id": canonical_id,
-                "status": "success",
-                "window": self._service.build_continuous_window(
+            return ToolContentSequentialReadResult(
+                content_id=canonical_id,
+                status="success",
+                window=self._service.build_continuous_window(
                     stored=stored,
                     offset=offset,
                     limit=limit,
                 ),
-            }
+            )
         except ToolExecutionError:
             raise
         except Exception as exc:

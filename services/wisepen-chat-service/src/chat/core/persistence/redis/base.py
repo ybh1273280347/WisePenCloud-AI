@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import redis.asyncio as redis
+from redis.asyncio import Redis
 
 
 class RedisRepository:
-    """Redis 仓储基类，统一 async client 生命周期。"""
+    """Redis 仓储基类，统一持有共享 async client。"""
 
     __slots__ = ("_redis",)
 
-    def __init__(self, *, redis_url: str) -> None:
-        self._redis = redis.from_url(redis_url, decode_responses=True)
-
-    async def aclose(self) -> None:
-        await self._redis.aclose()
+    def __init__(
+        self,
+        *,
+        redis_client: Redis,
+    ) -> None:
+        self._redis = redis_client

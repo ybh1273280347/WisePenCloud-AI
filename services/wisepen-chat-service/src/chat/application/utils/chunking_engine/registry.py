@@ -7,7 +7,6 @@ from .chunk_derivers.child_chunk_deriver import ChildChunkDeriver, ChildChunkDer
 from .chunk_locators.markdown_chunk_locator import MarkdownChunkLocator
 from .chunk_normalizers.flat_chunk_normalizer import FlatChunkNormalizer
 from .chunk_normalizers.parent_child_chunk_normalizer import ParentChildChunkNormalizer
-from .document_enrichers.markdown_section_context_enricher import MarkdownSectionContextEnricher
 from .engine import ChunkingEngine
 from .models import BlockKind, ChunkRole
 from .pipeline import ChunkingPipeline
@@ -30,9 +29,9 @@ class ChunkingEngineRegistry:
                         SizeBoundedBlockPackerConfig(
                             chunk_size=DEFAULT_CHUNK_SIZE,
                             role=ChunkRole.FLAT,
+                            hard_boundary_block_kinds=(BlockKind.PAGE_MARKER,),
                         )
                     ),
-                    document_enrichers=(MarkdownSectionContextEnricher(),),
                     chunk_normalizers=(FlatChunkNormalizer(),),
                     chunk_locator=MarkdownChunkLocator(),
                 )
@@ -47,7 +46,6 @@ class ChunkingEngineRegistry:
                             chunk_overlap=0,
                         )
                     ),
-                    document_enrichers=(),
                     chunk_normalizers=(FlatChunkNormalizer(),),
                 )
             ),
@@ -61,7 +59,6 @@ class ChunkingEngineRegistry:
                             chunk_overlap=0,
                         )
                     ),
-                    document_enrichers=(MarkdownSectionContextEnricher(),),
                     chunk_normalizers=(FlatChunkNormalizer(),),
                     chunk_locator=MarkdownChunkLocator(),
                 )
@@ -78,7 +75,6 @@ class ChunkingEngineRegistry:
                             hard_boundary_block_kinds=(BlockKind.PAGE_MARKER,),
                         )
                     ),
-                    document_enrichers=(MarkdownSectionContextEnricher(),),
                     chunk_derivers=(
                         ChildChunkDeriver(
                             ChildChunkDeriverConfig(

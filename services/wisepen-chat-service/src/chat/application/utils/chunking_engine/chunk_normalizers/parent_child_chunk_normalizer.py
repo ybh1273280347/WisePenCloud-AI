@@ -40,16 +40,20 @@ class ParentChildChunkNormalizer:
         children = tuple(c for c in chunks if c.parent_chunk_id is not None)
 
         # 1. 对父 chunk 做合并，收集 remapped_ids
-        result = merge_heading_only(parents)
-        result = merge_short_tails(result.chunks, min_size=self.min_size)
+        heading_result = merge_heading_only(parents)
+        tail_result = merge_short_tails(heading_result.chunks, min_size=self.min_size)
+        remapped_ids = _merge_remapped_ids(
+            heading_result.remapped_ids,
+            tail_result.remapped_ids,
+        )
 
         # 2. 用 remapped_ids 更新子 chunk 的 parent_chunk_id
         #    （被合并的父 ID → 存活的父 ID）
-        if result.remapped_ids:
+        if remapped_ids:
             children = tuple(
                 replace(
                     child,
-                    parent_chunk_id=result.remapped_ids.get(
+                    parent_chunk_id=remapped_ids.get(
                         child.parent_chunk_id, child.parent_chunk_id
                     ),
                 )
@@ -59,4 +63,18 @@ class ParentChildChunkNormalizer:
             )
 
         # 3. 统一 ID 生成 + parent_chunk_id 最终重写
-        return assign_chunk_ids((*result.chunks, *children), id_prefix=self.id_prefix)
+        return assign_chunk_ids((*tail_result.chunks, *children), id_prefix=self.id_prefix)
+
+
+def _merge_remapped_ids(
+    first: dict[str, str],
+    second: dict[str, str],
+) -> dict[str, str]:
+    """合并连续两轮 chunk 合并产生的旧 ID 映射。"""
+    remapped: dict[str, str] = {}
+
+    for old_id, target_id in first.items():
+        remapped[old_id] = second.get(target_id, target_id)
+
+    remapped.update(second)
+    return remapped

@@ -144,7 +144,10 @@ async def lifespan(app: FastAPI):
             await qdrant_client.close()
     except Exception as e:
         error("qdrant client close failed.", exc=e)
-    await _close_redis_repositories()
+    try:
+        await container.redis_client().aclose()
+    except Exception as e:
+        error("redis client close failed.", exc=e)
     try:
         neo4j_driver = container.neo4j_driver()
         if neo4j_driver is not None:
@@ -166,24 +169,6 @@ async def lifespan(app: FastAPI):
         await nacos_client_manager.deregister_instance()
     except Exception as e:
         error("nacos instance deregister failed.", exc=e)
-
-
-async def _close_redis_repositories() -> None:
-    redis_repositories = (
-        ("hot context redis", container.hot_context_repo()),
-        ("tool content redis", container.tool_content_repository()),
-        ("tool run file redis", container.tool_run_file_repository()),
-        ("web content cache redis", container.web_content_cache_repository()),
-        ("rag ingestion cache redis", container.rag_ingestion_deterministic_cache()),
-        ("rag evidence cache redis", container.rag_evidence_materialization_cache()),
-        ("rag graph cache redis", container.rag_graph_enhancement_cache()),
-    )
-    for name, repository in redis_repositories:
-        try:
-            await repository.aclose()
-        except Exception as e:
-            error(f"{name} close failed.", exc=e)
-
 
 container.wire(
     modules=[

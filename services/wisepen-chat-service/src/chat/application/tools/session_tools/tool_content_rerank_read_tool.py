@@ -24,6 +24,10 @@ from chat.application.tools.session_tools.tool_content_read.models import (
 from chat.application.tools.session_tools.tool_content_read.service import ToolContentReadService
 
 
+MAX_CONTENT_IDS = 16
+TOOL_CONTENT_READ_TIMEOUT_SECONDS = 300.0
+DEFAULT_TOP_K = 10
+
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -36,7 +40,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
         },
         "top_k": {
             "type": "integer",
-            "default": 5,
+            "default": DEFAULT_TOP_K,
             "description": "Maximum number of globally reranked matches.",
         },
         "merge_before": {
@@ -54,9 +58,6 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
-MAX_CONTENT_IDS = 16
-TOOL_CONTENT_READ_TIMEOUT_SECONDS = 300.0
-
 
 class ToolContentRerankReadTool:
     """跨文档重排检索已有 cnt_* 内容。"""
@@ -67,8 +68,12 @@ class ToolContentRerankReadTool:
             self,
             *,
             content_store: ToolContentStore,
+            max_window_chars: int | None = None,
     ) -> None:
-        self._service = ToolContentReadService(store=content_store)
+        self._service = ToolContentReadService(
+            store=content_store,
+            max_window_chars=max_window_chars,
+        )
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="tool_content_rerank_read",
@@ -121,7 +126,7 @@ class ToolContentRerankReadTool:
             content_ids=tuple(str(value) for value in kwargs["content_ids"]),
             query=query,
             selector=selector_from_payload(kwargs.get("selector")),
-            top_k=int(kwargs.get("top_k") or 5),
+            top_k=int(kwargs.get("top_k") or DEFAULT_TOP_K),
             merge_before=int(kwargs.get("merge_before") or 0),
             merge_after=int(kwargs.get("merge_after") or 0),
         )
@@ -143,3 +148,4 @@ class ToolContentRerankReadTool:
                 detail_reason=str(exc),
                 retryable=False,
             ) from exc
+

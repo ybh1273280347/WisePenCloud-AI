@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from typing import cast
+from dataclasses import dataclass
+from enum import StrEnum
 
-from chat.application.tools.tool_settings import tool_settings
 from chat.application.utils.chunking_engine import (
     Chunk,
     ChunkLocator,
@@ -22,21 +22,44 @@ from .core.models import (
 )
 from .core.repository_protocol import ToolContentRepository
 
-DEFAULT_TOOL_CONTENT_TTL_SECONDS = tool_settings.TOOL_CONTENT_DEFAULT_TTL_SECONDS
-DEFAULT_TOOL_CONTENT_MAX_CHARS = tool_settings.TOOL_CONTENT_MAX_CHARS
+_DEFAULT_TOOL_CONTENT_MAX_CHARS = 20_000_000
+
+# 重定向 receipt 场景下的固定提示语，抽到模块级避免每次调用重复构造字符串
+_REDIRECT_NOTE = (
+    "The requested content_id was a redirect receipt; "
+    "the readable content_id was used automatically for this call."
+)
+# canonicalize 时依次尝试的 metadata key：canonical_content_id 是显式指定的规范 ID，
+# parsed_content_id 是解析产物的兜底命名，前者优先级更高
+_REDIRECT_KEYS = ("canonical_content_id", "parsed_content_id")
+
+
+class ToolContentPutStatus(StrEnum):
+    STORED = "stored"
+    EMPTY_TEXT = "empty_text"
+    CONTENT_TOO_LARGE = "content_too_large"
+
+
+@dataclass(frozen=True, slots=True)
+class ToolContentPutResult:
+    status: ToolContentPutStatus
+    receipt: ToolContentReceipt | None = None
+    reason: str | None = None
 
 
 class ToolContentStore:
     """工具内容存储门面：原始文本 → 分块 → 持久化 → receipt。"""
 
-    __slots__ = ("_repository",)
+    __slots__ = ("_max_chars", "_repository")
 
     def __init__(
         self,
         *,
         repository: ToolContentRepository,
+        max_chars: int = _DEFAULT_TOOL_CONTENT_MAX_CHARS,
     ) -> None:
         self._repository = repository
+        self._max_chars = max(1, int(max_chars))
 
     async def put(
         self,
@@ -47,67 +70,32 @@ class ToolContentStore:
         metadata: Metadata | None = None,
         chunking_engine_name: str | None = None,
         chunked: bool = True,
-    ) -> ToolContentReceipt | None:
-        """写入内容并返回 receipt；空文本或超长返回 None。"""
+    ) -> ToolContentPutResult:
+        """写入内容并返回 put 结果；空文本跳过，超长文本明确拒绝。"""
         normalized_text = text.strip()
-        if not normalized_text or len(normalized_text) > DEFAULT_TOOL_CONTENT_MAX_CHARS:
-            return None
-
-        safe_metadata: Metadata = dict(metadata or {})
-        safe_metadata["content_hash"] = hashlib.sha256(
-            normalized_text.encode()
-        ).hexdigest()
-
-        chunks: tuple[ToolContentChunk, ...] = ()
-        index = ToolContentIndex()
-        chunk_metadata: Metadata = {}
-        used_chunking_engine_name: str | None = None
-
-        if chunked:
-            engine_name = chunking_engine_name or (
-                "markdown" if content_type == "text/markdown" else "plain_text"
+        if not normalized_text:
+            return ToolContentPutResult(
+                status=ToolContentPutStatus.EMPTY_TEXT,
+                reason="text is empty after stripping",
             )
-            chunking_engine = get_chunking_engine(engine_name)
-
-            result = chunking_engine.chunk(
-                document=ChunkDocument(
-                    text=normalized_text,
-                    content_type=content_type,
-                    metadata=safe_metadata,
-                ),
+        if len(normalized_text) > self._max_chars:
+            return ToolContentPutResult(
+                status=ToolContentPutStatus.CONTENT_TOO_LARGE,
+                reason=f"text length {len(normalized_text)} exceeds max {self._max_chars}",
             )
 
-            chunk_locator_view = _chunk_locator_view(result.locators)
-            chunks = tuple(
-                _to_tool_chunk(
-                    chunk,
-                    locator_view=chunk_locator_view.get(chunk.chunk_id),
-                )
-                for chunk in result.chunks
-            )
+        # content_hash 用于跨会话内容去重/一致性校验，必须基于分块前的原文计算
+        safe_metadata: Metadata = {
+            **(metadata or {}),
+            "content_hash": hashlib.sha256(normalized_text.encode()).hexdigest(),
+        }
 
-            index = ToolContentIndex(
-                entries=tuple(
-                    ToolContentIndexEntry(
-                        locator_name=idx.name,
-                        locator_kind=idx.kind.value,
-                        chunk_indices=idx.chunk_indices,
-                        start_offset=idx.start_offset,
-                        end_offset=idx.end_offset,
-                        section_path=(
-                            cast(
-                                tuple[str, ...] | None, idx.metadata.get("section_path")
-                            )
-                            or ()
-                        ),
-                        page_label=cast(str | None, idx.metadata.get("page_label")),
-                        anchor_label=cast(str | None, idx.metadata.get("anchor_label")),
-                    )
-                    for idx in result.locators
-                )
-            )
-            chunk_metadata = dict(result.metadata)
-            used_chunking_engine_name = result.pipeline
+        # chunked=False 时直接给出空壳数据，跳过分块引擎调用
+        chunks, index, chunk_metadata, engine_name = (
+            self._chunk(normalized_text, content_type, chunking_engine_name, safe_metadata)
+            if chunked
+            else ((), ToolContentIndex(), {}, None)
+        )
 
         stored = StoredToolContent(
             content_id=f"cnt_{uuid.uuid4().hex[:16]}",
@@ -119,16 +107,57 @@ class ToolContentStore:
             metadata={
                 **safe_metadata,
                 "chunked": chunked,
-                "chunking_engine": used_chunking_engine_name,
+                "chunking_engine": engine_name,
                 "chunking": chunk_metadata,
             },
         )
         await self._repository.put(stored)
-        return ToolContentReceipt(
-            content_id=stored.content_id,
-            chunk_count=len(stored.chunks),
-            supported_selectors=_selectors(stored),
+        return ToolContentPutResult(
+            status=ToolContentPutStatus.STORED,
+            receipt=ToolContentReceipt(
+                content_id=stored.content_id,
+                chunk_count=len(stored.chunks),
+                supported_selectors=_selectors(stored),
+            ),
         )
+
+    def _chunk(
+        self,
+        text: str,
+        content_type: str,
+        engine_name: str | None,
+        metadata: Metadata,
+    ) -> tuple[tuple[ToolContentChunk, ...], ToolContentIndex, Metadata, str]:
+        """执行分块并组装 chunks / index；从 put() 拆出，避免主流程被分块细节淹没。"""
+        # 未显式指定引擎时按 content_type 走默认约定：markdown 走 markdown 引擎，其余走纯文本引擎
+        engine = get_chunking_engine(
+            engine_name or ("markdown" if content_type == "text/markdown" else "plain_text")
+        )
+        result = engine.chunk(
+            document=ChunkDocument(text=text, content_type=content_type, metadata=metadata)
+        )
+
+        locator_view = _chunk_locator_view(result.locators)
+        chunks = tuple(
+            _to_tool_chunk(chunk, locator_view=locator_view.get(chunk.chunk_id))
+            for chunk in result.chunks
+        )
+        index = ToolContentIndex(
+            entries=tuple(
+                ToolContentIndexEntry(
+                    locator_name=idx.name,
+                    locator_kind=idx.kind.value,
+                    chunk_indices=idx.chunk_indices,
+                    start_offset=idx.start_offset,
+                    end_offset=idx.end_offset,
+                    section_path=_metadata_str_tuple(idx.metadata.get("section_path")),
+                    page_label=_metadata_str(idx.metadata.get("page_label")),
+                    anchor_label=_metadata_str(idx.metadata.get("anchor_label")),
+                )
+                for idx in result.locators
+            )
+        )
+        return chunks, index, dict(result.metadata), result.pipeline
 
     async def get(
         self, *, content_id: str, session_id: str
@@ -150,12 +179,7 @@ class ToolContentStore:
         if stored is None:
             return content_id, None
 
-        _REDIRECT_NOTE = (
-            "The requested content_id was a redirect receipt; "
-            "the readable content_id was used automatically for this call."
-        )
-        # canonical_content_id 优先，其次 parsed_content_id
-        for key in ("canonical_content_id", "parsed_content_id"):
+        for key in _REDIRECT_KEYS:
             target = stored.metadata.get(key)
             if isinstance(target, str) and target:
                 return target, _REDIRECT_NOTE
@@ -173,31 +197,26 @@ def _to_tool_chunk(
     *,
     locator_view: dict[str, object] | None,
 ) -> ToolContentChunk:
-    section_path = (
-        cast(tuple[str, ...] | None, locator_view.get("section_path"))
-        if locator_view
-        else None
+    """将底层 Chunk 转为对外的 ToolContentChunk；locator_view 缺失或字段缺失时回退到 chunk 自带 metadata。"""
+    locator_view = locator_view or {}
+    section_path = _metadata_str_tuple(
+        locator_view.get("section_path")
+    ) or _first_section_path(chunk.metadata.get("section_paths"))
+    page_label = _metadata_str(locator_view.get("page_label")) or _metadata_str(
+        chunk.metadata.get("page_label")
     )
-    page_label = (
-        cast(str | None, locator_view.get("page_label")) if locator_view else None
-    )
-    anchor_labels = (
-        cast(tuple[str, ...] | None, locator_view.get("anchor_labels"))
-        if locator_view
-        else None
-    )
+    anchor_labels = _metadata_str_tuple(
+        locator_view.get("anchor_labels")
+    ) or _metadata_str_tuple(chunk.metadata.get("anchor_labels"))
 
     return ToolContentChunk(
         chunk_index=chunk.chunk_index,
         start_offset=chunk.start_offset,
         end_offset=chunk.end_offset,
         block_kinds=tuple(str(v) for v in chunk.metadata.get("block_kinds", ())),
-        section_path=section_path
-        or _first_section_path(chunk.metadata.get("section_paths")),
-        page_label=page_label or cast(str | None, chunk.metadata.get("page_label")),
-        anchor_labels=anchor_labels
-        or cast(tuple[str, ...] | None, chunk.metadata.get("anchor_labels"))
-        or (),
+        section_path=section_path,
+        page_label=page_label,
+        anchor_labels=anchor_labels,
     )
 
 
@@ -207,63 +226,69 @@ def _first_section_path(value: object) -> tuple[str, ...]:
         return ()
     first = value[0]
     if isinstance(first, list | tuple):
-        return tuple(first)
-    return tuple(value)
+        return _metadata_str_tuple(first)
+    return _metadata_str_tuple(value)
+
+
+def _metadata_str(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _metadata_str_tuple(value: object) -> tuple[str, ...]:
+    """只要列表中出现非 str 元素就整体丢弃，避免脏数据混入下游而不是静默过滤。"""
+    if not isinstance(value, list | tuple):
+        return ()
+    values: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            return ()
+        values.append(item)
+    return tuple(values)
 
 
 def _chunk_locator_view(
     locators: tuple[ChunkLocator, ...],
 ) -> dict[str, dict[str, object]]:
+    """按 chunk_id 聚合三类 locator：section 取路径最深的一条，page 取首个命中，anchor 去重累加。"""
     chunk_view: dict[str, dict[str, object]] = {}
 
     for locator in locators:
         if locator.kind == LocatorKind.SECTION:
-            section_path = cast(
-                tuple[str, ...] | None, locator.metadata.get("section_path")
-            )
+            section_path = _metadata_str_tuple(locator.metadata.get("section_path"))
             if not section_path:
                 continue
             for chunk_id in locator.chunk_ids:
                 entry = chunk_view.setdefault(chunk_id, {})
                 current = entry.get("section_path")
+                # 同一 chunk 可能命中多层 section locator，保留路径最深（信息量最大）的一条
                 if not isinstance(current, tuple) or len(section_path) > len(current):
                     entry["section_path"] = section_path
-            continue
 
-        if locator.kind == LocatorKind.PAGE:
-            page_label = cast(str | None, locator.metadata.get("page_label"))
-            if not page_label:
+        elif locator.kind == LocatorKind.PAGE:
+            page_label = _metadata_str(locator.metadata.get("page_label"))
+            if page_label:
+                for chunk_id in locator.chunk_ids:
+                    chunk_view.setdefault(chunk_id, {}).setdefault("page_label", page_label)
+
+        elif locator.kind == LocatorKind.ANCHOR:
+            anchor_label = _metadata_str(locator.metadata.get("anchor_label"))
+            if not anchor_label:
                 continue
             for chunk_id in locator.chunk_ids:
-                chunk_view.setdefault(chunk_id, {}).setdefault("page_label", page_label)
-            continue
+                labels = chunk_view.setdefault(chunk_id, {}).setdefault("anchor_labels", [])
+                if anchor_label not in labels:
+                    labels.append(anchor_label)
 
-        if locator.kind != LocatorKind.ANCHOR:
-            continue
+    # anchor_labels 在聚合期间用 list（需要去重判断），出参前统一冻结为 tuple
+    for values in chunk_view.values():
+        if isinstance(values.get("anchor_labels"), list):
+            values["anchor_labels"] = tuple(values["anchor_labels"])
 
-        anchor_label = cast(str | None, locator.metadata.get("anchor_label"))
-        if not anchor_label:
-            continue
-        for chunk_id in locator.chunk_ids:
-            entry = chunk_view.setdefault(chunk_id, {})
-            labels = entry.setdefault("anchor_labels", [])
-            if isinstance(labels, list) and anchor_label not in labels:
-                labels.append(anchor_label)
-
-    return {
-        chunk_id: {
-            **values,
-            **(
-                {"anchor_labels": tuple(values["anchor_labels"])}
-                if isinstance(values.get("anchor_labels"), list)
-                else {}
-            ),
-        }
-        for chunk_id, values in chunk_view.items()
-    }
+    return chunk_view
 
 
 def _selectors(stored: StoredToolContent) -> tuple[str, ...]:
+    """汇总该内容支持的检索维度，写入 receipt 告知调用方可以用哪些方式定位 chunk。"""
     selectors: list[str] = []
     if stored.chunks:
         selectors.append("chunk_indices")

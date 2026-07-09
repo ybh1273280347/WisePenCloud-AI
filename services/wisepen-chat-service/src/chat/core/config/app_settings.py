@@ -101,6 +101,9 @@ class AppSettings(BaseModel):
     # ── Agent Loop (ReAct 循环控制) ────────────────────────────────────
     AGENT_MAX_ITERATIONS: int = 20  # 最大推理迭代次数
     TOOL_RESULT_MAX_CHARS: int = 4000  # 工具返回内容截断上限 (~1000 token)
+    TOOL_CONTENT_DEFAULT_TTL_SECONDS: int = 1800  # ToolContentStore 内容缓存 TTL
+    TOOL_CONTENT_MAX_CHARS: int = 20_000_000  # ToolContentStore 单段文本入库字符上限
+    TOOL_CONTENT_WINDOW_MAX_CHARS: int = 100_000  # ToolContentRead 单个读取窗口字符上限
 
     # —— RAG ——————————————————————————————————————————————————————————
     RAG_INGESTION_DETERMINISTIC_CACHE_TTL_SECONDS: int = 7 * 24 * 3600  # RAG 入库确定性中间结果缓存 TTL

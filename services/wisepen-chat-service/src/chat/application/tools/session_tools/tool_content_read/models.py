@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-DEFAULT_MAX_MATCHES = 10
-
-
 @dataclass(frozen=True, slots=True)
 class ToolContentSelector:
     """读取前置候选域过滤器。
@@ -31,7 +28,7 @@ class ToolContentRerankReadRequest:
     content_ids: tuple[str, ...]
     query: str
     selector: ToolContentSelector | None = None
-    top_k: int = 5
+    top_k: int = 10
     merge_before: int = 0
     merge_after: int = 0
 
@@ -43,7 +40,7 @@ class ToolContentRegexReadRequest:
     content_ids: tuple[str, ...]
     pattern: str
     selector: ToolContentSelector | None = None
-    max_matches: int = DEFAULT_MAX_MATCHES
+    max_matches: int = 10
     merge_before: int = 0
     merge_after: int = 0
 
@@ -83,3 +80,13 @@ class ToolContentReadResult:
 
     matches: tuple[ToolContentReadMatch, ...] = ()
     failed: tuple[ToolContentReadMatch, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ToolContentSequentialReadResult:
+    """单文档顺序读取结果。"""
+
+    content_id: str
+    status: str
+    window: ToolContentWindow | None = None
+    reason: str | None = None

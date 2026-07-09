@@ -38,40 +38,33 @@ class WeightedRrfFusion:
 
         for candidate in candidates:
             cand_signals = tuple(grouped[candidate.candidate_id])
-
-            # 计算各信号 RRF 贡献：index → (rank, value)
-            contributions: dict[int, tuple[int, float]] = {}
-            for i, sig in enumerate(cand_signals):
-                # 无排名候选跳过
+            contributions: list[tuple[int, ScoreSignal, int, float]] = []
+            for index, sig in enumerate(cand_signals):
                 if sig.rank is None:
                     continue
-                rank = sig.rank
-                contributions[i] = (rank, sig.weight / (self.k + rank))
+                contributions.append(
+                    (index, sig, sig.rank, sig.weight / (self.k + sig.rank))
+                )
 
-            score = sum(v for _, v in contributions.values())
-            if score == 0.0:
+            if not contributions:
                 continue
 
             # 按贡献降序排列信号，分数相同则保持原次序
-            sorted_indexed = tuple(
-                sorted(
-                    ((i, sig) for i, sig in enumerate(cand_signals) if i in contributions),
-                    key=lambda x: (-contributions[x[0]][1], x[0]),
-                )
+            sorted_contributions = tuple(
+                sorted(contributions, key=lambda item: (-item[3], item[0]))
             )
 
             # 生成 reason
             parts: list[str] = []
-            for i, sig in sorted_indexed:
-                rank, value = contributions[i]
+            for _, sig, rank, value in sorted_contributions:
                 parts.append(f"{sig.name}@{rank}={value:.4f}")
 
             ranked_items.append(
                 RankedCandidate(
                     candidate=candidate,
                     rank=0,
-                    score=score,
-                    signals=tuple(sig for _, sig in sorted_indexed),
+                    score=sum(value for _, _, _, value in contributions),
+                    signals=tuple(sig for _, sig, _, _ in sorted_contributions),
                     reason=", ".join(parts),
                     metadata={"fusion": self.name, "rrf_k": self.k},
                 )

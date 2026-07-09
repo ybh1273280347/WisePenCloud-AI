@@ -69,7 +69,12 @@ class RecursiveTextBlockSplitter:
         blocks: list[TextBlock] = []
         cursor = 0  # 用于在原文中定位每个 chunk 的 offset
         for index, chunk_text in enumerate(raw_chunks):
-            start = text.find(chunk_text, cursor)
+            search_from = (
+                max(0, cursor - self.config.chunk_overlap)
+                if self.config.chunk_overlap > 0
+                else cursor
+            )
+            start = text.find(chunk_text, search_from)
             if start < 0:
                 start = cursor
             end = start + len(chunk_text)

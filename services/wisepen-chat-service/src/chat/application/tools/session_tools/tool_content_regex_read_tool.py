@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from chat.application.tools.common.tool_content_store import ToolContentStore
@@ -24,10 +25,10 @@ from chat.application.tools.session_tools.tool_content_read.models import (
 from chat.application.tools.session_tools.tool_content_read.service import ToolContentReadService
 
 
-DEFAULT_MAX_MATCHES = 10
 MAX_CONTENT_IDS = 16
 MAX_REGEX_PATTERN_CHARS = 500
 TOOL_CONTENT_READ_TIMEOUT_SECONDS = 300.0
+DEFAULT_MAX_MATCHES = 10
 
 PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -70,8 +71,12 @@ class ToolContentRegexReadTool:
             self,
             *,
             content_store: ToolContentStore,
+            max_window_chars: int | None = None,
     ) -> None:
-        self._service = ToolContentReadService(store=content_store)
+        self._service = ToolContentReadService(
+            store=content_store,
+            max_window_chars=max_window_chars,
+        )
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="tool_content_regex_read",
@@ -125,6 +130,14 @@ class ToolContentRegexReadTool:
                 detail_reason=f"regex pattern is too long; max {MAX_REGEX_PATTERN_CHARS} chars.",
                 retryable=False,
             )
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise ToolExecutionError(
+                reason="invalid_regex_pattern",
+                detail_reason=str(exc),
+                retryable=False,
+            ) from exc
 
         request = ToolContentRegexReadRequest(
             content_ids=tuple(str(value) for value in kwargs["content_ids"]),

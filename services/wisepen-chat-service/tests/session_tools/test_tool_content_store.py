@@ -6,6 +6,9 @@ from chat.application.tools.common.tool_content_store.core.models import (
     StoredToolContent,
 )
 from chat.application.tools.common.tool_content_store.store import ToolContentStore
+from chat.application.tools.common.tool_content_store.store import (
+    ToolContentPutStatus,
+)
 
 
 class _RepositoryStub:
@@ -26,7 +29,7 @@ async def test_tool_content_store_projects_explicit_locator_fields() -> None:
     repository = _RepositoryStub()
     store = ToolContentStore(repository=repository)
 
-    receipt = await store.put(
+    put_result = await store.put(
         session_id="session-1",
         text="\n\n".join(
             (
@@ -37,6 +40,8 @@ async def test_tool_content_store_projects_explicit_locator_fields() -> None:
         ),
     )
 
+    receipt = put_result.receipt
+    assert put_result.status == ToolContentPutStatus.STORED
     assert receipt is not None
     assert repository.stored is not None
     assert repository.stored.chunks
@@ -53,3 +58,54 @@ async def test_tool_content_store_projects_explicit_locator_fields() -> None:
     assert page_entry.locator_name == "page:1"
     assert page_entry.page_label == "1"
     assert page_entry.chunk_indices == (chunk.chunk_index,)
+
+
+@pytest.mark.anyio
+async def test_tool_content_store_preserves_nested_section_path() -> None:
+    repository = _RepositoryStub()
+    store = ToolContentStore(repository=repository)
+
+    put_result = await store.put(
+        session_id="session-1",
+        text="# 一级\n\n## 二级\n\n正文。",
+    )
+
+    assert put_result.status == ToolContentPutStatus.STORED
+    assert repository.stored is not None
+    assert any(
+        chunk.section_path == ("一级", "二级")
+        for chunk in repository.stored.chunks
+    )
+    assert repository.stored.index is not None
+    assert any(
+        entry.locator_name == "section:一级 > 二级"
+        and entry.section_path == ("一级", "二级")
+        for entry in repository.stored.index.entries
+    )
+
+
+@pytest.mark.anyio
+async def test_tool_content_store_put_distinguishes_empty_text() -> None:
+    repository = _RepositoryStub()
+    store = ToolContentStore(repository=repository)
+
+    result = await store.put(session_id="session-1", text=" \n\t ")
+
+    assert result.status == ToolContentPutStatus.EMPTY_TEXT
+    assert result.receipt is None
+    assert repository.stored is None
+
+
+@pytest.mark.anyio
+async def test_tool_content_store_put_distinguishes_too_large_text() -> None:
+    repository = _RepositoryStub()
+    store = ToolContentStore(repository=repository, max_chars=3)
+
+    result = await store.put(
+        session_id="session-1",
+        text="xxxx",
+    )
+
+    assert result.status == ToolContentPutStatus.CONTENT_TOO_LARGE
+    assert result.receipt is None
+    assert repository.stored is None

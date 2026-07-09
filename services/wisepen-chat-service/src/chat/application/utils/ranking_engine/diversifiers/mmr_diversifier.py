@@ -17,7 +17,7 @@ class MmrDiversifierConfig:
 
 
 class MmrDiversifier:
-    """基于accard 相似度和同组抑制多样性控制器。"""
+    """基于 Jaccard 相似度和同组抑制的多样性控制器。"""
 
     __slots__ = ("tokenizer", "config", "name")
 
@@ -58,7 +58,8 @@ class MmrDiversifier:
                 for item in ranked
             }
         else:
-            relevance_scores = {item.candidate_id: item.score for item in ranked}
+            relevance = 1.0 if max_score > 0.0 else 0.0
+            relevance_scores = {item.candidate_id: relevance for item in ranked}
 
         token_sets = {
             item.candidate_id: set(self.tokenizer.tokenize(item.candidate.text))

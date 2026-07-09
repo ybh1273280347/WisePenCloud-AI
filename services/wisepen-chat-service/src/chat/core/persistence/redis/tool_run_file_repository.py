@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
-from dataclasses import asdict
-from datetime import datetime
-from typing import Any
+import msgspec
+from redis.asyncio import Redis
 
 from chat.application.tools.common.tool_run_file_store.core.models import ToolFileRefRecord
 from chat.application.tools.common.tool_run_file_store.core.protocols import ToolRunFileRepository
-from chat.core.persistence.redis._utils.jsonable import to_jsonable
+from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache
 from chat.core.persistence.redis.base import RedisRepository
 
 # --- 全局命名空间配置 ---
@@ -18,8 +16,8 @@ _SESSION_KEY_PREFIX = "wisepen:tool_file_ref:session:"
 class RedisToolRunFileRepository(RedisRepository, ToolRunFileRepository):
     """Redis 元数据仓库，用于 `tfile_*` 引用。"""
 
-    def __init__(self, *, redis_url: str) -> None:
-        super().__init__(redis_url=redis_url)
+    def __init__(self, *, redis_client: Redis) -> None:
+        super().__init__(redis_client=redis_client)
 
     async def put(self, record: ToolFileRefRecord, *, ttl_seconds: int) -> None:
         """写入文件引用元数据。"""
@@ -29,12 +27,9 @@ class RedisToolRunFileRepository(RedisRepository, ToolRunFileRepository):
             session_id=record.session_id,
         )
 
-        # 将 DataClass 预转为兼容日期等特殊类型的可序列化载荷
-        payload = json.dumps(to_jsonable(asdict(record)), ensure_ascii=False)
-
         # 使用 Pipeline (transaction=True) 保证单体 KV 记录与会话集合添加的原子性
         async with self._redis.pipeline(transaction=True) as pipe:
-            await pipe.set(item_key, payload, ex=ttl_seconds)
+            await pipe.set(item_key, dumps_cache(record), ex=ttl_seconds)
             await pipe.sadd(session_key, record.ref_id)
             await pipe.expire(session_key, ttl_seconds)
             await pipe.execute()
@@ -45,27 +40,10 @@ class RedisToolRunFileRepository(RedisRepository, ToolRunFileRepository):
         if raw is None:
             return None
 
-        # 内联反序列化解析 (Inline Decoding)
-        payload: dict[str, Any] = json.loads(raw)
-
-        return ToolFileRefRecord(
-            ref_id=str(payload["ref_id"]),
-            user_id=str(payload["user_id"]),
-            session_id=str(payload["session_id"]),
-            producer=str(payload["producer"]),
-            sha256=str(payload["sha256"]),
-            object_rel_path=str(payload["object_rel_path"]),
-            filename=str(payload["filename"]),
-            content_type=(
-                str(payload["content_type"])
-                if payload.get("content_type") is not None
-                else None
-            ),
-            size_bytes=int(payload["size_bytes"]),
-            created_at=datetime.fromisoformat(str(payload["created_at"])),
-            expires_at=datetime.fromisoformat(str(payload["expires_at"])),
-            metadata=payload.get("metadata") or {},
-        )
+        try:
+            return loads_cache(raw, ToolFileRefRecord)
+        except (msgspec.DecodeError, msgspec.ValidationError):
+            return None
 
     async def delete(self, ref_id: str) -> None:
         """删除文件引用元数据。"""

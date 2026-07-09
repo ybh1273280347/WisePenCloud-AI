@@ -1,22 +1,17 @@
 from __future__ import annotations
 
-import json
-from dataclasses import asdict
+from dataclasses import replace
 from datetime import datetime, timezone
 from hashlib import sha256
-from typing import Any
+
+import msgspec
+from redis.asyncio import Redis
 
 from chat.application.tools.common.web_content_cache.core.models import (
     WebContentCacheMode,
     WebContentCacheValue,
 )
-from chat.core.persistence.redis._utils.jsonable import to_jsonable
-from chat.core.persistence._utils.payload_readers import (
-    read_dict,
-    read_optional_datetime,
-    read_optional_int,
-    read_optional_str,
-)
+from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache
 from chat.core.persistence.redis.base import RedisRepository
 
 _VALUE_KEY_PREFIX = "wisepen:web_content_cache:value:"
@@ -25,8 +20,8 @@ _VALUE_KEY_PREFIX = "wisepen:web_content_cache:value:"
 class RedisWebContentCacheRepository(RedisRepository):
     """Redis 侧：URL 内容缓存读写。"""
 
-    def __init__(self, *, redis_url: str) -> None:
-        super().__init__(redis_url=redis_url)
+    def __init__(self, *, redis_client: Redis) -> None:
+        super().__init__(redis_client=redis_client)
 
     async def get_value(
             self,
@@ -40,42 +35,21 @@ class RedisWebContentCacheRepository(RedisRepository):
         if raw is None:
             return None
 
-        payload: dict[str, Any] = json.loads(raw)
-        return WebContentCacheValue(
-            user_id=str(payload["user_id"]),
-            canonical_url=str(payload["canonical_url"]),
-            final_url=read_optional_str(payload.get("final_url")),
-            cache_mode=WebContentCacheMode(str(payload["cache_mode"])),
-            status_code=read_optional_int(payload.get("status_code")),
-            content_type=read_optional_str(payload.get("content_type")),
-            raw_html=read_optional_str(payload.get("raw_html")),
-            markdown=read_optional_str(payload.get("markdown")),
-            content_hash=read_optional_str(payload.get("content_hash")),
-            fetched_at=read_optional_datetime(payload.get("fetched_at")),
-            expire_at=read_optional_datetime(payload.get("expire_at")),
-            etag=read_optional_str(payload.get("etag")),
-            last_modified=read_optional_str(payload.get("last_modified")),
-            metadata=read_dict(payload.get("metadata")),
-        )
+        try:
+            return loads_cache(raw, WebContentCacheValue)
+        except (msgspec.DecodeError, msgspec.ValidationError):
+            return None
 
     async def set_value(self, value: WebContentCacheValue) -> None:
         canonical_url = value.canonical_url.strip()
-        payload = json.dumps(
-            to_jsonable(
-                {
-                    **asdict(value),
-                    "canonical_url": canonical_url,
-                }
-            ),
-            ensure_ascii=False,
-        )
+        stored = replace(value, canonical_url=canonical_url)
         await self._redis.set(
             self._value_key(
                 user_id=value.user_id,
                 url=canonical_url,
                 cache_mode=value.cache_mode,
             ),
-            payload,
+            dumps_cache(stored),
             ex=_redis_ttl_seconds(value.expire_at),
         )
 

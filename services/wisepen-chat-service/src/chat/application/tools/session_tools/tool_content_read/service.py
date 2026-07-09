@@ -27,10 +27,8 @@ from chat.application.utils.ranking_engine.models import (
 from chat.application.utils.ranking_engine.registry import get_ranking_engine
 
 
-class _RegexLimitReached(Exception):
-    """异常：用于在正则匹配达到 max_matches 上限时快速跳出嵌套循环。"""
-
-    pass
+class ToolContentInvalidRegexError(ValueError):
+    """正则表达式语法无效。"""
 
 
 class ToolContentReadService:
@@ -39,18 +37,20 @@ class ToolContentReadService:
     2. regex_match:   基于正则表达式的精确文本匹配
     """
 
-    __slots__ = ("_store", "_ranking_engine")
+    __slots__ = ("_store", "_ranking_engine", "_window_builder")
 
     def __init__(
         self,
         *,
         store: ToolContentStore,
         ranking_engine: RankingEngine | None = None,
+        max_window_chars: int | None = None,
     ) -> None:
         self._store = store
         self._ranking_engine = ranking_engine or get_ranking_engine(
             "read.ranked_expand"
         )
+        self._window_builder = ToolContentWindowBuilder(max_window_chars=max_window_chars)
 
     async def read_ranked_expand(
         self,
@@ -137,7 +137,7 @@ class ToolContentReadService:
         locator = ToolContentWindowBuilder.locator(stored, chunks)
 
         return ToolContentWindow(
-            text=stored.text[safe_offset:end],
+            text=self._window_builder.truncate(stored.text[safe_offset:end]),
             start_offset=safe_offset,
             end_offset=end,
             page_label=locator["page_label"],
@@ -216,8 +216,8 @@ class ToolContentReadService:
                         candidate_id=candidate_id,
                         text=text,
                         fields={
-                            "section_path_text": " / ".join(chunk.section_path),
-                            "anchor_labels_text": " ".join(chunk.anchor_labels),
+                            "section": " / ".join(chunk.section_path),
+                            "anchor": " ".join(chunk.anchor_labels),
                         },
                         metadata={
                             "content_id": canonical_id,
@@ -246,7 +246,7 @@ class ToolContentReadService:
         return tuple(
             ToolContentReadMatch(
                 content_id=source_by_candidate_id[item.candidate_id][0],
-                window=ToolContentWindowBuilder.expand(
+                window=self._window_builder.expand(
                     source_by_candidate_id[item.candidate_id][1],
                     center_chunk=source_by_candidate_id[item.candidate_id][2],
                     merge_before=request.merge_before,
@@ -267,37 +267,38 @@ class ToolContentReadService:
         if max_matches == 0:
             return ()
 
-        regex = re.compile(request.pattern)
-        matches: list[ToolContentReadMatch] = []
         try:
-            for canonical_id, stored in stored_items:
-                candidate_chunks = self._select_chunks(stored, request.selector)
-                seen_centers: set[int] = set()
+            regex = re.compile(request.pattern)
+        except re.error as exc:
+            raise ToolContentInvalidRegexError(str(exc)) from exc
 
-                for chunk in candidate_chunks:
-                    text = ToolContentWindowBuilder.chunk_text(stored, chunk)
+        matches: list[ToolContentReadMatch] = []
+        seen_windows: set[tuple[str, int]] = set()
+        for canonical_id, stored in stored_items:
+            candidate_chunks = self._select_chunks(stored, request.selector)
 
-                    for _ in regex.finditer(text):
-                        if chunk.chunk_index in seen_centers:
-                            continue
-                        seen_centers.add(chunk.chunk_index)
+            for chunk in candidate_chunks:
+                text = ToolContentWindowBuilder.chunk_text(stored, chunk)
 
-                        matches.append(
-                            ToolContentReadMatch(
-                                content_id=canonical_id,
-                                window=ToolContentWindowBuilder.expand(
-                                    stored,
-                                    center_chunk=chunk.chunk_index,
-                                    merge_before=request.merge_before,
-                                    merge_after=request.merge_after,
-                                ),
-                            )
+                for _ in regex.finditer(text):
+                    match_key = (canonical_id, chunk.chunk_index)
+                    if match_key in seen_windows:
+                        continue
+                    seen_windows.add(match_key)
+
+                    matches.append(
+                        ToolContentReadMatch(
+                            content_id=canonical_id,
+                            window=self._window_builder.expand(
+                                stored,
+                                center_chunk=chunk.chunk_index,
+                                merge_before=request.merge_before,
+                                merge_after=request.merge_after,
+                            ),
                         )
-                        # 达到全局最大匹配上限时触发熔断
-                        if len(matches) >= max_matches:
-                            raise _RegexLimitReached
-        except _RegexLimitReached:
-            pass
+                    )
+                    if len(matches) >= max_matches:
+                        return tuple(matches)
 
         return tuple(matches)
 
@@ -322,13 +323,19 @@ class ToolContentReadService:
         if indexed is not None:
             selected = indexed if selected is None else selected & indexed
 
-        # 3. 按结构块类型过滤
-        if selected is None and selector.block_kinds:
-            selected = {
+        # 3. 按结构块类型过滤，多条件间取交集
+        if selector.block_kinds:
+            block_kinds = set(selector.block_kinds)
+            block_selected = {
                 c.chunk_index
                 for c in chunks
-                if set(selector.block_kinds) & set(c.block_kinds)
+                if block_kinds & set(c.block_kinds)
             }
+            selected = (
+                block_selected
+                if selected is None
+                else selected & block_selected
+            )
 
         if selected is None:
             selected = {c.chunk_index for c in chunks}

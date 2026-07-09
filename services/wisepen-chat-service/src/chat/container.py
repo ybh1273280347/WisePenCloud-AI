@@ -4,6 +4,7 @@ from typing import List
 
 import hishel.httpx as hishel_httpx
 import httpx
+import redis.asyncio as redis
 from dependency_injector import containers, providers
 from elasticsearch import AsyncElasticsearch
 from neo4j import AsyncGraphDatabase, AsyncDriver, GraphDatabase, Driver
@@ -33,10 +34,7 @@ from chat.application.rag.retrieval.pipeline.qdrant_retrieve import RagQdrantRet
 from chat.application.rag.retrieval.pipeline.ranking import RagEvidenceRankingService
 from chat.application.rag.retrieval.retrieval_pipeline import RagRetrievalPipeline
 from chat.application.token_counter import TokenCounter
-from chat.application.tools.common.tool_content_store.store import (
-    DEFAULT_TOOL_CONTENT_TTL_SECONDS,
-    ToolContentStore,
-)
+from chat.application.tools.common.tool_content_store.store import ToolContentStore
 from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
 from chat.application.tools.common.tool_run_file_store.gc import (
     ToolRunFileStoreGcScheduler,
@@ -153,6 +151,10 @@ from common.kafka.producer import KafkaProducerClient
 PADDLE_OCR_HTTP_TIMEOUT_SECONDS = 300.0
 WEB_SEARCH_HTTP_TIMEOUT_SECONDS = 15.0
 WEB_FETCH_HTTP_TIMEOUT_SECONDS = 30.0
+
+
+def _build_redis_client() -> redis.Redis:
+    return redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
 async def _provide_nacos_naming() -> NacosNamingService:
@@ -320,7 +322,11 @@ class Container(containers.DeclarativeContainer):
         MongoWebSearchCredentialRepository,
         secret_cipher=secret_cipher,
     )
-    hot_context_repo = providers.Singleton(RedisHotContext)
+    redis_client = providers.Singleton(_build_redis_client)
+    hot_context_repo = providers.Singleton(
+        RedisHotContext,
+        redis_client=redis_client,
+    )
 
     # 内部 RPC：Nacos 服务发现 + 通用 httpx 客户端 + file-storage typed facade
     service_discovery = providers.Singleton(
@@ -437,7 +443,7 @@ class Container(containers.DeclarativeContainer):
     )
     rag_ingestion_deterministic_cache = providers.Singleton(
         RedisRagIngestionDeterministicCache,
-        redis_url=settings.REDIS_URL,
+        redis_client=redis_client,
         ttl_seconds=settings.RAG_INGESTION_DETERMINISTIC_CACHE_TTL_SECONDS,
     )
     rag_qdrant_retriever = providers.Singleton(
@@ -478,7 +484,7 @@ class Container(containers.DeclarativeContainer):
     )
     rag_evidence_materialization_cache = providers.Singleton(
         RedisRagEvidenceMaterializationCache,
-        redis_url=settings.REDIS_URL,
+        redis_client=redis_client,
         ttl_seconds=settings.RAG_EVIDENCE_MATERIALIZATION_CACHE_TTL_SECONDS,
     )
     rag_evidence_materializer = providers.Singleton(
@@ -497,7 +503,7 @@ class Container(containers.DeclarativeContainer):
     )
     rag_graph_enhancement_cache = providers.Singleton(
         RedisRagGraphEnhancementCache,
-        redis_url=settings.REDIS_URL,
+        redis_client=redis_client,
         ttl_seconds=settings.RAG_GRAPH_ENHANCEMENT_CACHE_TTL_SECONDS,
     )
     rag_graph_enhancement = providers.Singleton(
@@ -554,16 +560,17 @@ class Container(containers.DeclarativeContainer):
     # ==================================================================
     tool_content_repository = providers.Singleton(
         RedisToolContentRepository,
-        redis_url=settings.REDIS_URL,
-        ttl_seconds=DEFAULT_TOOL_CONTENT_TTL_SECONDS,
+        redis_client=redis_client,
+        ttl_seconds=settings.TOOL_CONTENT_DEFAULT_TTL_SECONDS,
     )
     tool_content_store = providers.Singleton(
         ToolContentStore,
         repository=tool_content_repository,
+        max_chars=settings.TOOL_CONTENT_MAX_CHARS,
     )
     tool_run_file_repository = providers.Singleton(
         RedisToolRunFileRepository,
-        redis_url=settings.REDIS_URL,
+        redis_client=redis_client,
     )
     tool_run_file_store = providers.Singleton(
         ToolRunFileStore,
@@ -640,7 +647,7 @@ class Container(containers.DeclarativeContainer):
     # --- Web Fetch / Crawl 组件 ---
     web_content_cache_repository = providers.Singleton(
         RedisWebContentCacheRepository,
-        redis_url=settings.REDIS_URL,
+        redis_client=redis_client,
     )
     web_fetch_http_client = providers.Singleton(
         _build_web_fetch_http_client,
@@ -706,14 +713,17 @@ class Container(containers.DeclarativeContainer):
     tool_content_rerank_read_tool = providers.Singleton(
         ToolContentRerankReadTool,
         content_store=tool_content_store,
+        max_window_chars=settings.TOOL_CONTENT_WINDOW_MAX_CHARS,
     )
     tool_content_regex_read_tool = providers.Singleton(
         ToolContentRegexReadTool,
         content_store=tool_content_store,
+        max_window_chars=settings.TOOL_CONTENT_WINDOW_MAX_CHARS,
     )
     tool_content_sequential_read_tool = providers.Singleton(
         ToolContentSequentialReadTool,
         content_store=tool_content_store,
+        max_window_chars=settings.TOOL_CONTENT_WINDOW_MAX_CHARS,
     )
 
     # --- Web Tools ---

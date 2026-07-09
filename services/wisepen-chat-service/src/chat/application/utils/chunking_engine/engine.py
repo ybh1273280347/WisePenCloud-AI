@@ -26,18 +26,14 @@ class ChunkingEngine:
     ) -> ChunkingResult:
         """执行一次分块，返回分块结果。
 
-        流程：文档增强 → block 切分 → chunk 聚合 → chunk 派生 → chunk 规范化 → 定位
+        流程：block 切分 → chunk 聚合 → chunk 派生 → chunk 规范化 → 定位
         """
         pipeline = self._pipeline
 
-        # 1. 文档增强：按顺序执行所有增强器，逐步转换文档
-        for enricher in pipeline.document_enrichers:
-            document = enricher.process(document=document)
-
-        # 2. 切分：将文档拆成 TextBlock 列表
+        # 1. 切分：将文档拆成 TextBlock 列表
         blocks = pipeline.block_splitter.split(document=document)
 
-        # 3. 聚合：将 TextBlock 聚合成 Chunk
+        # 2. 聚合：将 TextBlock 聚合成 Chunk
         if pipeline.block_packer is not None:
             # 有聚合器时，按 block_packer 逻辑聚合（如 SizeBoundedBlockPacker 按大小合并相邻 block）
             chunks = pipeline.block_packer.pack(blocks=blocks)
@@ -59,17 +55,17 @@ class ChunkingEngine:
         # 聚合后重新分配 chunk_index
         chunks = self._assign_chunk_indices(chunks)
 
-        # 4. chunk 派生：从已有 chunk 生成关联 chunk，每步后重新分配 chunk_index
+        # 3. chunk 派生：从已有 chunk 生成关联 chunk，每步后重新分配 chunk_index
         for deriver in pipeline.chunk_derivers:
             chunks = deriver.process(chunks=chunks)
             chunks = self._assign_chunk_indices(chunks)
 
-        # 5. chunk 规范化：按顺序执行所有规范化器，每步后重新分配 chunk_index
+        # 4. chunk 规范化：按顺序执行所有规范化器，每步后重新分配 chunk_index
         for normalizer in pipeline.chunk_normalizers:
             chunks = normalizer.process(chunks=chunks)
             chunks = self._assign_chunk_indices(chunks)
 
-        # 6. 定位：基于最终 chunk 构建语义定位信息
+        # 5. 定位：基于最终 chunk 构建语义定位信息
         locators = (
             pipeline.chunk_locator.index(
                 document=document,

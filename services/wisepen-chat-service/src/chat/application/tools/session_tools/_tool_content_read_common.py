@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any, Awaitable, Callable, TypeVar
 
 from chat.application.tools.session_tools.tool_content_read.models import (
+    ToolContentReadMatch,
     ToolContentReadResult,
     ToolContentRegexReadRequest,
     ToolContentRerankReadRequest,
@@ -91,18 +92,39 @@ SELECTOR_SCHEMA: dict[str, Any] = {
             ),
         },
     },
+    "additionalProperties": False,
 }
 
 
 def selector_from_payload(payload: dict[str, Any] | None) -> ToolContentSelector:
     payload = payload or {}
     return ToolContentSelector(
-        block_kinds=tuple(payload.get("block_kinds") or ()),
-        sections=tuple(payload.get("sections") or ()),
-        page_labels=tuple(payload.get("page_labels") or ()),
-        anchor_labels=tuple(payload.get("anchor_labels") or ()),
-        chunk_indices=tuple(int(value) for value in (payload.get("chunk_indices") or ())),
-        include_unknown=bool(payload.get("include_unknown", False)),
+        block_kinds=_read_str_tuple(payload.get("block_kinds")),
+        sections=_read_str_tuple(payload.get("sections")),
+        page_labels=_read_str_tuple(payload.get("page_labels")),
+        anchor_labels=_read_str_tuple(payload.get("anchor_labels")),
+        chunk_indices=_read_int_tuple(payload.get("chunk_indices")),
+        include_unknown=payload.get("include_unknown") is True,
+    )
+
+
+def _read_str_tuple(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list | tuple):
+        return ()
+    return tuple(
+        item.strip()
+        for item in value
+        if isinstance(item, str) and item.strip()
+    )
+
+
+def _read_int_tuple(value: Any) -> tuple[int, ...]:
+    if not isinstance(value, list | tuple):
+        return ()
+    return tuple(
+        item
+        for item in value
+        if isinstance(item, int) and not isinstance(item, bool)
     )
 
 
@@ -118,7 +140,17 @@ async def read_content_id_batches(
         request.content_ids,
         batch_size=int(batch_size),
     ):
-        batch_result = await read_batch(replace(request, content_ids=batch_content_ids))
+        try:
+            batch_result = await read_batch(replace(request, content_ids=batch_content_ids))
+        except Exception as exc:
+            failed.extend(
+                ToolContentReadMatch(
+                    content_id=content_id,
+                    reason=exc.__class__.__name__,
+                )
+                for content_id in batch_content_ids
+            )
+            continue
         matches.extend(batch_result.matches)
         failed.extend(batch_result.failed)
 

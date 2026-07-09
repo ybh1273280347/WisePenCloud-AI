@@ -37,16 +37,12 @@ filters -> scorers -> fusion -> candidate_limit -> reranker(rank_async only) -> 
 ## 最小可运行示例
 
 ```python
-from chat.application.utils.ranking_engine import (
-    RankCandidate,
-    RankQuery,
-    RankRequest,
-    RankingEngine,
-    RankingPipeline,
-)
+from chat.application.utils.ranking_engine.engine import RankingEngine
 from chat.application.utils.ranking_engine.filters import KeywordFilter, KeywordFilterConfig
 from chat.application.utils.ranking_engine.fusion import WeightedRrfFusion
-from chat.application.utils.ranking_engine.scorers import BM25Scorer, PriorRankScorer
+from chat.application.utils.ranking_engine.models import RankCandidate, RankQuery, RankRequest
+from chat.application.utils.ranking_engine.pipeline import RankingPipeline
+from chat.application.utils.ranking_engine.scorers import BM25Scorer
 from chat.application.utils.ranking_engine.tokenizer import ThuLacRankingTokenizer
 
 tokenizer = ThuLacRankingTokenizer()
@@ -55,7 +51,6 @@ pipeline = RankingPipeline(
     name="demo.tokenizer",
     scorers=(
         BM25Scorer(tokenizer=tokenizer),
-        PriorRankScorer(),
     ),
     fusion=WeightedRrfFusion(),
 )
@@ -82,7 +77,7 @@ result = engine.rank(
 | `candidate_id` | 候选唯一 ID | 全链路                                        |
 | `text`         | 主文本     | `BM25Scorer`、reranker、部分 diversifier       |
 | `fields`       | 字段文本    | `FieldedBM25Scorer`、`KeywordFilter`        |
-| `prior_rank`   | 上游原始排序  | `PriorRankScorer`                          |
+| `prior_rank`   | 上游原始排序  | 调用方可在业务边界转成 `ScoreSignal` |
 | `group_key`    | 多样性分组   | diversifier                                |
 | `metadata`     | 业务回填信息  | `DenseVectorScorer` 读取 `embedding`，其他多数不解释 |
 
@@ -92,7 +87,7 @@ result = engine.rank(
 - 不要硬凑字段名。比如章节路径用 `section`，锚点用 `anchor`，不要伪装成 `title/summary`。
 - `candidate_id` 重复会报错。
 
-## Lexical / Prior Scorer 选型
+## Lexical Scorer 选型
 
 ### BM25Scorer
 
@@ -136,29 +131,35 @@ FieldedBM25Scorer(
 
 适合结构字段真实存在的场景。字段不存在或为空会跳过。
 
-### PriorRankScorer
+## 上游排序信号
 
-看 `candidate.prior_rank`。
-
-```python
-PriorRankScorer()
-```
-
-`prior_rank=None` 的候选会跳过该信号。
-
-###     
-
-读取上游检索系统已经产出的原始排序信号，不重新计算 BM25 或向量分数。
+如果上游检索系统已经给出原始 rank / score，调用方应在业务边界把它转换成
+`ScoreSignal`，通过 `RankRequest.signals` 交给 `WeightedRrfFusion`，不要塞进
+`candidate.metadata` 让 Ranking Engine 猜测。
 
 请求侧：
 
 ```python
+from chat.application.utils.ranking_engine.models import ScoreSignal, ScoreSignalKind
+
 RankCandidate(
     candidate_id="chunk-a",
     text="...",
-    metadata={"raw_score_signals": (qdrant_dense_signal, qdrant_sparse_signal)},
+)
+
+ScoreSignal(
+    candidate_id="chunk-a",
+    name="qdrant:dense",
+    value=0.82,
+    kind=ScoreSignalKind.VECTOR,
+    rank=1,
+    weight=1.0,
 )
 ```
+
+现有 `rag.knowledge_search` 就是这个模式：`RagEvidenceRankingService` 把 Qdrant
+召回产生的 dense / sparse channel 信号转换成 `ScoreSignal`，再进入
+`rag.knowledge_search` pipeline 做 RRF、rerank 和 diversify。
 
 ## Filter 选型
 
@@ -276,6 +277,23 @@ contribution = signal.weight / (k + signal.rank)
 
 为什么用 RRF：BM25、向量、prior 的原始分数不是同一量纲，不能简单相加。
 
+## BM25 索引复用与缓存
+
+`BM25Scorer` 和 `FieldedBM25Scorer` 当前按请求候选集合临时构建 BM25 索引。
+这是有意的：Ranking Engine 面向调用方传入的短生命周期候选集，不拥有稳定语料库。
+
+不要在 scorer 内部随手加通用 LRU 缓存：
+
+- 缓存 key 需要覆盖候选顺序、文本、字段、tokenizer 配置和 BM25 参数，容易膨胀。
+- 候选通常来自一次 tool read / retrieval 的窗口，生命周期短，缓存命中不稳定。
+- scorer 不是语料库索引所有者，不应长期持有大索引。
+
+如果业务场景有稳定大语料库，优先在检索层维护 BM25 索引，而不是在 Ranking
+Engine scorer 中缓存。当前使用的 `bm25s` 已内置 `save()`、`load()`、
+`load_scores()` 和 `mmap=True`，官方文档也把 mmap 作为大索引低内存加载方案；
+它适合“预构建索引 → 持久化 → mmap 加载 → 查询”的长期索引复用模式。这类能力应放在
+Elasticsearch/Qdrant/RAG 检索仓储或专门索引服务边界，不放在 request-scoped scorer 里。
+
 ## Reranker
 
 当前 reranker 是 async 协议。带 reranker 时：
@@ -286,24 +304,28 @@ result = await engine.rank_async(request)
 
 不要调用同步 `rank()`。
 
-可选组件：
+当前实现的组件：
 
-- `CrossEncoderReranker`
-- `BgeReranker`
 - `ZeroEntropyReranker`
 
 示例：
 
 ```python
+from chat.application.utils.ranking_engine.rerankers import (
+    ZeroEntropyReranker,
+    ZeroEntropyRerankerConfig,
+)
+
 pipeline = RankingPipeline(
-    name="kb.bge",
-    scorers=(FieldedBM25Scorer(tokenizer=tokenizer), PriorRankScorer()),
+    name="kb.zero_entropy",
+    scorers=(FieldedBM25Scorer(tokenizer=tokenizer),),
     fusion=WeightedRrfFusion(),
-    reranker=BgeReranker(
-        config=BgeRerankerConfig(
-            max_candidates=50,
-            keep_original_on_failure=True,
-        )
+    reranker=ZeroEntropyReranker(
+        client=zero_entropy_client,
+        config=ZeroEntropyRerankerConfig(
+            model="your-rerank-model",
+            top_n=20,
+        ),
     ),
 )
 
@@ -335,11 +357,11 @@ diversifiers = (
 
 ## 推荐模板
 
-### tool_content_rerank_read
+### read.ranked_expand
 
 ```python
 RankingPipeline(
-    name="tool_content_rerank_read",
+    name="read.ranked_expand",
     scorers=(
         BM25Scorer(tokenizer=tokenizer),
         FieldedBM25Scorer(
@@ -368,48 +390,6 @@ RankCandidate(
 ```
 
 这里保留两个 scorer：`BM25Scorer` 看正文，`FieldedBM25Scorer` 看结构字段，不会重复计算 section。
-
-### web_search
-
-```python
-RankingPipeline(
-    name="web_search.default",
-    scorers=(
-        FieldedBM25Scorer(
-            tokenizer=tokenizer,
-            config=FieldedBM25ScorerConfig(
-                field_weights={
-                    "title": 3.0,
-                    "snippet": 1.0,
-                    "url_path": 0.3,
-                    "domain": 0.5,
-                }
-            ),
-        ),
-        PriorRankScorer(),
-    ),
-    fusion=WeightedRrfFusion(),
-    diversifiers=(GroupRoundRobinDiversifier(),),
-)
-```
-
-候选建议：
-
-```python
-RankCandidate(
-    candidate_id=canonical_url_hash,
-    text=f"{title}\n{snippet}",
-    fields={
-        "title": title,
-        "snippet": snippet,
-        "url_path": cleaned_url_path,
-        "domain": domain,
-    },
-    prior_rank=source_rank,
-    group_key=domain,
-    metadata={"url": url, "source_id": source_id},
-)
-```
 
 ### 有 embedding 的 hybrid 排序
 

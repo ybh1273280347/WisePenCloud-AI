@@ -112,7 +112,7 @@ class MarkdownBlockSplitter:
 
         # 处理 block 级 token
         blocks: list[TextBlock] = []
-        section_path: list[str] = []
+        heading_stack: list[tuple[int, str]] = []
 
         for idx, token in enumerate(tokens):
             if token.level != 0:
@@ -144,10 +144,18 @@ class MarkdownBlockSplitter:
             block_kind = _TOKEN_TO_BLOCK_KIND[token.type]
 
             heading_title: str | None = None
+            section_path = tuple(title for _, title in heading_stack)
             if block_kind == BlockKind.HEADING:
                 heading_title = heading_inline.get(idx)
                 if heading_title:
-                    section_path = [heading_title]
+                    heading_level = int(token.tag[1])
+                    heading_stack = [
+                        (level, title)
+                        for level, title in heading_stack
+                        if level < heading_level
+                    ]
+                    heading_stack.append((heading_level, heading_title))
+                    section_path = tuple(title for _, title in heading_stack)
 
             start_offset = line_start[start_line]
             end_offset = line_start[end_line]
@@ -160,7 +168,7 @@ class MarkdownBlockSplitter:
                     block_index=len(blocks),
                     start_offset=start_offset,
                     end_offset=end_offset,
-                    section_path=tuple(section_path),
+                    section_path=section_path,
                     metadata={
                         "block_index": len(blocks),
                         "block_type": block_kind,

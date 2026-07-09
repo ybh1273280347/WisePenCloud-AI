@@ -90,8 +90,21 @@ class GetHistoricalChatMessagesTool:
 
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> str:
         # session_id 从系统注入的 context 读取
-        session_id: str = context["session_id"]
-        keyword: str = kwargs["keyword"].strip()
+        session_id = str(context.get("session_id") or "").strip()
+        if not session_id:
+            raise ToolExecutionError(
+                reason="missing_session_id",
+                detail_reason="session_id is required in tool context.",
+                retryable=False,
+            )
+
+        keyword = str(kwargs.get("keyword") or "").strip()
+        if not keyword:
+            raise ToolExecutionError(
+                reason="missing_keyword",
+                detail_reason="keyword is required.",
+                retryable=False,
+            )
 
         start_time: Optional[datetime] = None
         end_time: Optional[datetime] = None

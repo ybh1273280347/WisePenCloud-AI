@@ -58,7 +58,7 @@ def assign_chunk_ids(chunks: tuple[Chunk, ...], *, id_prefix: str = "") -> tuple
 
 
 def merge_heading_only(chunks: tuple[Chunk, ...]) -> ChunkMergeResult:
-    """纯标题合并：把只有 "Section: ..." 行的 chunk 并入相邻正文 chunk。
+    """纯标题合并：把只有标题上下文的 chunk 并入相邻正文 chunk。
 
     返回 ChunkMergeResult，remapped_ids 记录被合并 chunk 的 ID 映射。
     """
@@ -149,9 +149,14 @@ def _can_merge_chunks(left: Chunk, right: Chunk) -> bool:
 
 
 def _is_heading_only(text: str) -> bool:
-    """判断 chunk 是否只包含标题路径行（"Section: ..."）。"""
-    return all(
-        line.startswith("Section: ")
-        for line in text.splitlines()
-        if line.strip()
+    """判断 chunk 是否只包含标题行。"""
+    lines = tuple(line.strip() for line in text.splitlines() if line.strip())
+    return bool(lines) and all(
+        line.startswith("Section: ") or _is_markdown_heading(line)
+        for line in lines
     )
+
+
+def _is_markdown_heading(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("#") and stripped.lstrip("#").startswith(" ")

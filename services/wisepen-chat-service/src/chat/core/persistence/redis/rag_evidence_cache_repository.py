@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import json
-from dataclasses import asdict
 from hashlib import sha256
-from typing import Any
+
+import msgspec
+from redis.asyncio import Redis
 
 from chat.application.rag.cache.evidence_materialization import (
     RagEvidenceMaterializationCacheScope,
     RagMaterializedEvidenceView,
 )
-from chat.core.persistence.redis._utils.jsonable import to_jsonable
-from chat.core.persistence._utils.payload_readers import (
-    read_optional_trimmed_str,
-    read_trimmed_str_sequence,
-)
+from chat.core.persistence.redis._utils.cache_codec import dumps_cache, loads_cache
 from chat.core.persistence.redis.base import RedisRepository
 
 _KEY_PREFIX = "wisepen:rag:evidence_materialized:"
@@ -24,8 +20,8 @@ class RedisRagEvidenceMaterializationCache(RedisRepository):
 
     __slots__ = ("_ttl_seconds",)
 
-    def __init__(self, *, redis_url: str, ttl_seconds: int) -> None:
-        super().__init__(redis_url=redis_url)
+    def __init__(self, *, redis_client: Redis, ttl_seconds: int) -> None:
+        super().__init__(redis_client=redis_client)
         self._ttl_seconds = ttl_seconds
 
     async def get_many(
@@ -43,7 +39,10 @@ class RedisRagEvidenceMaterializationCache(RedisRepository):
         for chunk_id, raw in zip(child_chunk_ids, values, strict=True):
             if raw is None:
                 continue
-            result[chunk_id] = _decode_view(json.loads(raw))
+            try:
+                result[chunk_id] = loads_cache(raw, RagMaterializedEvidenceView)
+            except (msgspec.DecodeError, msgspec.ValidationError):
+                continue
         return result
 
     async def set_many(
@@ -59,7 +58,7 @@ class RedisRagEvidenceMaterializationCache(RedisRepository):
             for child_chunk_id, view in views_by_child_id.items():
                 await pipe.set(
                     self._key(scope=scope, child_chunk_id=child_chunk_id),
-                    json.dumps(to_jsonable(asdict(view)), ensure_ascii=False),
+                    dumps_cache(view),
                     ex=self._ttl_seconds,
                 )
             await pipe.execute()
@@ -86,15 +85,3 @@ class RedisRagEvidenceMaterializationCache(RedisRepository):
     @staticmethod
     def _hash(value: str) -> str:
         return sha256(value.encode("utf-8")).hexdigest()
-
-
-def _decode_view(payload: dict[str, Any]) -> RagMaterializedEvidenceView:
-    return RagMaterializedEvidenceView(
-        parent_chunk_id=str(payload["parent_chunk_id"]),
-        document_version=str(payload["document_version"]),
-        text=str(payload["text"]),
-        page_label=read_optional_trimmed_str(payload.get("page_label")),
-        section_path=read_trimmed_str_sequence(payload.get("section_path")),
-        anchor_labels=read_trimmed_str_sequence(payload.get("anchor_labels")),
-        matched_child_ids=read_trimmed_str_sequence(payload.get("matched_child_ids")),
-    )

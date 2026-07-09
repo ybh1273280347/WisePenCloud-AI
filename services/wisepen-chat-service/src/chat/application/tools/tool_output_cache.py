@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from chat.application.tools.common.tool_content_store.core.models import ToolContentReceipt
-from chat.application.tools.common.tool_content_store.store import ToolContentStore
+from chat.application.tools.common.tool_content_store.store import (
+    ToolContentPutStatus,
+    ToolContentStore,
+)
 from chat.application.tools.core.definition import ToolDefinition
 from chat.application.tools.core.llm.renderer import RenderToolResult
 from chat.application.tools.tool_output_renderer import RenderedToolOutput, render_tool_xml
@@ -51,33 +54,47 @@ class ToolOutputCache:
             else:
                 receipts = []
                 for index, text in enumerate(cacheable_texts):
-                    receipt = await self._content_store.put(
-                        session_id=context["session_id"],
-                        text=text,
-                        content_type="text/markdown",
-                        metadata={
-                            "tool": rendered.tool_name,
-                            "tool_call_id": rendered.tool_call_id,
-                            "tool_arguments": rendered.tool_arguments,
-                            "cache_payload": "cacheable_texts",
-                            "cacheable_text_index": index,
-                            "cacheable_text_count": len(cacheable_texts),
-                        },
-                        chunked=(
-                            tool_definition.policy.cache_chunked
-                            if tool_definition is not None
-                            else True
-                        ),
-                    )
-                    if receipt is not None:
-                        receipts.append(receipt)
-                    else:
+                    try:
+                        put_result = await self._content_store.put(
+                            session_id=context["session_id"],
+                            text=text,
+                            content_type="text/markdown",
+                            metadata={
+                                "tool": rendered.tool_name,
+                                "tool_call_id": rendered.tool_call_id,
+                                "tool_arguments": rendered.tool_arguments,
+                                "cache_payload": "cacheable_texts",
+                                "cacheable_text_index": index,
+                                "cacheable_text_count": len(cacheable_texts),
+                            },
+                            chunked=(
+                                tool_definition.policy.cache_chunked
+                                if tool_definition is not None
+                                else True
+                            ),
+                        )
+                    except Exception as exc:
                         warn(
-                            "tool output cache receipt missing.",
+                            "tool output cache content store failed.",
+                            e=exc,
                             tool_name=rendered.tool_name,
                             tool_call_id=rendered.tool_call_id,
                             cacheable_text_index=index,
-                            audit_message="工具输出内容仓库写入未返回 receipt，该文本不会出现在模型输出凭证中。",
+                            audit_message="工具输出部分内容入库失败，已继续处理其他可缓存文本。",
+                        )
+                        continue
+                    if put_result.receipt is not None:
+                        receipts.append(put_result.receipt)
+                        continue
+
+                    if put_result.status == ToolContentPutStatus.CONTENT_TOO_LARGE:
+                        warn(
+                            "tool output cache content too large.",
+                            tool_name=rendered.tool_name,
+                            tool_call_id=rendered.tool_call_id,
+                            cacheable_text_index=index,
+                            reason=put_result.reason,
+                            audit_message="工具输出内容超过 ToolContentStore 入库上限，该文本不会出现在模型输出凭证中。",
                         )
 
                 # 只要有一条单据存仓成功，就重构重写发送给模型的 XML 树

@@ -1,15 +1,15 @@
 import json
 from typing import List
 
-from chat.core.config.app_settings import settings
 from chat.core.persistence.redis.base import RedisRepository
 from chat.domain.entities import ChatMessage
 from chat.domain.repositories import HotContextRepository
+from redis.asyncio import Redis
 
 
 class RedisHotContext(RedisRepository, HotContextRepository):
-    def __init__(self):
-        super().__init__(redis_url=settings.REDIS_URL)
+    def __init__(self, *, redis_client: Redis):
+        super().__init__(redis_client=redis_client)
         self.ttl = 3600 * 24 * 7  # 会话上下文保留一个周
 
     def _get_key(self, session_id: str) -> str:
