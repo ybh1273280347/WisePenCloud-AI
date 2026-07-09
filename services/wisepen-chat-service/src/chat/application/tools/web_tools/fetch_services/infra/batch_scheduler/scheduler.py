@@ -4,6 +4,7 @@ import asyncio
 
 from .models import (
     FallbackAdmission,
+    FetchBatchCancelled,
     FetchJob,
     FetchSlot,
     HttpxJobHandler,
@@ -98,6 +99,8 @@ class FetchBatchScheduler:
         try:
             await httpx_queue.join()
             await scrapling_queue.join()
+        except asyncio.CancelledError as exc:
+            raise FetchBatchCancelled(slots=results) from exc
         finally:
             for task in (*httpx_workers, *scrapling_workers):
                 task.cancel()

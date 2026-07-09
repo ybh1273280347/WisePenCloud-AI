@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import types
 from datetime import datetime, timedelta, timezone
@@ -59,6 +60,15 @@ class _UnusedFetcher:
     async def fetch(self, url: str) -> object:
         self.calls += 1
         raise AssertionError(f"cache hit should avoid fetching {url}")
+
+
+class _BlockingFetcher:
+    def __init__(self, *, release: asyncio.Event) -> None:
+        self._release = release
+
+    async def fetch(self, url: str) -> object:
+        await self._release.wait()
+        raise AssertionError(f"fetch should be cancelled before completing {url}")
 
 
 class _UnusedCleaner:
@@ -126,7 +136,7 @@ async def test_web_crawler_reuses_fetch_cache_and_cached_raw_html_for_links() ->
         concurrency=1,
     )
 
-    results = await crawler.crawl(
+    result = await crawler.crawl(
         seed_url,
         user_id=user_id,
         session_id="s1",
@@ -134,8 +144,8 @@ async def test_web_crawler_reuses_fetch_cache_and_cached_raw_html_for_links() ->
         max_depth=1,
     )
 
-    assert [result.source_url for result in results] == [seed_url, child_url]
-    assert [result.markdown for result in results] == ["# Seed", "# Child"]
+    assert [page.source_url for page in result.pages] == [seed_url, child_url]
+    assert [page.markdown for page in result.pages] == ["# Seed", "# Child"]
     assert httpx_fetcher.calls == 0
     assert scrapling_fetcher.calls == 0
 
@@ -186,7 +196,7 @@ async def test_web_crawler_keeps_successful_pages_when_cached_html_has_bad_link(
         concurrency=1,
     )
 
-    results = await crawler.crawl(
+    result = await crawler.crawl(
         seed_url,
         user_id=user_id,
         session_id="s1",
@@ -194,8 +204,47 @@ async def test_web_crawler_keeps_successful_pages_when_cached_html_has_bad_link(
         max_depth=1,
     )
 
-    assert [result.source_url for result in results] == [seed_url]
-    assert [result.markdown for result in results] == ["# Seed"]
+    assert [page.source_url for page in result.pages] == [seed_url]
+    assert [page.markdown for page in result.pages] == ["# Seed"]
+
+
+@pytest.mark.asyncio
+async def test_web_crawler_returns_completed_pages_when_tool_timeout_cancels_crawl() -> None:
+    user_id = "u1"
+    seed_url = "https://example.test/start"
+    values = {
+        (user_id, seed_url, WebContentCacheMode.PUBLIC): _cache_value(
+            user_id=user_id,
+            url=seed_url,
+            raw_html='<html><body><a href="/child">Child</a></body></html>',
+            markdown="# Seed",
+            title="Seed",
+        ),
+    }
+    release_child = asyncio.Event()
+    crawler = WebCrawler(
+        httpx_fetcher=_BlockingFetcher(release=release_child),
+        scrapling_fetcher=_UnusedFetcher(),
+        cleaner=_UnusedCleaner(),
+        content_cache_repository=_CacheRepository(values),
+        concurrency=1,
+    )
+
+    result = await asyncio.wait_for(
+        crawler.crawl(
+            seed_url,
+            user_id=user_id,
+            session_id="s1",
+            max_pages=2,
+            max_depth=1,
+        ),
+        timeout=0.05,
+    )
+
+    assert result.timed_out is True
+    assert [page.source_url for page in result.pages] == [seed_url]
+
+    release_child.set()
 
 
 def _cache_value(

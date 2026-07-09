@@ -26,6 +26,12 @@ class _CrawlPage:
     should_cache: bool
 
 
+@dataclass(frozen=True, slots=True)
+class WebCrawlResult:
+    pages: tuple[WebFetchResult, ...]
+    timed_out: bool = False
+
+
 class WebCrawler:
     """Web 递归爬取服务。
 
@@ -81,7 +87,7 @@ class WebCrawler:
             max_pages: int = 100,
             max_depth: int = 3,
             same_domain: bool = True,
-    ) -> list[WebFetchResult]:
+    ) -> WebCrawlResult:
         """BFS 递归爬取 seed_url。"""
         base_domain = urlparse(seed_url).netloc
         queue: deque[tuple[str, int]] = deque([(seed_url, 0)])
@@ -89,56 +95,59 @@ class WebCrawler:
         results: list[WebFetchResult] = []
         semaphore = asyncio.Semaphore(self._concurrency)
 
-        while queue and len(results) < max_pages:
-            # 按并发度取一批
-            batch: list[tuple[str, int]] = []
-            while queue and len(batch) < self._concurrency and len(results) + len(batch) < max_pages:
-                url, depth = queue.popleft()
-                if url in visited:
-                    continue
-                visited.add(url)
-                batch.append((url, depth))
+        try:
+            while queue and len(results) < max_pages:
+                # 按并发度取一批
+                batch: list[tuple[str, int]] = []
+                while queue and len(batch) < self._concurrency and len(results) + len(batch) < max_pages:
+                    url, depth = queue.popleft()
+                    if url in visited:
+                        continue
+                    visited.add(url)
+                    batch.append((url, depth))
 
-            if not batch:
-                continue
-
-            # 并发抓取本批
-            tasks = [
-                self._fetch_one_for_crawl(
-                    url,
-                    semaphore=semaphore,
-                    user_id=user_id,
-                    source_scope=source_scope,
-                )
-                for url, _ in batch
-            ]
-            pages = await asyncio.gather(*tasks, return_exceptions=True)
-
-            for (url, depth), page in zip(batch, pages, strict=True):
-                if isinstance(page, Exception):
-                    warn("web_crawl fetch failed", url=url, reason=str(page))
-                    continue
-                if page is None:
+                if not batch:
                     continue
 
-                results.append(page.result)
+                # 并发抓取本批
+                tasks = [
+                    self._fetch_one_for_crawl(
+                        url,
+                        semaphore=semaphore,
+                        user_id=user_id,
+                        source_scope=source_scope,
+                    )
+                    for url, _ in batch
+                ]
+                pages = await asyncio.gather(*tasks, return_exceptions=True)
 
-                # 达到深度或页面数上限，不再扩展
-                if depth >= max_depth or len(results) >= max_pages or page.raw_html is None:
-                    continue
+                for (url, depth), page in zip(batch, pages, strict=True):
+                    if isinstance(page, Exception):
+                        warn("web_crawl fetch failed", url=url, reason=str(page))
+                        continue
+                    if page is None:
+                        continue
 
-                # 页面里的畸形 href 不能打断已抓到的结果，只影响该页面的后续扩展。
-                try:
-                    child_urls = _extract_links(page.raw_html, url, base_domain, same_domain)
-                except Exception as exc:
-                    warn("web_crawl extract links failed", url=url, reason=str(exc))
-                    continue
+                    results.append(page.result)
 
-                for child_url in child_urls:
-                    if child_url not in visited:
-                        queue.append((child_url, depth + 1))
+                    # 达到深度或页面数上限，不再扩展
+                    if depth >= max_depth or len(results) >= max_pages or page.raw_html is None:
+                        continue
 
-        return results
+                    # 页面里的畸形 href 不能打断已抓到的结果，只影响该页面的后续扩展。
+                    try:
+                        child_urls = _extract_links(page.raw_html, url, base_domain, same_domain)
+                    except Exception as exc:
+                        warn("web_crawl extract links failed", url=url, reason=str(exc))
+                        continue
+
+                    for child_url in child_urls:
+                        if child_url not in visited:
+                            queue.append((child_url, depth + 1))
+        except asyncio.CancelledError:
+            return WebCrawlResult(pages=tuple(results), timed_out=True)
+
+        return WebCrawlResult(pages=tuple(results))
 
     async def _fetch_one_for_crawl(
             self,

@@ -82,6 +82,8 @@ dependencies = [
     "wisepen-common",     # WisePen 公共基础公共库 (内部依赖)
     "cryptography",       # 密钥加密、解密与凭证安全保护
     "ddgs>=9.14.4",       # DuckDuckGo 外部搜索联网能力客户端
+
+    "readability-lxml>=0.8.4.1",
 ]
 
 [dependency-groups]

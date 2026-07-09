@@ -102,6 +102,41 @@ async def test_fetch_many_does_not_enqueue_fallback_after_scrapling_cap() -> Non
     assert scrapling_fetcher.calls == ["https://example.test/one"]
 
 
+@pytest.mark.asyncio
+async def test_fetch_many_returns_completed_results_when_tool_timeout_cancels_batch() -> None:
+    release_slow = asyncio.Event()
+    coordinator = FetchCoordinator(
+        httpx_fetcher=_OneFastOneBlockingHttpxFetcher(release_slow=release_slow),
+        scrapling_fetcher=_CountingScraplingFetcher(),
+        cleaner=_EchoCleaner(),
+        file_store=_UnusedFileStore(),
+        batch_concurrency=2,
+        scrapling_concurrency=1,
+        max_scrapling_fallbacks=0,
+        min_text_length=1,
+    )
+
+    result = await asyncio.wait_for(
+        coordinator.fetch_many(
+            [
+                "https://example.test/fast",
+                "https://example.test/slow",
+            ],
+            user_id="u1",
+            session_id="s1",
+        ),
+        timeout=0.05,
+    )
+
+    assert [item.source_url for item in result.items] == ["https://example.test/fast"]
+    assert [(item.url, item.reason) for item in result.failed] == [
+        ("https://example.test/slow", "fetch_timed_out"),
+    ]
+    assert "tool timed out; returning completed results" in result.warnings
+
+    release_slow.set()
+
+
 class _EchoCleaner:
     @property
     def name(self) -> str:
@@ -154,6 +189,20 @@ class _BlockingScraplingFetcher:
         self._started.set()
         await self._release.wait()
         return _raw(url, raw_html="fallback content " * 10, fetcher=self.name)
+
+
+class _OneFastOneBlockingHttpxFetcher:
+    def __init__(self, *, release_slow: asyncio.Event) -> None:
+        self._release_slow = release_slow
+
+    @property
+    def name(self) -> str:
+        return "httpx"
+
+    async def fetch(self, url: str) -> RawFetchOutput:
+        if url.endswith("/slow"):
+            await self._release_slow.wait()
+        return _raw(url, raw_html="content " * 10)
 
 
 class _CountingScraplingFetcher:

@@ -17,6 +17,7 @@ from .core.models import RawFetchOutput, WebFetchBatchResult, WebFetchFailure, W
 from .fetchers import WebFetcher
 from .infra.batch_scheduler import (
     AdmitFallback,
+    FetchBatchCancelled,
     FetchBatchScheduler,
     FetchJob,
     FetchQueue,
@@ -221,7 +222,12 @@ class FetchCoordinator:
             httpx_job_handler=run_httpx_job,
             scrapling_job_handler=run_scrapling_job,
         )
-        results = await scheduler.run(urls)
+        batch_cancelled = False
+        try:
+            results = await scheduler.run(urls)
+        except FetchBatchCancelled as exc:
+            batch_cancelled = True
+            results = exc.slots
 
         items = tuple(
             result
@@ -230,7 +236,10 @@ class FetchCoordinator:
         )
         failed = tuple(
             result if isinstance(result, WebFetchFailure)
-            else WebFetchFailure(url=url, reason="batch_result_missing")
+            else WebFetchFailure(
+                url=url,
+                reason="fetch_timed_out" if batch_cancelled else "batch_result_missing",
+            )
             for url, result in zip(urls, results, strict=True)
             if not isinstance(result, WebFetchResult)
         )
@@ -238,6 +247,8 @@ class FetchCoordinator:
         batch_warnings: list[str] = []
         if failed:
             batch_warnings.append(f"{len(failed)}/{len(urls)} urls failed")
+        if batch_cancelled:
+            batch_warnings.append("tool timed out; returning completed results")
 
         return WebFetchBatchResult(
             items=items,

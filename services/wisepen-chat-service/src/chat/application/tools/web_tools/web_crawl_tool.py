@@ -148,7 +148,7 @@ class WebCrawlTool:
 
         # 2. 调度异步批量递归爬虫服务
         try:
-            results = await self._crawler.crawl(
+            crawl_result = await self._crawler.crawl(
                 seed_url,
                 user_id=str(context["user_id"]),
                 session_id=str(context["session_id"]),
@@ -180,7 +180,7 @@ class WebCrawlTool:
             ) from exc
 
         # 3. 结果空值防御
-        if not results:
+        if not crawl_result.pages:
             raise ToolExecutionError(
                 reason="web_crawl_empty_result",
                 detail_reason="No pages could be crawled from the seed URL.",
@@ -194,18 +194,22 @@ class WebCrawlTool:
                 "title": r.title,
                 "markdown_length": len(r.markdown or ""),
             }
-            for r in results
+            for r in crawl_result.pages
         ]
 
         # 转换可缓存文本集合，供上层切面提取并建立索引分块
-        cacheable_texts = tuple(r.markdown for r in results if r.markdown)
+        cacheable_texts = tuple(r.markdown for r in crawl_result.pages if r.markdown)
+
+        visible_result: dict[str, object] = {
+            "seed_url": seed_url,
+            "pages_crawled": len(crawl_result.pages),
+            "pages": pages_summary,
+        }
+        if crawl_result.timed_out:
+            visible_result["warnings"] = ("tool timed out; returning completed pages",)
 
         return ToolReturn(
             tag="web_crawl_result",
-            visible_result={
-                "seed_url": seed_url,
-                "pages_crawled": len(results),
-                "pages": pages_summary,
-            },
+            visible_result=visible_result,
             cacheable_texts=cacheable_texts,
         )

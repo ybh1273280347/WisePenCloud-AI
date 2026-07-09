@@ -20,6 +20,12 @@ class FetchJob:
     warnings: tuple[str, ...] = ()
 
 
+class FetchBatchCancelled(Exception):
+    def __init__(self, *, slots: list[FetchSlot]) -> None:
+        super().__init__("fetch batch cancelled")
+        self.slots = slots
+
+
 FetchQueue = asyncio.Queue[FetchJob]
 
 HttpxJobHandler = Callable[

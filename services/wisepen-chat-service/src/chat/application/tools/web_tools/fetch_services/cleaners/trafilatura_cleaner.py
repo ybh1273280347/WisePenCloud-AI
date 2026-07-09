@@ -6,12 +6,16 @@ import trafilatura
 
 from common.logger import warn
 from .base import CleanedOutput
+from .html_prune_policy import build_prune_xpath
 
 
 class TrafilaturaCleaner:
     """web_fetch 专用 trafilatura 网页正文清洗器。"""
 
-    __slots__ = ()
+    __slots__ = ("_enable_dom_prune",)
+
+    def __init__(self, *, enable_dom_prune: bool = True) -> None:
+        self._enable_dom_prune = enable_dom_prune
 
     @property
     def name(self) -> str:
@@ -31,6 +35,7 @@ class TrafilaturaCleaner:
                 include_links=True,
                 favor_precision=False,
                 favor_recall=True,
+                prune_xpath=build_prune_xpath(url) if self._enable_dom_prune else None,
             )
         except Exception as exc:  # noqa: BLE001 - trafilatura 异常统一降级为空结果
             warn("web_fetch trafilatura clean failed", url=url, error=str(exc))

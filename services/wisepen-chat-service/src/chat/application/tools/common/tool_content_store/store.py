@@ -4,6 +4,7 @@ import hashlib
 import uuid
 from typing import cast
 
+from chat.application.tools.tool_settings import tool_settings
 from chat.application.utils.chunking_engine import (
     Chunk,
     ChunkLocator,
@@ -21,8 +22,8 @@ from .core.models import (
 )
 from .core.repository_protocol import ToolContentRepository
 
-DEFAULT_TOOL_CONTENT_TTL_SECONDS = 1800
-DEFAULT_TOOL_CONTENT_MAX_CHARS = 20_000_000
+DEFAULT_TOOL_CONTENT_TTL_SECONDS = tool_settings.TOOL_CONTENT_DEFAULT_TTL_SECONDS
+DEFAULT_TOOL_CONTENT_MAX_CHARS = tool_settings.TOOL_CONTENT_MAX_CHARS
 
 
 class ToolContentStore:

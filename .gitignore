@@ -18,6 +18,7 @@ logs/
 
 # 虚拟环境
 .venv/
+.venv-mineru-bench/
 venv/
 env/
 ENV/
@@ -41,8 +42,11 @@ ENV/
 .ruff_cache/
 
 # 临时测试脚本 / 设计稿
+.codex-worktrees/
 bench_*.py
 bench_results/
+benchmark_output/
+services/wisepen-chat-service/src/chat/benchmark/
 services/wisepen-chat-service/docs/add_tool_guide.md
 services/wisepen-chat-service/docs/tool_architecture_report.md
 services/wisepen-chat-service/test/
