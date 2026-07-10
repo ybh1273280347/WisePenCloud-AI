@@ -14,6 +14,7 @@ from ._utils import judge_quality
 from .cleaners.base import BaseCleaner
 from .core.errors import UrlFetchError, UrlFetchHttpError, UrlFetchUnsupportedUrlError
 from .core.models import RawFetchOutput, WebFetchBatchResult, WebFetchFailure, WebFetchResult
+from .downloaders import TempFileDownloader
 from .fetchers import WebFetcher
 from .infra.batch_scheduler import (
     AdmitFallback,
@@ -30,35 +31,38 @@ _NOT_RETRYABLE_HTTP_STATUS_REASONS = {"http 404", "http 410"}
 
 
 class FetchCoordinator:
-    """单点抓取协调器：编排 httpx → scrapling fallback 链路 + 清洗 + 质量判断 + 文件移交。`WebCrawler` 用于递归爬取。"""
+    """单点抓取协调器：编排 static → stealthy + 非 HTML 文件下载 + 清洗 + 文件移交。"""
 
     __slots__ = (
-        "_httpx_fetcher",
-        "_scrapling_fetcher",
         "_cleaner",
         "_cache",
         "_file_store",
+        "_static_fetcher",
+        "_stealthy_fetcher",
+        "_temp_file_downloader",
         "_min_text_length",
         "_batch_concurrency",
-        "_scrapling_concurrency",
-        "_max_scrapling_fallbacks",
+        "_stealthy_concurrency",
+        "_max_stealthy_fallbacks",
     )
 
     def __init__(
             self,
             *,
-            httpx_fetcher: WebFetcher,
-            scrapling_fetcher: WebFetcher,
+            static_fetcher: WebFetcher,
+            stealthy_fetcher: WebFetcher,
+            temp_file_downloader: TempFileDownloader,
             cleaner: BaseCleaner,
             file_store: ToolRunFileStore,
             content_cache_repository: WebContentCacheRepository | None = None,
             min_text_length: int = 200,
             batch_concurrency: int = 16,
-            scrapling_concurrency: int = 3,
-            max_scrapling_fallbacks: int = 6,
+            stealthy_concurrency: int = 3,
+            max_stealthy_fallbacks: int = 6,
     ) -> None:
-        self._httpx_fetcher = httpx_fetcher
-        self._scrapling_fetcher = scrapling_fetcher
+        self._static_fetcher = static_fetcher
+        self._stealthy_fetcher = stealthy_fetcher
+        self._temp_file_downloader = temp_file_downloader
         self._cleaner = cleaner
         self._file_store = file_store
         self._cache = WebFetchCache(
@@ -67,113 +71,8 @@ class FetchCoordinator:
         )
         self._min_text_length = min_text_length
         self._batch_concurrency = max(1, int(batch_concurrency))
-        self._scrapling_concurrency = max(1, int(scrapling_concurrency))
-        self._max_scrapling_fallbacks = max(0, int(max_scrapling_fallbacks))
-
-    async def fetch_one(
-            self,
-            url: str,
-            *,
-            user_id: str,
-            session_id: str,
-            source_scope: str = "web_public",
-    ) -> WebFetchResult:
-        """抓取单个 URL。
-
-        强制走 httpx → scrapling 链路，不允许跳过。
-
-        Args:
-            url: 目标 URL。
-            user_id: 用户隔离键（用于 ToolRunFileStore 文件移交）。
-            session_id: 会话隔离键（用于 ToolRunFileStore 文件移交）。
-
-        Returns:
-            WebFetchResult: 成功结果（HTML 页面或非 HTML 文件引用）。
-
-        Raises:
-            UrlFetchError: 抓取失败（HTTP 错误、网络错误、URL 不支持）。
-        """
-        info("网页抓取开始", url=url)
-
-        cached_result = await self._cache.read_result(
-            url=url,
-            user_id=user_id,
-        )
-        if cached_result is not None:
-            return cached_result
-
-        # 强制先走 httpx
-        warnings: list[str] = []
-        try:
-            raw = await self._httpx_fetcher.fetch(url)
-        except UrlFetchError as exc:
-            warn(
-                "网页抓取 httpx 失败，降级到 scrapling",
-                url=url,
-                reason=exc.reason,
-            )
-            warnings.append(f"httpx_fallback: {exc.reason}")
-            raw = await self._scrapling_fetcher.fetch(url)
-
-        # 非 HTML 文件路径：移交 ToolRunFileStore
-        if raw.file_path is not None:
-            return await self._handle_non_html_file(
-                raw=raw,
-                user_id=user_id,
-                session_id=session_id,
-                source_scope=source_scope,
-                warnings=warnings,
-            )
-
-        # HTML 路径：清洗 + 质量判断
-        cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.final_url or url)
-        quality = judge_quality(
-            raw=raw,
-            cleaned=cleaned,
-            min_text_length=self._min_text_length,
-        )
-
-        if quality.should_fallback:
-            # httpx 质量不足，降级到 scrapling
-            warn(
-                "网页抓取 httpx 内容质量不足，降级到 scrapling",
-                url=url,
-                reason=quality.reason,
-            )
-            warnings.append(f"httpx_quality_fallback: {quality.reason}")
-            raw = await self._scrapling_fetcher.fetch(url)
-            # scrapling 只返回 HTML（非 HTML 已被 httpx 拦截），无需再判 file_path
-            cleaned = self._cleaner.clean(
-                raw.raw_html or "", url=raw.final_url or url
-            )
-            quality = judge_quality(
-                raw=raw,
-                cleaned=cleaned,
-                min_text_length=self._min_text_length,
-            )
-
-        if quality.should_fallback:
-            warnings.append(f"content quality insufficient: {quality.reason}")
-
-        # 不截断 markdown：完整文本保留供后续缓存层处理
-        result = WebFetchResult(
-            source_url=raw.source_url,
-            final_url=raw.final_url,
-            status_code=raw.status_code,
-            content_type=raw.content_type,
-            title=cleaned.title,
-            markdown=cleaned.markdown,
-            warnings=tuple(warnings),
-        )
-        if not quality.should_fallback:
-            await self._cache.write_html_result(
-                url=url,
-                user_id=user_id,
-                source_scope=source_scope,
-                raw=raw,
-                result=result,
-            )
-        return result
+        self._stealthy_concurrency = max(1, int(stealthy_concurrency))
+        self._max_stealthy_fallbacks = max(0, int(max_stealthy_fallbacks))
 
     async def fetch_many(
             self,
@@ -190,37 +89,36 @@ class FetchCoordinator:
         if not urls:
             return WebFetchBatchResult()
 
-        async def run_httpx_job(
+        async def run_static_job(
                 job: FetchJob,
-                scrapling_queue: FetchQueue,
+                stealthy_queue: FetchQueue,
                 results: list[FetchSlot],
                 admit_fallback: AdmitFallback,
         ) -> None:
-            await self._run_httpx_job(
+            await self._run_static_job(
                 job=job,
                 user_id=user_id,
                 session_id=session_id,
                 source_scope=source_scope,
                 results=results,
-                scrapling_queue=scrapling_queue,
+                stealthy_queue=stealthy_queue,
                 admit_fallback=admit_fallback,
             )
 
-        async def run_scrapling_job(job: FetchJob) -> WebFetchResult | WebFetchFailure:
-            return await self._run_scrapling_job(
+        async def run_stealthy_job(job: FetchJob) -> WebFetchResult | WebFetchFailure:
+            return await self._run_stealthy_job(
                 job=job,
                 user_id=user_id,
-                session_id=session_id,
                 source_scope=source_scope,
             )
 
         scheduler = FetchBatchScheduler(
-            httpx_concurrency=self._batch_concurrency,
-            scrapling_concurrency=self._scrapling_concurrency,
-            max_scrapling_fallbacks=self._max_scrapling_fallbacks,
+            static_concurrency=self._batch_concurrency,
+            stealthy_concurrency=self._stealthy_concurrency,
+            max_stealthy_fallbacks=self._max_stealthy_fallbacks,
             fallback_admission=self._fallback_not_admitted_reason,
-            httpx_job_handler=run_httpx_job,
-            scrapling_job_handler=run_scrapling_job,
+            static_job_handler=run_static_job,
+            stealthy_job_handler=run_stealthy_job,
         )
         batch_cancelled = False
         try:
@@ -256,7 +154,7 @@ class FetchCoordinator:
             warnings=tuple(batch_warnings),
         )
 
-    async def _run_httpx_job(
+    async def _run_static_job(
             self,
             *,
             job: FetchJob,
@@ -264,7 +162,7 @@ class FetchCoordinator:
             session_id: str,
             source_scope: str,
             results: list[FetchSlot],
-            scrapling_queue: FetchQueue,
+            stealthy_queue: FetchQueue,
             admit_fallback: AdmitFallback,
     ) -> None:
         try:
@@ -278,7 +176,21 @@ class FetchCoordinator:
 
             warnings: list[str] = []
             try:
-                raw = await self._httpx_fetcher.fetch(job.url)
+                raw = await self._static_fetcher.fetch(job.url)
+            except UrlFetchUnsupportedUrlError as exc:
+                if exc.reason != "url_resolved_to_non_html":
+                    results[job.index] = WebFetchFailure(url=job.url, reason=exc.reason)
+                    return
+
+                raw = await self._temp_file_downloader.download(job.url)
+                results[job.index] = await self._handle_non_html_file(
+                    raw=raw,
+                    user_id=user_id,
+                    session_id=session_id,
+                    source_scope=source_scope,
+                    warnings=warnings,
+                )
+                return
             except UrlFetchError as exc:
                 not_admitted_reason = admit_fallback(exc)
                 if not_admitted_reason is not None:
@@ -288,22 +200,12 @@ class FetchCoordinator:
                     )
                     return
 
-                warn("网页抓取 httpx 失败，投递到 scrapling 慢路径", url=job.url, reason=exc.reason)
-                warnings.append(f"httpx_fallback: {exc.reason}")
-                await scrapling_queue.put(FetchJob(index=job.index, url=job.url, warnings=tuple(warnings)))
+                warn("网页抓取 static 失败，投递到 stealthy", url=job.url, reason=exc.reason)
+                warnings.append(f"static_fallback: {exc.reason}")
+                await stealthy_queue.put(FetchJob(index=job.index, url=job.url, warnings=tuple(warnings)))
                 return
 
-            if raw.file_path is not None:
-                results[job.index] = await self._handle_non_html_file(
-                    raw=raw,
-                    user_id=user_id,
-                    session_id=session_id,
-                    source_scope=source_scope,
-                    warnings=warnings,
-                )
-                return
-
-            cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.final_url or job.url)
+            cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.source_url)
             quality = judge_quality(
                 raw=raw,
                 cleaned=cleaned,
@@ -319,14 +221,13 @@ class FetchCoordinator:
                     )
                     return
 
-                warn("网页抓取 httpx 内容质量不足，投递到 scrapling 慢路径", url=job.url, reason=quality.reason)
-                warnings.append(f"httpx_quality_fallback: {quality.reason}")
-                await scrapling_queue.put(FetchJob(index=job.index, url=job.url, warnings=tuple(warnings)))
+                warn("网页抓取 static 内容质量不足，投递到 stealthy", url=job.url, reason=quality.reason)
+                warnings.append(f"static_quality_fallback: {quality.reason}")
+                await stealthy_queue.put(FetchJob(index=job.index, url=job.url, warnings=tuple(warnings)))
                 return
 
             result = WebFetchResult(
                 source_url=raw.source_url,
-                final_url=raw.final_url,
                 status_code=raw.status_code,
                 content_type=raw.content_type,
                 title=cleaned.title,
@@ -343,30 +244,20 @@ class FetchCoordinator:
         except UrlFetchError as exc:
             results[job.index] = WebFetchFailure(url=job.url, reason=exc.reason)
         except Exception as exc:
-            warn("网页抓取 httpx worker 未预期失败", url=job.url, e=exc)
+            warn("网页抓取 static worker 未预期失败", url=job.url, e=exc)
             results[job.index] = WebFetchFailure(url=job.url, reason=f"unexpected_error: {exc}")
 
-    async def _run_scrapling_job(
+    async def _run_stealthy_job(
             self,
             *,
             job: FetchJob,
             user_id: str,
-            session_id: str,
             source_scope: str,
     ) -> WebFetchResult | WebFetchFailure:
         warnings = list(job.warnings)
         try:
-            raw = await self._scrapling_fetcher.fetch(job.url)
-            if raw.file_path is not None:
-                return await self._handle_non_html_file(
-                    raw=raw,
-                    user_id=user_id,
-                    session_id=session_id,
-                    source_scope=source_scope,
-                    warnings=warnings,
-                )
-
-            cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.final_url or job.url)
+            raw = await self._stealthy_fetcher.fetch(job.url)
+            cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.source_url)
             quality = judge_quality(
                 raw=raw,
                 cleaned=cleaned,
@@ -377,7 +268,6 @@ class FetchCoordinator:
 
             result = WebFetchResult(
                 source_url=raw.source_url,
-                final_url=raw.final_url,
                 status_code=raw.status_code,
                 content_type=raw.content_type,
                 title=cleaned.title,
@@ -394,10 +284,10 @@ class FetchCoordinator:
                 )
             return result
         except UrlFetchError as exc:
-            return WebFetchFailure(url=job.url, reason=f"scrapling_failed: {exc.reason}")
+            return WebFetchFailure(url=job.url, reason=f"stealthy_failed: {exc.reason}")
         except Exception as exc:
-            warn("网页抓取 scrapling worker 未预期失败", url=job.url, e=exc)
-            return WebFetchFailure(url=job.url, reason=f"scrapling_failed: {exc}")
+            warn("网页抓取 stealthy worker 未预期失败", url=job.url, e=exc)
+            return WebFetchFailure(url=job.url, reason=f"stealthy_failed: {exc}")
 
     def _fallback_not_admitted_reason(
             self,
@@ -412,7 +302,7 @@ class FetchCoordinator:
             return f"http_status_not_retryable: {exc.reason}"
 
         if admitted_fallbacks >= fallback_limit:
-            return "max_scrapling_fallbacks_reached"
+            return "max_stealthy_fallbacks_reached"
 
         return None
 
@@ -431,7 +321,7 @@ class FetchCoordinator:
 
         try:
             filename = (
-                    filename_from_url(raw.final_url or raw.source_url)
+                    filename_from_url(raw.source_url)
                     or f"download.{raw.file_label or 'bin'}"
             )
             await self._cache.write_non_html_stub(
@@ -451,7 +341,6 @@ class FetchCoordinator:
                     "source_kind": "web_fetch",
                     "source_scope": source_scope,
                     "source_url": raw.source_url,
-                    "final_url": raw.final_url,
                     "content_type": raw.content_type,
                 },
             )
@@ -463,7 +352,6 @@ class FetchCoordinator:
             )
             return WebFetchResult(
                 source_url=raw.source_url,
-                final_url=raw.final_url,
                 status_code=raw.status_code,
                 content_type=raw.content_type,
                 title=None,

@@ -19,22 +19,26 @@ config_module.settings = types.SimpleNamespace(QUERY_MODEL="test-query-model")
 sys.modules["chat.core.config.app_settings"] = config_module
 
 from chat.application.tools.web_tools.fetch_services.cleaners.base import CleanedOutput  # noqa: E402
-from chat.application.tools.web_tools.fetch_services.web_fetch import FetchCoordinator  # noqa: E402
+from chat.application.tools.web_tools.fetch_services.core.errors import (  # noqa: E402
+    UrlFetchNetworkError,
+    UrlFetchUnsupportedUrlError,
+)
 from chat.application.tools.web_tools.fetch_services.core.models import RawFetchOutput  # noqa: E402
+from chat.application.tools.web_tools.fetch_services.web_fetch import FetchCoordinator  # noqa: E402
 
 
 @pytest.mark.asyncio
-async def test_fetch_many_releases_httpx_worker_when_scrapling_fallback_is_pending() -> None:
+async def test_fetch_many_releases_file_sniff_worker_when_scrapling_page_fetch_is_pending() -> None:
     scrapling_started = asyncio.Event()
     release_scrapling = asyncio.Event()
-    fast_httpx_seen = asyncio.Event()
-    httpx_fetcher = _SchedulerHttpxFetcher(fast_httpx_seen=fast_httpx_seen)
+    fast_sniff_seen = asyncio.Event()
+    file_sniffer = _SchedulerFileSniffer(fast_sniff_seen=fast_sniff_seen)
     scrapling_fetcher = _BlockingScraplingFetcher(
         started=scrapling_started,
         release=release_scrapling,
     )
     coordinator = FetchCoordinator(
-        httpx_fetcher=httpx_fetcher,
+        file_sniffer=file_sniffer,
         scrapling_fetcher=scrapling_fetcher,
         cleaner=_EchoCleaner(),
         file_store=_UnusedFileStore(),
@@ -56,7 +60,7 @@ async def test_fetch_many_releases_httpx_worker_when_scrapling_fallback_is_pendi
     )
 
     await asyncio.wait_for(scrapling_started.wait(), timeout=1)
-    await asyncio.wait_for(fast_httpx_seen.wait(), timeout=1)
+    await asyncio.wait_for(fast_sniff_seen.wait(), timeout=1)
     assert not fetch_task.done()
 
     release_scrapling.set()
@@ -67,7 +71,7 @@ async def test_fetch_many_releases_httpx_worker_when_scrapling_fallback_is_pendi
         "https://example.test/fast",
     ]
     assert result.failed == ()
-    assert httpx_fetcher.calls == [
+    assert file_sniffer.calls == [
         "https://example.test/slow",
         "https://example.test/fast",
     ]
@@ -77,7 +81,7 @@ async def test_fetch_many_releases_httpx_worker_when_scrapling_fallback_is_pendi
 async def test_fetch_many_does_not_enqueue_fallback_after_scrapling_cap() -> None:
     scrapling_fetcher = _CountingScraplingFetcher()
     coordinator = FetchCoordinator(
-        httpx_fetcher=_AlwaysLowQualityHttpxFetcher(),
+        file_sniffer=_AlwaysFailingFileSniffer(),
         scrapling_fetcher=scrapling_fetcher,
         cleaner=_EchoCleaner(),
         file_store=_UnusedFileStore(),
@@ -98,7 +102,7 @@ async def test_fetch_many_does_not_enqueue_fallback_after_scrapling_cap() -> Non
 
     assert len(result.items) == 1
     assert len(result.failed) == 1
-    assert result.failed[0].reason == "fallback_not_admitted: max_scrapling_fallbacks_reached"
+    assert result.failed[0].reason == "fallback_not_admitted: max_stealthy_fallbacks_reached"
     assert scrapling_fetcher.calls == ["https://example.test/one"]
 
 
@@ -106,7 +110,7 @@ async def test_fetch_many_does_not_enqueue_fallback_after_scrapling_cap() -> Non
 async def test_fetch_many_returns_completed_results_when_tool_timeout_cancels_batch() -> None:
     release_slow = asyncio.Event()
     coordinator = FetchCoordinator(
-        httpx_fetcher=_OneFastOneBlockingHttpxFetcher(release_slow=release_slow),
+        file_sniffer=_OneFastOneBlockingFileSniffer(release_slow=release_slow),
         scrapling_fetcher=_CountingScraplingFetcher(),
         cleaner=_EchoCleaner(),
         file_store=_UnusedFileStore(),
@@ -150,30 +154,29 @@ class _EchoCleaner:
         )
 
 
-class _SchedulerHttpxFetcher:
-    def __init__(self, *, fast_httpx_seen: asyncio.Event) -> None:
-        self._fast_httpx_seen = fast_httpx_seen
+class _SchedulerFileSniffer:
+    def __init__(self, *, fast_sniff_seen: asyncio.Event) -> None:
+        self._fast_sniff_seen = fast_sniff_seen
         self.calls: list[str] = []
 
     @property
     def name(self) -> str:
-        return "httpx"
+        return "file_sniffer"
 
     async def fetch(self, url: str) -> RawFetchOutput:
         self.calls.append(url)
         if url.endswith("/fast"):
-            self._fast_httpx_seen.set()
-            return _raw(url, raw_html="fast content " * 10)
-        return _raw(url, raw_html="short")
+            self._fast_sniff_seen.set()
+        raise UrlFetchUnsupportedUrlError(url=url, reason="url_resolved_to_html")
 
 
-class _AlwaysLowQualityHttpxFetcher:
+class _AlwaysFailingFileSniffer:
     @property
     def name(self) -> str:
-        return "httpx"
+        return "file_sniffer"
 
     async def fetch(self, url: str) -> RawFetchOutput:
-        return _raw(url, raw_html="short")
+        raise UrlFetchNetworkError(url=url, reason="network")
 
 
 class _BlockingScraplingFetcher:
@@ -191,18 +194,18 @@ class _BlockingScraplingFetcher:
         return _raw(url, raw_html="fallback content " * 10, fetcher=self.name)
 
 
-class _OneFastOneBlockingHttpxFetcher:
+class _OneFastOneBlockingFileSniffer:
     def __init__(self, *, release_slow: asyncio.Event) -> None:
         self._release_slow = release_slow
 
     @property
     def name(self) -> str:
-        return "httpx"
+        return "file_sniffer"
 
     async def fetch(self, url: str) -> RawFetchOutput:
         if url.endswith("/slow"):
             await self._release_slow.wait()
-        return _raw(url, raw_html="content " * 10)
+        raise UrlFetchUnsupportedUrlError(url=url, reason="url_resolved_to_html")
 
 
 class _CountingScraplingFetcher:
@@ -226,7 +229,6 @@ def _raw(url: str, *, raw_html: str, fetcher: str = "httpx") -> RawFetchOutput:
     return RawFetchOutput(
         source_url=url,
         fetcher=fetcher,
-        final_url=url,
         status_code=200,
         content_type="text/html",
         raw_html=raw_html,

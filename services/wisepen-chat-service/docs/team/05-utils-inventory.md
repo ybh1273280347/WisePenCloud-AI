@@ -120,14 +120,14 @@
 
 路径：`src/chat/application/tools/utils/url/`
 
-用途：工具层共享的 URL 能力。文件名提取、URL 抓取和 URL 安全校验分开放置，供 `web_fetch`、`web_crawl`、`document_parse` 直链下载和 `image_ocr` 图片 URL 读取复用。
+用途：工具层共享的 URL 能力。文件名提取、URL 临时文件下载和 URL 安全校验分开放置，供 `web_fetch`、`document_parse` 直链下载和 `image_ocr` 图片 URL 读取复用。
 
 现有入口：
 
 - `filename.filename_from_url`
-- `fetcher.fetch_url`
-- `fetcher.FetchedUrl`
-- `fetcher.UrlFetcherError` / `UrlFetcherNetworkError` / `UrlFetcherHttpError` / `UrlFetcherUnsupportedUrlError`
+- `downloader.download_url`
+- `downloader.DownloadedUrl`
+- `downloader.UrlDownloadError` / `UrlDownloadNetworkError` / `UrlDownloadHttpError` / `UrlDownloadUnsupportedUrlError`
 - `security.validate_public_http_url`
 - `security.UrlSecurityError`
 
@@ -157,7 +157,7 @@
 | 需要对候选排序、融合、多样性控制 | `ranking_engine` |
 | 需要轻量调用模型或 embedding | `llm_clients` |
 | 需要识别本地文件类型 | `detect_file_type` / `detect_mime_type` |
-| 需要抓取 URL 并区分 HTML 与文件 | `tools/utils/url/fetcher.fetch_url` |
+| 需要下载非 HTML URL 到临时文件 | `tools/utils/url/downloader.download_url` |
 | 需要提取 URL 文件名 | `tools/utils/url/filename.filename_from_url` |
 | 需要校验外部 URL 是否安全 | `tools/utils/url/security.validate_public_http_url` |
 | 需要 HTML 片段转 Markdown | `markdown_renderer/html2markdown.HtmlToMarkdownRenderer` |

@@ -75,6 +75,9 @@ async def lifespan(app: FastAPI):
     )
     info("beanie initialized.", db=settings.MONGODB_DB_NAME)
 
+    # 初始化容器托管资源（如页面抓取 session），业务对象只消费资源，不自行管理生命周期。
+    await container.init_resources()
+
     # 注册 Nacos 服务
     try:
         await nacos_client_manager.register_instance()
@@ -132,6 +135,14 @@ async def lifespan(app: FastAPI):
         await container.rpc_client().aclose()
     except Exception as e:
         error("rpc client close failed.", exc=e)
+    try:
+        await container.web_fetch_http_client().aclose()
+    except Exception as e:
+        error("web fetch http client close failed.", exc=e)
+    try:
+        await container.shutdown_resources()
+    except Exception as e:
+        error("container resource shutdown failed.", exc=e)
     try:
         elasticsearch_client = container.elasticsearch_client()
         if elasticsearch_client is not None:

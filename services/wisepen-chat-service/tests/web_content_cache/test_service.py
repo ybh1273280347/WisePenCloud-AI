@@ -49,7 +49,6 @@ async def test_html_markdown_cache_roundtrip_keeps_raw_html() -> None:
             url="https://example.com/page",
             user_id="user-1",
             source_scope="web_public",
-            final_url="https://example.com/page",
             status_code=200,
             content_type="text/html",
             raw_html="<html><body>Hello</body></html>",
@@ -82,7 +81,6 @@ async def test_non_html_stub_can_be_filled_by_source_metadata() -> None:
             user_id="user-1",
             source_scope="web_public",
             source_url="https://example.com/report.pdf",
-            final_url="https://example.com/report.pdf",
             status_code=200,
             content_type="application/pdf",
             headers={"cache-control": "max-age=60"},
@@ -94,7 +92,6 @@ async def test_non_html_stub_can_be_filled_by_source_metadata() -> None:
         "source_kind": "web_fetch",
         "source_scope": "web_public",
         "source_url": "https://example.com/report.pdf",
-        "final_url": "https://example.com/report.pdf",
     }
 
     written = await service.write_markdown_from_metadata(
@@ -125,7 +122,6 @@ async def test_expired_value_is_not_returned() -> None:
         WebContentCacheValue(
             user_id="user-1",
             canonical_url="https://example.com/old",
-            final_url="https://example.com/old",
             cache_mode=WebContentCacheMode.PUBLIC,
             status_code=200,
             content_type="text/html",

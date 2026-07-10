@@ -67,6 +67,7 @@ dependencies = [
     "jsonschema",         # JSON Schema 格式校验
     "markdown-it-py",     # 高性能 Markdown 解析器
     "mdit-py-plugins",    # Markdown-it 扩展插件
+    "charset-normalizer", # HTML 响应编码探测
     # --- Internal & Security (内部共享库与安全凭证) ---
     "wisepen-common",     # WisePen 公共基础公共库 (内部依赖)
     "cryptography",       # 密钥加密、解密与凭证安全保护

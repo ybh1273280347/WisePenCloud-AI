@@ -91,7 +91,7 @@ async def test_image_ocr_file_path_url_deletes_downloaded_temp_file(tmp_path: Pa
     )
 
     assert result.visible_result["status"] == "success"
-    assert result.cacheable_texts[0].startswith("<!-- page 1 -->\n\nocr text from tool_fetch_")
+    assert result.cacheable_texts[0].startswith("<!-- page 1 -->\n\nocr text from tool_download_")
     assert ocr_client.last_file_path is not None
     assert not ocr_client.last_file_path.exists()
 

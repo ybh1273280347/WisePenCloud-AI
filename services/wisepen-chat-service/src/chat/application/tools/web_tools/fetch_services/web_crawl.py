@@ -7,14 +7,12 @@ from urllib.parse import urljoin, urlparse
 
 from lxml import html as lxml_html
 
-from chat.application.tools.common.web_content_cache import (
-    WebContentCacheRepository,
-)
+from chat.application.tools.common.web_content_cache import WebContentCacheRepository
 from common.logger import info, warn
 from ._utils import judge_quality
 from .cleaners import BaseCleaner
-from .core.errors import UrlFetchError
-from .core.models import RawFetchOutput, WebFetchResult
+from .core.errors import UrlFetchError, UrlFetchUnsupportedUrlError
+from .core.models import WebFetchResult
 from .fetchers import WebFetcher
 from .infra.cache import WebFetchCache
 
@@ -23,7 +21,6 @@ from .infra.cache import WebFetchCache
 class _CrawlPage:
     result: WebFetchResult
     raw_html: str | None
-    should_cache: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,23 +30,11 @@ class WebCrawlResult:
 
 
 class WebCrawler:
-    """Web 递归爬取服务。
-
-    复用 HttpxFetcher / ScraplingFetcher 的 fallback 链路抓取 HTML 页面，
-    用 lxml 从 raw_html 提取同域链接，BFS 递归爬取。
-
-    设计要点：
-    - 直接用底层 fetcher（非 FetchCoordinator.fetch_one），因为 crawl 需要 raw_html 提取链接，
-      而 fetch_one 返回的 WebFetchResult 只含清洗后的 markdown
-    - 非 HTML 文件（PDF/图片等）自然跳过：fetcher 返回 file_path 而非 raw_html，
-      crawler 不递归非 HTML，也不做 handoff（crawl 目标是 HTML 页面集合）
-    - 复用 cleaner 保持清洗一致性，复用 judge_quality 让低质量页面也触发 scrapling fallback
-    - BFS + visited 集合防环，max_pages/max_depth 限制规模
-    """
+    """复用 static → stealthy 抓取链路，按 BFS 递归爬取 HTML 页面。"""
 
     __slots__ = (
-        "_httpx_fetcher",
-        "_scrapling_fetcher",
+        "_static_fetcher",
+        "_stealthy_fetcher",
         "_cleaner",
         "_cache",
         "_min_text_length",
@@ -59,15 +44,15 @@ class WebCrawler:
     def __init__(
             self,
             *,
-            httpx_fetcher: WebFetcher,
-            scrapling_fetcher: WebFetcher,
+            static_fetcher: WebFetcher,
+            stealthy_fetcher: WebFetcher,
             cleaner: BaseCleaner,
             content_cache_repository: WebContentCacheRepository | None = None,
             min_text_length: int = 200,
             concurrency: int = 16,
     ) -> None:
-        self._httpx_fetcher = httpx_fetcher
-        self._scrapling_fetcher = scrapling_fetcher
+        self._static_fetcher = static_fetcher
+        self._stealthy_fetcher = stealthy_fetcher
         self._cleaner = cleaner
         self._cache = WebFetchCache(
             cleaner_name=cleaner.name,
@@ -82,191 +67,211 @@ class WebCrawler:
             seed_url: str,
             *,
             user_id: str,
-            session_id: str,
             source_scope: str = "web_public",
             max_pages: int = 100,
             max_depth: int = 3,
             same_domain: bool = True,
     ) -> WebCrawlResult:
-        """BFS 递归爬取 seed_url。"""
+        """按 BFS 递归爬取 seed_url。"""
         base_domain = urlparse(seed_url).netloc
         queue: deque[tuple[str, int]] = deque([(seed_url, 0)])
-        visited: set[str] = set()
+        discovered = {seed_url}
         results: list[WebFetchResult] = []
-        semaphore = asyncio.Semaphore(self._concurrency)
 
         try:
             while queue and len(results) < max_pages:
-                # 按并发度取一批
-                batch: list[tuple[str, int]] = []
-                while queue and len(batch) < self._concurrency and len(results) + len(batch) < max_pages:
-                    url, depth = queue.popleft()
-                    if url in visited:
-                        continue
-                    visited.add(url)
-                    batch.append((url, depth))
-
-                if not batch:
-                    continue
-
-                # 并发抓取本批
-                tasks = [
-                    self._fetch_one_for_crawl(
-                        url,
-                        semaphore=semaphore,
-                        user_id=user_id,
-                        source_scope=source_scope,
+                batch = [
+                    queue.popleft()
+                    for _ in range(
+                        min(
+                            len(queue),
+                            self._concurrency,
+                            max_pages - len(results),
+                        )
                     )
-                    for url, _ in batch
                 ]
-                pages = await asyncio.gather(*tasks, return_exceptions=True)
+
+                pages = await asyncio.gather(
+                    *(
+                        self._fetch_one(
+                            url,
+                            user_id=user_id,
+                            source_scope=source_scope,
+                        )
+                        for url, _ in batch
+                    ),
+                    return_exceptions=True,
+                )
 
                 for (url, depth), page in zip(batch, pages, strict=True):
                     if isinstance(page, Exception):
                         warn("web_crawl fetch failed", url=url, reason=str(page))
                         continue
+
                     if page is None:
                         continue
 
                     results.append(page.result)
-
-                    # 达到深度或页面数上限，不再扩展
-                    if depth >= max_depth or len(results) >= max_pages or page.raw_html is None:
+                    if (
+                            depth >= max_depth
+                            or len(results) >= max_pages
+                            or page.raw_html is None
+                    ):
                         continue
 
-                    # 页面里的畸形 href 不能打断已抓到的结果，只影响该页面的后续扩展。
-                    try:
-                        child_urls = _extract_links(page.raw_html, url, base_domain, same_domain)
-                    except Exception as exc:
-                        warn("web_crawl extract links failed", url=url, reason=str(exc))
-                        continue
+                    for child_url in _extract_links(
+                            page.raw_html,
+                            base_url=url,
+                            base_domain=base_domain,
+                            same_domain=same_domain,
+                    ):
+                        if child_url in discovered:
+                            continue
+                        discovered.add(child_url)
+                        queue.append((child_url, depth + 1))
 
-                    for child_url in child_urls:
-                        if child_url not in visited:
-                            queue.append((child_url, depth + 1))
         except asyncio.CancelledError:
             return WebCrawlResult(pages=tuple(results), timed_out=True)
 
         return WebCrawlResult(pages=tuple(results))
 
-    async def _fetch_one_for_crawl(
+    async def _fetch_one(
             self,
             url: str,
             *,
-            semaphore: asyncio.Semaphore,
             user_id: str,
             source_scope: str,
     ) -> _CrawlPage | None:
-        """单个 URL 抓取，httpx → scrapling fallback。"""
-        async with semaphore:
-            cached = await self._cache.read_page(
-                url=url,
-                user_id=user_id,
+        cached = await self._cache.read_page(url=url, user_id=user_id)
+        if cached is not None:
+            return _CrawlPage(
+                result=cached.result,
+                raw_html=cached.raw_html,
             )
-            if cached is not None:
-                return _CrawlPage(
-                    result=cached.result,
-                    raw_html=cached.raw_html,
-                    should_cache=False,
-                )
+
+        used_stealthy = False
+
+        try:
+            raw = await self._static_fetcher.fetch(url)
+        except UrlFetchUnsupportedUrlError as exc:
+            warn(
+                "web_crawl skip unsupported url result",
+                url=url,
+                reason=exc.reason,
+            )
+            return None
+        except UrlFetchError as exc:
+            warn(
+                "web_crawl static failed, fallback to stealthy",
+                url=url,
+                reason=exc.reason,
+            )
+            used_stealthy = True
 
             try:
-                raw = await self._httpx_fetcher.fetch(url)
-            except UrlFetchError as exc:
-                warn("web_crawl httpx failed, fallback to scrapling", url=url, reason=exc.reason)
-                try:
-                    raw = await self._scrapling_fetcher.fetch(url)
-                except UrlFetchError as exc2:
-                    warn("web_crawl scrapling failed", url=url, reason=exc2.reason)
-                    return None
-
-            if raw.raw_html is None:
-                info("web_crawl skip non-html", url=url, label=raw.file_label)
+                raw = await self._stealthy_fetcher.fetch(url)
+            except UrlFetchError as fallback_exc:
+                warn(
+                    "web_crawl stealthy failed",
+                    url=url,
+                    reason=fallback_exc.reason,
+                )
                 return None
 
-            # 质量判断：httpx 结果若质量不足，尝试 scrapling
-            cleaned = self._cleaner.clean(raw.raw_html, url=raw.final_url or url)
-            quality = judge_quality(raw=raw, cleaned=cleaned, min_text_length=self._min_text_length)
-            if quality.should_fallback:
-                warn("web_crawl httpx quality insufficient, fallback to scrapling", url=url, reason=quality.reason)
-                try:
-                    fallback_raw = await self._scrapling_fetcher.fetch(url)
-                    if fallback_raw.raw_html is not None:
-                        raw = fallback_raw
-                except UrlFetchError as exc2:
-                    warn("web_crawl scrapling failed, using httpx result", url=url, reason=exc2.reason)
+        if raw.raw_html is None:
+            info("web_crawl skip non-html", url=url, label=raw.file_label)
+            return None
 
-            page = self._build_page(raw)
-            if page.should_cache:
-                await self._cache.write_html_result(
-                    url=url,
-                    user_id=user_id,
-                    source_scope=source_scope,
-                    raw=raw,
-                    result=page.result,
-                )
-            return page
-
-    def _build_page(self, raw: RawFetchOutput) -> _CrawlPage:
-        """将 RawFetchOutput 清洗为 WebFetchResult。"""
-        cleaned = self._cleaner.clean(raw.raw_html or "", url=raw.final_url or raw.source_url)
-        quality = judge_quality(raw=raw, cleaned=cleaned, min_text_length=self._min_text_length)
-
-        return _CrawlPage(
-            result=WebFetchResult(
-                source_url=raw.source_url,
-                final_url=raw.final_url,
-                status_code=raw.status_code,
-                content_type=raw.content_type,
-                title=cleaned.title,
-                markdown=cleaned.markdown,
-            ),
-            raw_html=raw.raw_html,
-            should_cache=not quality.should_fallback,
+        cleaned = self._cleaner.clean(raw.raw_html, url=raw.source_url)
+        quality = judge_quality(
+            raw=raw,
+            cleaned=cleaned,
+            min_text_length=self._min_text_length,
         )
+
+        if not used_stealthy and quality.should_fallback:
+            warn(
+                "web_crawl static quality insufficient, fallback to stealthy",
+                url=url,
+                reason=quality.reason,
+            )
+
+            try:
+                fallback = await self._stealthy_fetcher.fetch(url)
+            except UrlFetchError as exc:
+                warn(
+                    "web_crawl stealthy failed, using static result",
+                    url=url,
+                    reason=exc.reason,
+                )
+            else:
+                if fallback.raw_html is not None:
+                    raw = fallback
+                    cleaned = self._cleaner.clean(
+                        raw.raw_html,
+                        url=raw.source_url,
+                    )
+                    quality = judge_quality(
+                        raw=raw,
+                        cleaned=cleaned,
+                        min_text_length=self._min_text_length,
+                    )
+
+        result = WebFetchResult(
+            source_url=raw.source_url,
+            status_code=raw.status_code,
+            content_type=raw.content_type,
+            title=cleaned.title,
+            markdown=cleaned.markdown,
+        )
+
+        if not quality.should_fallback:
+            await self._cache.write_html_result(
+                url=url,
+                user_id=user_id,
+                source_scope=source_scope,
+                raw=raw,
+                result=result,
+            )
+
+        return _CrawlPage(result=result, raw_html=raw.raw_html)
 
 
 def _extract_links(
         raw_html: str,
+        *,
         base_url: str,
         base_domain: str,
         same_domain: bool,
 ) -> list[str]:
-    """从 HTML 提取链接，去锚点、规范化、same_domain 过滤。返回去重结果。"""
+    """提取并去重页面中的 HTTP(S) 链接。"""
     try:
-        tree = lxml_html.fromstring(raw_html)
+        hrefs = lxml_html.fromstring(raw_html).xpath("//a/@href")
     except Exception:
         return []
 
+    links: list[str] = []
     seen: set[str] = set()
-    result: list[str] = []
 
-    for href in tree.xpath("//a/@href"):
-        if not href:
-            continue
-        # 去锚点
+    for href in hrefs:
         href = href.split("#", 1)[0].strip()
         if not href:
             continue
+
         try:
-            # 相对路径转绝对。urllib 会对非法 IPv6 host 等畸形 URL 抛 ValueError。
             absolute = urljoin(base_url, href)
-        except ValueError:
-            continue
-
-        if not absolute.startswith(("http://", "https://")):
-            continue
-
-        try:
             parsed = urlparse(absolute)
         except ValueError:
             continue
 
-        # 同域过滤
+        if parsed.scheme not in {"http", "https"}:
+            continue
         if same_domain and parsed.netloc != base_domain:
             continue
-        if absolute not in seen:
-            seen.add(absolute)
-            result.append(absolute)
+        if absolute in seen:
+            continue
 
-    return result
+        seen.add(absolute)
+        links.append(absolute)
+
+    return links

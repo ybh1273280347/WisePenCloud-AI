@@ -22,7 +22,6 @@ class WebContentCacheValue:
 
     user_id: str
     canonical_url: str
-    final_url: str | None
     cache_mode: WebContentCacheMode
     status_code: int | None
     content_type: str | None

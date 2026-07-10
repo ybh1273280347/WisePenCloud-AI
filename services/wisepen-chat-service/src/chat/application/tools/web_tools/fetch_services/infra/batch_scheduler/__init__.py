@@ -8,8 +8,8 @@ from .models import (
     FetchOutcome,
     FetchQueue,
     FetchSlot,
-    HttpxJobHandler,
-    ScraplingJobHandler,
+    StaticJobHandler,
+    StealthyJobHandler,
 )
 from .scheduler import FetchBatchScheduler
 
@@ -22,6 +22,6 @@ __all__ = [
     "FetchOutcome",
     "FetchQueue",
     "FetchSlot",
-    "HttpxJobHandler",
-    "ScraplingJobHandler",
+    "StaticJobHandler",
+    "StealthyJobHandler",
 ]

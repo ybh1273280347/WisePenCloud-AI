@@ -9,7 +9,6 @@ class RawFetchOutput:
 
     source_url: str
     fetcher: str
-    final_url: str | None = None
     status_code: int | None = None
     content_type: str | None = None
     headers: dict[str, str] = field(default_factory=dict)
@@ -39,7 +38,7 @@ class WebFetchResult:
 
     只承载对模型决策有用的语义字段：
     - source_url: 原始请求 URL，工具可见结果使用它标识来源
-    - final_url / status_code / content_type: 内部缓存写入需要的 HTTP 元数据，不直接暴露给模型
+    - status_code / content_type: 内部缓存写入需要的 HTTP 元数据，不直接暴露给模型
     - title / markdown: HTML 页面路径的核心内容
     - file_ref / file_label: 非 HTML 文件移交 ToolRunFileStore 后的引用
     - warnings: 会改变模型后续策略的提示，如最终正文质量不足
@@ -50,7 +49,6 @@ class WebFetchResult:
     """
 
     source_url: str
-    final_url: str | None
     status_code: int | None
     content_type: str | None
     title: str | None

@@ -11,7 +11,7 @@ from chat.application.tools.common.web_content_cache._utils.metadata import (
     source_scope_from_metadata,
     string_metadata,
 )
-from chat.application.tools.utils.url import FetchedUrl
+from chat.application.tools.utils.url import DownloadedUrl
 from common.logger import warn
 
 _DOCUMENT_PARSE_CACHE_PARSER_VERSION = "document_parse:v1"
@@ -38,14 +38,13 @@ class DocumentParseCache:
             self,
             *,
             user_id: str,
-            raw: FetchedUrl,
+            raw: DownloadedUrl,
     ) -> bool:
         return await self._content_cache_service.write_non_html_stub(
             NonHtmlCacheStubWrite(
                 user_id=user_id,
                 source_scope="web_public",
                 source_url=raw.source_url,
-                final_url=raw.final_url,
                 status_code=raw.status_code,
                 content_type=raw.content_type,
                 headers=raw.headers,
@@ -106,13 +105,11 @@ class DocumentParseCache:
 def direct_url_metadata(
         *,
         url: str,
-        final_url: str | None,
         content_type: str | None,
 ) -> dict[str, object]:
     return {
         "source_kind": "web_fetch",
         "source_scope": "web_public",
         "source_url": url,
-        "final_url": final_url,
         "content_type": content_type,
     }

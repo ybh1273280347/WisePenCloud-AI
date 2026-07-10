@@ -1,0 +1,76 @@
+// node_modules/html-void-elements/index.js
+var htmlVoidElements = [
+  "area",
+  "base",
+  "basefont",
+  "bgsound",
+  "br",
+  "col",
+  "command",
+  "embed",
+  "frame",
+  "hr",
+  "image",
+  "img",
+  "input",
+  "keygen",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr"
+];
+
+// node_modules/hast-util-whitespace/lib/index.js
+var re = /[ \t\n\f\r]/g;
+function whitespace(thing) {
+  return typeof thing === "object" ? thing.type === "text" ? empty(thing.value) : false : empty(thing);
+}
+function empty(value) {
+  return value.replace(re, "") === "";
+}
+
+// node_modules/zwitch/index.js
+var own = {}.hasOwnProperty;
+function zwitch(key, options) {
+  const settings = options || {};
+  function one(value, ...parameters) {
+    let fn = one.invalid;
+    const handlers = one.handlers;
+    if (value && own.call(value, key)) {
+      const id = String(value[key]);
+      fn = own.call(handlers, id) ? handlers[id] : one.unknown;
+    }
+    if (fn) {
+      return fn.call(this, value, ...parameters);
+    }
+  }
+  one.handlers = settings.handlers || {};
+  one.invalid = settings.invalid;
+  one.unknown = settings.unknown;
+  return one;
+}
+
+// node_modules/ccount/index.js
+function ccount(value, character) {
+  const source = String(value);
+  if (typeof character !== "string") {
+    throw new TypeError("Expected character");
+  }
+  let count = 0;
+  let index = source.indexOf(character);
+  while (index !== -1) {
+    count++;
+    index = source.indexOf(character, index + character.length);
+  }
+  return count;
+}
+
+export {
+  zwitch,
+  htmlVoidElements,
+  ccount,
+  whitespace
+};
+//# sourceMappingURL=chunk-CDHXPRKO.js.map

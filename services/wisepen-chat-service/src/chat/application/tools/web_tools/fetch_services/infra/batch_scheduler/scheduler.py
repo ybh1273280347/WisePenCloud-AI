@@ -7,58 +7,58 @@ from .models import (
     FetchBatchCancelled,
     FetchJob,
     FetchSlot,
-    HttpxJobHandler,
-    ScraplingJobHandler,
+    StaticJobHandler,
+    StealthyJobHandler,
 )
-from .workers import httpx_worker, scrapling_worker
+from .workers import static_worker, stealthy_worker
 from ...core.errors import UrlFetchError
 
 
 class FetchBatchScheduler:
     """web_fetch 批量抓取的两阶段调度器。
 
-    只负责 httpx 快路径与 scrapling 慢路径的资源池隔离；具体抓取、清洗、
+    只负责 static 与 stealthy 页面抓取的资源池隔离；具体抓取、清洗、
     缓存写入和失败语义仍由 FetchCoordinator 提供。
     """
 
     __slots__ = (
         "_fallback_admission",
-        "_httpx_concurrency",
-        "_httpx_job_handler",
-        "_max_scrapling_fallbacks",
-        "_scrapling_concurrency",
-        "_scrapling_job_handler",
+        "_max_stealthy_fallbacks",
+        "_static_concurrency",
+        "_static_job_handler",
+        "_stealthy_concurrency",
+        "_stealthy_job_handler",
     )
 
     def __init__(
             self,
             *,
-            httpx_concurrency: int,
-            scrapling_concurrency: int,
-            max_scrapling_fallbacks: int,
+            static_concurrency: int,
+            stealthy_concurrency: int,
+            max_stealthy_fallbacks: int,
             fallback_admission: FallbackAdmission,
-            httpx_job_handler: HttpxJobHandler,
-            scrapling_job_handler: ScraplingJobHandler,
+            static_job_handler: StaticJobHandler,
+            stealthy_job_handler: StealthyJobHandler,
     ) -> None:
-        self._httpx_concurrency = max(1, int(httpx_concurrency))
-        self._scrapling_concurrency = max(1, int(scrapling_concurrency))
-        self._max_scrapling_fallbacks = max(0, int(max_scrapling_fallbacks))
+        self._static_concurrency = max(1, int(static_concurrency))
+        self._stealthy_concurrency = max(1, int(stealthy_concurrency))
+        self._max_stealthy_fallbacks = max(0, int(max_stealthy_fallbacks))
         self._fallback_admission = fallback_admission
-        self._httpx_job_handler = httpx_job_handler
-        self._scrapling_job_handler = scrapling_job_handler
+        self._static_job_handler = static_job_handler
+        self._stealthy_job_handler = stealthy_job_handler
 
     async def run(self, urls: list[str]) -> list[FetchSlot]:
         if not urls:
             return []
 
-        httpx_queue: asyncio.Queue[FetchJob] = asyncio.Queue()
-        scrapling_queue: asyncio.Queue[FetchJob] = asyncio.Queue()
+        static_queue: asyncio.Queue[FetchJob] = asyncio.Queue()
+        stealthy_queue: asyncio.Queue[FetchJob] = asyncio.Queue()
         results: list[FetchSlot] = [None] * len(urls)
-        fallback_limit = min(self._max_scrapling_fallbacks, len(urls))
+        fallback_limit = min(self._max_stealthy_fallbacks, len(urls))
         admitted_fallbacks = 0
 
         for index, url in enumerate(urls):
-            await httpx_queue.put(FetchJob(index=index, url=url))
+            await static_queue.put(FetchJob(index=index, url=url))
 
         def admit_fallback(exc: UrlFetchError | None = None) -> str | None:
             nonlocal admitted_fallbacks
@@ -73,37 +73,37 @@ class FetchBatchScheduler:
             admitted_fallbacks += 1
             return None
 
-        httpx_workers = [
+        static_workers = [
             asyncio.create_task(
-                httpx_worker(
-                    httpx_queue=httpx_queue,
-                    scrapling_queue=scrapling_queue,
+                static_worker(
+                    static_queue=static_queue,
+                    stealthy_queue=stealthy_queue,
                     results=results,
                     admit_fallback=admit_fallback,
-                    job_handler=self._httpx_job_handler,
+                    job_handler=self._static_job_handler,
                 )
             )
-            for _ in range(min(self._httpx_concurrency, len(urls)))
+            for _ in range(min(self._static_concurrency, len(urls)))
         ]
-        scrapling_workers = [
+        stealthy_workers = [
             asyncio.create_task(
-                scrapling_worker(
-                    scrapling_queue=scrapling_queue,
+                stealthy_worker(
+                    stealthy_queue=stealthy_queue,
                     results=results,
-                    job_handler=self._scrapling_job_handler,
+                    job_handler=self._stealthy_job_handler,
                 )
             )
-            for _ in range(min(self._scrapling_concurrency, fallback_limit))
+            for _ in range(min(self._stealthy_concurrency, fallback_limit))
         ]
 
         try:
-            await httpx_queue.join()
-            await scrapling_queue.join()
+            await static_queue.join()
+            await stealthy_queue.join()
         except asyncio.CancelledError as exc:
             raise FetchBatchCancelled(slots=results) from exc
         finally:
-            for task in (*httpx_workers, *scrapling_workers):
+            for task in (*static_workers, *stealthy_workers):
                 task.cancel()
-            await asyncio.gather(*httpx_workers, *scrapling_workers, return_exceptions=True)
+            await asyncio.gather(*static_workers, *stealthy_workers, return_exceptions=True)
 
         return results

@@ -73,7 +73,6 @@ class WebFetchCache:
         return _CachedWebFetchPage(
             result=WebFetchResult(
                 source_url=cached.source_url,
-                final_url=cached.final_url,
                 status_code=cached.status_code,
                 content_type=cached.content_type,
                 title=cached.title,
@@ -96,7 +95,6 @@ class WebFetchCache:
                 url=url,
                 user_id=user_id,
                 source_scope=source_scope,
-                final_url=raw.final_url,
                 status_code=raw.status_code,
                 content_type=raw.content_type,
                 raw_html=raw.raw_html,
@@ -121,7 +119,6 @@ class WebFetchCache:
                 user_id=user_id,
                 source_scope=source_scope,
                 source_url=raw.source_url,
-                final_url=raw.final_url,
                 status_code=raw.status_code,
                 content_type=raw.content_type,
                 headers=raw.headers,

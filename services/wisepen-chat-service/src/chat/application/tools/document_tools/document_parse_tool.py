@@ -34,11 +34,11 @@ from chat.application.tools.document_tools.document_parse.core.models import Doc
 from chat.application.tools.document_tools.document_parse.service import DocumentParseService
 from chat.application.tools.utils.batching import batched
 from chat.application.tools.utils.url import (
-    FetchedUrl,
-    UrlFetcherError,
-    UrlFetcherUnsupportedUrlError,
+    DownloadedUrl,
+    UrlDownloadError,
+    UrlDownloadUnsupportedUrlError,
     UrlSecurityError,
-    fetch_url,
+    download_url,
     filename_from_url,
     validate_public_http_url,
 )
@@ -353,9 +353,9 @@ class DocumentParseTool:
                 None,
             )
 
-        raw: FetchedUrl | None = None
+        raw: DownloadedUrl | None = None
         try:
-            metadata = direct_url_metadata(url=url, final_url=url, content_type=None)
+            metadata = direct_url_metadata(url=url, content_type=None)
             cache_hit = await self._cache.read_parsed_web_cache(
                 user_id=user_id,
                 metadata=metadata,
@@ -370,11 +370,10 @@ class DocumentParseTool:
                     cache_hit.markdown,
                 )
 
-            raw = await fetch_url(
+            raw = await download_url(
                 url,
                 http_client=self._url_download_http_client,
                 max_response_bytes=self._max_download_bytes,
-                allow_html=False,
             )
             await self._cache.write_direct_url_cache_stub(
                 user_id=user_id,
@@ -382,7 +381,6 @@ class DocumentParseTool:
             )
             metadata = direct_url_metadata(
                 url=raw.source_url,
-                final_url=raw.final_url or raw.source_url,
                 content_type=raw.content_type,
             )
             record = await self._file_store.publish_file(
@@ -390,7 +388,7 @@ class DocumentParseTool:
                 session_id=session_id,
                 producer="document_parse",
                 path=raw.file_path,
-                filename=filename_from_url(raw.final_url or raw.source_url)
+                filename=filename_from_url(raw.source_url)
                          or f"download.{raw.file_label or 'bin'}",
                 content_type=raw.content_type,
                 ref_prefix="web_public",
@@ -402,7 +400,7 @@ class DocumentParseTool:
                 session_id=session_id,
                 file_ref=record.ref_id,
             )
-        except UrlFetcherUnsupportedUrlError as e:
+        except UrlDownloadUnsupportedUrlError as e:
             reason = (
                 "direct_url_not_file"
                 if e.reason == "url_resolved_to_html"
@@ -416,7 +414,7 @@ class DocumentParseTool:
                 ),
                 None,
             )
-        except UrlFetcherError as e:
+        except UrlDownloadError as e:
             return (
                 DocumentParseToolItem(
                     source=direct_url,

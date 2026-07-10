@@ -22,7 +22,6 @@ class CachedMarkdownPage:
     """URL 缓存命中的 HTML/Markdown 页面。"""
 
     source_url: str
-    final_url: str | None
     status_code: int | None
     content_type: str | None
     title: str | None
@@ -38,7 +37,6 @@ class HtmlCacheWrite:
     url: str
     user_id: str
     source_scope: str
-    final_url: str | None
     status_code: int | None
     content_type: str | None
     raw_html: str | None
@@ -58,7 +56,6 @@ class NonHtmlCacheStubWrite:
     user_id: str
     source_scope: str
     source_url: str
-    final_url: str | None
     status_code: int | None
     content_type: str | None
     headers: dict[str, str]
@@ -139,7 +136,6 @@ class WebContentCacheService:
                 WebContentCacheValue(
                     user_id=write.user_id,
                     canonical_url=canonical_url,
-                    final_url=write.final_url,
                     cache_mode=mode,
                     status_code=write.status_code,
                     content_type=write.content_type,
@@ -196,7 +192,6 @@ class WebContentCacheService:
                 WebContentCacheValue(
                     user_id=write.user_id,
                     canonical_url=write.source_url.strip(),
-                    final_url=write.final_url,
                     cache_mode=mode,
                     status_code=write.status_code,
                     content_type=write.content_type,
@@ -210,7 +205,6 @@ class WebContentCacheService:
                         "source_kind": write.source_kind,
                         "source_scope": write.source_scope,
                         "source_url": write.source_url,
-                        "final_url": write.final_url,
                         "fetcher": write.fetcher,
                         "file_label": write.file_label,
                         "cache_control": write.headers.get("cache-control"),
@@ -308,12 +302,10 @@ class WebContentCacheService:
                 return False
 
             raw_html = existing.raw_html if existing is not None else None
-            final_url = string_metadata(metadata, "final_url")
             content_hash_payload = f"{raw_html or ''}\n---markdown---\n{markdown}"
             value = WebContentCacheValue(
                 user_id=user_id,
                 canonical_url=existing.canonical_url if existing is not None else source_url.strip(),
-                final_url=existing.final_url if existing is not None else final_url,
                 cache_mode=mode,
                 status_code=existing.status_code if existing is not None else None,
                 content_type=existing.content_type if existing is not None else content_type,
@@ -329,7 +321,6 @@ class WebContentCacheService:
                     "source_kind": source_kind,
                     "source_scope": source_scope,
                     "source_url": source_url,
-                    "final_url": final_url,
                     "content_type": content_type,
                     "parser": parser,
                     "parser_version": parser_version,
@@ -359,7 +350,6 @@ def _cached_markdown_page(
     title = value.metadata.get("title")
     return CachedMarkdownPage(
         source_url=source_url,
-        final_url=value.final_url,
         status_code=value.status_code,
         content_type=value.content_type,
         title=title if isinstance(title, str) else None,

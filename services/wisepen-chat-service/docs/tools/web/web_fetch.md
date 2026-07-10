@@ -35,14 +35,15 @@ input urls
   -> URL validation
   -> FetchCoordinator.fetch_many
   -> per URL: WebContentCacheService.read_markdown_page
-  -> httpx fetch
-  -> optional scrapling fallback
+  -> static page fetch
+  -> optional browser page fetch
   -> HTML: trafilatura clean + quality check + cache write
+  -> non-HTML: temporary file download
   -> non-HTML: ToolRunFileStore publish + cache stub write
   -> ToolReturn(cacheable_texts=markdowns)
 ```
 
-抓取链路优先使用工具层共享 `HttpxFetcher`；网络失败或 HTML 质量不足时降级到 `ScraplingFetcher`。HTML 由 `TrafilaturaCleaner` 清洗为 Markdown，并按 HTTP cache-control 计算 URL 缓存 TTL。
+抓取链路先用静态页面 fetcher 读取 HTML，质量不足时再降级到浏览器页面 fetcher。只有静态页面 fetcher 明确发现目标不是 HTML 时，才交给临时文件下载器落盘并移交 `tfile_*`。HTML 由 `TrafilaturaCleaner` 清洗为 Markdown，并按 HTTP cache-control 计算 URL 缓存 TTL。
 
 内部服务结构：
 
@@ -52,8 +53,9 @@ input urls
 | web_crawl 服务门面 | `web_tools/fetch_services/web_crawl.py` |
 | 共享模型 | `web_tools/fetch_services/core/models.py` |
 | 共享异常 | `web_tools/fetch_services/core/errors.py` |
-| HTTP 抓取实现 | `web_tools/fetch_services/fetchers/httpx_fetcher.py` |
-| Scrapling fallback | `web_tools/fetch_services/fetchers/scrapling_fetcher.py` |
+| 非 HTML 临时文件下载 | `web_tools/fetch_services/downloaders/temp_file_downloader.py` |
+| 静态 HTML 抓取 | `web_tools/fetch_services/fetchers/static_page_fetcher.py` |
+| 浏览器 HTML 抓取 | `web_tools/fetch_services/fetchers/stealthy_page_fetcher.py` |
 | HTML cleaner | `web_tools/fetch_services/cleaners/trafilatura_cleaner.py` |
 | URL 缓存适配 | `web_tools/fetch_services/infra/cache.py` |
 | 批量调度器 | `web_tools/fetch_services/infra/batch_scheduler/` |
@@ -70,7 +72,7 @@ src/chat/application/tools/common/web_content_cache/
 
 1. 下载到临时文件。
 2. 为 URL 写入缓存占位文档。
-3. 发布为 `tfile_*`，metadata 包含 `source_kind=web_fetch`、`source_scope`、`source_url`、`final_url`。
+3. 发布为 `tfile_*`，metadata 包含 `source_kind=web_fetch`、`source_scope`、`source_url`。
 4. 返回 `file_ref` 和 `file_label`，建议下一步调用 `document_parse`。
 
 ## 输出
@@ -79,7 +81,7 @@ src/chat/application/tools/common/web_content_cache/
 
 | 字段 | 说明 |
 | --- | --- |
-| `visible_result.items` | 每个成功 URL 的轻量元数据，包含 `source_url`、`final_url`、`status_code`、`content_type`、`title`、`warnings`、`file_ref`、`file_label`、`source_scope`。 |
+| `visible_result.items` | 每个成功 URL 的轻量元数据，包含 `source_url`、`title`、`file_ref`、`file_label`。 |
 | `visible_result.failed` | 单 URL 失败列表；批量中单项失败不阻断其它 URL。 |
 | `visible_result.warnings` | 批量级 warning。 |
 | `cacheable_texts` | HTML Markdown。超出内联阈值后变成 `cnt_*`。 |
@@ -95,9 +97,9 @@ visible result 不直接携带 Markdown，避免大正文污染模型上下文�
 
 ## 可插拔组件
 
-- `fetch_services/fetchers/httpx_fetcher.py`：常规 HTTP 下载，可实验 header、重试、MIME 探测和最大响应字节。
+- `fetch_services/downloaders/temp_file_downloader.py`：非 HTML 临时下载，可实验 header、MIME 探测和最大响应字节。
 - `tools/utils/url/security.validate_public_http_url`：URL 安全性校验，只校验 URL 本身，不做页面内容阻断。
-- `fetch_services/fetchers/scrapling_fetcher.py`：动态/反爬 fallback，可替换为 Playwright 类 browser fetcher。
+- `fetch_services/fetchers/static_page_fetcher.py` / `stealthy_page_fetcher.py`：静态与浏览器 HTML 抓取，可实验 impersonate、browser 并发和反爬策略。
 - `fetch_services/cleaners/trafilatura_cleaner.py`：web_fetch 内部 HTML 正文抽取，可替换 cleaner。
 - `judge_quality`：降级判断阈值，可按站点类型或内容长度实验。
 - `WebContentCacheService`：统一 URL 缓存门面，可扩展 ETag、Last-Modified、缓存分层。

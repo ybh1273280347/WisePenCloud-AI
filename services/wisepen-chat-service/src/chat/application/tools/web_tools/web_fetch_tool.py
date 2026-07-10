@@ -42,7 +42,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
 class WebFetchTool:
     """Web fetch 工具门面，批量抓取 URL。
 
-    复用 FetchCoordinator 的 httpx -> scrapling fallback 链路 + 清洗 + 质量判断。
+    复用 FetchCoordinator 的静态抓取 -> 浏览器 fallback 链路 + 清洗 + 质量判断。
     HTML 页面返回清洗后的 markdown；非 HTML 文件移交 ToolRunFileStore 返回 tfile_* 引用。
     单个 URL 失败不阻塞其他，转为 failed 项。
 

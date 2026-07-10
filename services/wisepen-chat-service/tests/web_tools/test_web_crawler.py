@@ -126,10 +126,10 @@ async def test_web_crawler_reuses_fetch_cache_and_cached_raw_html_for_links() ->
             title="Child",
         ),
     }
-    httpx_fetcher = _UnusedFetcher()
+    file_sniffer = _UnusedFetcher()
     scrapling_fetcher = _UnusedFetcher()
     crawler = WebCrawler(
-        httpx_fetcher=httpx_fetcher,
+        file_sniffer=file_sniffer,
         scrapling_fetcher=scrapling_fetcher,
         cleaner=_UnusedCleaner(),
         content_cache_repository=_CacheRepository(values),
@@ -146,7 +146,7 @@ async def test_web_crawler_reuses_fetch_cache_and_cached_raw_html_for_links() ->
 
     assert [page.source_url for page in result.pages] == [seed_url, child_url]
     assert [page.markdown for page in result.pages] == ["# Seed", "# Child"]
-    assert httpx_fetcher.calls == 0
+    assert file_sniffer.calls == 0
     assert scrapling_fetcher.calls == 0
 
 
@@ -189,7 +189,7 @@ async def test_web_crawler_keeps_successful_pages_when_cached_html_has_bad_link(
         ),
     }
     crawler = WebCrawler(
-        httpx_fetcher=_UnusedFetcher(),
+        file_sniffer=_UnusedFetcher(),
         scrapling_fetcher=_UnusedFetcher(),
         cleaner=_UnusedCleaner(),
         content_cache_repository=_CacheRepository(values),
@@ -223,7 +223,7 @@ async def test_web_crawler_returns_completed_pages_when_tool_timeout_cancels_cra
     }
     release_child = asyncio.Event()
     crawler = WebCrawler(
-        httpx_fetcher=_BlockingFetcher(release=release_child),
+        file_sniffer=_BlockingFetcher(release=release_child),
         scrapling_fetcher=_UnusedFetcher(),
         cleaner=_UnusedCleaner(),
         content_cache_repository=_CacheRepository(values),
@@ -258,7 +258,6 @@ def _cache_value(
     return WebContentCacheValue(
         user_id=user_id,
         canonical_url=url,
-        final_url=url,
         cache_mode=WebContentCacheMode.PUBLIC,
         status_code=200,
         content_type="text/html",

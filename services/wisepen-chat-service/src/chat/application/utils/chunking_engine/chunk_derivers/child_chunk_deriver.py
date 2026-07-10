@@ -85,16 +85,14 @@ class ChildChunkDeriver:
                         metadata={
                             "child_index": i,
                             "child_count": len(blocks),
-                            **_page_metadata_from(parent),
+                            **(
+                                {"page_label": page_label}
+                                if (page_label := parent.metadata.get("page_label"))
+                                else {}
+                            ),
                         },
                     )
                 )
 
         return (*chunks, *children)
 
-
-def _page_metadata_from(parent: Chunk) -> dict[str, object]:
-    metadata: dict[str, object] = {}
-    if page_label := parent.metadata.get("page_label"):
-        metadata["page_label"] = page_label
-    return metadata

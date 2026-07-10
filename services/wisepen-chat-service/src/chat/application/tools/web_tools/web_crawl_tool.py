@@ -69,7 +69,7 @@ PARAMETERS_SCHEMA: dict[str, Any] = {
 class WebCrawlTool:
     """Web crawl 工具门面，递归爬取同域 HTML 页面。
 
-    复用 FetchCoordinator 的 fetcher 链路（httpx -> scrapling fallback）+ cleaner，
+    复用静态抓取 -> 浏览器 fallback 的 fetcher 链路 + cleaner，
     用 lxml 从 raw_html 提取链接，BFS 递归爬取。
 
     与 web_fetch 的区别：

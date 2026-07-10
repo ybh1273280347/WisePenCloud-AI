@@ -1,10 +1,12 @@
 # src/chat/container.py
 
-from typing import List
+from collections.abc import AsyncIterator
+from typing import Any, List
 
 import hishel.httpx as hishel_httpx
 import httpx
 import redis.asyncio as redis
+from scrapling.fetchers import AsyncStealthySession, FetcherSession
 from dependency_injector import containers, providers
 from elasticsearch import AsyncElasticsearch
 from neo4j import AsyncGraphDatabase, AsyncDriver, GraphDatabase, Driver
@@ -79,9 +81,12 @@ from chat.application.tools.web_tools.fetch_services import (
 from chat.application.tools.web_tools.fetch_services.cleaners.trafilatura_cleaner import (
     TrafilaturaCleaner,
 )
+from chat.application.tools.web_tools.fetch_services.downloaders import (
+    TempFileDownloader,
+)
 from chat.application.tools.web_tools.fetch_services.fetchers import (
-    HttpxFetcher,
-    ScraplingFetcher,
+    StaticPageFetcher,
+    StealthyPageFetcher,
 )
 from chat.application.tools.search_tools.web_search.runtime_context_resolver import (
     WebSearchRuntimeContextResolver,
@@ -151,6 +156,7 @@ from common.kafka.producer import KafkaProducerClient
 PADDLE_OCR_HTTP_TIMEOUT_SECONDS = 300.0
 WEB_SEARCH_HTTP_TIMEOUT_SECONDS = 15.0
 WEB_FETCH_HTTP_TIMEOUT_SECONDS = 30.0
+WEB_FETCH_SCRAPLING_RETRIES = 1
 
 
 def _build_redis_client() -> redis.Redis:
@@ -290,6 +296,35 @@ def _build_web_fetch_http_client() -> httpx.AsyncClient:
         transport=transport,
         trust_env=False,
     )
+
+
+async def _provide_static_page_session() -> AsyncIterator[Any]:
+    async with FetcherSession(
+            impersonate="chrome",
+            stealthy_headers=True,
+            follow_redirects=False,
+            timeout=WEB_FETCH_HTTP_TIMEOUT_SECONDS,
+            retries=WEB_FETCH_SCRAPLING_RETRIES,
+    ) as session:
+        yield session
+
+
+async def _provide_stealthy_page_session() -> AsyncIterator[AsyncStealthySession]:
+    session = AsyncStealthySession(
+        headless=True,
+        max_pages=3,
+        timeout=int(WEB_FETCH_HTTP_TIMEOUT_SECONDS * 1000),
+        disable_resources=True,
+        block_ads=True,
+        network_idle=False,
+        load_dom=True,
+        retries=WEB_FETCH_SCRAPLING_RETRIES,
+    )
+    await session.start()
+    try:
+        yield session
+    finally:
+        await session.close()
 
 
 class Container(containers.DeclarativeContainer):
@@ -652,27 +687,39 @@ class Container(containers.DeclarativeContainer):
     web_fetch_http_client = providers.Singleton(
         _build_web_fetch_http_client,
     )
-    web_fetch_httpx_fetcher = providers.Singleton(
-        HttpxFetcher,
-        http_client=web_fetch_http_client,
+    web_fetch_static_page_session = providers.Resource(
+        _provide_static_page_session,
     )
-    web_fetch_scrapling_fetcher = providers.Singleton(
-        ScraplingFetcher,
+    web_fetch_stealthy_page_session = providers.Resource(
+        _provide_stealthy_page_session,
+    )
+    web_fetch_static_page_fetcher = providers.Singleton(
+        StaticPageFetcher,
+        session=web_fetch_static_page_session,
+    )
+    web_fetch_stealthy_page_fetcher = providers.Singleton(
+        StealthyPageFetcher,
+        session=web_fetch_stealthy_page_session,
+    )
+    web_fetch_temp_file_downloader = providers.Singleton(
+        TempFileDownloader,
+        http_client=web_fetch_http_client,
     )
     web_fetch_cleaner = providers.Singleton(
         TrafilaturaCleaner,
     )
     web_crawler = providers.Singleton(
         WebCrawler,
-        httpx_fetcher=web_fetch_httpx_fetcher,
-        scrapling_fetcher=web_fetch_scrapling_fetcher,
+        static_fetcher=web_fetch_static_page_fetcher,
+        stealthy_fetcher=web_fetch_stealthy_page_fetcher,
         cleaner=web_fetch_cleaner,
         content_cache_repository=web_content_cache_repository,
     )
     web_fetch_coordinator = providers.Singleton(
         FetchCoordinator,
-        httpx_fetcher=web_fetch_httpx_fetcher,
-        scrapling_fetcher=web_fetch_scrapling_fetcher,
+        static_fetcher=web_fetch_static_page_fetcher,
+        stealthy_fetcher=web_fetch_stealthy_page_fetcher,
+        temp_file_downloader=web_fetch_temp_file_downloader,
         cleaner=web_fetch_cleaner,
         file_store=tool_run_file_store,
         content_cache_repository=web_content_cache_repository,

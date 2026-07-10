@@ -1,38 +1,38 @@
 from __future__ import annotations
 
-from .models import AdmitFallback, FetchQueue, FetchSlot, HttpxJobHandler, ScraplingJobHandler
+from .models import AdmitFallback, FetchQueue, FetchSlot, StaticJobHandler, StealthyJobHandler
 
 
-async def httpx_worker(
+async def static_worker(
         *,
-        httpx_queue: FetchQueue,
-        scrapling_queue: FetchQueue,
+        static_queue: FetchQueue,
+        stealthy_queue: FetchQueue,
         results: list[FetchSlot],
         admit_fallback: AdmitFallback,
-        job_handler: HttpxJobHandler,
+        job_handler: StaticJobHandler,
 ) -> None:
     while True:
-        job = await httpx_queue.get()
+        job = await static_queue.get()
         try:
             await job_handler(
                 job,
-                scrapling_queue,
+                stealthy_queue,
                 results,
                 admit_fallback,
             )
         finally:
-            httpx_queue.task_done()
+            static_queue.task_done()
 
 
-async def scrapling_worker(
+async def stealthy_worker(
         *,
-        scrapling_queue: FetchQueue,
+        stealthy_queue: FetchQueue,
         results: list[FetchSlot],
-        job_handler: ScraplingJobHandler,
+        job_handler: StealthyJobHandler,
 ) -> None:
     while True:
-        job = await scrapling_queue.get()
+        job = await stealthy_queue.get()
         try:
             results[job.index] = await job_handler(job)
         finally:
-            scrapling_queue.task_done()
+            stealthy_queue.task_done()

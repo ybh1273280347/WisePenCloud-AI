@@ -40,7 +40,6 @@ class _FakeFetchService:
             items=(
                 WebFetchResult(
                     source_url="https://example.test/page",
-                    final_url="https://cdn.example.test/page",
                     status_code=200,
                     content_type="text/html",
                     title="Example Page",
@@ -49,7 +48,6 @@ class _FakeFetchService:
                 ),
                 WebFetchResult(
                     source_url="https://example.test/file.pdf",
-                    final_url="https://cdn.example.test/file.pdf",
                     status_code=200,
                     content_type="application/pdf",
                     title=None,

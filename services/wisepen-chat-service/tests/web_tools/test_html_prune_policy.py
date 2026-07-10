@@ -49,7 +49,7 @@ def test_build_prune_xpath_matches_ascii_backdrop_without_pruning_code_blocks() 
 
     matched_ids = _matched_element_ids(
         tree,
-        build_prune_xpath("https://openai.com/zh-Hans-CN/index/previewing-gpt-5-6-sol"),
+        build_prune_xpath(),
     )
 
     assert "ascii-hero" in matched_ids
@@ -79,7 +79,7 @@ def test_trafilatura_cleaner_passes_prune_xpath_by_default(monkeypatch) -> None:
     )
 
     assert result.markdown == "Title\n\nBody"
-    assert calls["prune_xpath"] == build_prune_xpath("https://openai.com/research/example")
+    assert calls["prune_xpath"] == build_prune_xpath()
 
 
 def test_trafilatura_cleaner_can_disable_dom_prune(monkeypatch) -> None:

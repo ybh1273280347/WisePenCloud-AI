@@ -21,11 +21,11 @@ from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.document_tools.ocr import OcrPageResult
 from chat.application.tools.utils.file_type_detect import detect_mime_type
 from chat.application.tools.utils.url import (
-    FetchedUrl,
-    UrlFetcherError,
-    UrlFetcherUnsupportedUrlError,
+    DownloadedUrl,
+    UrlDownloadError,
+    UrlDownloadUnsupportedUrlError,
     UrlSecurityError,
-    fetch_url,
+    download_url,
     filename_from_url,
     validate_public_http_url,
 )
@@ -196,21 +196,20 @@ class ImageOcrTool:
         if self._url_download_http_client is None:
             return ImageOcrToolResult(status="failed", reason="image_url_fetch_unavailable")
 
-        raw: FetchedUrl | None = None
+        raw: DownloadedUrl | None = None
         try:
             url = validate_public_http_url(url)
-            raw = await fetch_url(
+            raw = await download_url(
                 url,
                 http_client=self._url_download_http_client,
                 max_response_bytes=self._max_download_bytes,
-                allow_html=False,
             )
             return await self._parse_image_path(
                 path=Path(raw.file_path),
-                file_name=filename_from_url(raw.final_url or raw.source_url),
+                file_name=filename_from_url(raw.source_url),
                 content_type=raw.content_type,
             )
-        except UrlFetcherUnsupportedUrlError as e:
+        except UrlDownloadUnsupportedUrlError as e:
             reason = (
                 "image_url_not_file"
                 if e.reason == "url_resolved_to_html"
@@ -222,7 +221,7 @@ class ImageOcrTool:
                 status="failed",
                 reason=f"invalid_image_url:{e}",
             )
-        except UrlFetcherError as e:
+        except UrlDownloadError as e:
             return ImageOcrToolResult(
                 status="failed",
                 reason=f"image_url_fetch_failed:{e.reason}",

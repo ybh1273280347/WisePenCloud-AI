@@ -1,0 +1,42 @@
+[
+  {
+    "engine": "httpx",
+    "total_elapsed_ms": 3877.963799983263,
+    "request_ok_count": 5,
+    "target_count": 10,
+    "avg_elapsed_ms": 1910.0573299944401,
+    "avg_cleaned_chars": 1647.0
+  },
+  {
+    "engine": "scrapling_async_fetcher",
+    "total_elapsed_ms": 3309.3098999857903,
+    "request_ok_count": 5,
+    "target_count": 10,
+    "avg_elapsed_ms": 1098.4533899962903,
+    "avg_cleaned_chars": 4057.9
+  },
+  {
+    "engine": "scrapling_fetcher_session",
+    "total_elapsed_ms": 3251.784900009632,
+    "request_ok_count": 5,
+    "target_count": 10,
+    "avg_elapsed_ms": 1135.5256599992513,
+    "avg_cleaned_chars": 4086.3
+  },
+  {
+    "engine": "stealthy_fetch_async",
+    "total_elapsed_ms": 32936.16449999809,
+    "request_ok_count": 6,
+    "target_count": 10,
+    "avg_elapsed_ms": 6539.4833599954845,
+    "avg_cleaned_chars": 6478.6
+  },
+  {
+    "engine": "stealthy_session",
+    "total_elapsed_ms": 27886.946799993515,
+    "request_ok_count": 6,
+    "target_count": 10,
+    "avg_elapsed_ms": 5196.136999994516,
+    "avg_cleaned_chars": 4201.4
+  }
+]

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 _UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 _LOWER = "abcdefghijklmnopqrstuvwxyz"
-_LOWER_NAME = f"translate(name(), '{_UPPER}', '{_LOWER}')"
 
-COMMON_TAG_PRUNE_XPATH: tuple[str, ...] = (
+# 几乎不会误删
+_BASE_PRUNE_XPATH = (
     "//script",
     "//style",
     "//noscript",
@@ -12,6 +12,10 @@ COMMON_TAG_PRUNE_XPATH: tuple[str, ...] = (
     "//svg",
     "//canvas",
     "//iframe",
+)
+
+# 已有策略选择，存在一定召回损失
+_LAYOUT_PRUNE_XPATH = (
     "//header",
     "//nav",
     "//footer",
@@ -20,55 +24,20 @@ COMMON_TAG_PRUNE_XPATH: tuple[str, ...] = (
     "//button",
 )
 
-DOM_HYGIENE_PRUNE_XPATH: tuple[str, ...] = (
+# 由真实异常样例驱动增加
+_OBSERVED_NOISE_XPATH = (
     f"//*[translate(@aria-hidden, '{_UPPER}', '{_LOWER}')='true']",
     "//*[@hidden]",
     "//*[@inert]",
     "//*[@data-animated-cell]",
 )
 
-PRESENTATIONAL_DATA_ATTR_MARKERS: tuple[str, ...] = (
-    "animated",
-    "animation",
-    "ascii",
-    "backdrop",
-    "confetti",
-    "decorative",
-    "decoration",
-    "motion",
-    "ornament",
-    "particle",
-    "particles",
-    "sparkle",
+_PRUNE_XPATH = (
+    *_BASE_PRUNE_XPATH,
+    *_LAYOUT_PRUNE_XPATH,
+    *_OBSERVED_NOISE_XPATH,
 )
 
 
 def build_prune_xpath(url: str | None = None) -> list[str]:
-    rules: list[str] = []
-    rules.extend(COMMON_TAG_PRUNE_XPATH)
-    rules.extend(DOM_HYGIENE_PRUNE_XPATH)
-    rules.extend(_build_presentational_data_attr_xpath())
-
-    return _dedupe_preserve_order(rules)
-
-
-def _build_presentational_data_attr_xpath() -> tuple[str, ...]:
-    return tuple(
-        f"//*[@*[{_is_presentational_data_attr(marker)}]]"
-        for marker in PRESENTATIONAL_DATA_ATTR_MARKERS
-    )
-
-
-def _is_presentational_data_attr(marker: str) -> str:
-    return f"starts-with({_LOWER_NAME}, 'data-') and contains({_LOWER_NAME}, '{marker}')"
-
-
-def _dedupe_preserve_order(rules: list[str]) -> list[str]:
-    seen: set[str] = set()
-    deduped: list[str] = []
-    for rule in rules:
-        if rule in seen:
-            continue
-        seen.add(rule)
-        deduped.append(rule)
-    return deduped
+    return list(_PRUNE_XPATH)

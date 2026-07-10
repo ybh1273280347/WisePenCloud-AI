@@ -107,13 +107,14 @@ provider/platform search tool
 ```text
 web_fetch
   -> URL cache read
-  -> httpx/scrapling
+  -> static page fetch -> optional browser page fetch
   -> HTML: cleaner -> URL cache -> cacheable_texts -> cnt_*
+  -> non-HTML: temporary file downloader
   -> non-HTML: URL cache stub -> tfile_* -> document_parse
 
 web_crawl
   -> URL cache read per page
-  -> httpx/scrapling
+  -> static page fetch -> optional browser page fetch
   -> cleaner -> URL cache -> cacheable_texts -> cnt_*
   -> raw_html link extraction for BFS
 ```

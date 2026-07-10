@@ -1,0 +1,52 @@
+Introducing ChatGPT Work, a new agent in ChatGPT that can take action across your apps and workflows to turn a goal into finished work. Powered by Codex and GPT-5.6, ChatGPT Work is a whole new way to use ChatGPT, moving beyond just answering questions to getting real work done across web, mobile, and desktop. You can ask ChatGPT Work to take on entire workflows with a single request. It will understand your goals, use context from selected apps and files, create polished documents, decks, analyses, sites, and reports, and keep work moving while you stay in control. GPT-5.6 makes ChatGPT state of the art at reasoning through complex tasks and creating materials that match your templates, reference files, and preferred style. ChatGPT Work starts rolling out today on web and mobile, beginning with Pro, Enterprise, and Edu users and expanding to Plus and Business over the next few days. Chat, Work, and Codex are available to all desktop users, including Free, starting today in the updated ChatGPT desktop app for Mac and Windows. Codex app users can update their app as usual—it will become the new ChatGPT desktop app. https://lnkd.in/ehpEC3V8
+About us
+OpenAI is an AI research and deployment company dedicated to ensuring that general-purpose artificial intelligence benefits all of humanity. AI is an extremely powerful tool that must be created with safety and human needs at its core. OpenAI is dedicated to putting that alignment of interests first — ahead of profit. To achieve our mission, we must encompass and value the many different perspectives, voices, and experiences that form the full spectrum of humanity. Our investment in diversity, equity, and inclusion is ongoing, executed through a wide range of initiatives, and championed and supported by leadership. At OpenAI, we believe artificial intelligence has the potential to help people solve immense global challenges, and we want the upside of AI to be widely shared. Join us in shaping the future of technology.
+- Industry
+- Research Services
+- Company size
+- 1,001-5,000 employees
+- Headquarters
+- San Francisco, CA
+- Type
+- Partnership
+- Specialties
+- artificial intelligence and machine learning
+Locations
+Employees at OpenAI
+Updates
+- 
+              
+        
+    Andrew Ambrosino, Jessica Liang, Ed Bayes, Lauren Gordon, Tejal Patwardhan, and Katy Shi with host Thibault Sottiaux introduce and demo the new ChatGPT and GPT-5.6. https://lnkd.in/gVbXg8sk Our biggest update for work in ChatGPTwww.linkedin.com
+- 
+              
+        
+    Introducing GPT-Live, a new generation of voice models for natural human-AI interaction. Rolling out in ChatGPT starting today. GPT-Live makes talking with AI feel like having a real conversation. It’s also our smartest voice model yet. It’s built on a full-duplex architecture, meaning it can listen and speak at the same time. This allows the model to engage in more natural back-and-forth, maintain a better sense of time, and even perform live translation. A good voice model should be enjoyable to talk to, and GPT-Live is a great conversationalist with a more natural and defined personality than previous voice models. For questions that require web search, deeper reasoning, or more complex work, GPT-Live can delegate to our latest frontier model behind the scenes, and brings the result back into the conversation when it's ready. These new models are rolling out now to everyone in ChatGPT across iOS, Android, and web. Coming soon to the API. Just tap the Voice button to talk with ChatGPT, and you’ll get the new experience powered by GPT-Live. Learn more about GPT-Live and ChatGPT Voice: https://lnkd.in/g8_uW3Kj 
+- 
+              
+        
+    We’re introducing GeneBench-Pro, a research-level benchmark for a harder kind of AI progress: how well agents can navigate messy biological data, choose the right analysis path, and make judgment calls that real computational research depends on. GeneBench-Pro represents an initial effort to evaluate the more abstract skills involved in good scientific judgment possessed by experienced. We anticipate that as model capabilities advance, benchmarks that probe model abilities at these higher levels of abstraction will become increasingly useful, beyond those that simply test book knowledge or the ability to execute routine analyses. https://lnkd.in/eeZaipbH 
+- 
+              
+        
+    Introducing a limited preview of GPT-5.6 Sol, our next generation frontier model, as well as GPT-5.6 Terra, a balanced model for efficient, everyday work, and GPT-5.6 Luna, a fast and affordable model for high-volume work. We believe in broad access and plan to make GPT-5.6 Sol, Terra, and Luna generally available in the coming weeks. For now, at the request of the U.S. government, we’re starting with a limited preview among a small group of trusted partners in Codex and the API. We’re excited to continue learning from this preview period, and to bring GPT‑5.6 Sol, Terra and Luna to more people soon. https://lnkd.in/eYiKri9U 
+- 
+              
+        
+    Codex usage at OpenAI gives us a preview of what agentic work may look like in the future. A new OpenAI Economic Research paper finds that agentic AI is expanding the frontier of productive work: - Users increasingly ask Codex to take on work estimated to require 30 minutes, one hour, or even eight hours of human effort. - At OpenAI, Codex became the main interface for work-related AI use across the company, including non-technical functions. - Workers use Codex for a broader mix of tasks, including debugging, validation, automation, tooling, documentation, data transformation, and structured analysis. The findings are early, but they point to a broader shift: as agents improve, people use them for more complex, longer-running, and more cross-functional work. https://lnkd.in/e_-X3NhX 
+- 
+              
+        
+    We’ve designed and built our first AI chip: Jalapeño. Designed from the ground up by OpenAI and brought to production with Broadcom, Jalapeño is purpose-built for the LLM workloads powering ChatGPT, Codex, the API, and future agentic products. Chips are foundational to the AI economy. Building our own expands our full-stack platform from products to models to infrastructure, and will help us scale intelligence, serve more people, and expand access to AI. https://lnkd.in/gg8UvTwE 
+- 
+              
+        
+    OpenAI reposted this Applications to attend OpenAI DevDay 2026 are open. Join us in San Francisco on September 29 to: • Tinker with what’s new • Swap build notes with other builders • Go deep in technical sessions • Bring your sharpest questions Apply by July 10: https://devday.openai.com/ 
+- 
+              
+        
+    The next generation is already building the future with AI. The ChatGPT Futures Class of 2026 came together in San Francisco to share the ideas they're pursuing, the projects they're building, and the experiences that inspired them to start. As the first graduating class to have ChatGPT throughout college, they offer a glimpse of how young builders, researchers, creators, and advocates are turning new tools into real-world progress. 
+- 
+              
+        
+    We’re expanding OpenAI Daybreak to help democratize patching vulnerable software at machine speed: - Codex Security plugin: find, validate, and fix vulnerabilities right inside Codex - The full version of GPT-5.5-Cyber model: a strong model for trusted defenders - Cyber Partner Program: powering products built on top of our best cyber capabilities for 20+ leading security companies to secure the world's software - Patch the Planet: working with maintainers to secure critical open source projects With an update to GPT‑5.5‑Cyber, it’s now more permissive and more capable for advanced, authorized cybersecurity work. It is our most capable cyber model yet, with stronger performance on defensive workflows like tracing vulnerable code, validating issues, developing patches, and preparing evidence for human review. Codex Security brings these capabilities into real security workflows. Teams can run deep scans, validate findings, trace attack paths, build threat models, generate codebase-specific patches for review, and export into the tools they already use. We’re also launching the OpenAI Daybreak Cyber Partner Program with leading security software and services providers. Participating partners can use GPT‑5.5 with Trusted Access for Cyber in the security products and services they provide to customers. This helps their customers benefit from advanced defensive AI, while keeping direct model access with trusted partners. Our goal is to move beyond using models to find more vulnerabilities, towards a world of safer software and cyber resilience. https://lnkd.in/eTjgMDUw

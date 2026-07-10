@@ -28,9 +28,9 @@ class FetchBatchCancelled(Exception):
 
 FetchQueue = asyncio.Queue[FetchJob]
 
-HttpxJobHandler = Callable[
+StaticJobHandler = Callable[
     [FetchJob, FetchQueue, list[FetchSlot], AdmitFallback],
     Awaitable[None],
 ]
 
-ScraplingJobHandler = Callable[[FetchJob], Awaitable[FetchOutcome]]
+StealthyJobHandler = Callable[[FetchJob], Awaitable[FetchOutcome]]
