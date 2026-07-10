@@ -49,7 +49,7 @@ from chat.application.tools.utils.url import (
     UrlSecurityError,
     download_url,
     filename_from_url,
-    validate_public_http_url,
+    validate_public_http_url_async,
 )
 
 DOCUMENT_PARSE_TOOL_TIMEOUT_SECONDS = 660.0
@@ -283,7 +283,7 @@ class DocumentParseTool:
             )
 
         try:
-            url = validate_public_http_url(direct_url.strip())
+            url = await validate_public_http_url_async(direct_url.strip())
         except UrlSecurityError as exc:
             return (
                 DocumentParseToolItem(

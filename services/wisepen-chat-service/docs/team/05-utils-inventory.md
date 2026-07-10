@@ -131,22 +131,6 @@
 - `security.validate_public_http_url`
 - `security.UrlSecurityError`
 
-## Markdown 渲染器
-
-路径：`src/chat/application/tools/utils/markdown_renderer/`
-
-用途：把已确定的 HTML 片段按 HTML 语法树确定性渲染成适合模型阅读、缓存和分块的 Markdown。这里不处理特定业务或站点清洗逻辑，不做网页正文抽取、反爬判断、页面阻断、导航去噪或内容质量判断；这些策略属于具体工具自己的 cleaner。
-
-现有入口：
-
-- `html2markdown.HtmlToMarkdownRenderer`
-
-### HtmlToMarkdownRenderer
-
-将 HTML 片段直接转 Markdown，并可移除 `script`、`style`、`noscript`、`template`、`svg`、`canvas` 等语法树节点。它只做确定性的语法树到 Markdown 渲染，不调用 trafilatura 这类网页正文抽取器，也不承载 web page 专用清洗策略。
-
-适用场景：OCR 或外部服务返回的局部 HTML 表格/片段。
-
 ## 快速定位
 
 新增业务能力前先检查：
@@ -160,7 +144,6 @@
 | 需要下载非 HTML URL 到临时文件 | `tools/utils/url/downloader.download_url` |
 | 需要提取 URL 文件名 | `tools/utils/url/filename.filename_from_url` |
 | 需要校验外部 URL 是否安全 | `tools/utils/url/security.validate_public_http_url` |
-| 需要 HTML 片段转 Markdown | `markdown_renderer/html2markdown.HtmlToMarkdownRenderer` |
 | 需要网页主体抽取成 Markdown | `web_tools/fetch_services/cleaners/TrafilaturaCleaner` |
 | 需要复用外部 URL 抓取、HTML 清洗或文件解析结果 | `src/chat/application/tools/common/web_content_cache/`，不要混入 `ToolContentStore` |
 

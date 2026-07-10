@@ -32,7 +32,7 @@ class StaticPageFetcher:
 
     async def fetch(self, url: str) -> RawFetchOutput:
         try:
-            url = validate_page_url(url)
+            url = await validate_page_url(url)
             response = await self._session.get(url, follow_redirects=False)
             return build_raw_html_output(
                 response,

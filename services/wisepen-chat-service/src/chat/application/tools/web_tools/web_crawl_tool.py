@@ -11,7 +11,10 @@ from chat.application.tools.core import (
     ToolRiskLevel,
 )
 from chat.application.tools.core.tool_return import ToolReturn
-from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
+from chat.application.tools.utils.url import (
+    UrlSecurityError,
+    validate_public_http_url_async,
+)
 from chat.application.tools.web_tools.fetch_services import WebCrawler
 from chat.application.tools.web_tools.fetch_services.core.errors import UrlFetchError
 from common.logger import warn
@@ -138,7 +141,7 @@ class WebCrawlTool:
         same_domain = kwargs.get("same_domain") if kwargs.get("same_domain") is not None else True
 
         try:
-            seed_url = validate_public_http_url(seed_url)
+            seed_url = await validate_public_http_url_async(seed_url)
         except UrlSecurityError as exc:
             raise ToolExecutionError(
                 reason="invalid_seed_url",

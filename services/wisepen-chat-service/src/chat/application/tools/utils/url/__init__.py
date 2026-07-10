@@ -7,7 +7,11 @@ from .downloader import (
     download_url,
 )
 from .filename import filename_from_url
-from .security import UrlSecurityError, validate_public_http_url
+from .security import (
+    UrlSecurityError,
+    validate_public_http_url,
+    validate_public_http_url_async,
+)
 
 __all__ = [
     "DownloadedUrl",
@@ -19,4 +23,5 @@ __all__ = [
     "download_url",
     "filename_from_url",
     "validate_public_http_url",
+    "validate_public_http_url_async",
 ]

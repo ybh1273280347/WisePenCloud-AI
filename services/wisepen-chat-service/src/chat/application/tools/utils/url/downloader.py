@@ -10,7 +10,7 @@ import httpx
 
 from chat.application.tools.utils.file_type_detect import FileType, detect_file_type_from_bytes
 from .filename import filename_from_url
-from .security import UrlSecurityError, validate_public_http_url
+from .security import UrlSecurityError, validate_public_http_url_async
 
 _DEFAULT_DOWNLOAD_HEADERS = {
     "User-Agent": (
@@ -74,7 +74,7 @@ async def download_url(
 ) -> DownloadedUrl:
     """下载公开 http(s) 非 HTML URL 到临时文件。"""
     try:
-        source_url = validate_public_http_url(url)
+        source_url = await validate_public_http_url_async(url)
     except UrlSecurityError as exc:
         raise UrlDownloadUnsupportedUrlError(url=url, reason=str(exc)) from exc
 

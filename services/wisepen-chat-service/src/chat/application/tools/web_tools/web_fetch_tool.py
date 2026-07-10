@@ -11,7 +11,10 @@ from chat.application.tools.core import (
     ToolRiskLevel,
 )
 from chat.application.tools.core.tool_return import ToolReturn
-from chat.application.tools.utils.url import UrlSecurityError, validate_public_http_url
+from chat.application.tools.utils.url import (
+    UrlSecurityError,
+    validate_public_http_url_async,
+)
 from chat.application.tools.web_tools.fetch_services import FetchCoordinator
 from chat.application.tools.web_tools.fetch_services.core.errors import UrlFetchError
 from common.logger import warn
@@ -110,7 +113,7 @@ class WebFetchTool:
         for u in kwargs["urls"]:
             url = u.strip()
             try:
-                urls.append(validate_public_http_url(url))
+                urls.append(await validate_public_http_url_async(url))
             except UrlSecurityError as exc:
                 raise ToolExecutionError(
                     reason="invalid_url",

@@ -29,7 +29,7 @@ from chat.application.tools.utils.url import (
     UrlSecurityError,
     download_url,
     filename_from_url,
-    validate_public_http_url,
+    validate_public_http_url_async,
 )
 
 IMAGE_OCR_TOOL_TIMEOUT_SECONDS = 300.0
@@ -210,7 +210,7 @@ class ImageOcrTool:
 
         downloaded: DownloadedUrl | None = None
         try:
-            url = validate_public_http_url(url)
+            url = await validate_public_http_url_async(url)
             downloaded = await download_url(
                 url,
                 http_client=self._url_download_http_client,

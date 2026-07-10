@@ -78,7 +78,14 @@ async def test_document_parse_direct_url_downloads_without_intermediate_file_ref
             file_label="txt",
         )
 
-    monkeypatch.setattr(tool_module, "validate_public_http_url", lambda url: url)
+    async def fake_validate_public_http_url(url: str) -> str:
+        return url
+
+    monkeypatch.setattr(
+        tool_module,
+        "validate_public_http_url_async",
+        fake_validate_public_http_url,
+    )
     monkeypatch.setattr(tool_module, "download_url", fake_download_url)
     tool = DocumentParseTool(
         file_store=_FileStore(),

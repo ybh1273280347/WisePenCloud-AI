@@ -41,7 +41,6 @@ dependencies = [
     "trafilatura",        # 网页正文高率抽取
     "scrapling[fetchers]",  # 动态网页抓取（支持反爬与 JS 渲染，含 playwright/curl_cffi 等完整依赖）
     "beautifulsoup4",     # HTML/XML 结构化解析
-    "markdownify",        # HTML 转 Markdown
     "magika",             # 基于 AI 的文件类型深度识别
     # --- Text Chunking & Retrieval (分词、切分与多路检索) ---
     "langchain_text_splitters", # 文本智能分块工具
