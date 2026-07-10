@@ -3,8 +3,8 @@ from __future__ import annotations
 import contextlib
 from pathlib import Path
 
-from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
-from chat.application.tools.common.tool_run_file_store.core.errors import ToolRunFileStoreError
+from chat.application.tools.common.file_reference_store import FileReferenceStore
+from chat.application.tools.common.file_reference_store.core.errors import FileReferenceStoreError
 from chat.application.tools.common.web_content_cache import (
     WebContentCacheRepository,
 )
@@ -53,7 +53,7 @@ class FetchCoordinator:
             stealthy_fetcher: WebFetcher,
             temp_file_downloader: TempFileDownloader,
             cleaner: BaseCleaner,
-            file_store: ToolRunFileStore,
+            file_store: FileReferenceStore,
             content_cache_repository: WebContentCacheRepository | None = None,
             min_text_length: int = 200,
             batch_concurrency: int = 16,
@@ -315,7 +315,7 @@ class FetchCoordinator:
             source_scope: str,
             warnings: list[str],
     ) -> WebFetchResult:
-        """移交非 HTML 文件到 ToolRunFileStore，返回带 file_ref 的结果。"""
+        """发布非 HTML 文件引用并返回给后续工具。"""
         file_path = raw.file_path
         assert file_path is not None  # 由调用方保证
 
@@ -360,7 +360,7 @@ class FetchCoordinator:
                 file_label=raw.file_label,
                 warnings=tuple(warnings),
             )
-        except ToolRunFileStoreError as exc:
+        except FileReferenceStoreError as exc:
             raise UrlFetchError(
                 url=raw.source_url,
                 reason=f"file_publish_failed: {exc}",

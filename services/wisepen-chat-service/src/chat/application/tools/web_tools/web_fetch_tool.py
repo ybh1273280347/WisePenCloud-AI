@@ -43,7 +43,7 @@ class WebFetchTool:
     """Web fetch 工具门面，批量抓取 URL。
 
     复用 FetchCoordinator 的静态抓取 -> 浏览器 fallback 链路 + 清洗 + 质量判断。
-    HTML 页面返回清洗后的 markdown；非 HTML 文件移交 ToolRunFileStore 返回 tfile_* 引用。
+    HTML 页面返回清洗后的 markdown；非 HTML 文件返回统一的 file_* 引用。
     单个 URL 失败不阻塞其他，转为 failed 项。
 
     与 web_crawl 的区别：
@@ -82,7 +82,7 @@ class WebFetchTool:
                     "\n"
                     "OUTPUT RULES:\n"
                     "  - HTML page: returns title and cleaned markdown.\n"
-                    "  - Non-HTML file: returns file_ref (tfile_*) and file_label; pass file_ref to document_parse to extract content.\n"
+                    "  - Non-HTML file: returns file_ref (file_*) and file_label; pass file_ref to document_parse to extract content.\n"
                     "  - Avoid producing this file_ref handoff when the original user input was already an obvious direct file URL; document_parse can parse those URLs directly.\n"
                     "  - Per-URL failure is returned in the failed list with a reason; do NOT silently drop failed URLs.\n"
                     "  - Within one session, do NOT re-fetch the same url unless new information is required.\n"

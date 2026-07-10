@@ -3,19 +3,18 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from dataclasses import dataclass
+from itertools import batched
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
-from chat.application.tools.common.tool_run_file_store.core.errors import tool_file_error_reason
+from chat.application.tools.common.file_reference_store import FileReferenceStore
+from chat.application.tools.common.file_reference_store.core.errors import (
+    file_reference_error_reason,
+)
 from chat.application.tools.common.web_content_cache import (
     WebContentCacheRepository,
-)
-from chat.application.tools.common.web_content_cache._utils.metadata import (
-    source_scope_from_metadata,
-    string_metadata,
 )
 from chat.application.tools.core import (
     ToolDefinition,
@@ -28,11 +27,21 @@ from chat.application.tools.core import (
 from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.document_tools.document_parse.cache import (
     DocumentParseCache,
-    direct_url_metadata,
 )
-from chat.application.tools.document_tools.document_parse.core.models import DocumentParseRequest
-from chat.application.tools.document_tools.document_parse.service import DocumentParseService
-from chat.application.tools.utils.batching import batched
+from chat.application.tools.document_tools.document_parse.core.errors import (
+    DocumentDecodeError,
+    DocumentParseError,
+    DocumentTooLargeError,
+    RemoteParserError,
+    RemoteParserTimeoutError,
+    UnsupportedDocumentFormatError,
+)
+from chat.application.tools.document_tools.document_parse.core.models import (
+    DocumentParseRequest,
+)
+from chat.application.tools.document_tools.document_parse.service import (
+    DocumentParseService,
+)
 from chat.application.tools.utils.url import (
     DownloadedUrl,
     UrlDownloadError,
@@ -43,29 +52,26 @@ from chat.application.tools.utils.url import (
     validate_public_http_url,
 )
 
-MAX_DOCUMENT_PARSE_FILE_REFS = 64
-SERVICE_BATCH_SIZE = 16
-DOCUMENT_PARSE_CONCURRENCY = 16
-DOCUMENT_PARSE_TOOL_TIMEOUT_SECONDS = 300.0
+DOCUMENT_PARSE_TOOL_TIMEOUT_SECONDS = 660.0
+DOCUMENT_PARSE_CONCURRENCY = 8
 DOCUMENT_PARSE_MAX_DOWNLOAD_BYTES = 52_428_800
 
 
 @dataclass(frozen=True, slots=True)
 class DocumentParseToolItem:
-    source: str  # 调用方传入的 tfile_* 引用或直链 URL
-    status: str  # success 或 failed
-    file_name: str | None = None  # 解析出的展示文件名
-    reason: str | None = None  # 单项失败原因，供模型判断下一步
+    source: str
+    status: str
+    file_name: str | None = None
+    reason: str | None = None
 
 
 class DocumentParseTool:
-    """批量解析 tfile_* 文档引用的工具入口。"""
+    """批量解析统一文件引用或明显文档直链。"""
 
     __slots__ = (
         "_cache",
         "_definition",
         "_file_store",
-        "_max_download_bytes",
         "_parse_service",
         "_url_download_http_client",
     )
@@ -73,44 +79,39 @@ class DocumentParseTool:
     def __init__(
             self,
             *,
-            file_store: ToolRunFileStore,
+            file_store: FileReferenceStore,
             parse_service: DocumentParseService,
             content_cache_repository: WebContentCacheRepository | None = None,
             url_download_http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._file_store = file_store
         self._parse_service = parse_service
-        self._url_download_http_client = url_download_http_client
-        self._max_download_bytes = DOCUMENT_PARSE_MAX_DOWNLOAD_BYTES
         self._cache = DocumentParseCache(
-            content_cache_repository=content_cache_repository,
+            content_cache_repository=content_cache_repository
         )
+        self._url_download_http_client = url_download_http_client
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="document_parse",
                 description=(
-                    "Parse temporary document files or direct file URLs into Markdown.\n"
+                    "Parse document files into model-readable Markdown.\n"
                     "\n"
                     "WHEN TO TRIGGER:\n"
-                    "  - MUST trigger when previous tools returned tfile_* references (e.g. from web_fetch, web_crawl, or uploads) and you need their textual content.\n"
-                    "  - MUST trigger directly when the user provides obvious document file URLs (PDF, Office, spreadsheet, or similar non-HTML files) and asks for their content.\n"
-                    "  - SHOULD trigger when the user asks to read, summarize, or answer questions about an attached document.\n"
+                    "  - A previous tool returned one or more file_* references and document text is needed.\n"
+                    "  - The user supplied an obvious direct document URL such as PDF, Office, spreadsheet, HTML, JSON, or text.\n"
                     "DO NOT TRIGGER when:\n"
-                    "  - You need to read normal HTML pages — use web_fetch or web_crawl instead.\n"
-                    "  - You already have content_ids from a previous parse — use tool_content_rerank_read, tool_content_regex_read, or tool_content_sequential_read instead.\n"
-                    "  - You need OCR for a standalone image after inspecting it — use image_ocr instead.\n"
+                    "  - The target is a normal HTML web page; use web_fetch or web_crawl.\n"
+                    "  - The target is an image, archive, audio, video, executable, model weight, or database file.\n"
                     "\n"
                     "INPUT RULES:\n"
-                    "  - Provide file_refs for tfile_* values returned by web_fetch or another previous tool.\n"
-                    "  - Provide direct_urls for full http(s) direct document file URLs.\n"
-                    "  - Provide exactly one of file_refs or direct_urls; never provide both.\n"
-                    "  - Pass all selected files in one array; the tool auto-batches large sets and parses files concurrently within each batch.\n"
-                    "  - Do not wrap obvious direct document file URLs through web_fetch first; pass direct_urls directly.\n"
+                    "  - Provide exactly one of file_refs or direct_urls.\n"
+                    "  - file_refs must be file_* values returned by trusted tools.\n"
+                    "  - direct_urls must be complete public http(s) document file URLs.\n"
+                    "  - Never invent or pass a local filesystem path.\n"
                     "\n"
                     "OUTPUT RULES:\n"
-                    "  - Returns one item per input file with status success or failed.\n"
-                    "  - Each successfully parsed file produces a cacheable content unit; failed files return a reason code.\n"
-                    "  - Use content receipts with session read tools to locate answer-relevant windows in the parsed Markdown."
+                    "  - Each input returns an independent success or failure item.\n"
+                    "  - Successful document text is returned as Markdown content."
                 ),
                 parameters_schema=ToolParametersSchema(
                     {
@@ -118,29 +119,26 @@ class DocumentParseTool:
                         "properties": {
                             "file_refs": {
                                 "type": "array",
+                                "minItems": 1,
                                 "items": {
                                     "type": "string",
                                     "minLength": 1,
+                                    "pattern": "^file_",
                                 },
-                                "minItems": 1,
-                                "maxItems": MAX_DOCUMENT_PARSE_FILE_REFS,
                                 "description": (
-                                    "tfile_* references produced by previous tools. "
-                                    "Large sets are automatically split into internal batches."
+                                    "Internal file_* references produced by trusted tools."
                                 ),
                             },
                             "direct_urls": {
                                 "type": "array",
+                                "minItems": 1,
                                 "items": {
                                     "type": "string",
                                     "minLength": 1,
+                                    "pattern": "^https?://",
                                 },
-                                "minItems": 1,
-                                "maxItems": MAX_DOCUMENT_PARSE_FILE_REFS,
                                 "description": (
-                                    "Full http(s) direct document file URLs. "
-                                    "Large sets are automatically split into internal batches. "
-                                    "Use this for obvious non-HTML file links instead of calling web_fetch first."
+                                    "Public direct document file URLs."
                                 ),
                             },
                         },
@@ -160,15 +158,23 @@ class DocumentParseTool:
 
     @property
     def definition(self) -> ToolDefinition:
-        """返回工具元定义。"""
         return self._definition
 
-    async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
-        """批量解析文件引用，单项失败不影响其它文件。"""
+    async def execute(
+            self,
+            context: dict[str, Any],
+            **kwargs: Any,
+    ) -> ToolReturn:
         user_id = str(context["user_id"])
         session_id = str(context["session_id"])
-        file_refs = tuple(str(value).strip() for value in kwargs.get("file_refs", ()))
-        direct_urls = tuple(str(value).strip() for value in kwargs.get("direct_urls", ()))
+        file_refs = tuple(
+            str(value).strip()
+            for value in kwargs.get("file_refs", ())
+        )
+        direct_urls = tuple(
+            str(value).strip()
+            for value in kwargs.get("direct_urls", ())
+        )
 
         if bool(file_refs) == bool(direct_urls):
             raise ToolExecutionError(
@@ -178,158 +184,94 @@ class DocumentParseTool:
             )
 
         if file_refs:
-            item_results = await self._parse_file_ref_batches(
-                user_id=user_id,
-                session_id=session_id,
-                file_refs=file_refs,
-            )
-        else:
-            item_results = await self._parse_direct_url_batches(
-                user_id=user_id,
-                session_id=session_id,
-                direct_urls=direct_urls,
-            )
-
-        cacheable_texts: list[str] = []
-        items: list[DocumentParseToolItem] = []
-        for item, markdown in item_results:
-            if markdown:
-                item = DocumentParseToolItem(
-                    source=item.source,
-                    status=item.status,
-                    file_name=item.file_name,
-                )
-                cacheable_texts.append(markdown)
-            items.append(item)
-
-        return ToolReturn(
-            tag="document_parse_result",
-            visible_result={
-                "items": tuple(items),
-            },
-            cacheable_texts=tuple(cacheable_texts),
-        )
-
-    async def _parse_file_ref_batches(
-            self,
-            *,
-            user_id: str,
-            session_id: str,
-            file_refs: tuple[str, ...],
-    ) -> list[tuple[DocumentParseToolItem, str | None]]:
-        semaphore = asyncio.Semaphore(DOCUMENT_PARSE_CONCURRENCY)
-        results: list[tuple[DocumentParseToolItem, str | None]] = []
-        for batch_file_refs in batched(file_refs, batch_size=max(1, int(SERVICE_BATCH_SIZE))):
-            parse_inputs = [
-                self._parse_one(
-                    semaphore=semaphore,
+            requests = (
+                self._parse_file_ref(
                     user_id=user_id,
                     session_id=session_id,
                     file_ref=file_ref,
                 )
-                for file_ref in batch_file_refs
-            ]
-            results.extend(await asyncio.gather(*parse_inputs, return_exceptions=False))
-        return results
-
-    async def _parse_direct_url_batches(
-            self,
-            *,
-            user_id: str,
-            session_id: str,
-            direct_urls: tuple[str, ...],
-    ) -> list[tuple[DocumentParseToolItem, str | None]]:
-        semaphore = asyncio.Semaphore(DOCUMENT_PARSE_CONCURRENCY)
-        results: list[tuple[DocumentParseToolItem, str | None]] = []
-        for batch_direct_urls in batched(direct_urls, batch_size=max(1, int(SERVICE_BATCH_SIZE))):
-            parse_inputs = [
+                for file_ref in file_refs
+            )
+        else:
+            requests = (
                 self._parse_direct_url(
-                    semaphore=semaphore,
                     user_id=user_id,
-                    session_id=session_id,
                     direct_url=direct_url,
                 )
-                for direct_url in batch_direct_urls
-            ]
-            results.extend(await asyncio.gather(*parse_inputs, return_exceptions=False))
-        return results
+                for direct_url in direct_urls
+            )
 
-    async def _parse_one(
+        # 分批 gather 已经限制了并发数，不需要再套一层 Semaphore。
+        item_results: list[
+            tuple[DocumentParseToolItem, str | None]
+        ] = []
+        for batch in batched(requests, DOCUMENT_PARSE_CONCURRENCY):
+            item_results.extend(await asyncio.gather(*batch))
+
+        return ToolReturn(
+            tag="document_parse_result",
+            visible_result={
+                "items": tuple(item for item, _ in item_results),
+            },
+            cacheable_texts=tuple(
+                markdown
+                for _, markdown in item_results
+                if markdown
+            ),
+        )
+
+    async def _parse_file_ref(
             self,
             *,
-            semaphore: asyncio.Semaphore,
             user_id: str,
             session_id: str,
             file_ref: str,
     ) -> tuple[DocumentParseToolItem, str | None]:
-        """解析单个文件引用；异常转换为单项失败。"""
-        async with semaphore:
-            try:
-                resolved = await self._file_store.resolve_ref(
-                    user_id=user_id,
-                    session_id=session_id,
-                    ref_id=file_ref,
-                )
-                source_scope = source_scope_from_metadata(resolved.metadata)
-                source_kind = string_metadata(resolved.metadata, "source_kind")
-                cache_hit = await self._cache.read_parsed_web_cache(
-                    user_id=user_id,
-                    metadata=resolved.metadata,
-                )
-                if cache_hit is not None:
-                    return (
-                        DocumentParseToolItem(
-                            source=file_ref,
-                            status="success",
-                            file_name=resolved.filename,
-                        ),
-                        cache_hit.markdown,
-                    )
+        try:
+            resolved = await self._file_store.resolve_ref(
+                user_id=user_id,
+                session_id=session_id,
+                ref_id=file_ref,
+            )
+        except Exception as exc:
+            return (
+                DocumentParseToolItem(
+                    source=file_ref,
+                    status="failed",
+                    reason=file_reference_error_reason(exc),
+                ),
+                None,
+            )
 
-                result = await self._parse_service.parse(
-                    DocumentParseRequest(
-                        file_path=resolved.path,
-                        original_filename=resolved.filename,
-                        mime_type=resolved.content_type,
-                        source_scope=source_scope,
-                        source_kind=source_kind,
-                    )
-                )
-                markdown = result.markdown.strip()
-                if markdown:
-                    await self._cache.write_parsed_web_cache(
-                        user_id=user_id,
-                        metadata=resolved.metadata,
-                        content_type=resolved.content_type,
-                        markdown=markdown,
-                    )
-                return (
-                    DocumentParseToolItem(
-                        source=file_ref,
-                        status="success",
-                        file_name=resolved.filename,
-                    ),
-                    markdown or None,
-                )
-            except Exception as e:
-                return (
-                    DocumentParseToolItem(
-                        source=file_ref,
-                        status="failed",
-                        reason=tool_file_error_reason(e, default="parse_failed"),
-                    ),
-                    None,
-                )
+        cache_hit = await self._cache.read_parsed_web_cache(
+            user_id=user_id,
+            metadata=resolved.metadata,
+        )
+        if cache_hit is not None:
+            return (
+                DocumentParseToolItem(
+                    source=file_ref,
+                    status="success",
+                    file_name=resolved.filename,
+                ),
+                cache_hit,
+            )
+
+        return await self._convert_local_file(
+            user_id=user_id,
+            source=file_ref,
+            file_path=resolved.path,
+            file_name=resolved.filename,
+            content_type=resolved.content_type,
+            metadata=resolved.metadata,
+        )
 
     async def _parse_direct_url(
             self,
             *,
-            semaphore: asyncio.Semaphore,
             user_id: str,
-            session_id: str,
             direct_url: str,
     ) -> tuple[DocumentParseToolItem, str | None]:
-        """下载明显文件直链并复用 tfile 解析链路。"""
         if self._url_download_http_client is None:
             return (
                 DocumentParseToolItem(
@@ -340,71 +282,73 @@ class DocumentParseTool:
                 None,
             )
 
-        url = direct_url.strip()
         try:
-            url = validate_public_http_url(url)
-        except UrlSecurityError as e:
+            url = validate_public_http_url(direct_url.strip())
+        except UrlSecurityError as exc:
             return (
                 DocumentParseToolItem(
                     source=direct_url,
                     status="failed",
-                    reason=f"invalid_direct_url:{e}",
+                    reason=f"invalid_direct_url:{exc}",
                 ),
                 None,
             )
 
-        raw: DownloadedUrl | None = None
-        try:
-            metadata = direct_url_metadata(url=url, content_type=None)
-            cache_hit = await self._cache.read_parsed_web_cache(
-                user_id=user_id,
-                metadata=metadata,
+        metadata: dict[str, object] = {
+            "source_kind": "web_fetch",
+            "source_scope": "web_public",
+            "source_url": url,
+            "content_type": None,
+        }
+        cache_hit = await self._cache.read_parsed_web_cache(
+            user_id=user_id,
+            metadata=metadata,
+        )
+        if cache_hit is not None:
+            return (
+                DocumentParseToolItem(
+                    source=direct_url,
+                    status="success",
+                    file_name=filename_from_url(url),
+                ),
+                cache_hit,
             )
-            if cache_hit is not None:
-                return (
-                    DocumentParseToolItem(
-                        source=direct_url,
-                        status="success",
-                        file_name=filename_from_url(url),
-                    ),
-                    cache_hit.markdown,
-                )
 
-            raw = await download_url(
+        downloaded: DownloadedUrl | None = None
+        try:
+            downloaded = await download_url(
                 url,
                 http_client=self._url_download_http_client,
-                max_response_bytes=self._max_download_bytes,
+                max_response_bytes=DOCUMENT_PARSE_MAX_DOWNLOAD_BYTES,
             )
             await self._cache.write_direct_url_cache_stub(
                 user_id=user_id,
-                raw=raw,
+                raw=downloaded,
             )
-            metadata = direct_url_metadata(
-                url=raw.source_url,
-                content_type=raw.content_type,
+
+            metadata.update({
+                "source_url": downloaded.source_url,
+                "content_type": downloaded.content_type,
+            })
+            file_name = (
+                filename_from_url(downloaded.source_url)
+                or f"download.{downloaded.file_label or 'bin'}"
             )
-            record = await self._file_store.publish_file(
+
+            return await self._convert_local_file(
                 user_id=user_id,
-                session_id=session_id,
-                producer="document_parse",
-                path=raw.file_path,
-                filename=filename_from_url(raw.source_url)
-                         or f"download.{raw.file_label or 'bin'}",
-                content_type=raw.content_type,
-                ref_prefix="web_public",
+                source=direct_url,
+                file_path=Path(downloaded.file_path),
+                file_name=file_name,
+                content_type=downloaded.content_type,
                 metadata=metadata,
             )
-            return await self._parse_one(
-                semaphore=semaphore,
-                user_id=user_id,
-                session_id=session_id,
-                file_ref=record.ref_id,
-            )
-        except UrlDownloadUnsupportedUrlError as e:
+
+        except UrlDownloadUnsupportedUrlError as exc:
             reason = (
                 "direct_url_not_file"
-                if e.reason == "url_resolved_to_html"
-                else f"direct_url_fetch_failed:{e.reason}"
+                if exc.reason == "url_resolved_to_html"
+                else f"direct_url_fetch_failed:{exc.reason}"
             )
             return (
                 DocumentParseToolItem(
@@ -414,25 +358,83 @@ class DocumentParseTool:
                 ),
                 None,
             )
-        except UrlDownloadError as e:
+
+        except UrlDownloadError as exc:
             return (
                 DocumentParseToolItem(
                     source=direct_url,
                     status="failed",
-                    reason=f"direct_url_fetch_failed:{e.reason}",
+                    reason=f"direct_url_fetch_failed:{exc.reason}",
                 ),
                 None,
             )
-        except Exception:
-            return (
-                DocumentParseToolItem(
-                    source=direct_url,
-                    status="failed",
-                    reason="direct_url_parse_failed",
-                ),
-                None,
-            )
+
         finally:
-            if raw is not None and raw.file_path is not None:
+            # URL 下载器产生的临时文件只在本次解析期间存活。
+            if downloaded is not None:
                 with contextlib.suppress(OSError):
-                    Path(raw.file_path).unlink(missing_ok=True)
+                    Path(downloaded.file_path).unlink(missing_ok=True)
+
+    async def _convert_local_file(
+            self,
+            *,
+            user_id: str,
+            source: str,
+            file_path: Path,
+            file_name: str,
+            content_type: str | None,
+            metadata: dict[str, object],
+    ) -> tuple[DocumentParseToolItem, str | None]:
+        try:
+            result = await self._parse_service.parse(
+                DocumentParseRequest(
+                    file_path=file_path,
+                    original_filename=file_name,
+                    mime_type=content_type,
+                )
+            )
+            markdown = result.markdown.strip()
+
+            if markdown:
+                await self._cache.write_parsed_web_cache(
+                    user_id=user_id,
+                    metadata=metadata,
+                    content_type=content_type,
+                    markdown=markdown,
+                )
+
+            return (
+                DocumentParseToolItem(
+                    source=source,
+                    status="success",
+                    file_name=file_name,
+                ),
+                markdown or None,
+            )
+
+        except Exception as exc:
+            return (
+                DocumentParseToolItem(
+                    source=source,
+                    status="failed",
+                    file_name=file_name,
+                    reason=_document_error_reason(exc),
+                ),
+                None,
+            )
+
+
+def _document_error_reason(error: BaseException) -> str:
+    if isinstance(error, UnsupportedDocumentFormatError):
+        return "unsupported_document_format"
+    if isinstance(error, DocumentDecodeError):
+        return f"document_decode_failed:{error}"
+    if isinstance(error, RemoteParserTimeoutError):
+        return f"remote_parser_timeout:{error}"
+    if isinstance(error, DocumentTooLargeError):
+        return f"document_too_large:{error}"
+    if isinstance(error, RemoteParserError):
+        return f"remote_parser_failed:{error}"
+    if isinstance(error, DocumentParseError):
+        return f"document_parse_failed:{error}"
+    return "document_parse_failed"

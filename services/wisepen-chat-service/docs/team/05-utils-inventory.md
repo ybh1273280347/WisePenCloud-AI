@@ -114,7 +114,7 @@
 
 - `detect_file_type(file_path) -> FileType`
 - `detect_mime_type(file_path) -> str`
-- `FileType(label, mime_type)`
+- `FileType(label, mime_type, extension)`，其中 `extension` 是文件名最后一段小写后缀，不含 `.`
 
 ## URL 工具
 

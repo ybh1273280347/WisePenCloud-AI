@@ -40,7 +40,7 @@ class WebFetchResult:
     - source_url: 原始请求 URL，工具可见结果使用它标识来源
     - status_code / content_type: 内部缓存写入需要的 HTTP 元数据，不直接暴露给模型
     - title / markdown: HTML 页面路径的核心内容
-    - file_ref / file_label: 非 HTML 文件移交 ToolRunFileStore 后的引用
+    - file_ref / file_label: 非 HTML 文件发布后的统一文件引用
     - warnings: 会改变模型后续策略的提示，如最终正文质量不足
 
     两种互斥结果：

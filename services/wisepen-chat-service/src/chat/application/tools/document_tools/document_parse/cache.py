@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from chat.application.tools.common.web_content_cache import (
     NonHtmlCacheStubWrite,
     WebContentCacheRepository,
@@ -14,13 +12,7 @@ from chat.application.tools.common.web_content_cache._utils.metadata import (
 from chat.application.tools.utils.url import DownloadedUrl
 from common.logger import warn
 
-_DOCUMENT_PARSE_CACHE_PARSER_VERSION = "document_parse:v1"
-
-
-@dataclass(frozen=True, slots=True)
-class ParsedCacheHit:
-    markdown: str
-
+_DOCUMENT_PARSE_CACHE_PARSER_VERSION = "document_parse:v2"
 
 class DocumentParseCache:
     __slots__ = ("_content_cache_service",)
@@ -48,7 +40,7 @@ class DocumentParseCache:
                 status_code=raw.status_code,
                 content_type=raw.content_type,
                 headers=raw.headers,
-                fetcher=raw.fetcher,
+                fetcher=raw.downloader,
                 file_label=raw.file_label,
             ),
         )
@@ -58,7 +50,7 @@ class DocumentParseCache:
             *,
             user_id: str,
             metadata: dict[str, object],
-    ) -> ParsedCacheHit | None:
+    ) -> str | None:
         cached = await self._content_cache_service.read_markdown_by_metadata(
             user_id=user_id,
             metadata=metadata,
@@ -67,9 +59,7 @@ class DocumentParseCache:
         if cached is None:
             return None
 
-        return ParsedCacheHit(
-            markdown=cached.markdown,
-        )
+        return cached.markdown
 
     async def write_parsed_web_cache(
             self,
@@ -100,16 +90,3 @@ class DocumentParseCache:
                 source_scope=source_scope,
                 audit_message="文档解析结果写入网页内容缓存失败，不影响本次解析结果返回。",
             )
-
-
-def direct_url_metadata(
-        *,
-        url: str,
-        content_type: str | None,
-) -> dict[str, object]:
-    return {
-        "source_kind": "web_fetch",
-        "source_scope": "web_public",
-        "source_url": url,
-        "content_type": content_type,
-    }

@@ -6835,6 +6835,7 @@ dependencies = [
     { name = "trafilatura" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "wisepen-common" },
+    { name = "xlrd" },
     { name = "zeroentropy" },
 ]
 
@@ -6900,6 +6901,7 @@ requires-dist = [
     { name = "trafilatura" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "wisepen-common", editable = "services/wisepen-common" },
+    { name = "xlrd", specifier = ">=2.0.2" },
     { name = "zeroentropy" },
 ]
 

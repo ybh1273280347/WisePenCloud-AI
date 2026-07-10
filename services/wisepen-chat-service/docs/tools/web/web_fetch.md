@@ -1,6 +1,6 @@
 # web_fetch
 
-> 一句话：`web_fetch` 批量抓取独立 URL，HTML 返回清洗后的 Markdown，非 HTML 文件发布为 `tfile_*` 供 `document_parse` 解析。
+> 一句话：`web_fetch` 批量抓取独立 URL，HTML 返回清洗后的 Markdown，非 HTML 文件发布为 `file_*` 供 `document_parse` 解析。
 
 实现入口：`src/chat/application/tools/web_tools/web_fetch_tool.py`
 内部服务：`src/chat/application/tools/web_tools/fetch_services/web_fetch.py`
@@ -39,11 +39,11 @@ input urls
   -> optional browser page fetch
   -> HTML: trafilatura clean + quality check + cache write
   -> non-HTML: temporary file download
-  -> non-HTML: ToolRunFileStore publish + cache stub write
+  -> non-HTML: FileReferenceStore publish + cache stub write
   -> ToolReturn(cacheable_texts=markdowns)
 ```
 
-抓取链路先用静态页面 fetcher 读取 HTML，质量不足时再降级到浏览器页面 fetcher。只有静态页面 fetcher 明确发现目标不是 HTML 时，才交给临时文件下载器落盘并移交 `tfile_*`。HTML 由 `TrafilaturaCleaner` 清洗为 Markdown，并按 HTTP cache-control 计算 URL 缓存 TTL。
+抓取链路先用静态页面 fetcher 读取 HTML，质量不足时再降级到浏览器页面 fetcher。只有静态页面 fetcher明确发现目标不是 HTML 时，才交给临时文件下载器落盘并发布 `file_*`。HTML 由 `TrafilaturaCleaner` 清洗为 Markdown，并按 HTTP cache-control 计算 URL 缓存 TTL。
 
 内部服务结构：
 
@@ -72,7 +72,7 @@ src/chat/application/tools/common/web_content_cache/
 
 1. 下载到临时文件。
 2. 为 URL 写入缓存占位文档。
-3. 发布为 `tfile_*`，metadata 包含 `source_kind=web_fetch`、`source_scope`、`source_url`。
+3. 发布为 `file_*`，metadata 包含 `source_kind=web_fetch`、`source_scope`、`source_url`。
 4. 返回 `file_ref` 和 `file_label`，建议下一步调用 `document_parse`。
 
 ## 输出

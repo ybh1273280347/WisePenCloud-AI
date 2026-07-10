@@ -35,6 +35,6 @@
 
 - 只查当前 `session_id` 的历史消息，不能由模型传入或伪造 session。
 - 不做语义搜索，只做 repository 提供的文本检索。
-- 不读取工具缓存 `cnt_*`，也不读取临时文件 `tfile_*`。
+- 不读取工具缓存 `cnt_*`，也不读取文件引用 `file_*`。
 - 检索失败会包装为 retryable 的 `history_search_failed`。
 - 默认超时 5 秒。

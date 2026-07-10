@@ -5,12 +5,12 @@
 实现入口：`src/chat/application/tools/document_tools/image_ocr_tool.py`
 OCR provider：`src/chat/application/tools/document_tools/ocr/`
 
-`image_ocr` 是 document 工具域里的按需辅助工具。它接收内部 `tfile_*` 图片引用，或用户直接给出的图片 URL/路径，调用 OCR provider 产出 Markdown 文本。
+`image_ocr` 是 document 工具域里的按需辅助工具。它接收内部 `file_*` 图片引用，或用户直接给出的图片 URL/路径，调用 OCR provider 产出 Markdown 文本。
 
 ## 何时使用
 
 - 模型已经拿到图片，但需要更精确的图片内文字。
-- 上游工具返回了图片 `tfile_*`，后续任务依赖图片里的文字。
+- 上游工具返回了图片 `file_*`，后续任务依赖图片里的文字。
 - 用户直接给出图片 URL，并明确要求识别其中的文字。
 
 ## 不要在这些场景使用
@@ -23,10 +23,10 @@ OCR provider：`src/chat/application/tools/document_tools/ocr/`
 
 | 参数 | 类型 | 规则 |
 | --- | --- | --- |
-| `file_ref` | `string` | 内部 `tfile_*` 图片引用。 |
+| `file_ref` | `string` | 内部 `file_*` 图片引用。 |
 | `file_path` | `string` | 用户直接给出的图片 URL/路径，或可信上游工具路径。 |
 
-`file_ref` 和 `file_path` 在工具 `execute()` 入口校验：二者必须且只能提供一组。`file_ref` 通过 `ToolRunFileStore.resolve_ref(...)` 校验 `user_id/session_id` 作用域；URL 形式的 `file_path` 使用工具层共享 URL fetcher 下载。
+`file_ref` 和 `file_path` 在工具 `execute()` 入口校验：二者必须且只能提供一组。`file_ref` 通过 `FileReferenceStore.resolve_ref(...)` 校验 `user_id/session_id` 作用域；URL 形式的 `file_path` 使用工具层共享 URL fetcher 下载。
 
 ## 输出
 
@@ -45,7 +45,7 @@ OCR Markdown 不直接放进 `visible_result`，避免大文本污染模型上�
 
 ```text
 file_ref
-  -> ToolRunFileStore.resolve_ref
+  -> FileReferenceStore.resolve_ref
   -> MIME check
   -> OCR client
   -> cacheable_texts
@@ -63,6 +63,6 @@ file_path URL
 
 ## 边界
 
-- OCR provider 是 `document_tools/ocr/` 下的辅助能力，不属于 `document_parse/parsers/`。
-- `ToolRunFileStore` 相关错误统一通过 `tool_file_error_reason(...)` 映射为模型可见 reason。
+- OCR provider 是 `document_tools/ocr/` 下的独立图片文字识别能力，不属于 `document_parse/converters/`。
+- `FileReferenceStore` 相关错误统一通过 `file_reference_error_reason(...)` 映射为模型可见 reason。
 - URL 下载能力复用 `tools/utils/url/downloader.py`，不依赖 `web_fetch` 私有下载器；URL 安全性校验复用 `tools/utils/url/security.py`，不做页面内容阻断。

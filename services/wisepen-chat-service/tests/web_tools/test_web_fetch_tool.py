@@ -52,7 +52,7 @@ class _FakeFetchService:
                     content_type="application/pdf",
                     title=None,
                     markdown=None,
-                    file_ref="tfile_abc",
+                    file_ref="file_abc",
                     file_label="pdf",
                     warnings=("file handoff",),
                 ),
@@ -77,7 +77,7 @@ async def test_web_fetch_visible_result_hides_internal_fetch_metadata() -> None:
         },
         {
             "source_url": "https://example.test/file.pdf",
-            "file_ref": "tfile_abc",
+            "file_ref": "file_abc",
             "file_label": "pdf",
         },
     )

@@ -77,6 +77,8 @@ async def lifespan(app: FastAPI):
 
     # 初始化容器托管资源（如页面抓取 session），业务对象只消费资源，不自行管理生命周期。
     await container.init_resources()
+    file_reference_gc = container.file_reference_store_gc_scheduler()
+    await file_reference_gc.start()
 
     # 注册 Nacos 服务
     try:
@@ -111,6 +113,8 @@ async def lifespan(app: FastAPI):
 
     # --- 关闭阶段 ---
     info("service stopping.", service=bootstrap_settings.SERVICE_NAME)
+
+    await file_reference_gc.stop()
 
     # 关闭 Kafka Producer
     kafka_producer = container.kafka_producer()

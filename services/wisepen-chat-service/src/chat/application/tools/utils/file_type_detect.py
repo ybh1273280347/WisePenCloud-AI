@@ -11,22 +11,29 @@ from magika import Magika
 class FileType:
     label: str
     mime_type: str
+    extension: str
 
 
 _magika = Magika()
 
 
-def detect_file_type(file_path: str | Path) -> FileType:
+def detect_file_type(
+        file_path: str | Path,
+        *,
+        fallback_name: str | None = None,
+) -> FileType:
     path = Path(file_path)
+    file_name = fallback_name or path.name
     try:
         result = _magika.identify_path(path)
     except Exception:
-        return _fallback_file_type(path)
+        return _fallback_file_type(file_name)
     if not result.ok:
-        return _fallback_file_type(path)
+        return _fallback_file_type(file_name)
     return FileType(
         label=result.output.label.lower(),
         mime_type=result.output.mime_type.lower(),
+        extension=_extension_from_name(file_name),
     )
 
 
@@ -40,19 +47,20 @@ def detect_file_type_from_bytes(content: bytes, *, fallback_name: str | None = N
         fallback_name: 检测失败时用于推断 MIME 的文件名（含扩展名），可为 None。
 
     Returns:
-        FileType: 检测结果，label 和 mime_type 均为小写。
+        FileType: 检测结果，三个字段均为小写，extension 不含前导点。
     """
     if not content:
-        return _fallback_file_type_from_name(fallback_name)
+        return _fallback_file_type(fallback_name)
     try:
         result = _magika.identify_bytes(content)
     except Exception:
-        return _fallback_file_type_from_name(fallback_name)
+        return _fallback_file_type(fallback_name)
     if not result.ok:
-        return _fallback_file_type_from_name(fallback_name)
+        return _fallback_file_type(fallback_name)
     return FileType(
         label=result.output.label.lower(),
         mime_type=result.output.mime_type.lower(),
+        extension=_extension_from_name(fallback_name),
     )
 
 
@@ -60,18 +68,16 @@ def detect_mime_type(file_path: str | Path) -> str:
     return detect_file_type(file_path).mime_type
 
 
-def _fallback_file_type(path: Path) -> FileType:
-    mime_type = (guess_type(path.name)[0] or "").lower()
+def _fallback_file_type(name: str | None) -> FileType:
+    extension = _extension_from_name(name)
     return FileType(
-        label=path.suffix.lower().lstrip("."),
-        mime_type=mime_type,
+        label=extension,
+        mime_type=(guess_type(name or "")[0] or "").lower(),
+        extension=extension,
     )
 
 
-def _fallback_file_type_from_name(name: str | None) -> FileType:
-    """字节检测失败时，按文件名扩展名兜底推断。"""
+def _extension_from_name(name: str | None) -> str:
     if not name:
-        return FileType(label="", mime_type="")
-    mime_type = (guess_type(name)[0] or "").lower()
-    suffix = Path(name).suffix.lower().lstrip(".")
-    return FileType(label=suffix, mime_type=mime_type)
+        return ""
+    return Path(name).suffix.lower().lstrip(".")

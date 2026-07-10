@@ -1,6 +1,6 @@
 # Toolchain Architecture
 
-> 一句话：WisePen Chat Service 的工具体系由若干业务域工具组成，它们通过 URL、`tfile_*`、`cnt_*` 和 URL 缓存形成稳定协作链。
+> 一句话：WisePen Chat Service 的工具体系由若干业务域工具组成，它们通过 URL、`file_*`、`cnt_*` 和 URL 缓存形成稳定协作链。
 
 实现入口：`src/chat/application/tools`
 注册入口：`src/chat/container.py`
@@ -38,7 +38,7 @@ ToolInvocation
 
 | 引用 | 生产者 | 消费者 | 语义 |
 | --- | --- | --- | --- |
-| `tfile_*` | `web_fetch`、`document_parse` 直链下载等 | `document_parse(file_refs=[...])`、`image_ocr(file_ref=...)` | 工具运行期临时文件引用，按 `user_id/session_id` 隔离。 |
+| `file_*` | `web_fetch`、后续附件/沙箱文件接入等 | `document_parse(file_refs=[...])`、`image_ocr(file_ref=...)` | 统一文件引用，按 `user_id/session_id` 隔离，模型不感知底层路径。 |
 | `cnt_*` | `ToolOutputCache` | `tool_content_rerank_read`、`tool_content_regex_read`、`tool_content_sequential_read` | 大文本缓存凭证，表示已有内容，不代表新外部抓取需求。 |
 
 ## 外界信息获取链
@@ -74,7 +74,7 @@ document_parse(direct_urls=[...])
   -> session read tools
 
 web_fetch(urls=[...])
-  -> non-HTML file_ref tfile_*
+  -> non-HTML file_ref file_*
   -> document_parse(file_refs=[...])
   -> parsed markdown
   -> URL content cache + cnt_*
@@ -110,7 +110,7 @@ web_fetch
   -> static page fetch -> optional browser page fetch
   -> HTML: cleaner -> URL cache -> cacheable_texts -> cnt_*
   -> non-HTML: temporary file downloader
-  -> non-HTML: URL cache stub -> tfile_* -> document_parse
+  -> non-HTML: URL cache stub -> file_* -> document_parse
 
 web_crawl
   -> URL cache read per page
@@ -129,7 +129,7 @@ cnt_* receipt
 
 ## 模型约束
 
-- 不要伪造 `tfile_*`、`cnt_*`、`skill_id`、asset path 或内部 URL。
+- 不要伪造 `file_*`、`cnt_*`、`skill_id`、asset path 或内部 URL。
 - 不要把 search preview 或 supplier answer 当作正文证据。
 - 不要把 obvious document file URL 包一层 `web_fetch`，直接给 `document_parse(direct_urls=[...])`。
 - 不要把 `file_refs` 和 `direct_urls` 混在一次 document parse 调用里。

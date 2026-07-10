@@ -74,6 +74,7 @@ dependencies = [
     "ddgs>=9.14.4",       # DuckDuckGo 外部搜索联网能力客户端
     "readability-lxml>=0.8.4.1",
     "msgspec>=0.21.1",
+    "xlrd>=2.0.2",
 ]
 
 [dependency-groups]

@@ -46,7 +46,7 @@ seed_url
   -> ToolReturn(cacheable_texts=page markdowns)
 ```
 
-`WebCrawler` 直接使用底层 fetcher，因为 crawl 需要 raw HTML 来提取链接。非 HTML 文件会被跳过，不生成 `tfile_*`，因为 crawl 的目标是 HTML 页面集合。
+`WebCrawler` 直接使用底层 fetcher，因为 crawl 需要 raw HTML 来提取链接。非 HTML 文件会被跳过，不生成 `file_*`，因为 crawl 的目标是 HTML 页面集合。
 
 crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `web_content_cache`；命中时直接返回缓存 Markdown，并使用缓存中的 `raw_html` 继续抽取链接。未命中或 Redis value 过期时执行物理抓取，清洗后的 Markdown 和 raw HTML 通过 `WebContentCacheService` 写回同一 URL 缓存路径。
 
@@ -73,7 +73,7 @@ crawler 已纳入统一 URL 内容缓存体系。每个页面抓取前先读 `we
 
 - `platform_search/exa_search/... -> web_fetch` 更适合开放网络找候选再读几个页面。
 - `web_crawl -> tool_content_rerank_read / tool_content_regex_read` 更适合同站多页采集后的跨页检索。
-- `web_crawl` 不产生 `tfile_*`、不解析文件。
+- `web_crawl` 不产生 `file_*`、不解析文件。
 
 ## 可插拔组件
 

@@ -2,21 +2,41 @@ from __future__ import annotations
 
 
 class DocumentParseError(Exception):
-    """文档解析异常基类，携带原始异常。"""
+    """文档转换稳定异常基类。"""
 
+
+class UnsupportedDocumentFormatError(DocumentParseError):
     def __init__(
             self,
-            message: str,
             *,
-            cause: BaseException | None = None,
+            file_name: str,
+            extension: str,
+            mime_type: str | None,
     ) -> None:
-        super().__init__(message)
-        self.cause = cause
+        self.file_name = file_name
+        self.extension = extension
+        self.mime_type = mime_type
+        super().__init__(
+            f"Unsupported document format: file={file_name}, "
+            f"extension={extension or '<none>'}, mime_type={mime_type or '<unknown>'}."
+        )
+
+
+class DocumentDecodeError(DocumentParseError):
+    """文件内容无法可靠解码为文本。"""
 
 
 class DocumentParserError(DocumentParseError):
-    """单个解析器或专用策略内部失败。"""
+    """本地格式转换器执行失败。"""
 
 
-class DocumentParseFailedError(DocumentParseError):
-    """通用解析链路整体失败。"""
+class RemoteParserError(DocumentParseError):
+    """远程文档解析服务返回失败。"""
+
+
+class RemoteParserTimeoutError(RemoteParserError):
+    """远程文档解析任务超时。"""
+
+
+class DocumentTooLargeError(DocumentParseError):
+    """输入或远程结果超过允许大小。"""

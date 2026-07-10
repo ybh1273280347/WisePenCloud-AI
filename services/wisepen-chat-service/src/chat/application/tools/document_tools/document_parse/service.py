@@ -1,16 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import replace
-from typing import Any
-
 from chat.application.tools.document_tools.document_parse.core.models import DocumentParseRequest, DocumentParseResult
-from chat.application.tools.utils.file_type_detect import detect_file_type
-from .parsers.generic import GenericDocumentParser
-from .parsers.specialized import PdfParser
-from .parsers.specialized.spreadsheet_parser import (
-    PandasSpreadsheetParser,
-    is_supported_spreadsheet_file,
-)
+from .converters.pdf import MinerUConverter
+from .converters.router import DocumentConverterRouter
 
 
 class DocumentParseService:
@@ -19,24 +11,11 @@ class DocumentParseService:
     def __init__(
             self,
             *,
-            ocr_client: Any | None = None,
+            mineru_converter: MinerUConverter,
     ) -> None:
-        self._ocr_client = ocr_client
+        self._router = DocumentConverterRouter(
+            mineru_converter=mineru_converter
+        )
 
     async def parse(self, request: DocumentParseRequest) -> DocumentParseResult:
-        detected_type = detect_file_type(request.file_path)
-        mime_type = (request.mime_type or detected_type.mime_type).split(";", maxsplit=1)[0].lower()
-        label = detected_type.label
-
-        if label == "pdf" or mime_type == "application/pdf":
-            return await PdfParser(ocr_client=self._ocr_client).parse(request)
-
-        if is_supported_spreadsheet_file(
-                file_path=request.file_path,
-                label=label,
-                mime_type=mime_type,
-        ):
-            parser_request = replace(request, mime_type=mime_type)
-            return await PandasSpreadsheetParser().parse(parser_request)
-
-        return await GenericDocumentParser().parse(request)
+        return await self._router.convert(request)

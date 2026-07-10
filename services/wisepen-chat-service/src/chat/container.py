@@ -36,15 +36,16 @@ from chat.application.rag.retrieval.pipeline.qdrant_retrieve import RagQdrantRet
 from chat.application.rag.retrieval.pipeline.ranking import RagEvidenceRankingService
 from chat.application.rag.retrieval.retrieval_pipeline import RagRetrievalPipeline
 from chat.application.token_counter import TokenCounter
-from chat.application.tools.common.tool_content_store.store import ToolContentStore
-from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
-from chat.application.tools.common.tool_run_file_store.gc import (
-    ToolRunFileStoreGcScheduler,
+from chat.application.tools.common.file_reference_store import FileReferenceStore
+from chat.application.tools.common.file_reference_store.gc import (
+    FileReferenceStoreGcScheduler,
 )
+from chat.application.tools.common.tool_content_store.store import ToolContentStore
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
 from chat.application.tools.document_tools import DocumentParseTool, ImageOcrTool
 from chat.application.tools.document_tools.document_parse import DocumentParseService
+from chat.application.tools.document_tools.document_parse.converters.pdf import MinerUConverter
 from chat.application.tools.document_tools.ocr import (
     PaddleCloudClient,
     PaddleCloudConfig,
@@ -133,7 +134,7 @@ from chat.core.persistence.redis.rag_ingestion_cache_repository import (
     RedisRagIngestionDeterministicCache,
 )
 from chat.core.persistence.redis.tool_content_repository import RedisToolContentRepository
-from chat.core.persistence.redis.tool_run_file_repository import RedisToolRunFileRepository
+from chat.core.persistence.redis.file_reference_repository import RedisFileReferenceRepository
 from chat.core.persistence.redis.web_content_cache_repository import (
     RedisWebContentCacheRepository,
 )
@@ -189,6 +190,25 @@ def _build_paddle_ocr_client(
             model=settings.PADDLE_OCR_MODEL,
         ),
         http_client=http_client,
+    )
+
+
+def _build_document_parse_service(
+        *,
+        http_client: httpx.AsyncClient,
+) -> DocumentParseService:
+    return DocumentParseService(
+        mineru_converter=MinerUConverter(
+            http_client=http_client,
+            api_base_url=settings.MINERU_API_BASE_URL,
+            api_key=settings.MINERU_CLOUD_TOKEN,
+            model_version=settings.MINERU_MODEL_VERSION,
+            poll_interval_seconds=settings.MINERU_POLL_INTERVAL_SECONDS,
+            task_timeout_seconds=settings.MINERU_TASK_TIMEOUT_SECONDS,
+            upload_timeout_seconds=settings.MINERU_UPLOAD_TIMEOUT_SECONDS,
+            download_timeout_seconds=settings.MINERU_DOWNLOAD_TIMEOUT_SECONDS,
+            max_download_bytes=settings.MINERU_MAX_DOWNLOAD_BYTES,
+        )
     )
 
 
@@ -296,6 +316,11 @@ def _build_web_fetch_http_client() -> httpx.AsyncClient:
         transport=transport,
         trust_env=False,
     )
+
+
+async def _provide_mineru_http_client() -> AsyncIterator[httpx.AsyncClient]:
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        yield client
 
 
 async def _provide_static_page_session() -> AsyncIterator[Any]:
@@ -603,18 +628,18 @@ class Container(containers.DeclarativeContainer):
         repository=tool_content_repository,
         max_chars=settings.TOOL_CONTENT_MAX_CHARS,
     )
-    tool_run_file_repository = providers.Singleton(
-        RedisToolRunFileRepository,
+    file_reference_repository = providers.Singleton(
+        RedisFileReferenceRepository,
         redis_client=redis_client,
     )
-    tool_run_file_store = providers.Singleton(
-        ToolRunFileStore,
-        repository=tool_run_file_repository,
-        root_dir=settings.TOOL_RUN_FILE_ROOT,
+    file_reference_store = providers.Singleton(
+        FileReferenceStore,
+        repository=file_reference_repository,
+        root_dir=settings.FILE_REFERENCE_ROOT,
     )
-    tool_run_file_store_gc_scheduler = providers.Singleton(
-        ToolRunFileStoreGcScheduler,
-        store=tool_run_file_store,
+    file_reference_store_gc_scheduler = providers.Singleton(
+        FileReferenceStoreGcScheduler,
+        store=file_reference_store,
     )
     tool_output_renderer = providers.Singleton(ToolOutputRenderer)
     tool_output_cache = providers.Singleton(
@@ -641,9 +666,12 @@ class Container(containers.DeclarativeContainer):
         _build_paddle_ocr_client,
         http_client=paddle_ocr_http_client,
     )
+    mineru_http_client = providers.Resource(
+        _provide_mineru_http_client,
+    )
     document_parse_service = providers.Singleton(
-        DocumentParseService,
-        ocr_client=paddle_ocr_client,
+        _build_document_parse_service,
+        http_client=mineru_http_client,
     )
 
     # --- Web Search 组件 ---
@@ -721,7 +749,7 @@ class Container(containers.DeclarativeContainer):
         stealthy_fetcher=web_fetch_stealthy_page_fetcher,
         temp_file_downloader=web_fetch_temp_file_downloader,
         cleaner=web_fetch_cleaner,
-        file_store=tool_run_file_store,
+        file_store=file_reference_store,
         content_cache_repository=web_content_cache_repository,
     )
 
@@ -739,14 +767,14 @@ class Container(containers.DeclarativeContainer):
     # --- Document Tools ---
     document_parse_tool = providers.Singleton(
         DocumentParseTool,
-        file_store=tool_run_file_store,
+        file_store=file_reference_store,
         parse_service=document_parse_service,
         content_cache_repository=web_content_cache_repository,
         url_download_http_client=web_fetch_http_client,
     )
     image_ocr_tool = providers.Singleton(
         ImageOcrTool,
-        file_store=tool_run_file_store,
+        file_store=file_reference_store,
         ocr_client=paddle_ocr_client,
         url_download_http_client=web_fetch_http_client,
     )

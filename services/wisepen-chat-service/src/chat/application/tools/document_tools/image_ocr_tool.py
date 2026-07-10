@@ -7,8 +7,10 @@ from typing import Any
 
 import httpx
 
-from chat.application.tools.common.tool_run_file_store import ToolRunFileStore
-from chat.application.tools.common.tool_run_file_store.core.errors import tool_file_error_reason
+from chat.application.tools.common.file_reference_store import FileReferenceStore
+from chat.application.tools.common.file_reference_store.core.errors import (
+    file_reference_error_reason,
+)
 from chat.application.tools.core import (
     ToolDefinition,
     ToolExecutionError,
@@ -48,7 +50,6 @@ class ImageOcrTool:
     __slots__ = (
         "_definition",
         "_file_store",
-        "_max_download_bytes",
         "_ocr_client",
         "_url_download_http_client",
     )
@@ -56,14 +57,13 @@ class ImageOcrTool:
     def __init__(
             self,
             *,
-            file_store: ToolRunFileStore,
+            file_store: FileReferenceStore,
             ocr_client: Any | None = None,
             url_download_http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._file_store = file_store
         self._ocr_client = ocr_client
         self._url_download_http_client = url_download_http_client
-        self._max_download_bytes = IMAGE_OCR_MAX_DOWNLOAD_BYTES
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="image_ocr",
@@ -72,7 +72,7 @@ class ImageOcrTool:
                     "\n"
                     "WHEN TO TRIGGER:\n"
                     "  - Trigger after you already have an image source and need precise text from the image.\n"
-                    "  - Use file_ref for internal tfile_* references returned by previous tools.\n"
+                    "  - Use file_ref for internal file_* references returned by previous tools.\n"
                     "  - Use file_path for a direct user-provided image URL/path.\n"
                     "DO NOT TRIGGER when:\n"
                     "  - You can answer from normal multimodal image understanding without extra OCR.\n"
@@ -94,12 +94,17 @@ class ImageOcrTool:
                             "file_ref": {
                                 "type": "string",
                                 "minLength": 1,
-                                "description": "Internal tfile_* image reference from a previous tool.",
+                                "description": (
+                                    "Internal file_* image reference from a previous tool."
+                                ),
                             },
                             "file_path": {
                                 "type": "string",
                                 "minLength": 1,
-                                "description": "Direct user-provided image URL/path or trusted upstream file path.",
+                                "description": (
+                                    "Direct user-provided image URL/path or "
+                                    "trusted upstream file path."
+                                ),
                             },
                         },
                         "additionalProperties": False,
@@ -120,7 +125,11 @@ class ImageOcrTool:
     def definition(self) -> ToolDefinition:
         return self._definition
 
-    async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
+    async def execute(
+            self,
+            context: dict[str, Any],
+            **kwargs: Any,
+    ) -> ToolReturn:
         if self._ocr_client is None:
             raise ToolExecutionError(
                 reason="image_ocr_unavailable",
@@ -144,12 +153,15 @@ class ImageOcrTool:
                 session_id=str(context["session_id"]),
                 file_ref=file_ref,
             )
+        elif file_path.startswith(("http://", "https://")):
+            result = await self._parse_image_url(file_path)
         else:
-            result = await self._parse_file_path(file_path)
-
-        cacheable_texts: tuple[str, ...] = ()
-        if result.markdown:
-            cacheable_texts = (result.markdown,)
+            path = Path(file_path)
+            result = await self._parse_image_path(
+                path=path,
+                file_name=path.name,
+                content_type=None,
+            )
 
         return ToolReturn(
             tag="image_ocr_result",
@@ -158,7 +170,7 @@ class ImageOcrTool:
                 "file_name": result.file_name,
                 "reason": result.reason,
             },
-            cacheable_texts=cacheable_texts,
+            cacheable_texts=(result.markdown,) if result.markdown else (),
         )
 
     async def _parse_file_ref(
@@ -174,8 +186,11 @@ class ImageOcrTool:
                 session_id=session_id,
                 ref_id=file_ref,
             )
-        except Exception as e:
-            return ImageOcrToolResult(status="failed", reason=tool_file_error_reason(e))
+        except Exception as exc:
+            return ImageOcrToolResult(
+                status="failed",
+                reason=file_reference_error_reason(exc),
+            )
 
         return await self._parse_image_path(
             path=Path(resolved.path),
@@ -183,53 +198,62 @@ class ImageOcrTool:
             content_type=resolved.content_type,
         )
 
-    async def _parse_file_path(self, file_path: str) -> ImageOcrToolResult:
-        if file_path.startswith(("http://", "https://")):
-            return await self._parse_image_url(file_path)
-        return await self._parse_image_path(
-            path=Path(file_path),
-            file_name=Path(file_path).name,
-            content_type=None,
-        )
-
-    async def _parse_image_url(self, url: str) -> ImageOcrToolResult:
+    async def _parse_image_url(
+            self,
+            url: str,
+    ) -> ImageOcrToolResult:
         if self._url_download_http_client is None:
-            return ImageOcrToolResult(status="failed", reason="image_url_fetch_unavailable")
+            return ImageOcrToolResult(
+                status="failed",
+                reason="image_url_fetch_unavailable",
+            )
 
-        raw: DownloadedUrl | None = None
+        downloaded: DownloadedUrl | None = None
         try:
             url = validate_public_http_url(url)
-            raw = await download_url(
+            downloaded = await download_url(
                 url,
                 http_client=self._url_download_http_client,
-                max_response_bytes=self._max_download_bytes,
+                max_response_bytes=IMAGE_OCR_MAX_DOWNLOAD_BYTES,
             )
+
             return await self._parse_image_path(
-                path=Path(raw.file_path),
-                file_name=filename_from_url(raw.source_url),
-                content_type=raw.content_type,
+                path=Path(downloaded.file_path),
+                file_name=(
+                    filename_from_url(downloaded.source_url)
+                    or f"image.{downloaded.file_label or 'bin'}"
+                ),
+                content_type=downloaded.content_type,
             )
-        except UrlDownloadUnsupportedUrlError as e:
+
+        except UrlSecurityError as exc:
+            return ImageOcrToolResult(
+                status="failed",
+                reason=f"invalid_image_url:{exc}",
+            )
+
+        except UrlDownloadUnsupportedUrlError as exc:
             reason = (
                 "image_url_not_file"
-                if e.reason == "url_resolved_to_html"
-                else f"image_url_fetch_failed:{e.reason}"
+                if exc.reason == "url_resolved_to_html"
+                else f"image_url_fetch_failed:{exc.reason}"
             )
-            return ImageOcrToolResult(status="failed", reason=reason)
-        except UrlSecurityError as e:
             return ImageOcrToolResult(
                 status="failed",
-                reason=f"invalid_image_url:{e}",
+                reason=reason,
             )
-        except UrlDownloadError as e:
+
+        except UrlDownloadError as exc:
             return ImageOcrToolResult(
                 status="failed",
-                reason=f"image_url_fetch_failed:{e.reason}",
+                reason=f"image_url_fetch_failed:{exc.reason}",
             )
+
         finally:
-            if raw is not None and raw.file_path is not None:
+            # URL 下载器生成的临时文件只供本次 OCR 使用。
+            if downloaded is not None:
                 with contextlib.suppress(OSError):
-                    Path(raw.file_path).unlink(missing_ok=True)
+                    Path(downloaded.file_path).unlink(missing_ok=True)
 
     async def _parse_image_path(
             self,
@@ -245,13 +269,29 @@ class ImageOcrTool:
                 reason="file_path_unavailable",
             )
 
-        if not _is_image(path=path, content_type=content_type):
-            return ImageOcrToolResult(status="failed", file_name=file_name, reason="not_image")
+        # 优先信任上游 Content-Type，否则再从文件内容嗅探。
+        mime_type = (
+            content_type
+            or detect_mime_type(path)
+        ).partition(";")[0].strip().lower()
+
+        if not mime_type.startswith("image/"):
+            return ImageOcrToolResult(
+                status="failed",
+                file_name=file_name,
+                reason="not_image",
+            )
 
         try:
-            page: OcrPageResult = await self._ocr_client.parse_image(file_path=path)
+            page: OcrPageResult = await self._ocr_client.parse_image(
+                file_path=path
+            )
         except Exception:
-            return ImageOcrToolResult(status="failed", file_name=file_name, reason="ocr_failed")
+            return ImageOcrToolResult(
+                status="failed",
+                file_name=file_name,
+                reason="ocr_failed",
+            )
 
         markdown = page.markdown_with_page_marker().strip()
         return ImageOcrToolResult(
@@ -259,8 +299,3 @@ class ImageOcrTool:
             markdown=markdown or None,
             file_name=file_name,
         )
-
-
-def _is_image(*, path: Path, content_type: str | None) -> bool:
-    mime_type = (content_type or detect_mime_type(path)).split(";", maxsplit=1)[0].strip().lower()
-    return mime_type.startswith("image/")

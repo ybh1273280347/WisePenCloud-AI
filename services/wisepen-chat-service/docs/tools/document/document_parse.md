@@ -1,123 +1,114 @@
 # document_parse
 
-> 一句话：`document_parse` 把 `tfile_*` 或明显文件直链批量解析为 Markdown，不读普通 HTML，也不负责上传或资产持久化。
+> 一句话：`document_parse` 将统一 `file_*` 引用或明显文档直链转换为 Markdown，不接收模型透传的本地路径。
 
 实现入口：`src/chat/application/tools/document_tools/document_parse_tool.py`
 
-`document_parse` 将上游工具产出的 `tfile_*` 临时文件引用，或明显的文件直链 URL，批量解析为 Markdown。文件直链只支持完整 `http(s)` 非 HTML 文件 URL；普通网页仍交给 `web_fetch` / `web_crawl`。
+## 输入边界
 
-## 实现结构
+`document_parse` 保持两个互斥入口：
 
-```text
-src/chat/application/tools/document_tools/
-  document_parse_tool.py       # 工具门面
-  document_parse/
-    service.py                 # 文档解析路由
-    models.py                  # DocumentParseRequest / DocumentParseResult
-    errors.py
-    cache.py                   # URL parsed markdown 缓存适配
-    parsers/
-      common_document/         # Docling / MarkItDown 通用解析
-      specialized/             # PDF / spreadsheet 专用解析
-  ocr/                         # PDF 扫描页和 image_ocr 共享的 OCR provider
+```json
+{"file_refs": ["file_xxx"]}
 ```
 
-`document_parse/` 和 `ocr/` 是 document 工具域下的两个独立能力族；当前没有大量共享编排层，因此不额外引入 `core/` 或 `services/` 包。
+```json
+{"direct_urls": ["https://example.com/report.pdf"]}
+```
 
-## 何时使用
+- `file_refs` 只接受受信工具产生的 `file_*` 引用，通过 `FileReferenceStore.resolve_ref(...)` 校验用户、会话和文件完整性。
+- `direct_urls` 只接受公开 `http(s)` 文档文件 URL；普通网页仍使用 `web_fetch` / `web_crawl`。
+- 模型不得传入或伪造本地路径、OSS key、上传对象 ID 或缓存内部 ID。
+- 单次调用只能提供 `file_refs` 或 `direct_urls` 中的一组。
 
-- 已经有一个或多个 `tfile_*`，需要把文件内容转为可检索 Markdown。
-- 用户直接给出明显文档文件直链（PDF、Office、表格等）并要求读取文件内容时，直接传 `direct_urls`，不要先走 `web_fetch` 生成中转 `tfile_*`。
-- 同一任务有多个文件时，应一次性把同一来源字段下的所有文件传入同一调用。
-- 解析结果较长时，后续优先通过 `tool_content_rerank_read` 或 `tool_content_regex_read` 检索相关窗口，也可通过 `tool_content_sequential_read` 顺序继续阅读单个 `cnt_*`。
+`file_*` 是统一文件引用协议，不绑定某一种持久化实现。当前后端将引用解析为本机可读路径；后续可接入沙箱文件等来源而不改变模型参数。
 
-## 参数
+## 内部流程
 
-| 参数 | 类型 | 规则 |
+```text
+file_*
+  -> FileReferenceStore.resolve_ref
+  -> local Path + metadata
+  -> DocumentConverterRouter
+  -> Markdown
+
+direct URL
+  -> URL 安全校验和 parsed cache
+  -> 限流下载到本次调用临时文件
+  -> DocumentConverterRouter
+  -> URL parsed cache
+  -> 删除下载临时文件
+```
+
+直链下载后直接进入 converter，不创建仅供本次调用使用的中间 `file_*`。
+
+## Converter 路由
+
+转换器位于：
+
+```text
+document_parse/converters/
+  base.py
+  router.py
+  pdf/mineru_converter.py
+  spreadsheet/spreadsheet_converter.py
+  office/docx_converter.py
+  office/pptx_converter.py
+  html/html_converter.py
+  json/json_converter.py
+  plaintext/plaintext_converter.py
+  fallback/fallback_converter.py
+```
+
+精确路由：
+
+| 格式 | Converter | 实现 |
 | --- | --- | --- |
-| `file_refs` | `string[]` | 支持批量 `tfile_*`；超单批时工具内部自动分批。 |
-| `direct_urls` | `string[]` | 支持批量完整 `http(s)` 文档文件直链；超单批时工具内部自动分批。 |
+| PDF | `MinerUConverter` | MinerU 云端上传、轮询、ZIP Markdown 提取 |
+| DOCX | `DocxConverter` | Docling，图片 Base64 内嵌 |
+| PPTX | `PptxConverter` | Docling，图片 Base64 内嵌 |
+| CSV / TSV / XLS / XLSX | `SpreadsheetConverter` | pandas；文本表格严格解码并保留字符串值 |
+| HTML / HTM | `HtmlConverter` | MarkItDown 完整文档转换，不使用网页正文清洗器 |
+| JSON / JSONL / NDJSON | `JsonConverter` | 标准库验证和规范化 |
+| TXT / Markdown / 常见代码和配置 | `PlaintextConverter` | `read_bytes + decode_text`，保持原文 |
 
-`file_refs` 和 `direct_urls` 在工具 `execute()` 入口校验：二者必须且只能提供一组。执行上下文必须包含 `user_id` 和 `session_id`。工具会用这两个值解析并校验 `tfile_*` 的作用域；直链会先下载到短期工具文件，再复用同一解析链路。
-
-`direct_urls` 会先经过 `tools/utils/url/security.validate_public_http_url` 校验。该校验只判断 URL 本身是否适合作为外部抓取目标，不做页面内容阻断。
-
-## 与 web_fetch 的关系
-
-`web_fetch` 和 `document_parse` 共同构成核心外界信息获取工具体系：`web_fetch` 负责网页正文和不确定 URL 的抓取，`document_parse` 负责文件内容解析。两者共享 URL 内容缓存、HTTP fetcher 能力和 `source_*` metadata 是有意设计的正确行为，不视为需要拆除的错误耦合。
-
-直链解析会先按 URL 读取 parse markdown 缓存；未命中时使用工具层共享 URL fetcher 下载文件，预创建同一 URL Redis 缓存记录，再把解析出的 Markdown 回填到该 URL 缓存路径。
-
-URL 缓存公共组件位于：
+未命中精确格式时按以下顺序兜底：
 
 ```text
-src/chat/application/tools/common/web_content_cache/
+Docling -> MarkItDown -> 严格文本解码 -> UnsupportedDocumentFormatError
 ```
 
-`document_parse` 通过 `DocumentParseCache` 使用同一套 Redis URL 内容缓存：
+图片、压缩包、音视频、可执行文件、共享库、字体和数据库等在进入通用 fallback 前明确拒绝。图片文字提取使用独立 `image_ocr`。
 
-- `file_refs`：按 `tfile_*` metadata 中的 `source_kind/source_scope/source_url` 精确读取和回写 parsed Markdown。
-- `direct_urls`：先读 URL parsed cache；未命中时下载文件、写非 HTML 占位，再解析并回填。
-- Redis value 未过期时命中 parsed Markdown 缓存；过期后视为未命中并重新下载或解析。
+## MinerU PDF
 
-document parse 读取缓存时不能在 public/private 域之间回退，避免自定义搜索源或用户私有 URL 结果串域。
+PDF 不再执行本地 Docling、PyMuPDF4LLM 或 PaddleOCR fallback。流程为：
 
-## 输出
+```text
+POST /api/v4/file-urls/batch
+  -> PUT 签名上传 URL
+  -> GET /api/v4/extract-results/batch/{batch_id}
+  -> 下载受大小限制的 ZIP
+  -> 优先读取 full.md，或唯一 Markdown 文件
+  -> 使用 content_list.json 的 page_idx 注入 <!-- page N -->
+```
 
-返回 `ToolReturn(tag="document_parse_result")`：
+MinerU 使用独立 `httpx.AsyncClient` 资源。API token、base URL、轮询间隔、任务/上传/下载超时和最大下载字节数来自 settings。日志和模型输出不包含 token 或签名 URL。
 
-| 字段 | 说明 |
-| --- | --- |
-| `visible_result.items` | 按输入顺序返回每个文件的 `source`、`status`、`file_name` 和失败 `reason`。 |
-| `cacheable_texts` | 每个成功文件一段 Markdown；当总长度超过内联阈值时会被缓存为独立的 `cnt_*` receipt。 |
+页码从 1 开始，并插在每页第一个非空正文 Markdown 块之前。只有所有页面都能在最终 Markdown 中唯一且顺序定位时才注入；content list 缺失、结果文件错配或任一页定位不可靠时，完整返回 MinerU 原始 Markdown，不输出部分或推测页码。图片、表格、代码等块仅用于定位，内容仍交给后续 chunking engine 处理。
 
-## 边界
+## 输出与缓存
 
-- `file_refs` 只解析 `tfile_*` 指向的短生命周期文件。
-- `direct_urls` 只用于明显文档文件直链，不用于普通 HTML 页面。
-- 不负责文件上传、资产持久化、知识库入库或文件展示。
-- 单个文件解析失败会记录为 failed item，不阻断其它文件。
-- 内部最多并发解析 8 个文件；大量输入会按内部批次切分后顺序聚合。
+工具返回 `ToolReturn(tag="document_parse_result")`：
 
-## 解析策略
+- `visible_result.items`：按输入顺序返回 `source`、`status`、`file_name` 和失败 `reason`。
+- 每个成功文件对应一段 `cacheable_texts`，由 `ToolOutputCache` 内联或生成独立 `cnt_*`。
+- web 来源继续复用统一 URL parsed cache；缓存 key 不暴露给模型。
+- 单项失败不阻断同批其它文件。
 
-解析路由由 `DocumentParseService` 直接决定：
+## 非职责
 
-| 文件类型 | 策略 |
-| --- | --- |
-| PDF | 专职 PDF 策略，内部自行维护 PyMuPDF4LLM/OCR 兜底 |
-| Excel XML（`.xlsx` / `.xlsm` / `.xltx` / `.xltm`） | Pandas + openpyxl |
-| CSV / TSV | Pandas `read_csv` |
-| 图片 | 不作为通用文档解析入口；模型看图后需要精确抽字时使用 `image_ocr` |
-| 其它普通文档 | Docling -> MarkItDown |
-
-`parsers/common_document/` 放通用解析器：Docling 和 MarkItDown；`parsers/specialized/` 放格式或策略专用解析器：PDF、Excel XML 和 CSV/TSV。当前 spreadsheet 专用路径只覆盖 openpyxl 已支持的 Excel XML 系列，以及 pandas 原生 CSV/TSV；`.xls`、`.xlsb`、`.ods` 等格式需要引入对应 pandas engine 后再单独扩展。通用 Docling 不维护额外 `allowed_formats` 白名单。PDF、spreadsheet 等专用路径不追加通用 MarkItDown 兜底；专用解析器如果需要特殊兜底，应在自己的策略内部维护，避免专用行为反向污染通用解析链路。
-
-OCR provider 不属于 parser 树，统一放在 `document_tools/ocr/`。PDF 扫描页和 `image_ocr` 工具都复用这个辅助能力。
-
-### PDF 主链路
-
-- 使用 Docling，开启表格结构和图片抽取，关闭 Docling OCR。
-- PDF 内部只按页判断是否存在可抽取文本；空文本页视为扫描页，不再用图片覆盖度阈值推断。
-- 文本页优先保留 Docling 结构化结果和已抽取图片，不因为页面存在大图而强行 OCR。
-- 扫描页在原页位用 OCR 替换或补全。
-- Docling 单页空结果再用 PyMuPDF4LLM 逐页补页。
-- 可分页文档尽量按页插入 `<!-- page N -->` 标记；Docling 解析结果存在 `pages` 时按 `page_no` 分页导出后再注入页码，无可靠页信息的格式保持原始 Markdown 输出。
-- PyMuPDF4LLM 兜底链路按页单独解析，避免单页异常拖垮整份 PDF。
-- Docling Markdown 导出固定保留已抽取图片，尽量把图片写成 data URI；如果上游格式或 Docling pipeline 无法生成图片对象，才会退化为普通 Markdown 占位。
-- 如果后续需要专门识别表格截图、图表或图片内复杂结构，应新增平行工具承载该能力，不反向扩大 PDF 文本解析策略。
-
-### OCR 边界
-
-- OCR 不作为 document_parse 的全局兜底 parser。
-- 独立图片文字提取走平行工具 `image_ocr`，不作为 document_parse 的普通兜底。
-- PDF 扫描页 OCR 保留在 `PdfParser` 内部，以便和 Docling/PyMuPDF4LLM 文本页结果按原页序合并。
-
-### 开发环境提示
-
-本地开发机上 Docling native 层偶发 `std::bad_alloc` 通常表示本机内存紧张，不代表 PDF 主链路设计不可用；容器环境资源更稳定，实测该链路可稳定运行。
-
-## 统一切面
-
-- 工具门面不手写 `cnt_*` receipt；大文本缓存由 `ToolOutputCache` 和 `ToolContentStore` 统一处理。
-- URL cache 的 Redis key 不暴露给模型；工具内部只通过 `source_scope/source_url` 定位缓存。
+- 不负责用户附件、资产持久化、OSS 上传或知识库入库。
+- 不自动解压归档。
+- 不执行 HTML JavaScript，不启动浏览器，不主动抓取 HTML 外部资源。
+- 不允许模型通过工具参数传递本地文件路径。

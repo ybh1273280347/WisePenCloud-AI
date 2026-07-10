@@ -6,6 +6,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from chat.core.config.bootstrap_settings import bootstrap_settings
 from chat.core.config.nacos import nacos_client_manager
 from common.logger import error, info
 
@@ -124,6 +125,16 @@ class AppSettings(BaseModel):
     PADDLE_OCR_API_URL: str  # PaddleOCR 服务 API URL
     PADDLE_OCR_MODEL: str  # PaddleOCR 模型名
 
+    # ── MinerU Cloud (PDF 云端解析) ─────────────────────────────────────
+    MINERU_API_BASE_URL: str = "https://mineru.net"
+    MINERU_CLOUD_TOKEN: str = bootstrap_settings.MINERU_CLOUD_TOKEN
+    MINERU_MODEL_VERSION: str | None = None
+    MINERU_POLL_INTERVAL_SECONDS: float = 2.0
+    MINERU_TASK_TIMEOUT_SECONDS: float = 600.0
+    MINERU_UPLOAD_TIMEOUT_SECONDS: float = 120.0
+    MINERU_DOWNLOAD_TIMEOUT_SECONDS: float = 120.0
+    MINERU_MAX_DOWNLOAD_BYTES: int = 104_857_600
+
     # ── Web Search Gateways (搜索引擎基础设施网关) ──────────────────────
     WEB_SEARCH_FOURGET_BASE_URL: str = "http://127.0.0.1:8088"  # Fourget 搜索网关
     WEB_SEARCH_EXA_BASE_URL: str = "https://api.exa.ai"  # Exa 搜索网关
@@ -157,9 +168,9 @@ class AppSettings(BaseModel):
     OSS_CACHE_TTL_SECONDS: int = 6 * 3600  # 缓存文件 TTL (6h)
     OSS_CACHE_GC_INTERVAL_SECONDS: int = 30 * 60  # GC 扫描周期 (30min)
 
-    # ── Tool Run File Store (工具产出临时文件工作区) ────────────────────
-    TOOL_RUN_FILE_ROOT: str = "/tmp/wisepen-tool-run-files"  # 工作区根目录
-    # TTL / 容量 / 宽限期等稳定行为默认值由 ToolRunFileStore 就近定义。
+    # ── File Reference Store (统一文件引用的本地实现) ──────────────────
+    FILE_REFERENCE_ROOT: str = "/tmp/wisepen-file-references"  # 工作区根目录
+    # TTL / 容量 / 宽限期等稳定行为默认值由 FileReferenceStore 就近定义。
 
 
 def _run_async(coro):

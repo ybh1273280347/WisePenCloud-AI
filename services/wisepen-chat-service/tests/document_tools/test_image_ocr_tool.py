@@ -64,7 +64,7 @@ async def test_image_ocr_file_ref_returns_markdown_content(tmp_path: Path) -> No
 
     result = await tool.execute(
         {"user_id": "u1", "session_id": "s1"},
-        file_ref="tfile_image",
+        file_ref="file_image",
     )
 
     assert result.tag == "image_ocr_result"
@@ -106,7 +106,7 @@ async def test_image_ocr_rejects_ambiguous_input(tmp_path: Path) -> None:
     with pytest.raises(ToolExecutionError) as exc_info:
         await tool.execute(
             {"user_id": "u1", "session_id": "s1"},
-            file_ref="tfile_image",
+            file_ref="file_image",
             file_path="https://example.com/image.png",
         )
 
