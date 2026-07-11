@@ -37,15 +37,11 @@ _DANGEROUS_INNER_SUFFIXES = frozenset({
     ".bat", ".cmd", ".com", ".dll", ".exe",
     ".jar", ".js", ".msi", ".ps1", ".scr", ".sh", ".vbs",
 })
-_HASH_CHUNK_BYTES = 1024 * 1024  # SHA-256 流式哈希分块大小，算法常量
+_HASH_CHUNK_BYTES = 1024 * 1024
 
 
 class FileReferenceStore:
-    """文件引用的本地存储实现。
-
-    该门面只实现当前机器上的文件发布与解析，不接管附件、资产或知识库归属。
-    Redis 只保存 file_* 元数据，文件字节保存在本地或共享文件系统根目录。
-    """
+    """在本地或共享文件系统中发布、解析和清理短期 file_* 引用。"""
 
     __slots__ = (
         "_cleanup_grace_seconds",
@@ -56,13 +52,13 @@ class FileReferenceStore:
     )
 
     def __init__(
-            self,
-            *,
-            repository: FileReferenceRepository,
-            root_dir: str | Path = DEFAULT_FILE_REFERENCE_ROOT,
-            ref_ttl_seconds: int = DEFAULT_FILE_REFERENCE_TTL_SECONDS,
-            cleanup_grace_seconds: int = DEFAULT_FILE_REFERENCE_CLEANUP_GRACE_SECONDS,
-            max_file_size_bytes: int | None = DEFAULT_FILE_REFERENCE_MAX_BYTES,
+        self,
+        *,
+        repository: FileReferenceRepository,
+        root_dir: str | Path = DEFAULT_FILE_REFERENCE_ROOT,
+        ref_ttl_seconds: int = DEFAULT_FILE_REFERENCE_TTL_SECONDS,
+        cleanup_grace_seconds: int = DEFAULT_FILE_REFERENCE_CLEANUP_GRACE_SECONDS,
+        max_file_size_bytes: int | None = DEFAULT_FILE_REFERENCE_MAX_BYTES,
     ) -> None:
         self._repository = repository
         self._root_dir = Path(root_dir)
@@ -71,102 +67,98 @@ class FileReferenceStore:
         self._max_file_size_bytes = max_file_size_bytes
 
     def create_staging_dir(
-            self,
-            *,
-            user_id: str,
-            session_id: str,
-            producer: str,
-            run_id: str | None = None,
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        producer: str,
+        run_id: str | None = None,
     ) -> Path:
-        """为单次工具运行创建隔离的暂存目录。
-
-        Args:
-            user_id: 用户隔离键。
-            session_id: 会话隔离键。
-            producer: 工具或内部组件名称。
-            run_id: 可选运行标识；未传入时自动生成短 ID。
-
-        Returns:
-            已创建且位于 store 根目录内的暂存目录路径。
-
-        Raises:
-            InvalidFileReferenceError: 解析后的暂存目录逃逸 store 根目录。
-            FileReferenceWriteError: 根目录创建失败或不是目录。
-        """
+        """为单次工具运行创建隔离的暂存目录。"""
         root = self._ensure_root()
-        safe_user = _safe_component(user_id, fallback="user")
-        safe_session = _safe_component(session_id, fallback="session")
-        safe_producer = _safe_component(producer, fallback="tool")
-        safe_run = _safe_component(run_id or uuid.uuid4().hex[:16], fallback="run")
-
         staging_dir = (
-                root / safe_user / safe_session / "staging" / safe_producer / safe_run
+            root
+            / _safe_component(user_id, fallback="user")
+            / _safe_component(session_id, fallback="session")
+            / "staging"
+            / _safe_component(producer, fallback="tool")
+            / _safe_component(run_id or uuid.uuid4().hex[:16], fallback="run")
         ).resolve(strict=False)
         _ensure_within_root(staging_dir, root)
-        staging_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            staging_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise FileReferenceWriteError() from exc
         return staging_dir
 
     async def publish_file(
-            self,
-            *,
-            user_id: str,
-            session_id: str,
-            producer: str,
-            path: str | Path,
-            filename: str | None = None,
-            content_type: str | None = None,
-            ttl_seconds: int | None = None,
-            metadata: dict[str, object] | None = None,
-            ref_prefix: str | None = None,
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        producer: str,
+        path: str | Path,
+        filename: str | None = None,
+        content_type: str | None = None,
+        ttl_seconds: int | None = None,
+        metadata: dict[str, object] | None = None,
+        ref_prefix: str | None = None,
     ) -> FileReferenceRecord:
-        """发布本地文件，返回不透明的 file_* 引用。
-
-        Args:
-            user_id: 用户隔离键。
-            session_id: 会话隔离键。
-            producer: 工具或内部组件名称。
-            path: 待发布的本地文件路径。
-            filename: 可选展示文件名；缺省时使用源文件名。
-            content_type: 上游已知 MIME；未知时为空。
-            ttl_seconds: 可选引用 TTL；缺省时使用 store 默认 TTL。
-            metadata: 调用方附加的轻量元数据。
-            ref_prefix: 可选来源前缀，生成 `file_{prefix}_{random}`；缺省时为 `file_{random}`。
-
-        Returns:
-            已写入 Redis 的短期文件引用记录。
-
-        Raises:
-            ReferencedFileUnreadableError: 源文件不存在、不可读、不是普通文件或超过大小限制。
-            FileReferenceWriteError: TTL 非法、根目录异常或 object 写入失败。
-            InvalidFileReferenceError: object 路径逃逸 store 根目录。
-        """
-        source_path, size_bytes = await asyncio.to_thread(
-            self._resolve_publish_source, Path(path),
-        )
-        safe_filename = _sanitize_tool_file_name(filename or source_path.name)
-        safe_suffix = Path(safe_filename).suffix.lower()
-        sha256 = await asyncio.to_thread(_sha256_file, source_path)
-
-        root = self._ensure_root()
-        # 内容寻址路径：sha256 前两字节作为一级分桶目录（仿 Git objects 布局）
-        object_path = (
-                root
-                / _safe_component(user_id, fallback="user")
-                / _safe_component(session_id, fallback="session")
-                / "objects"
-                / sha256[:2]
-                / f"{sha256}{safe_suffix}"
-        ).resolve(strict=False)
-        _ensure_within_root(object_path, root)
-
-        await asyncio.to_thread(_copy_to_object_path, source_path, object_path)
-
-        ttl = int(ttl_seconds or self._ref_ttl_seconds)
+        """发布本地普通文件并返回短期 file_* 引用。"""
+        try:
+            ttl = self._ref_ttl_seconds if ttl_seconds is None else int(ttl_seconds)
+        except (TypeError, ValueError) as exc:
+            raise FileReferenceWriteError(
+                "ttl_seconds must be an integer.",
+            ) from exc
         if ttl <= 0:
             raise FileReferenceWriteError("ttl_seconds must be positive.")
 
+        try:
+            source_path = Path(path).resolve(strict=True)
+            if not source_path.is_file():
+                raise ReferencedFileUnreadableError()
+            size_bytes = source_path.stat().st_size
+        except OSError as exc:
+            raise ReferencedFileUnreadableError() from exc
+
+        if (
+            self._max_file_size_bytes is not None
+            and size_bytes > self._max_file_size_bytes
+        ):
+            raise ReferencedFileUnreadableError()
+
+        safe_filename = _sanitize_tool_file_name(filename or source_path.name)
+        try:
+            sha256 = await asyncio.to_thread(_sha256_file, source_path)
+        except OSError as exc:
+            raise ReferencedFileUnreadableError() from exc
+
+        root = self._ensure_root()
+        object_path = (
+            root
+            / _safe_component(user_id, fallback="user")
+            / _safe_component(session_id, fallback="session")
+            / "objects"
+            / sha256[:2]
+            / f"{sha256}{Path(safe_filename).suffix.lower()}"
+        ).resolve(strict=False)
+        _ensure_within_root(object_path, root)
+
+        await asyncio.to_thread(
+            _copy_to_object_path,
+            source_path,
+            object_path,
+        )
+
         now = datetime.now(timezone.utc)
-        ref_id = _build_ref_id(ref_prefix)
+        safe_prefix = _safe_component(ref_prefix, fallback="")
+        ref_id = (
+            f"{_REF_ID_PREFIX}"
+            f"{safe_prefix + '_' if safe_prefix else ''}"
+            f"{uuid.uuid4().hex[:16]}"
+        )
         record = FileReferenceRecord(
             ref_id=ref_id,
             user_id=user_id,
@@ -185,42 +177,23 @@ class FileReferenceStore:
         return record
 
     async def publish_bytes(
-            self,
-            *,
-            user_id: str,
-            session_id: str,
-            producer: str,
-            filename: str,
-            content: bytes,
-            content_type: str | None = None,
-            ttl_seconds: int | None = None,
-            metadata: dict[str, object] | None = None,
-            ref_prefix: str | None = None,
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        producer: str,
+        filename: str,
+        content: bytes,
+        content_type: str | None = None,
+        ttl_seconds: int | None = None,
+        metadata: dict[str, object] | None = None,
+        ref_prefix: str | None = None,
     ) -> FileReferenceRecord:
-        """发布已经持有的 bytes 内容，返回不透明的 file_* 引用。
-
-        该方法是通用中转入口，不判断文件业务类型，也不负责上传、资产或知识库归属。
-
-        Args:
-            user_id: 用户隔离键。
-            session_id: 会话隔离键。
-            producer: 工具或内部组件名称。
-            filename: 展示文件名，会在写入前清洗。
-            content: 待发布的文件字节。
-            content_type: 上游已知 MIME；未知时为空。
-            ttl_seconds: 可选引用 TTL；缺省时使用 store 默认 TTL。
-            metadata: 调用方附加的轻量元数据。
-            ref_prefix: 可选来源前缀，生成 `file_{prefix}_{random}`；缺省时为 `file_{random}`。
-
-        Returns:
-            已写入 Redis 的短期文件引用记录。
-
-        Raises:
-            ReferencedFileUnreadableError: 内容超过大小限制。
-            FileReferenceWriteError: staging 写入、TTL 校验或 object 写入失败。
-            InvalidFileReferenceError: staging 或 object 路径逃逸 store 根目录。
-        """
-        if self._max_file_size_bytes is not None and len(content) > self._max_file_size_bytes:
+        """通过暂存文件发布已持有的 bytes 内容。"""
+        if (
+            self._max_file_size_bytes is not None
+            and len(content) > self._max_file_size_bytes
+        ):
             raise ReferencedFileUnreadableError()
 
         safe_filename = _sanitize_tool_file_name(filename)
@@ -232,74 +205,60 @@ class FileReferenceStore:
         staging_path = (staging_dir / safe_filename).resolve(strict=False)
         _ensure_within_root(staging_path, self._ensure_root())
 
-        await asyncio.to_thread(_write_bytes_to_file, staging_path, content)
-        record = await self.publish_file(
-            user_id=user_id,
-            session_id=session_id,
-            producer=producer,
-            path=staging_path,
-            filename=safe_filename,
-            content_type=content_type,
-            ttl_seconds=ttl_seconds,
-            metadata=metadata,
-            ref_prefix=ref_prefix,
-        )
-        self.remove_staging_dir(staging_dir)
-        return record
+        try:
+            await asyncio.to_thread(
+                _write_bytes_to_file,
+                staging_path,
+                content,
+            )
+            return await self.publish_file(
+                user_id=user_id,
+                session_id=session_id,
+                producer=producer,
+                path=staging_path,
+                filename=safe_filename,
+                content_type=content_type,
+                ttl_seconds=ttl_seconds,
+                metadata=metadata,
+                ref_prefix=ref_prefix,
+            )
+        finally:
+            self.remove_staging_dir(staging_dir)
 
     async def resolve_ref(
-            self,
-            *,
-            user_id: str,
-            session_id: str,
-            ref_id: str,
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        ref_id: str,
     ) -> ResolvedFileReference:
-        """将 file_* 引用解析为已验证的本地文件路径。
-
-        Args:
-            user_id: 当前用户隔离键。
-            session_id: 当前会话隔离键。
-            ref_id: 待解析的 file_* 文件引用 ID。
-
-        Returns:
-            已校验作用域、TTL、路径和大小的本地文件描述。
-
-        Raises:
-            InvalidFileReferenceError: 引用格式非法、作用域不匹配或路径逃逸根目录。
-            ReferencedFileNotFoundError: 引用不存在、已过期或文件不存在。
-            ReferencedFileUnreadableError: 文件不是普通文件或大小校验失败。
-        """
+        """将 file_* 引用解析为经过作用域、TTL、路径和大小校验的本地文件。"""
         if not ref_id.startswith(_REF_ID_PREFIX):
             raise InvalidFileReferenceError()
 
         record = await self._repository.get(ref_id)
         if record is None:
             raise ReferencedFileNotFoundError()
-
-        # 会话隔离：ref 只能被创建它的用户和会话访问
         if record.user_id != user_id or record.session_id != session_id:
             raise InvalidFileReferenceError()
-
         if record.expires_at <= datetime.now(timezone.utc):
-            await self._repository.delete(ref_id)  # 惰性清理过期记录
+            await self._repository.delete(ref_id)
             raise ReferencedFileNotFoundError()
 
         root = self._ensure_root()
         try:
             object_path = (root / record.object_rel_path).resolve(strict=True)
-        except OSError as e:
-            raise ReferencedFileNotFoundError() from e
-
-        _ensure_within_root(object_path, root)  # 防御路径穿越
+        except OSError as exc:
+            raise ReferencedFileNotFoundError() from exc
+        _ensure_within_root(object_path, root)
 
         try:
             if not object_path.is_file():
                 raise ReferencedFileUnreadableError()
             size_bytes = object_path.stat().st_size
-        except OSError as e:
-            raise ReferencedFileUnreadableError() from e
-
-        if size_bytes != record.size_bytes:  # 文件被篡改或意外损坏
+        except OSError as exc:
+            raise ReferencedFileUnreadableError() from exc
+        if size_bytes != record.size_bytes:
             raise ReferencedFileUnreadableError()
 
         return ResolvedFileReference(
@@ -315,36 +274,26 @@ class FileReferenceStore:
         )
 
     def remove_staging_dir(self, staging_dir: str | Path) -> None:
-        """尽力清理由本 store 创建的暂存目录。
-
-        Args:
-            staging_dir: 待清理的暂存目录路径。
-
-        Raises:
-            InvalidFileReferenceError: 目录路径逃逸 store 根目录。
-            FileReferenceWriteError: 传入目录不位于 staging 命名空间。
-        """
+        """删除本 store 创建的单次运行暂存目录。"""
         root = self._ensure_root()
         candidate = Path(staging_dir).resolve(strict=False)
         _ensure_within_root(candidate, root)
-        if "staging" not in candidate.relative_to(root).parts:
-            raise FileReferenceWriteError("staging_dir is not under a staging namespace.")
+
+        relative_parts = candidate.relative_to(root).parts
+        if len(relative_parts) != 5 or relative_parts[2] != "staging":
+            raise FileReferenceWriteError(
+                "staging_dir is not a staging run directory.",
+            )
         shutil.rmtree(candidate, ignore_errors=True)
 
     def cleanup_expired_files(self) -> FileReferenceCleanupResult:
-        """按 mtime 清理过期 object 文件和陈旧暂存目录。
-
-        Redis 负责 file_* 元数据 TTL；该方法只负责回收文件系统中的残留字节。
-
-        Returns:
-            本次清理扫描、删除和失败数量。
-
-        Raises:
-            FileReferenceWriteError: store 根目录无法创建或不是目录。
-        """
+        """按 mtime 回收过期 object 文件和陈旧暂存目录。"""
         root = self._ensure_root()
-        # TTL + 宽限期之前最后修改的文件视为可回收
-        cutoff = time.time() - self._ref_ttl_seconds - self._cleanup_grace_seconds
+        cutoff = (
+            time.time()
+            - self._ref_ttl_seconds
+            - self._cleanup_grace_seconds
+        )
 
         scanned_objects = removed_objects = failed_objects = 0
         scanned_staging_dirs = removed_staging_dirs = failed_staging_dirs = 0
@@ -352,37 +301,41 @@ class FileReferenceStore:
         for objects_dir in root.glob("*/*/objects"):
             if not objects_dir.is_dir():
                 continue
-            for item in list(objects_dir.rglob("*")):  # list() 防止迭代中修改目录树
+
+            for item in list(objects_dir.rglob("*")):
                 if not item.is_file():
                     continue
+
                 scanned_objects += 1
                 try:
                     resolved = item.resolve(strict=True)
                     _ensure_within_root(resolved, root)
-                    if resolved.stat().st_mtime > cutoff:
-                        continue
-                    resolved.unlink()
-                    removed_objects += 1
+                    if resolved.stat().st_mtime <= cutoff:
+                        resolved.unlink()
+                        removed_objects += 1
                 except Exception:
                     failed_objects += 1
+
             _remove_empty_children(objects_dir)
 
         for staging_root in root.glob("*/*/staging"):
             if not staging_root.is_dir():
                 continue
-            for run_dir in list(staging_root.glob("*/*")):  # list() 防止迭代中修改目录树
+
+            for run_dir in list(staging_root.glob("*/*")):
                 if not run_dir.is_dir():
                     continue
+
                 scanned_staging_dirs += 1
                 try:
                     resolved = run_dir.resolve(strict=True)
                     _ensure_within_root(resolved, root)
-                    if resolved.stat().st_mtime > cutoff:
-                        continue
-                    shutil.rmtree(resolved)
-                    removed_staging_dirs += 1
+                    if resolved.stat().st_mtime <= cutoff:
+                        shutil.rmtree(resolved)
+                        removed_staging_dirs += 1
                 except Exception:
                     failed_staging_dirs += 1
+
             _remove_empty_children(staging_root)
 
         return FileReferenceCleanupResult(
@@ -394,49 +347,34 @@ class FileReferenceStore:
             failed_staging_dirs=failed_staging_dirs,
         )
 
-    def _resolve_publish_source(self, path: Path) -> tuple[Path, int]:
-        """解析并校验发布源文件，返回 resolved_path 和 size_bytes。"""
-        try:
-            source_path = path.resolve(strict=True)
-            if not source_path.is_file():
-                raise ReferencedFileUnreadableError()  # 非 OSError，穿透 except OSError 块
-            size_bytes = source_path.stat().st_size
-        except OSError as e:
-            raise ReferencedFileUnreadableError() from e
-
-        if self._max_file_size_bytes is not None and size_bytes > self._max_file_size_bytes:
-            raise ReferencedFileUnreadableError()
-        return source_path, size_bytes
-
     def _ensure_root(self) -> Path:
-        """确保根目录存在并返回其 resolved 路径。"""
+        """确保根目录存在并返回 resolved 路径。"""
         try:
             root = self._root_dir.resolve(strict=False)
             root.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            raise FileReferenceWriteError() from e
+        except OSError as exc:
+            raise FileReferenceWriteError() from exc
+
         if not root.is_dir():
-            raise FileReferenceWriteError("file reference root is not a directory.")
+            raise FileReferenceWriteError(
+                "file reference root is not a directory.",
+            )
         return root
 
 
 def _safe_component(value: str | None, *, fallback: str) -> str:
-    """将任意字符串清理为安全的单层路径组件，防止路径穿越。"""
+    """将任意值清洗为安全的单层路径组件。"""
     raw = PurePosixPath(str(value or "").replace("\\", "/")).name
     safe = _SAFE_COMPONENT_PATTERN.sub("_", raw).strip("._-")
     return safe or fallback
 
 
-def _sanitize_tool_file_name(filename: str, *, default: str = "file") -> str:
-    """将任意文件名清理为对文件系统和下载均安全的形式。
-
-    Args:
-        filename: 原始文件名；可能来自工具输出、URL 推断名或上游元数据。
-        default: 清洗后为空时使用的默认文件名。
-
-    Returns:
-        已移除路径片段、危险字符和危险内层后缀的安全文件名。
-    """
+def _sanitize_tool_file_name(
+    filename: str,
+    *,
+    default: str = "file",
+) -> str:
+    """移除路径片段、危险字符和危险内层后缀，并保留最终扩展名。"""
     base = PurePosixPath(str(filename).replace("\\", "/")).name.strip()
     if not base:
         return default
@@ -444,78 +382,85 @@ def _sanitize_tool_file_name(filename: str, *, default: str = "file") -> str:
     path = PurePosixPath(base)
     suffix = _SAFE_FILENAME_PATTERN.sub("", path.suffix).lower()
     stem = path.stem or default
-    stem_path = PurePosixPath(stem)
-    # 防双重扩展名伪装，例如 report.exe.pdf 最终会变成 report.pdf。
-    if stem_path.suffix.lower() in _DANGEROUS_INNER_SUFFIXES:
-        stem = stem_path.stem or default
+
+    # 连续剥离危险内层扩展名，防止 report.exe.js.pdf 一类伪装。
+    while PurePosixPath(stem).suffix.lower() in _DANGEROUS_INNER_SUFFIXES:
+        stem = PurePosixPath(stem).stem or default
 
     safe_stem = _SAFE_FILENAME_PATTERN.sub("_", stem).strip("._-") or default
-    safe = f"{safe_stem}{suffix}"
-    return safe[:_MAX_FILENAME_LENGTH] or default
-
-
-def _build_ref_id(prefix: str | None) -> str:
-    """生成 file_* 引用 ID。"""
-    random_part = uuid.uuid4().hex[:16]
-    prefix_text = str(prefix or "").strip()
-    if prefix_text:
-        return f"{_REF_ID_PREFIX}{prefix_text}_{random_part}"
-    return f"{_REF_ID_PREFIX}{random_part}"
+    max_stem_length = max(1, _MAX_FILENAME_LENGTH - len(suffix))
+    safe_stem = (
+        safe_stem[:max_stem_length].rstrip("._-")
+        or default
+    )
+    return f"{safe_stem}{suffix}"[:_MAX_FILENAME_LENGTH] or default
 
 
 def _sha256_file(path: Path) -> str:
-    """分块计算文件 SHA-256，支持大文件。"""
+    """分块计算文件 SHA-256。"""
     digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        while chunk := fh.read(_HASH_CHUNK_BYTES):
+    with path.open("rb") as file:
+        while chunk := file.read(_HASH_CHUNK_BYTES):
             digest.update(chunk)
     return digest.hexdigest()
 
 
-def _copy_to_object_path(source_path: Path, object_path: Path) -> None:
-    """将文件内容寻址写入 object 路径；已存在则仅 touch 刷新 mtime（相同内容去重）。"""
+def _copy_to_object_path(
+    source_path: Path,
+    object_path: Path,
+) -> None:
+    """原子写入内容寻址路径；相同对象已存在时只刷新 mtime。"""
     object_path.parent.mkdir(parents=True, exist_ok=True)
     if object_path.exists():
-        object_path.touch()  # 内容相同的文件只存一份，touch 延长其清理宽限期
+        object_path.touch()
         return
 
-    # 先写临时文件再 rename，保证目标路径写入的原子性
-    tmp_path = object_path.with_name(f".{object_path.name}.{uuid.uuid4().hex}.tmp")
+    tmp_path = object_path.with_name(
+        f".{object_path.name}.{uuid.uuid4().hex}.tmp",
+    )
     try:
         shutil.copyfile(source_path, tmp_path)
         tmp_path.replace(object_path)
-    except OSError as e:
-        raise FileReferenceWriteError() from e
+    except OSError as exc:
+        raise FileReferenceWriteError() from exc
     finally:
         with suppress(OSError):
             tmp_path.unlink(missing_ok=True)
 
 
 def _write_bytes_to_file(path: Path, content: bytes) -> None:
-    """将 bytes 原子写入目标文件，避免消费者看到半写入内容。"""
+    """原子写入 bytes，避免消费者读取半成品。"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    tmp_path = path.with_name(
+        f".{path.name}.{uuid.uuid4().hex}.tmp",
+    )
     try:
         tmp_path.write_bytes(content)
         tmp_path.replace(path)
-    except OSError as e:
-        raise FileReferenceWriteError() from e
+    except OSError as exc:
+        raise FileReferenceWriteError() from exc
     finally:
         with suppress(OSError):
             tmp_path.unlink(missing_ok=True)
 
 
 def _ensure_within_root(path: Path, root: Path) -> None:
-    """断言 path 位于 root 之下，否则拒绝文件引用。"""
+    """拒绝逃逸 store 根目录的路径。"""
     try:
-        path.resolve(strict=False).relative_to(root.resolve(strict=False))
-    except (ValueError, OSError) as e:
-        raise InvalidFileReferenceError() from e
+        path.resolve(strict=False).relative_to(
+            root.resolve(strict=False),
+        )
+    except (ValueError, OSError) as exc:
+        raise InvalidFileReferenceError() from exc
 
 
 def _remove_empty_children(root: Path) -> None:
-    """从最深层开始向上删除空目录（倒序保证子目录先于父目录被尝试删除）。"""
-    for item in sorted(root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+    """从最深层开始删除空目录。"""
+    for item in sorted(
+        root.rglob("*"),
+        key=lambda path: len(path.parts),
+        reverse=True,
+    ):
         if item.is_dir():
             with suppress(OSError):
-                item.rmdir()  # 非空目录会抛 OSError，suppress 静默跳过
+                item.rmdir()
