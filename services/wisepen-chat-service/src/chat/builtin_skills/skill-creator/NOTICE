@@ -1,0 +1,9 @@
+Wisepen skill-creator
+
+This skill includes material derived from OpenAI's skill-creator skill,
+licensed under the Apache License, Version 2.0.
+
+Wisepen has modified the original material to support Wisepen AIAsset Skill
+draft creation, Skill metadata editing, and draft asset upload workflows.
+
+See license.txt for the Apache License, Version 2.0.

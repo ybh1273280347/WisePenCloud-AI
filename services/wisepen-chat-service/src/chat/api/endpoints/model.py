@@ -102,7 +102,19 @@ def to_model_response_with_mapping(
     return model_response
 
 
-@router.get("/listAvailableModels", response_model=R[AvailableModelsResponse])
+@router.get(
+    "/listAvailableModels",
+    response_model=R[AvailableModelsResponse],
+    summary="查询可用模型",
+    description="""
+- 用途：查询当前用户可用于发起聊天的系统模型和个人模型。
+- 请求：无业务请求参数，用户身份来自请求上下文。
+- 约束：当前用户必须已登录；模型、Provider 和映射数据必须可读取。
+- 处理：分别读取系统模型、用户模型及其 Provider 映射，只返回 active 模型，并补充 provider runtime options；系统 Provider 不展示 provider_name。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN。
+- 响应：返回系统模型列表和用户模型列表，每个模型包含可用映射信息。
+""",
+)
 @inject
 async def list_available_models(
         user_id: str = Depends(require_login),
@@ -140,7 +152,19 @@ async def list_available_models(
     ))
 
 
-@router.get("/listUserProviders", response_model=R[ListUserProvidersResponse])
+@router.get(
+    "/listUserProviders",
+    response_model=R[ListUserProvidersResponse],
+    summary="查询用户 Provider",
+    description="""
+- 用途：查询当前用户维护的个人 LLM Provider 列表。
+- 请求：无业务请求参数，用户身份来自请求上下文。
+- 约束：当前用户必须已登录。
+- 处理：读取当前用户的 Provider 并返回脱敏后的 API Key 指纹；不返回明文 API Key。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN。
+- 响应：返回当前用户 Provider 列表。
+""",
+)
 @inject
 async def list_user_providers(
         user_id: str = Depends(require_login),
@@ -152,7 +176,20 @@ async def list_user_providers(
     ))
 
 
-@router.post("/createUserProvider", response_model=R, status_code=200)
+@router.post(
+    "/createUserProvider",
+    response_model=R,
+    status_code=200,
+    summary="创建用户 Provider",
+    description="""
+- 用途：为当前用户新增一个个人 LLM Provider。
+- 请求：name、type、api_key 描述 Provider；base_url 可选指定自定义网关；is_active 控制是否启用。
+- 约束：当前用户必须已登录；同一用户下 Provider 名称不能重复；请求参数必须满足 schema 约束。
+- 处理：创建归属于当前用户的 Provider，保存 API Key 并生成指纹；不自动绑定模型。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；Provider 已存在 -> ChatErrorCode.PROVIDER_ALREADY_EXISTS；请求参数校验失败 -> ResultCode.PARAM_ERROR。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def create_user_provider(
         req: CreateUserProviderRequest,
@@ -171,7 +208,20 @@ async def create_user_provider(
     return R.success()
 
 
-@router.post("/updateUserProvider", response_model=R, status_code=200)
+@router.post(
+    "/updateUserProvider",
+    response_model=R,
+    status_code=200,
+    summary="更新用户 Provider",
+    description="""
+- 用途：维护当前用户的个人 LLM Provider 配置。
+- 请求：provider_id 指定目标 Provider；name、base_url、api_key、type、is_active 未传时不更新对应字段。
+- 约束：当前用户必须已登录；目标 Provider 必须属于当前用户；更新后的 Provider 名称不能与同用户其他 Provider 冲突。
+- 处理：按传入字段更新 Provider；不直接修改模型或模型映射。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；Provider 不存在或不属于当前用户 -> ChatErrorCode.PROVIDER_NOT_FOUND；Provider 名称冲突 -> ChatErrorCode.PROVIDER_ALREADY_EXISTS；请求参数校验失败 -> ResultCode.PARAM_ERROR。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def update_user_provider(
         req: UpdateUserProviderRequest,
@@ -184,7 +234,20 @@ async def update_user_provider(
     return R.success()
 
 
-@router.post("/deleteUserProvider", response_model=R, status_code=200)
+@router.post(
+    "/deleteUserProvider",
+    response_model=R,
+    status_code=200,
+    summary="删除用户 Provider",
+    description="""
+- 用途：删除当前用户的个人 LLM Provider。
+- 请求：provider_id 指定目标 Provider。
+- 约束：当前用户必须已登录；目标 Provider 必须属于当前用户。
+- 处理：删除 Provider 记录；关联映射的约束由 repository 保证。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；Provider 不存在或不属于当前用户 -> ChatErrorCode.PROVIDER_NOT_FOUND；Provider 仍被模型映射使用 -> ChatErrorCode.PROVIDER_IN_USE；请求参数校验失败 -> ResultCode.PARAM_ERROR。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def delete_user_provider(
         req: DeleteUserProviderRequest,
@@ -196,7 +259,19 @@ async def delete_user_provider(
     return R.success()
 
 
-@router.get("/listUserModelsByProviderId", response_model=R[ListUserModelsResponse])
+@router.get(
+    "/listUserModelsByProviderId",
+    response_model=R[ListUserModelsResponse],
+    summary="按 Provider 查询用户模型",
+    description="""
+- 用途：查询当前用户指定 Provider 下关联的个人模型。
+- 请求：provider_id 指定目标 Provider。
+- 约束：当前用户必须已登录；provider_id 必须可转换为有效对象 ID。
+- 处理：按 Provider ID 和当前用户查询模型映射并返回模型摘要；不返回 Provider 明文 API Key。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；请求参数校验失败 -> ResultCode.PARAM_ERROR。
+- 响应：返回模型列表。
+""",
+)
 @inject
 async def list_user_models_by_provider_id(
         provider_id: str = Query(..., description="Provider ID"),
@@ -230,7 +305,20 @@ async def list_all_user_models(
     ))
 
 
-@router.post("/createUserModel", response_model=R, status_code=200)
+@router.post(
+    "/createUserModel",
+    response_model=R,
+    status_code=200,
+    summary="创建用户模型",
+    description="""
+- 用途：为当前用户新增一个个人模型定义。
+- 请求：display_name、type、model_family、billing_ratio、能力开关和上下文窗口字段描述模型能力。
+- 约束：当前用户必须已登录；同一用户下模型展示名不能重复；请求参数必须满足 schema 约束。
+- 处理：创建归属于当前用户的模型定义；不自动创建 Provider 或模型映射。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；模型已存在 -> ChatErrorCode.MODEL_ALREADY_EXISTS；请求参数校验失败 -> ResultCode.PARAM_ERROR。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def create_user_model(
         req: CreateUserModelRequest,
@@ -253,7 +341,20 @@ async def create_user_model(
     return R.success()
 
 
-@router.post("/updateUserModel", response_model=R, status_code=200)
+@router.post(
+    "/updateUserModel",
+    response_model=R,
+    status_code=200,
+    summary="更新用户模型",
+    description="""
+- 用途：维护当前用户的个人模型定义。
+- 请求：model_id 指定目标模型；display_name、type、model_family、billing_ratio、能力开关、上下文窗口和 is_active 未传时不更新对应字段。
+- 约束：当前用户必须已登录；目标模型必须属于当前用户；更新后的模型展示名不能与同用户其他模型冲突。
+- 处理：按传入字段更新模型定义；不直接修改 Provider 或模型映射。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；模型不存在或不属于当前用户 -> ChatErrorCode.MODEL_NOT_FOUND；模型展示名冲突 -> ChatErrorCode.MODEL_ALREADY_EXISTS；请求参数校验失败 -> ResultCode.PARAM_ERROR。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def update_user_model(
         req: UpdateUserModelRequest,
@@ -266,7 +367,20 @@ async def update_user_model(
     return R.success()
 
 
-@router.post("/deleteUserModel", response_model=R, status_code=200)
+@router.post(
+    "/deleteUserModel",
+    response_model=R,
+    status_code=200,
+    summary="删除用户模型",
+    description="""
+- 用途：删除当前用户的个人模型定义。
+- 请求：model_id 指定目标模型。
+- 约束：当前用户必须已登录；目标模型必须属于当前用户。
+- 处理：删除模型定义；关联映射的清理由 repository 保证。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；模型不存在或不属于当前用户 -> ChatErrorCode.MODEL_NOT_FOUND；请求参数校验失败 -> ResultCode.PARAM_ERROR。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def delete_user_model(
         req: DeleteUserModelRequest,
@@ -278,7 +392,20 @@ async def delete_user_model(
     return R.success()
 
 
-@router.post("/bindModelProvider", response_model=R, status_code=200)
+@router.post(
+    "/bindModelProvider",
+    response_model=R,
+    status_code=200,
+    summary="绑定模型 Provider",
+    description="""
+- 用途：为当前用户的模型绑定一个 Provider 侧模型名称。
+- 请求：model_id 指定用户模型；provider_id 指定用户 Provider；provider_model_name 是 Provider 实际模型名；is_preferred 和 is_active 控制映射偏好与启用状态。
+- 约束：当前用户必须已登录；模型和 Provider 必须存在且属于当前用户。
+- 处理：创建或更新模型到 Provider 的映射关系；设置 Provider 侧模型名、启用状态和首选状态；不修改模型定义或 Provider 凭证。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；模型不存在或不属于当前用户 -> ChatErrorCode.MODEL_NOT_FOUND；Provider 不存在或不属于当前用户 -> ChatErrorCode.PROVIDER_NOT_FOUND；并发创建映射冲突 -> ChatErrorCode.MODEL_MAPPING_ALREADY_EXISTS；请求参数校验失败 -> ResultCode.PARAM_ERROR。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def bind_model_provider(
         req: BindModelProviderRequest,
@@ -296,7 +423,20 @@ async def bind_model_provider(
     return R.success()
 
 
-@router.post("/unbindModelProvider", response_model=R, status_code=200)
+@router.post(
+    "/unbindModelProvider",
+    response_model=R,
+    status_code=200,
+    summary="解绑模型 Provider",
+    description="""
+- 用途：解除当前用户模型与 Provider 的绑定关系。
+- 请求：model_id 指定用户模型；provider_id 指定用户 Provider。
+- 约束：当前用户必须已登录；目标映射必须存在且属于当前用户。
+- 处理：删除模型到 Provider 的映射关系；不删除模型定义或 Provider。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；模型不存在或不属于当前用户 -> ChatErrorCode.MODEL_NOT_FOUND；模型供应商映射不存在 -> ChatErrorCode.MODEL_MAPPING_NOT_FOUND；请求参数校验失败 -> ResultCode.PARAM_ERROR。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def unbind_model_provider(
         req: UnbindModelProviderRequest,

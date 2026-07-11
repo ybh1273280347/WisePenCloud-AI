@@ -1,6 +1,5 @@
 import asyncio
 import threading
-from pathlib import Path
 from typing import Literal
 
 import yaml
@@ -10,13 +9,10 @@ from chat.core.config.bootstrap_settings import bootstrap_settings
 from chat.core.config.nacos import nacos_client_manager
 from common.logger import error, info
 
-SERVICE_ROOT = Path(__file__).resolve().parents[4]
-
-
 class AppSettings(BaseModel):
     """由 Nacos 提供的全量业务配置，extra=forbid 校验预防字段错误。"""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict()
 
     # ── LLM Gateway (默认网关，主对话链路从 Provider 表动态获取) ────────
     LLM_BASE_URL: str  # 默认 LLM 网关 base URL

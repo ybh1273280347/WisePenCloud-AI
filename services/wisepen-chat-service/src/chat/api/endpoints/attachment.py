@@ -19,10 +19,22 @@ from common.core.domain import R
 from common.logger import info, warning
 from common.security import SecurityContextHolder, require_login
 
-router = APIRouter(tags=["attachment"])
+router = APIRouter()
 
 
-@router.post("/initUploadTemporaryAttachment", response_model=R[InitUploadResponse])
+@router.post(
+    "/initUploadTemporaryAttachment",
+    response_model=R[InitUploadResponse],
+    summary="初始化临时附件上传",
+    description="""
+- 用途：为当前会话中的临时 AI 附件申请对象存储直传凭证。
+- 请求：session_id 指定目标会话；filename、extension、file_size 和 md5 描述待上传文件；enable_library 当前不改变处理流程。
+- 约束：当前用户必须已登录；目标会话必须属于当前用户；文件名、后缀、大小和 MD5 必须满足请求模型约束。
+- 处理：向文件存储服务申请 PRIVATE_AI_ATTACHMENT 上传凭证，生成会话内 attachment_id，并把临时附件引用追加到会话；不上传文件字节，不创建资源附件。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；请求参数校验失败 -> ResultCode.PARAM_ERROR；会话不存在或不属于当前用户 -> ChatErrorCode.SESSION_NOT_FOUND；文件存储服务调用失败 -> ResultCode.SYSTEM_ERROR。
+- 响应：返回附件 ID、objectKey、预签名上传 URL 和回调 header。
+""",
+)
 @inject
 async def init_temp_attachment_upload(
         req: InitUploadRequest,
@@ -66,7 +78,20 @@ async def init_temp_attachment_upload(
     ))
 
 
-@router.post("/addResourceAttachments", response_model=R[List[str]], status_code=200)
+@router.post(
+    "/addResourceAttachments",
+    response_model=R[List[str]],
+    status_code=200,
+    summary="添加资源附件",
+    description="""
+- 用途：将用户可访问的资源作为会话附件加入当前聊天会话。
+- 请求：session_id 指定目标会话；resource_ids 指定要加入的资源 ID 列表。
+- 约束：当前用户必须已登录；目标会话必须属于当前用户；资源列表不能为空；用户必须能通过资源服务读取目标资源信息。
+- 处理：逐个读取资源信息，已存在的资源附件会刷新名称、类型并恢复为未删除；不存在时创建新的资源附件引用；不复制资源文件。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；请求参数校验失败 -> ResultCode.PARAM_ERROR；会话不存在或不属于当前用户 -> ChatErrorCode.SESSION_NOT_FOUND；资源服务调用失败 -> ResultCode.SYSTEM_ERROR。
+- 响应：返回本次关联或恢复的附件 ID 列表。
+""",
+)
 @inject
 async def add_resource_attachments(
         req: AddResourceAttachmentsRequest,
@@ -115,7 +140,19 @@ async def add_resource_attachments(
     return R.success(data=attachment_ids)
 
 
-@router.post("/deleteAttachment", response_model=R)
+@router.post(
+    "/deleteAttachment",
+    response_model=R,
+    summary="删除会话附件",
+    description="""
+- 用途：从当前会话中删除临时附件或资源附件。
+- 请求：session_id 指定目标会话；attachment_id 指定会话内附件。
+- 约束：当前用户必须已登录；目标会话必须属于当前用户。
+- 处理：匹配临时附件时标记删除并调用文件存储服务删除对象；匹配资源附件时仅标记删除；找不到未删除附件时跳过并返回成功。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；请求参数校验失败 -> ResultCode.PARAM_ERROR；会话不存在或不属于当前用户 -> ChatErrorCode.SESSION_NOT_FOUND；文件存储服务调用失败 -> ResultCode.SYSTEM_ERROR。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def delete_attachment(
         req: DeleteAttachmentRequest,

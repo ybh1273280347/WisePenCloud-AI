@@ -880,6 +880,10 @@ class Container(containers.DeclarativeContainer):
         search_history_tool,
         load_skill_tool,
         load_skill_asset_tool,
+        create_skill_info_tool,
+        get_skill_info_tool,
+        update_skill_info_tool,
+        upload_skill_draft_asset_tool,
     )
     tool_registry = providers.Singleton(
         _build_registry,

@@ -13,6 +13,7 @@ from chat.application.tools.core.llm.invocation import ToolInvocation
 from chat.application.tools.core.tool_return import ToolReturn
 from chat.application.tools.skill_tools.common import AllowedSkillIdCheck, build_skill_asset_output_placeholder, \
     SkillPermissionCheck
+from chat.application.tools.skill_tools.utils.builtin_skills import get_builtin_skill, is_builtin_skill_id, read_builtin_skill_asset
 from chat.domain.interfaces.file_loader import FileLoader
 from chat.service_client import AIAssetClient
 from chat.service_client.resource_service_client import ResourceClient
@@ -35,7 +36,10 @@ class ValidSkillAssetPathCheck(ToolPreflightHook):
         skill_id: str = invocation.tool_call_arguments.get("skill_id")
         path: str = invocation.tool_call_arguments.get("path")
 
-        skill = await self._ai_asset_client.get_published_skill(skill_id)
+        if is_builtin_skill_id(skill_id):
+            skill = get_builtin_skill(skill_id)
+        else:
+            skill = await self._ai_asset_client.get_published_skill(skill_id)
         if skill is None:
             return ToolPreflightResult(ok=False,
                                        message=f"Skill '{skill_id}' not found.")

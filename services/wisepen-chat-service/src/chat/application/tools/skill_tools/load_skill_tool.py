@@ -74,7 +74,11 @@ class LoadSkillTool:
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> str:
         skill_id = (kwargs.get("skill_id") or "").strip()
 
-        skill = await self._ai_asset_client.get_published_skill(skill_id)
+        # 先检查是否为内置Skill
+        if is_builtin_skill_id(skill_id):
+            skill = get_builtin_skill(skill_id)
+        else:
+            skill = await self._ai_asset_client.get_published_skill(skill_id)
         if skill is None:
             raise ToolExecutionError(
                 reason="Skill Not Found",

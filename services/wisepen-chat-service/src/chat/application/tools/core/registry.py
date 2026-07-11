@@ -55,6 +55,7 @@ class ToolRegistry:
             allow_tool_name_set: set[str] | None = None,
             deny_tool_name_set: set[str] | None = None,
     ) -> ToolScope:
+        context = dict(tool_context or {})
         expose_tool_name_set = expose_tool_name_set or set()
         deny_tool_name_set = deny_tool_name_set or set()
 
@@ -64,10 +65,15 @@ class ToolRegistry:
         for name, tool in tools.items():
             policy = tool.definition.policy
 
+            explicitly_exposed = name in expose_tool_name_set
+            skill_exposed = (policy.required_allowed_builtin_skill_ids and
+                             set(policy.required_allowed_builtin_skill_ids).issubset(set(context.get("allowed_skill_ids") or [])))
+
             if not policy.expose_by_default:
-                if name in expose_tool_name_set:
+                if explicitly_exposed or skill_exposed:
                     filtered_tools[name] = tool
                 continue
+
             if allow_tool_name_set is not None and name not in allow_tool_name_set:
                 continue
             if policy.expose_by_default and name in deny_tool_name_set:
@@ -75,7 +81,6 @@ class ToolRegistry:
 
             filtered_tools[name] = tool
 
-        context = dict(tool_context or {})
 
         return ToolScope(tools=filtered_tools, context=context)
 

@@ -182,7 +182,7 @@ class ChatTurnCoordinator:
         available_skills = []
         if tool_and_skill_policy.enable_use_tool and tool_and_skill_policy.enable_use_skill:
             # 若用户指定了 user_defined_on_demand_skill_ids，则覆盖 agent 预设的 on_demand_skill_ids
-            on_demand_skill_ids = user_defined_on_demand_skill_ids or tool_and_skill_policy.on_demand_skill_ids or set()
+            on_demand_skill_ids = (user_defined_on_demand_skill_ids if user_defined_on_demand_skill_ids is not None else tool_and_skill_policy.on_demand_skill_ids) or set()
             # 构建 available_skills
             available_skills = await self._skill_matcher.match(
                 on_demand_skill_ids=on_demand_skill_ids,

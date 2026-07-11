@@ -35,8 +35,8 @@ class DefaultSkillMatcher(SkillMatcher):
             user_query: str,
             skill_match_top_k: Optional[int] = None
     ) -> List[SkillMeta]:
-        if not on_demand_skill_ids:
-            return []
+        # 系统级内置 Skill 始终进入候选集，不受前端 on-demand 覆盖影响
+        on_demand_skill_ids = set(on_demand_skill_ids or set()) | ALWAYS_AVAILABLE_BUILTIN_SKILL_IDS
 
         skill_meta_list: List[SkillMeta] = []
         try:

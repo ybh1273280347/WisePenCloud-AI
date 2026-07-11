@@ -14,13 +14,24 @@ from common.security import require_login
 router = APIRouter()
 
 
-@router.get("/listMemories", response_model=R[List[MemoryItemResponse]])
+@router.get(
+    "/listMemories",
+    response_model=R[List[MemoryItemResponse]],
+    summary="查询长期记忆",
+    description="""
+- 用途：查询当前用户的全部长期记忆条目，用于记忆管理面板展示。
+- 请求：无业务请求参数，用户身份来自请求上下文。
+- 约束：当前用户必须已登录；长期记忆 provider 必须可用。
+- 处理：调用 MemoryProvider 读取当前用户全部记忆，并转换为记忆 ID、内容和 metadata；不修改记忆内容。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；记忆 provider 调用失败 -> ChatErrorCode.MEMORY_OPERATION_FAILED。
+- 响应：返回当前用户的长期记忆列表。
+""",
+)
 @inject
 async def list_memories(
         user_id: str = Depends(require_login),
         memory: MemoryProvider = Depends(Provide[Container.memory_provider]),
 ):
-    """GET /chat/memories — 返回当前用户的全部长期记忆条目，供记忆管理面板展示。"""
     try:
         items = await memory.get_all(user_id=user_id)
     except Exception as e:
@@ -35,14 +46,26 @@ async def list_memories(
     ])
 
 
-@router.post("/deleteMemory", response_model=R, status_code=200)
+@router.post(
+    "/deleteMemory",
+    response_model=R,
+    status_code=200,
+    summary="删除长期记忆",
+    description="""
+- 用途：删除当前用户的一条长期记忆，用于用户主动纠错或清理记忆。
+- 请求：memory_id 指定目标记忆。
+- 约束：当前用户必须已登录；目标记忆删除操作必须被 MemoryProvider 接受。
+- 处理：调用 MemoryProvider 删除指定记忆；不返回删除后的列表。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；记忆 provider 拒绝或删除失败 -> ChatErrorCode.MEMORY_OPERATION_FAILED。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def delete_memory(
         memory_id: str,
         user_id: str = Depends(require_login),
         memory: MemoryProvider = Depends(Provide[Container.memory_provider]),
 ):
-    """DELETE /chat/memories/{memory_id} — 删除单条长期记忆，用于用户主动纠错（幻觉修正）场景。"""
     try:
         await memory.delete_memory(memory_id=memory_id, user_id=user_id)
     except PermissionError:
@@ -52,13 +75,25 @@ async def delete_memory(
     return R.success()
 
 
-@router.delete("/deleteAllMemories", response_model=R, status_code=200)
+@router.delete(
+    "/deleteAllMemories",
+    response_model=R,
+    status_code=200,
+    summary="清空长期记忆",
+    description="""
+- 用途：清空当前用户的全部长期记忆，用于隐私清理或重置个人记忆。
+- 请求：无业务请求参数，用户身份来自请求上下文。
+- 约束：当前用户必须已登录；长期记忆 provider 必须可用。
+- 处理：调用 MemoryProvider 删除当前用户全部记忆；不删除会话、消息或附件。
+- 失败：未登录 -> PermissionErrorCode.NOT_LOGIN；记忆 provider 调用失败 -> ChatErrorCode.MEMORY_OPERATION_FAILED。
+- 响应：成功时返回空结果。
+""",
+)
 @inject
 async def delete_all_memories(
         user_id: str = Depends(require_login),
         memory: MemoryProvider = Depends(Provide[Container.memory_provider]),
 ):
-    """DELETE /chat/memories — 清空当前用户的全部长期记忆，满足 GDPR 等隐私合规注销需求。"""
     try:
         await memory.delete_all_for_user(user_id=user_id)
     except Exception as e:
