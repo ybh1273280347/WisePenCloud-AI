@@ -20,6 +20,18 @@ from chat.core.persistence._utils.payload_readers import (
     read_trimmed_str_sequence,
 )
 
+_RETRIEVAL_PAYLOAD_FIELDS = (
+    "chunk_id",
+    "evidence_text",
+    "resource_id",
+    "document_version",
+    "corpus_version",
+    "parent_chunk_id",
+    "page_label",
+    "section_path",
+    "anchor_labels",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class _RetrievedPoint:
@@ -30,11 +42,7 @@ class _RetrievedPoint:
 
 
 class RagQdrantRetriever:
-    """Qdrant dense + BM25 主检索步骤。
-
-    Qdrant filter 只承载 resource、Elastic 候选集合和 ACL 范围；内容相关性由 dense/BM25
-    查询本身决定，不通过 payload 过滤表达。
-    """
+    """在 resource、Elastic 候选和 ACL 范围内执行 dense + BM25 主检索。"""
 
     __slots__ = (
         "_bm25_config",
@@ -46,14 +54,14 @@ class RagQdrantRetriever:
     )
 
     def __init__(
-            self,
-            *,
-            client: AsyncQdrantClient | None,
-            collection_name: str,
-            permission_filter_builder: RagPermissionFilterBuilder,
-            bm25_config: qdrant_models.Bm25Config,
-            dense_vector_name: str = "dense",
-            sparse_vector_name: str = "sparse",
+        self,
+        *,
+        client: AsyncQdrantClient | None,
+        collection_name: str,
+        permission_filter_builder: RagPermissionFilterBuilder,
+        bm25_config: qdrant_models.Bm25Config,
+        dense_vector_name: str = "dense",
+        sparse_vector_name: str = "sparse",
     ) -> None:
         self._client = client
         self._collection_name = collection_name
@@ -62,217 +70,218 @@ class RagQdrantRetriever:
         self._dense_vector_name = dense_vector_name
         self._sparse_vector_name = sparse_vector_name
 
-    async def retrieve(self, request: RagQdrantRetrievalRequest) -> tuple[ScoredChunk, ...]:
-        if self._client is None:
+    async def retrieve(
+        self,
+        request: RagQdrantRetrievalRequest,
+    ) -> tuple[ScoredChunk, ...]:
+        client = self._client
+        if client is None or request.top_k <= 0:
             return ()
 
-        query_filter = self.build_retrieval_filter(
-            RagQdrantRetrievalFilterRequest(
-                resource_id=request.resource_id,
-                candidate_chunk_ids=request.candidate_chunk_ids,
-                permission_scope=request.permission_scope,
-            )
-        )
         points = await self._query_points(
+            client=client,
             request=request,
-            query_filter=query_filter,
-        )
-        return tuple(
-            chunk
-            for rank, item in enumerate(points, start=1)
-            if (
-                chunk := _to_scored_chunk(
-                    item.point,
-                    rank=rank,
-                    retrieval_score=item.score,
-                    channels=item.channels,
-                    signals=item.signals,
+            query_filter=self.build_retrieval_filter(
+                RagQdrantRetrievalFilterRequest(
+                    resource_id=request.resource_id,
+                    candidate_chunk_ids=request.candidate_chunk_ids,
+                    permission_scope=request.permission_scope,
                 )
-            ) is not None
+            ),
         )
 
+        chunks: list[ScoredChunk] = []
+        for item in points:
+            chunk = _to_scored_chunk(
+                item.point,
+                rank=len(chunks) + 1,
+                retrieval_score=item.score,
+                channels=item.channels,
+                signals=item.signals,
+            )
+            if chunk is not None:
+                chunks.append(chunk)
+        return tuple(chunks)
+
     def build_retrieval_filter(
-            self,
-            request: RagQdrantRetrievalFilterRequest,
+        self,
+        request: RagQdrantRetrievalFilterRequest,
     ) -> qdrant_models.Filter:
-        # candidate_chunk_ids 来自 Elastic 关键词 prefilter；没有关键词时不限制 chunk_id。
+        """构造仅用于限定 resource、Elastic 候选和 ACL 的 Qdrant filter。"""
         must: list[qdrant_models.Condition] = [
             qdrant_models.FieldCondition(
                 key="resource_id",
                 match=qdrant_models.MatchValue(value=request.resource_id),
-            ),
+            )
         ]
+
         if request.candidate_chunk_ids:
+            candidate_ids = list(dict.fromkeys(
+                chunk_id.strip()
+                for chunk_id in request.candidate_chunk_ids
+                if chunk_id.strip()
+            ))
+            # 输入声明存在候选集合时保持 fail-closed，不能因脏数据退化为全资源检索。
             must.append(
                 qdrant_models.FieldCondition(
                     key="chunk_id",
-                    match=qdrant_models.MatchAny(any=list(request.candidate_chunk_ids)),
+                    match=qdrant_models.MatchAny(any=candidate_ids or [""]),
                 )
             )
+
         if request.permission_scope is not None:
             must.append(
-                self._permission_filter_builder.build_qdrant_filter(request.permission_scope)
+                self._permission_filter_builder.build_qdrant_filter(
+                    request.permission_scope
+                )
             )
         return qdrant_models.Filter(must=must)
 
     async def _query_points(
-            self,
-            *,
-            request: RagQdrantRetrievalRequest,
-            query_filter: qdrant_models.Filter,
+        self,
+        *,
+        client: AsyncQdrantClient,
+        request: RagQdrantRetrievalRequest,
+        query_filter: qdrant_models.Filter,
     ) -> tuple[_RetrievedPoint, ...]:
-        # ---- 无文本退化：只有向量可走 ----
-        if not request.query_text.strip():
-            return _wrap_response_points(
-                await self._query_dense_points(
-                    request=request,
+        query_text = request.query_text.strip()
+        query_vector = list(request.query_vector)
+        if query_vector and query_text:
+            dense_response, sparse_response = await asyncio.gather(
+                client.query_points(
+                    collection_name=self._collection_name,
+                    query=query_vector,
+                    using=self._dense_vector_name,
                     query_filter=query_filter,
+                    limit=request.top_k,
+                    with_payload=list(_RETRIEVAL_PAYLOAD_FIELDS),
                 ),
-                channel=RagRetrievalChannel.DENSE,
+                client.query_points(
+                    collection_name=self._collection_name,
+                    query=qdrant_models.Document(
+                        text=query_text,
+                        model="Qdrant/bm25",
+                        options=self._bm25_config,
+                    ),
+                    using=self._sparse_vector_name,
+                    query_filter=query_filter,
+                    limit=request.top_k,
+                    with_payload=list(_RETRIEVAL_PAYLOAD_FIELDS),
+                ),
+            )
+            return _merge_channel_points(
+                dense_points=tuple(dense_response.points),
+                sparse_points=tuple(sparse_response.points),
             )
 
-        dense_response, sparse_response = await asyncio.gather(
-            self._query_dense_points(request=request, query_filter=query_filter),
-            self._query_sparse_points(request=request, query_filter=query_filter),
-        )
-        return _merge_channel_points(
-            dense_points=tuple(dense_response.points),
-            sparse_points=tuple(sparse_response.points),
-        )
-
-    async def _query_dense_points(
-            self,
-            *,
-            request: RagQdrantRetrievalRequest,
-            query_filter: qdrant_models.Filter,
-    ) -> qdrant_types.QueryResponse:
-        return await self._client.query_points(
-            collection_name=self._collection_name,
-            query=list(request.query_vector),
-            using=self._dense_vector_name,
-            query_filter=query_filter,
-            limit=request.top_k,
-            with_payload=True,
-        )
-
-    async def _query_sparse_points(
-            self,
-            *,
-            request: RagQdrantRetrievalRequest,
-            query_filter: qdrant_models.Filter,
-    ) -> qdrant_types.QueryResponse:
-        return await self._client.query_points(
-            collection_name=self._collection_name,
-            query=qdrant_models.Document(
-                text=request.query_text,
-                model="Qdrant/bm25",
-                options=self._bm25_config,
-            ),
-            using=self._sparse_vector_name,
-            query_filter=query_filter,
-            limit=request.top_k,
-            with_payload=True,
-        )
-
-
-def _wrap_response_points(
-        response: qdrant_types.QueryResponse,
-        *,
-        channel: RagRetrievalChannel,
-) -> tuple[_RetrievedPoint, ...]:
-    return tuple(
-        _RetrievedPoint(
-            point=point,
-            score=point.score,
-            channels=(channel,),
-            signals=(
-                RagRetrievalSignal(
-                    channel=channel,
-                    rank=rank,
-                    score=point.score,
+        if query_vector:
+            channel = RagRetrievalChannel.DENSE
+            response = await client.query_points(
+                collection_name=self._collection_name,
+                query=query_vector,
+                using=self._dense_vector_name,
+                query_filter=query_filter,
+                limit=request.top_k,
+                with_payload=list(_RETRIEVAL_PAYLOAD_FIELDS),
+            )
+        elif query_text:
+            channel = RagRetrievalChannel.SPARSE
+            response = await client.query_points(
+                collection_name=self._collection_name,
+                query=qdrant_models.Document(
+                    text=query_text,
+                    model="Qdrant/bm25",
+                    options=self._bm25_config,
                 ),
-            ),
+                using=self._sparse_vector_name,
+                query_filter=query_filter,
+                limit=request.top_k,
+                with_payload=list(_RETRIEVAL_PAYLOAD_FIELDS),
+            )
+        else:
+            return ()
+
+        return tuple(
+            _RetrievedPoint(
+                point=point,
+                score=point.score,
+                channels=(channel,),
+                signals=(
+                    RagRetrievalSignal(
+                        channel=channel,
+                        rank=rank,
+                        score=point.score,
+                    ),
+                ),
+            )
+            for rank, point in enumerate(response.points, start=1)
         )
-        for rank, point in enumerate(response.points, start=1)
-    )
 
 
 def _merge_channel_points(
-        *,
-        dense_points: tuple[qdrant_types.ScoredPoint, ...],
-        sparse_points: tuple[qdrant_types.ScoredPoint, ...],
+    *,
+    dense_points: tuple[qdrant_types.ScoredPoint, ...],
+    sparse_points: tuple[qdrant_types.ScoredPoint, ...],
 ) -> tuple[_RetrievedPoint, ...]:
-    points_by_chunk_id: dict[str, qdrant_types.ScoredPoint] = {}
-    scores_by_chunk_id: dict[str, float] = {}
-    channels_by_chunk_id: dict[str, set[RagRetrievalChannel]] = {}
-    signals_by_chunk_id: dict[str, list[RagRetrievalSignal]] = {}
-    first_seen_order: dict[str, int] = {}
+    """按首次出现顺序合并通道，并保留每个通道的原始 rank/score 信号。"""
+    merged: dict[str, _RetrievedPoint] = {}
 
     for channel, points in (
-            (RagRetrievalChannel.DENSE, dense_points),
-            (RagRetrievalChannel.SPARSE, sparse_points),
+        (RagRetrievalChannel.DENSE, dense_points),
+        (RagRetrievalChannel.SPARSE, sparse_points),
     ):
         for rank, point in enumerate(points, start=1):
             chunk_id = read_optional_trimmed_str(
-                (point.payload or {}).get("chunk_id"),
+                (point.payload or {}).get("chunk_id")
             ) or read_optional_trimmed_str(point.id)
-
             if not chunk_id:
                 continue
 
-            if chunk_id not in first_seen_order:
-                first_seen_order[chunk_id] = len(first_seen_order)
-                points_by_chunk_id[chunk_id] = point
-                scores_by_chunk_id[chunk_id] = 0.0
-                channels_by_chunk_id[chunk_id] = set()
-                signals_by_chunk_id[chunk_id] = []
-
-            scores_by_chunk_id[chunk_id] = max(scores_by_chunk_id[chunk_id], point.score)
-            channels_by_chunk_id[chunk_id].add(channel)
-            signals_by_chunk_id[chunk_id].append(
-                RagRetrievalSignal(
-                    channel=channel,
-                    rank=rank,
+            signal = RagRetrievalSignal(
+                channel=channel,
+                rank=rank,
+                score=point.score,
+            )
+            existing = merged.get(chunk_id)
+            if existing is None:
+                merged[chunk_id] = _RetrievedPoint(
+                    point=point,
                     score=point.score,
+                    channels=(channel,),
+                    signals=(signal,),
                 )
+                continue
+
+            merged[chunk_id] = _RetrievedPoint(
+                point=existing.point,
+                score=max(existing.score, point.score),
+                channels=(
+                    existing.channels
+                    if channel in existing.channels
+                    else (*existing.channels, channel)
+                ),
+                signals=(*existing.signals, signal),
             )
 
-    return tuple(
-        _RetrievedPoint(
-            point=points_by_chunk_id[chunk_id],
-            score=scores_by_chunk_id[chunk_id],
-            channels=tuple(
-                channel
-                for channel in (RagRetrievalChannel.DENSE, RagRetrievalChannel.SPARSE)
-                if channel in channels_by_chunk_id[chunk_id]
-            ),
-            signals=tuple(signals_by_chunk_id[chunk_id]),
-        )
-        for chunk_id in sorted(
-            scores_by_chunk_id,
-            key=lambda item: first_seen_order[item],
-        )
-    )
+    return tuple(merged.values())
 
 
 def _to_scored_chunk(
-        point: qdrant_types.ScoredPoint,
-        *,
-        rank: int,
-        retrieval_score: float,
-        channels: tuple[RagRetrievalChannel, ...],
-        signals: tuple[RagRetrievalSignal, ...],
+    point: qdrant_types.ScoredPoint,
+    *,
+    rank: int,
+    retrieval_score: float,
+    channels: tuple[RagRetrievalChannel, ...],
+    signals: tuple[RagRetrievalSignal, ...],
 ) -> ScoredChunk | None:
     payload = point.payload or {}
     chunk_id = read_optional_trimmed_str(
         payload.get("chunk_id")
-    ) or read_optional_trimmed_str(
-        point.id
-    )
+    ) or read_optional_trimmed_str(point.id)
     if not chunk_id:
         return None
 
-    parent_chunk_id = read_optional_trimmed_str(payload.get("parent_chunk_id"))
+    parent_chunk_id = read_optional_trimmed_str(payload.get("parent_chunk_id")) or ""
     return ScoredChunk(
         chunk_id=chunk_id,
         text=read_optional_trimmed_str(payload.get("evidence_text")) or "",
@@ -284,7 +293,7 @@ def _to_scored_chunk(
             payload.get("document_version")
         ) or "",
         corpus_version=read_optional_trimmed_str(payload.get("corpus_version")) or "",
-        parent_chunk_id=parent_chunk_id or "",
+        parent_chunk_id=parent_chunk_id,
         page_label=read_optional_trimmed_str(payload.get("page_label")),
         section_path=read_trimmed_str_sequence(payload.get("section_path")),
         anchor_labels=read_trimmed_str_sequence(payload.get("anchor_labels")),

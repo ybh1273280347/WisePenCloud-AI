@@ -229,6 +229,7 @@ def _build_materialization_cache_scope(
 
     user_id = request.permission_scope.user_id.strip()
     session_id = request.session_id.strip()
+    group_role_map = request.permission_scope.group_role_map
     if not user_id or not session_id:
         return None
 
@@ -236,12 +237,8 @@ def _build_materialization_cache_scope(
         user_id=user_id,
         session_id=session_id,
         resource_id=request.resource_id,
-        permission_scope_key=_permission_scope_cache_key(request.permission_scope.group_role_map),
-    )
-
-
-def _permission_scope_cache_key(group_role_map: dict[str, str]) -> str:
-    return "|".join(
-        f"{group_id}:{role}"
-        for group_id, role in sorted(group_role_map.items())
+        permission_scope_key="|".join(
+            f"{group_id}:{role}"
+            for group_id, role in sorted(group_role_map.items())
+        ),
     )

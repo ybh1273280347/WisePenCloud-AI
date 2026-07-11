@@ -92,12 +92,6 @@ def _locators_by_chunk(
     """
     locators_by_chunk: dict[str, list[RagChunkLocator]] = {}
     for locator in locators:
-        if locator.kind not in {
-            LocatorKind.PAGE,
-            LocatorKind.SECTION,
-            LocatorKind.ANCHOR,
-        }:
-            continue
         projected = RagChunkLocator.from_chunk_locator(locator)
         # 一个定位项可能覆盖多个 chunk（例如跨 chunk 的章节标题）。
         for chunk_id in locator.chunk_ids:
