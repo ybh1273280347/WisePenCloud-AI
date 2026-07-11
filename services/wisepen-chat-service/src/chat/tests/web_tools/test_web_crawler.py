@@ -1,0 +1,227 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from chat.application.tools.common.web_content_cache import (
+    WebContentCacheMode,
+    WebContentCacheValue,
+)
+from chat.application.tools.web_tools.fetch_services.web_crawl import (
+    WebCrawler,
+    _extract_links,
+)
+
+
+class _UnusedFetcher:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def fetch(self, url: str) -> object:
+        self.calls += 1
+        raise AssertionError(f"cache hit should avoid fetching {url}")
+
+
+class _BlockingFetcher:
+    def __init__(self, *, release: asyncio.Event) -> None:
+        self._release = release
+
+    async def fetch(self, url: str) -> object:
+        await self._release.wait()
+        raise AssertionError(f"fetch should be cancelled before completing {url}")
+
+
+class _UnusedCleaner:
+    name = "fake_cleaner"
+
+    def clean(self, *_: object, **__: object) -> object:
+        raise AssertionError("cache hit should avoid cleaning")
+
+
+class _CacheRepository:
+    def __init__(self, values: dict[tuple[str, str, WebContentCacheMode], WebContentCacheValue]) -> None:
+        self._values = values
+
+    async def get_value(
+            self,
+            *,
+            user_id: str,
+            url: str,
+            cache_mode: WebContentCacheMode | str,
+    ) -> WebContentCacheValue | None:
+        return self._values.get((user_id, url, WebContentCacheMode(cache_mode)))
+
+    async def set_value(self, value: WebContentCacheValue) -> None:
+        raise AssertionError(f"cache hit should avoid writing {value.canonical_url}")
+
+    async def delete_value(
+            self,
+            *,
+            user_id: str,
+            url: str,
+            cache_mode: WebContentCacheMode | str,
+    ) -> None:
+        raise AssertionError(f"cache hit should avoid deleting {url}")
+
+
+@pytest.mark.asyncio
+async def test_web_crawler_reuses_fetch_cache_and_cached_raw_html_for_links() -> None:
+    user_id = "u1"
+    seed_url = "https://example.test/start"
+    child_url = "https://example.test/child"
+
+    values = {
+        (user_id, seed_url, WebContentCacheMode.PUBLIC): _cache_value(
+            user_id=user_id,
+            url=seed_url,
+            raw_html='<html><body><a href="/child">Child</a></body></html>',
+            markdown="# Seed",
+            title="Seed",
+        ),
+        (user_id, child_url, WebContentCacheMode.PUBLIC): _cache_value(
+            user_id=user_id,
+            url=child_url,
+            raw_html="<html><body>Child</body></html>",
+            markdown="# Child",
+            title="Child",
+        ),
+    }
+    static_fetcher = _UnusedFetcher()
+    stealthy_fetcher = _UnusedFetcher()
+    crawler = WebCrawler(
+        static_fetcher=static_fetcher,
+        stealthy_fetcher=stealthy_fetcher,
+        cleaner=_UnusedCleaner(),
+        content_cache_repository=_CacheRepository(values),
+        concurrency=1,
+    )
+
+    result = await crawler.crawl(
+        seed_url,
+        user_id=user_id,
+        max_pages=2,
+        max_depth=1,
+    )
+
+    assert [page.source_url for page in result.pages] == [seed_url, child_url]
+    assert [page.markdown for page in result.pages] == ["# Seed", "# Child"]
+    assert static_fetcher.calls == 0
+    assert stealthy_fetcher.calls == 0
+
+
+def test_extract_links_skips_malformed_ipv6_urls() -> None:
+    raw_html = """
+    <html>
+      <body>
+        <a href="/valid">Valid</a>
+        <a href="https://[broken">Broken</a>
+        <a href="https://example.test/other">Other</a>
+      </body>
+    </html>
+    """
+
+    links = _extract_links(
+        raw_html,
+        base_url="https://example.test/start",
+        base_domain="example.test",
+        same_domain=True,
+    )
+
+    assert links == [
+        "https://example.test/valid",
+        "https://example.test/other",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_web_crawler_keeps_successful_pages_when_cached_html_has_bad_link() -> None:
+    user_id = "u1"
+    seed_url = "https://example.test/start"
+
+    values = {
+        (user_id, seed_url, WebContentCacheMode.PUBLIC): _cache_value(
+            user_id=user_id,
+            url=seed_url,
+            raw_html='<html><body><a href="https://[broken">Broken</a></body></html>',
+            markdown="# Seed",
+            title="Seed",
+        ),
+    }
+    crawler = WebCrawler(
+        static_fetcher=_UnusedFetcher(),
+        stealthy_fetcher=_UnusedFetcher(),
+        cleaner=_UnusedCleaner(),
+        content_cache_repository=_CacheRepository(values),
+        concurrency=1,
+    )
+
+    result = await crawler.crawl(
+        seed_url,
+        user_id=user_id,
+        max_pages=2,
+        max_depth=1,
+    )
+
+    assert [page.source_url for page in result.pages] == [seed_url]
+    assert [page.markdown for page in result.pages] == ["# Seed"]
+
+
+@pytest.mark.asyncio
+async def test_web_crawler_returns_completed_pages_when_tool_timeout_cancels_crawl() -> None:
+    user_id = "u1"
+    seed_url = "https://example.test/start"
+    values = {
+        (user_id, seed_url, WebContentCacheMode.PUBLIC): _cache_value(
+            user_id=user_id,
+            url=seed_url,
+            raw_html='<html><body><a href="/child">Child</a></body></html>',
+            markdown="# Seed",
+            title="Seed",
+        ),
+    }
+    release_child = asyncio.Event()
+    crawler = WebCrawler(
+        static_fetcher=_BlockingFetcher(release=release_child),
+        stealthy_fetcher=_UnusedFetcher(),
+        cleaner=_UnusedCleaner(),
+        content_cache_repository=_CacheRepository(values),
+        concurrency=1,
+    )
+
+    result = await asyncio.wait_for(
+        crawler.crawl(
+            seed_url,
+            user_id=user_id,
+            max_pages=2,
+            max_depth=1,
+        ),
+        timeout=0.05,
+    )
+
+    assert result.timed_out is True
+    assert [page.source_url for page in result.pages] == [seed_url]
+
+    release_child.set()
+
+
+def _cache_value(
+        *,
+        user_id: str,
+        url: str,
+        raw_html: str,
+        markdown: str,
+        title: str,
+) -> WebContentCacheValue:
+    return WebContentCacheValue(
+        user_id=user_id,
+        canonical_url=url,
+        cache_mode=WebContentCacheMode.PUBLIC,
+        status_code=200,
+        content_type="text/html",
+        raw_html=raw_html,
+        markdown=markdown,
+        expire_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        metadata={"title": title},
+    )

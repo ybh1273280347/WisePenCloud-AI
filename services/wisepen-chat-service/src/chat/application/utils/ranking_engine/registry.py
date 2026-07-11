@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 from .diversifiers import MmrDiversifier, MmrDiversifierConfig
 from .engine import RankingEngine
 from .fusion import WeightedRrfFusion
@@ -66,8 +68,10 @@ class RankingEngineRegistry:
             raise KeyError(f"Unknown ranking engine: {name!r}") from exc
 
 
-_REGISTRY = RankingEngineRegistry()
+@lru_cache(maxsize=1)
+def _get_registry() -> RankingEngineRegistry:
+    return RankingEngineRegistry()
 
 
 def get_ranking_engine(name: str) -> RankingEngine:
-    return _REGISTRY.get(name)
+    return _get_registry().get(name)

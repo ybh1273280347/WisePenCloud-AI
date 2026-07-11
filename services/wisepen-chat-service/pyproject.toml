@@ -81,3 +81,7 @@ dev = [
     "pytest",             # 单元测试框架
     "pytest-asyncio",     # 异步测试支持
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["src/chat/tests"]
+addopts = "--basetemp=.pytest-tmp"
