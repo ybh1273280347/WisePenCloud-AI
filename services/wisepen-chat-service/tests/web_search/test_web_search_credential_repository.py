@@ -11,10 +11,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 @pytest.mark.anyio
 async def test_get_platform_credential_uses_supported_in_operator(monkeypatch) -> None:
     for module_name in (
+            "beanie.operators",
+            "beanie",
             "chat.core.persistence.mongo.web_search_credential_repository",
             "chat.domain.entities.web_search_credential",
             "chat.domain.entities",
+            "chat.domain.error_codes",
             "common.logger",
+            "common.core.domain",
+            "common.core.exceptions",
+            "common.core",
             "common",
     ):
         monkeypatch.delitem(sys.modules, module_name, raising=False)

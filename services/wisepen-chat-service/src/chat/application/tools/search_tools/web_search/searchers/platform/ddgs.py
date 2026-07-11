@@ -6,7 +6,6 @@ from ddgs import DDGS
 
 from chat.application.tools.search_tools.web_search.providers.ddgs import map_ddgs_response
 from chat.application.tools.search_tools.web_search.providers.models import ProviderSearchResponse
-from chat.application.tools.search_tools.web_search.searchers.base import SearchProviderError
 
 
 class DdgSearcher:
@@ -38,4 +37,4 @@ class DdgSearcher:
             query: str,
             max_results: int,
     ) -> ProviderSearchResponse:
-        raise SearchProviderError("DDGS does not support academic search.")
+        return await self.search_web(query=query, max_results=max_results)

@@ -61,4 +61,4 @@ class PlatformDefaultSearcher:
             query: str,
             max_results: int,
     ) -> ProviderSearchResponse:
-        raise SearchProviderError("platform_default does not support academic search.")
+        return await self.search_web(query=query, max_results=max_results)

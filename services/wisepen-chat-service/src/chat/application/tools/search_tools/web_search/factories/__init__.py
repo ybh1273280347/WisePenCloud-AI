@@ -1,7 +1,5 @@
-from .integration_searcher_factory import IntegrationSearcherFactory
-from .platform_source_factory import WebSearchPlatformSourceFactory
+from .search_source_factory import SearchSourceFactory
 
 __all__ = [
-    "IntegrationSearcherFactory",
-    "WebSearchPlatformSourceFactory",
+    "SearchSourceFactory",
 ]

@@ -103,7 +103,7 @@ class BaseProviderSearcher:
             query: str,
             max_results: int,
     ) -> ProviderSearchResponse:
-        raise SearchProviderError(f"{self.provider} does not support academic search.")
+        return await self.search_web(query=query, max_results=max_results)
 
     async def _execute_request(
             self,

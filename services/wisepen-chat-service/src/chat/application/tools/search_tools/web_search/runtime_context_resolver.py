@@ -18,9 +18,11 @@ class WebSearchCredentialRuntimeRepository(Protocol):
 
     async def get_platform_credential(self, *, user_id: str) -> WebSearchPlatformCredentialRecord | None: ...
 
+    async def get_custom_api_key(self, *, user_id: str, provider: SearchProviderName) -> str: ...
+
 
 class WebSearchRuntimeContextResolver:
-    """平台搜索配置解析器。"""
+    """将平台或 custom 凭证解析为统一运行时配置。"""
 
     __slots__ = (
         "_credential_repository",
@@ -39,12 +41,24 @@ class WebSearchRuntimeContextResolver:
         self._platform_member_provider = _parse_platform_member_provider(platform_member_provider)
         self._platform_member_api_key = (platform_member_api_key or "").strip() or None
 
-    async def resolve_platform(
+    async def resolve(
             self,
             *,
             user_id: str,
+            provider: SearchProviderName | None = None,
     ) -> WebSearchRuntimeConfig:
-        """只解析平台源，供 platform_search 使用。"""
+        if provider is not None:
+            api_key = await self._credential_repository.get_custom_api_key(
+                user_id=user_id,
+                provider=provider,
+            )
+            return WebSearchRuntimeConfig(
+                source_kind=WebSearchSourceKind.CUSTOM,
+                provider=provider,
+                source_id=f"custom:{provider.value}",
+                api_key=api_key,
+            )
+
         platform_credential = await self._credential_repository.get_platform_credential(user_id=user_id)
         if (
                 platform_credential is not None
@@ -66,7 +80,6 @@ class WebSearchRuntimeContextResolver:
             source_id="platform_default",
             api_key=None,
         )
-
 
 def _parse_platform_member_provider(value: str | None) -> SearchProviderName | None:
     normalized = (value or "").strip()

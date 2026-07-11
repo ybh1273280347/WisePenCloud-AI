@@ -85,9 +85,14 @@ class MinerUConverter:
         if not self._api_key:
             raise RemoteParserError("MinerU API key is not configured.")
 
-        batch_id, upload_url = await self._request_upload(file_name)
+        upload_file_name = (
+            file_name
+            if file_name.lower().endswith(".pdf")
+            else f"{file_name}.pdf"
+        )
+        batch_id, upload_url = await self._request_upload(upload_file_name)
         await self._upload_file(file_path, upload_url)
-        result_url = await self._wait_for_result(batch_id, file_name)
+        result_url = await self._wait_for_result(batch_id, upload_file_name)
         markdown = await self._download_markdown(result_url, file_name)
 
         return DocumentParseResult(markdown=markdown)

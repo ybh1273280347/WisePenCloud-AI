@@ -5,15 +5,14 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-def is_http_url(url: str) -> bool:
-    """判断字符串是否为合法的 http/https URL。"""
-    parsed = urlparse(url)
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
-
-
 def is_valid_result(*, title: str, url: str) -> bool:
-    """搜索结果最低可用性校验：title 非空且 url 合法。"""
-    return bool(title) and is_http_url(url)
+    """搜索结果最低可用性校验：title 非空且 url 为合法的 HTTP/HTTPS URL。"""
+    parsed = urlparse(url)
+    return (
+            bool(title)
+            and parsed.scheme in {"http", "https"}
+            and bool(parsed.netloc)
+    )
 
 
 def dedupe_by_url(

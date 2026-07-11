@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from chat.application.tools.search_tools.web_search.providers.models import SearchProviderName
+from chat.application.tools.search_tools.web_search.providers.models import SearchCapability, SearchProviderName
 from chat.application.tools.search_tools.web_search.searchers import ProviderSearcher
 
 
@@ -24,6 +24,9 @@ class WebSearchRuntimeSource(Protocol):
     searcher: ProviderSearcher
     api_key: str | None
 
+    @property
+    def capability(self) -> SearchCapability: ...
+
 
 @dataclass(frozen=True, slots=True)
 class PlatformDefaultSearchSource:
@@ -34,6 +37,10 @@ class PlatformDefaultSearchSource:
     provider: SearchProviderName | None = None
     source_id: str = "platform_default"
     api_key: str | None = None
+
+    @property
+    def capability(self) -> SearchCapability:
+        return SearchCapability(web=True, academic=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +53,10 @@ class PlatformMemberSearchSource:
     api_key: str
     kind: WebSearchSourceKind = WebSearchSourceKind.PLATFORM_MEMBER
 
+    @property
+    def capability(self) -> SearchCapability:
+        return self.provider.capability
+
 
 @dataclass(frozen=True, slots=True)
 class CustomSearchSource:
@@ -56,3 +67,7 @@ class CustomSearchSource:
     searcher: ProviderSearcher
     api_key: str
     kind: WebSearchSourceKind = WebSearchSourceKind.CUSTOM
+
+    @property
+    def capability(self) -> SearchCapability:
+        return self.provider.capability

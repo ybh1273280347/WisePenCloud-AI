@@ -92,11 +92,8 @@ from chat.application.tools.web_tools.fetch_services.fetchers import (
 from chat.application.tools.search_tools.web_search.runtime_context_resolver import (
     WebSearchRuntimeContextResolver,
 )
-from chat.application.tools.search_tools.web_search.factories.integration_searcher_factory import (
-    IntegrationSearcherFactory,
-)
-from chat.application.tools.search_tools.web_search.factories.platform_source_factory import (
-    WebSearchPlatformSourceFactory,
+from chat.application.tools.search_tools.web_search.factories.search_source_factory import (
+    SearchSourceFactory,
 )
 from chat.application.tools.search_tools.web_search.searchers import (
     DdgSearcher,
@@ -105,7 +102,7 @@ from chat.application.tools.search_tools.web_search.searchers import (
     ProviderSearcher,
     SearchProviderConfig,
 )
-from chat.application.tools.search_tools.web_search.service import SearchService
+from chat.application.tools.search_tools.web_search.search_pipeline import SearchPipeline
 from chat.application.utils.llm_clients import build_query_client
 from chat.application.utils.llm_clients.embedding import build_embedding_client
 from chat.core.config.app_settings import settings
@@ -690,21 +687,17 @@ class Container(containers.DeclarativeContainer):
         platform_member_provider=settings.WEB_SEARCH_PLATFORM_MEMBER_PROVIDER,
         platform_member_api_key=settings.WEB_SEARCH_PLATFORM_MEMBER_API_KEY,
     )
-    web_search_integration_searcher_factory = providers.Singleton(
-        IntegrationSearcherFactory,
+    web_search_source_factory = providers.Singleton(
+        SearchSourceFactory,
         http_client=web_search_http_client,
+        platform_default_searcher=platform_default_searcher,
         exa_base_url=settings.WEB_SEARCH_EXA_BASE_URL,
         tavily_base_url=settings.WEB_SEARCH_TAVILY_BASE_URL,
         anysearch_base_url=settings.WEB_SEARCH_ANYSEARCH_BASE_URL,
         baidu_qianfan_base_url=settings.WEB_SEARCH_BAIDU_QIANFAN_BASE_URL,
     )
-    web_search_platform_source_factory = providers.Singleton(
-        WebSearchPlatformSourceFactory,
-        platform_default_searcher=platform_default_searcher,
-        integration_searcher_factory=web_search_integration_searcher_factory,
-    )
-    web_search_service = providers.Singleton(
-        SearchService,
+    web_search_pipeline = providers.Singleton(
+        SearchPipeline,
     )
 
     # --- Web Fetch / Crawl 组件 ---
@@ -804,33 +797,33 @@ class Container(containers.DeclarativeContainer):
     # --- Web Tools ---
     platform_search_tool = providers.Singleton(
         PlatformSearchTool,
-        service=web_search_service,
-        platform_source_factory=web_search_platform_source_factory,
+        search_pipeline=web_search_pipeline,
+        source_factory=web_search_source_factory,
         runtime_context_resolver=web_search_runtime_context_resolver,
     )
     exa_search_tool = providers.Singleton(
         ExaSearchTool,
-        service=web_search_service,
-        integration_searcher_factory=web_search_integration_searcher_factory,
-        credential_repository=web_search_credential_repo,
+        search_pipeline=web_search_pipeline,
+        source_factory=web_search_source_factory,
+        runtime_context_resolver=web_search_runtime_context_resolver,
     )
     tavily_search_tool = providers.Singleton(
         TavilySearchTool,
-        service=web_search_service,
-        integration_searcher_factory=web_search_integration_searcher_factory,
-        credential_repository=web_search_credential_repo,
+        search_pipeline=web_search_pipeline,
+        source_factory=web_search_source_factory,
+        runtime_context_resolver=web_search_runtime_context_resolver,
     )
     anysearch_search_tool = providers.Singleton(
         AnySearchSearchTool,
-        service=web_search_service,
-        integration_searcher_factory=web_search_integration_searcher_factory,
-        credential_repository=web_search_credential_repo,
+        search_pipeline=web_search_pipeline,
+        source_factory=web_search_source_factory,
+        runtime_context_resolver=web_search_runtime_context_resolver,
     )
     baidu_qianfan_search_tool = providers.Singleton(
         BaiduQianfanSearchTool,
-        service=web_search_service,
-        integration_searcher_factory=web_search_integration_searcher_factory,
-        credential_repository=web_search_credential_repo,
+        search_pipeline=web_search_pipeline,
+        source_factory=web_search_source_factory,
+        runtime_context_resolver=web_search_runtime_context_resolver,
     )
     web_crawl_tool = providers.Singleton(
         WebCrawlTool,

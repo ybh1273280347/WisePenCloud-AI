@@ -72,6 +72,49 @@ async def test_mineru_converter_uploads_polls_and_extracts_markdown(tmp_path: Pa
 
 
 @pytest.mark.asyncio
+async def test_mineru_converter_adds_pdf_extension_to_extensionless_upload_name(
+        tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "download"
+    file_path.write_bytes(b"%PDF-test")
+    result_zip = _zip_bytes({"result/full.md": b"# Parsed"})
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v4/file-urls/batch":
+            payload = json.loads(request.content)
+            assert payload["files"][0]["name"] == "1706.03762.pdf"
+            return httpx.Response(200, json={
+                "data": {
+                    "batch_id": "batch-1",
+                    "file_urls": ["https://upload.example/file"],
+                }
+            })
+        if request.url.host == "upload.example":
+            return httpx.Response(200)
+        if request.url.path == "/api/v4/extract-results/batch/batch-1":
+            return httpx.Response(200, json={
+                "data": {
+                    "extract_result": [{
+                        "file_name": "1706.03762.pdf",
+                        "state": "done",
+                        "full_zip_url": "https://download.example/result.zip",
+                    }]
+                }
+            })
+        if request.url.host == "download.example":
+            return httpx.Response(200, content=result_zip)
+        raise AssertionError(f"Unexpected request: {request.url}")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await _converter(client).convert(
+            file_path,
+            file_name="1706.03762",
+        )
+
+    assert result.markdown == "# Parsed"
+
+
+@pytest.mark.asyncio
 async def test_mineru_converter_reports_remote_failure_with_trace(tmp_path: Path) -> None:
     file_path = tmp_path / "sample.pdf"
     file_path.write_bytes(b"%PDF-test")

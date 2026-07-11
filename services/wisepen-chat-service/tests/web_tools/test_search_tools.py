@@ -112,11 +112,14 @@ mongo_repo_module = types.ModuleType("chat.core.persistence.mongo.web_search_cre
 mongo_repo_module.MongoWebSearchCredentialRepository = object
 sys.modules["chat.core.persistence.mongo.web_search_credential_repository"] = mongo_repo_module
 
-from chat.application.tools.core import ToolExecutionError
 from chat.application.tools.search_tools.exa_search_tool import ExaSearchTool
 from chat.application.tools.search_tools.platform_search_tool import PlatformSearchTool
 from chat.application.tools.search_tools.web_search.core.runtime_context import WebSearchRuntimeConfig
-from chat.application.tools.search_tools.web_search.core.sources import WebSearchSourceKind
+from chat.application.tools.search_tools.web_search.core.sources import (
+    PlatformDefaultSearchSource,
+    WebSearchSourceKind,
+)
+from chat.application.tools.search_tools.web_search.pipeline.candidates_builder import build_candidates
 from chat.application.tools.search_tools.web_search.pipeline.search_executor import WebSearchResult
 from chat.application.tools.search_tools.web_search.providers.models import (
     ProviderSearchResponse,
@@ -125,49 +128,51 @@ from chat.application.tools.search_tools.web_search.providers.models import (
     SearchPreview,
     SearchProviderName,
 )
+from chat.application.tools.search_tools.web_search.search_pipeline import SearchPipelineResult
+from chat.application.tools.search_tools.web_search.searchers.base import BaseProviderSearcher
+from chat.application.tools.search_tools.web_search.searchers.platform.default import PlatformDefaultSearcher
 
 
-class FakeSearchService:
+class FakeSearchPipeline:
     def __init__(self, result: WebSearchResult) -> None:
         self.result = result
         self.calls: list[dict[str, object]] = []
 
-    async def search(self, **kwargs) -> WebSearchResult:
+    async def search(self, **kwargs) -> SearchPipelineResult:
         self.calls.append(kwargs)
-        return self.result
-
-
-class FakeCredentialRepository:
-    def __init__(self, api_key: str = "exa-key") -> None:
-        self.api_key = api_key
-        self.calls: list[tuple[str, SearchProviderName]] = []
-
-    async def get_custom_api_key(self, *, user_id: str, provider: SearchProviderName) -> str:
-        self.calls.append((user_id, provider))
-        return self.api_key
-
-
-class FakeIntegrationSearcherFactory:
-    def __init__(self) -> None:
-        self.calls: list[dict[str, object]] = []
-
-    def build(self, **kwargs):
-        self.calls.append(kwargs)
-        return object()
-
-
-class FakeRuntimeContextResolver:
-    async def resolve_platform(self, *, user_id: str) -> WebSearchRuntimeConfig:
-        return WebSearchRuntimeConfig(
-            source_kind=WebSearchSourceKind.PLATFORM_MEMBER,
-            provider=SearchProviderName.EXA,
-            source_id="platform_member:exa",
-            api_key="platform-key",
+        candidates = build_candidates(self.result.responses)
+        return SearchPipelineResult(
+            search_result=self.result,
+            candidates=candidates,
+            recommended_ids=("[1]",),
         )
 
 
-class FakePlatformSourceFactory:
+class FakeRuntimeContextResolver:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def resolve(
+            self,
+            *,
+            user_id: str,
+            provider: SearchProviderName | None,
+    ) -> WebSearchRuntimeConfig:
+        self.calls.append({"user_id": user_id, "provider": provider})
+        return WebSearchRuntimeConfig(
+            source_kind=(WebSearchSourceKind.PLATFORM_DEFAULT if provider is None else WebSearchSourceKind.CUSTOM),
+            provider=provider,
+            source_id="platform_default" if provider is None else f"custom:{provider.value}",
+            api_key=None if provider is None else "custom-key",
+        )
+
+
+class FakeSearchSourceFactory:
+    def __init__(self) -> None:
+        self.calls: list[WebSearchRuntimeConfig] = []
+
     def build(self, config: WebSearchRuntimeConfig):
+        self.calls.append(config)
         return types.SimpleNamespace(
             kind=config.source_kind,
             provider=config.provider,
@@ -201,22 +206,14 @@ def _result(query: str = "rag paper") -> WebSearchResult:
 
 
 @pytest.mark.anyio
-async def test_exa_search_uses_provider_credential_and_academic_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _rank_candidates(**kwargs):
-        return ["[1]"]
-
-    monkeypatch.setattr(
-        "chat.application.tools.search_tools.web_search.tool_utils.select_candidate_ids",
-        _rank_candidates,
-    )
-
-    credential_repository = FakeCredentialRepository()
-    integration_factory = FakeIntegrationSearcherFactory()
-    service = FakeSearchService(_result())
+async def test_exa_search_uses_unified_runtime_source_and_pipeline() -> None:
+    resolver = FakeRuntimeContextResolver()
+    source_factory = FakeSearchSourceFactory()
+    pipeline = FakeSearchPipeline(_result())
     tool = ExaSearchTool(
-        service=service,
-        integration_searcher_factory=integration_factory,
-        credential_repository=credential_repository,
+        search_pipeline=pipeline,
+        source_factory=source_factory,
+        runtime_context_resolver=resolver,
     )
 
     result = await tool.execute(
@@ -225,9 +222,9 @@ async def test_exa_search_uses_provider_credential_and_academic_mode(monkeypatch
         mode="academic",
     )
 
-    assert credential_repository.calls == [("user-1", SearchProviderName.EXA)]
-    assert integration_factory.calls[0]["provider"] == SearchProviderName.EXA
-    assert service.calls[0]["mode"] == SearchMode.ACADEMIC
+    assert resolver.calls == [{"user_id": "user-1", "provider": SearchProviderName.EXA}]
+    assert source_factory.calls[0].source_kind == WebSearchSourceKind.CUSTOM
+    assert pipeline.calls[0]["mode"] == SearchMode.ACADEMIC
     assert result.tag == "exa_search_result"
     assert result.visible_result["mode"] == "academic"
     assert result.visible_result["recommended_ids"] == ("[1]",)
@@ -235,20 +232,14 @@ async def test_exa_search_uses_provider_credential_and_academic_mode(monkeypatch
 
 
 @pytest.mark.anyio
-async def test_platform_search_resolves_platform_source_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _rank_candidates(**kwargs):
-        return []
-
-    monkeypatch.setattr(
-        "chat.application.tools.search_tools.web_search.tool_utils.select_candidate_ids",
-        _rank_candidates,
-    )
-
-    service = FakeSearchService(_result("platform query"))
+async def test_platform_search_resolves_platform_source_only() -> None:
+    resolver = FakeRuntimeContextResolver()
+    source_factory = FakeSearchSourceFactory()
+    pipeline = FakeSearchPipeline(_result("platform query"))
     tool = PlatformSearchTool(
-        service=service,
-        platform_source_factory=FakePlatformSourceFactory(),
-        runtime_context_resolver=FakeRuntimeContextResolver(),
+        search_pipeline=pipeline,
+        source_factory=source_factory,
+        runtime_context_resolver=resolver,
     )
 
     result = await tool.execute(
@@ -256,34 +247,50 @@ async def test_platform_search_resolves_platform_source_only(monkeypatch: pytest
         query="platform query",
     )
 
-    assert service.calls[0]["source"].source_id == "platform_member:exa"
-    assert service.calls[0]["mode"] == SearchMode.WEB
+    assert resolver.calls == [{"user_id": "user-1", "provider": None}]
+    assert source_factory.calls[0].source_kind == WebSearchSourceKind.PLATFORM_DEFAULT
+    assert pipeline.calls[0]["mode"] == SearchMode.WEB
     assert result.tag == "platform_search_result"
     assert result.visible_result["mode"] == "web"
     assert result.visible_result["candidates"][0].url == "https://arxiv.org/abs/1706.03762"
 
 
 @pytest.mark.anyio
-async def test_platform_academic_mode_requires_academic_provider() -> None:
-    class NonAcademicResolver:
-        async def resolve_platform(self, *, user_id: str) -> WebSearchRuntimeConfig:
-            return WebSearchRuntimeConfig(
-                source_kind=WebSearchSourceKind.PLATFORM_DEFAULT,
-                provider=None,
-                source_id="platform_default",
-            )
+async def test_platform_default_academic_search_falls_back_to_web() -> None:
+    response = _result().responses[0]
 
-    tool = PlatformSearchTool(
-        service=FakeSearchService(_result()),
-        platform_source_factory=FakePlatformSourceFactory(),
-        runtime_context_resolver=NonAcademicResolver(),
+    class Searcher:
+        async def search_web(self, **kwargs):
+            return response
+
+    searcher = PlatformDefaultSearcher(
+        fourget_searcher=Searcher(),
+        ddg_searcher=Searcher(),
     )
 
-    with pytest.raises(ToolExecutionError) as exc_info:
-        await tool.execute(
-            {"user_id": "user-1", "session_id": "session-1"},
-            query="papers",
-            mode="academic",
-        )
+    result = await searcher.search_academic(query="papers", max_results=10)
 
-    assert getattr(exc_info.value, "reason") == "platform_search_academic_unavailable"
+    assert result.source_id == "platform_default"
+
+
+def test_platform_default_declares_web_only_capability() -> None:
+    source = PlatformDefaultSearchSource(searcher=object())
+
+    assert source.capability.web is True
+    assert source.capability.academic is False
+
+
+@pytest.mark.anyio
+async def test_base_provider_academic_search_falls_back_to_web() -> None:
+    response = _result().responses[0]
+
+    class WebOnlySearcher(BaseProviderSearcher):
+        def __init__(self) -> None:
+            pass
+
+        async def search_web(self, **kwargs):
+            return response
+
+    result = await WebOnlySearcher().search_academic(query="papers", max_results=10)
+
+    assert result is response

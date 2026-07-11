@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 
+from chat.application.tools.search_tools.web_search.pipeline.candidates_builder import (
+    WebSearchCandidate,
+)
 from chat.application.utils.llm_clients import QueryClient, build_query_client
-from chat.application.utils.xml_markup import xml_cdata
+from chat.application.utils.xml_markup import xml_attr, xml_cdata
 from chat.core.config.app_settings import settings
 from common.logger import info
 
@@ -46,7 +49,32 @@ CANDIDATE_SELECTOR_SYSTEM_PROMPT = """\
 MAX_SELECTED_CANDIDATES = 5
 
 
-async def select_candidate_ids(
+async def select_recommended_ids(
+        *,
+        search_query: str,
+        candidates: tuple[WebSearchCandidate, ...],
+        max_recommended_candidates: int,
+        fallback_candidates_count: int,
+) -> tuple[str, ...]:
+    if not candidates:
+        return ()
+
+    selected = await _select_candidate_ids(
+        search_query=search_query,
+        candidates_xml=_candidates_xml(candidates),
+    )
+    if selected:
+        valid_ids = {candidate.candidate_id for candidate in candidates}
+        filtered = tuple(candidate_id for candidate_id in selected if candidate_id in valid_ids)[
+            :max_recommended_candidates
+        ]
+        if filtered:
+            return filtered
+
+    return tuple(candidate.candidate_id for candidate in candidates[:fallback_candidates_count])
+
+
+async def _select_candidate_ids(
         *,
         search_query: str,
         candidates_xml: str,
@@ -97,3 +125,25 @@ def _build_selector_prompt(*, search_query: str, candidates_xml: str) -> str:
             "</candidate_selector_input>",
         )
     )
+
+
+def _candidates_xml(candidates: tuple[WebSearchCandidate, ...]) -> str:
+    blocks: list[str] = []
+    for candidate in candidates:
+        parts = [
+            f"    <candidate id=\"{xml_attr(candidate.candidate_id)}\">",
+            f"      <title>{xml_cdata(candidate.title)}</title>",
+            f"      <url>{xml_cdata(candidate.url)}</url>",
+        ]
+        if candidate.overview:
+            parts.append(f"      <overview>{xml_cdata(candidate.overview)}</overview>")
+        if candidate.highlights:
+            parts.append("      <highlights>")
+            parts.extend(
+                f"        <highlight>{xml_cdata(highlight)}</highlight>"
+                for highlight in candidate.highlights
+            )
+            parts.append("      </highlights>")
+        parts.append("    </candidate>")
+        blocks.append("\n".join(parts))
+    return "\n".join(blocks)

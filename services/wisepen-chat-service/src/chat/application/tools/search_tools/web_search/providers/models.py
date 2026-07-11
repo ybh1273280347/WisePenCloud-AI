@@ -4,6 +4,14 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 
+@dataclass(frozen=True, slots=True)
+class SearchCapability:
+    """搜索 provider 支持的检索模式。"""
+
+    web: bool
+    academic: bool
+
+
 class SearchProviderName(StrEnum):
     """Web search provider 标识。"""
 
@@ -13,9 +21,10 @@ class SearchProviderName(StrEnum):
     BAIDU_QIANFAN = "baidu_qianfan"
 
     @property
-    def supports_academic_mode(self) -> bool:
-        """当前搜索源是否支持 academic mode。"""
-        return self == SearchProviderName.EXA
+    def capability(self) -> SearchCapability:
+        if self == SearchProviderName.EXA:
+            return SearchCapability(web=True, academic=True)
+        return SearchCapability(web=True, academic=False)
 
     @property
     def supports_custom_credential(self) -> bool:

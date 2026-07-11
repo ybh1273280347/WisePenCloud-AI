@@ -95,12 +95,14 @@ web_fetch(urls=[...])
 ```text
 provider/platform search tool
   -> fixed provider/source
-  -> SearchService.search(mode)
+  -> SearchPipeline.search(mode)
   -> visible candidates with URLs
   -> web_fetch
 ```
 
 搜索工具不是默认暴露工具。每轮只根据当前用户 active 搜索凭证暴露一个入口：平台 active 暴露 `platform_search`，custom active 暴露对应 provider 工具，无 active 凭证则不暴露搜索工具。
+
+所有搜索工具由同一个 `BaseSearchTool` 表达，并通过同一个 `SearchSourceFactory` 构造平台或 custom source。平台默认源仅声明 web 能力；academic mode 在不支持原生学术检索的 source 上回退 web。
 
 ### Web 工具
 
