@@ -17,44 +17,36 @@ CANDIDATE_SELECTOR_SYSTEM_PROMPT = """\
 
 # 任务
 
-按搜索查询与候选内容的相关性和证据价值，选择最值得后续关注的候选编号。
+根据 `search_query`，从候选结果中选择相关性和证据价值最高的候选编号，并按推荐优先级排序。
 
 # 输入
 
-运行期输入是 XML：
+运行期输入由若干 `<candidate>` 和最后一个 `<search_query>` 组成。
 
-- `<search_query>` 是用户的搜索查询。
-- `<candidate>` 是候选结果，`id` 是唯一候选编号，例如 `[1]`。
-- 候选内容可能包含标题、URL、overview 和 highlights。
+每个候选可能包含标题、URL、overview 和若干 highlight，`id` 是形如 `[1]` 的唯一编号。
 
 # 规则
 
-- 只能选择输入 XML 中存在的 `candidate id`，禁止编造编号。
-- 编号必须保持 `[1]` 这种原始格式，不能改成 `1`。
-- 每次返回 1 到 5 个高质量编号，宁缺勿滥，不要凑满 5 个。
-- 如果没有足够相关的候选，只返回确信有帮助的编号。
+- `selected_ids` 只能包含输入中存在的原始 `candidate id`。
+- 返回 0 到 5 个高质量编号，宁缺勿滥，不重复。
+- 保持编号的 `[1]` 原始格式。
 
 # 输出格式
 
-只输出一个 JSON 对象，结构为 `{"selected_ids":["[1]","[2]"]}`。
+仅输出严格 JSON 对象：
 
-# 禁止
-
-- 不要输出 Markdown 代码块、标题、列表或 JSON 外的任何文字。
-- 不要解释选择理由、评分依据、筛选过程或候选内容。
-- `selected_ids` 里不要重复同一个编号。
-- `selected_ids` 里不要出现输入 XML 中不存在的 `candidate id`。
+{"selected_ids":["[1]","[2]"]}
 """
 
 MAX_SELECTED_CANDIDATES = 5
 
 
 async def select_recommended_ids(
-        *,
-        search_query: str,
-        candidates: tuple[WebSearchCandidate, ...],
-        max_recommended_candidates: int,
-        fallback_candidates_count: int,
+    *,
+    search_query: str,
+    candidates: tuple[WebSearchCandidate, ...],
+    max_recommended_candidates: int,
+    fallback_candidates_count: int,
 ) -> tuple[str, ...]:
     if not candidates:
         return ()
@@ -65,22 +57,27 @@ async def select_recommended_ids(
     )
     if selected:
         valid_ids = {candidate.candidate_id for candidate in candidates}
-        filtered = tuple(candidate_id for candidate_id in selected if candidate_id in valid_ids)[
-            :max_recommended_candidates
-        ]
+        filtered = tuple(
+            candidate_id
+            for candidate_id in selected
+            if candidate_id in valid_ids
+        )[:max_recommended_candidates]
         if filtered:
             return filtered
 
-    return tuple(candidate.candidate_id for candidate in candidates[:fallback_candidates_count])
+    return tuple(
+        candidate.candidate_id
+        for candidate in candidates[:fallback_candidates_count]
+    )
 
 
 async def _select_candidate_ids(
-        *,
-        search_query: str,
-        candidates_xml: str,
-        client: QueryClient | None = None,
+    *,
+    search_query: str,
+    candidates_xml: str,
+    client: QueryClient | None = None,
 ) -> list[str]:
-    """用小模型选择推荐候选编号，返回 1 到 MAX_SELECTED_CANDIDATES 个编号。"""
+    """用小模型选择最多 MAX_SELECTED_CANDIDATES 个候选编号。"""
     query_client = client or build_query_client(
         model=settings.QUERY_MODEL,
     )
@@ -92,12 +89,18 @@ async def _select_candidate_ids(
         system_prompt=CANDIDATE_SELECTOR_SYSTEM_PROMPT,
         max_tokens=256,
     )
-    info("selector.select_candidate_ids", search_query=search_query.strip()[:80], raw_response=result.content)
+    info(
+        "selector.select_candidate_ids",
+        search_query=search_query.strip()[:80],
+        raw_response=result.content,
+    )
+
     try:
         payload = json.loads(result.content)
-        if not isinstance(payload, dict):
-            raise ValueError
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(payload, dict):
         return []
 
     raw_ids = payload.get("selected_ids")
@@ -105,45 +108,52 @@ async def _select_candidate_ids(
         return []
 
     selected: list[str] = []
+    seen: set[str] = set()
+
     for value in raw_ids:
         candidate_id = value.strip() if isinstance(value, str) else ""
-        if candidate_id:
-            selected.append(candidate_id)
+        if not candidate_id or candidate_id in seen:
+            continue
+
+        seen.add(candidate_id)
+        selected.append(candidate_id)
         if len(selected) >= MAX_SELECTED_CANDIDATES:
             break
+
     return selected
 
 
 def _build_selector_prompt(*, search_query: str, candidates_xml: str) -> str:
+    """候选放在前面，将每次变化的查询放在输入末尾。"""
     return "\n".join(
         (
-            "<candidate_selector_input>",
-            f"  <search_query>{xml_cdata(search_query.strip())}</search_query>",
-            "  <candidates>",
             candidates_xml.strip(),
-            "  </candidates>",
-            "</candidate_selector_input>",
+            "",
+            "<search_query>",
+            xml_cdata(search_query.strip()),
+            "</search_query>",
         )
     )
 
 
 def _candidates_xml(candidates: tuple[WebSearchCandidate, ...]) -> str:
     blocks: list[str] = []
+
     for candidate in candidates:
         parts = [
-            f"    <candidate id=\"{xml_attr(candidate.candidate_id)}\">",
-            f"      <title>{xml_cdata(candidate.title)}</title>",
-            f"      <url>{xml_cdata(candidate.url)}</url>",
+            f'<candidate id="{xml_attr(candidate.candidate_id)}">',
+            f"  <title>{xml_cdata(candidate.title)}</title>",
+            f"  <url>{xml_cdata(candidate.url)}</url>",
         ]
         if candidate.overview:
-            parts.append(f"      <overview>{xml_cdata(candidate.overview)}</overview>")
-        if candidate.highlights:
-            parts.append("      <highlights>")
-            parts.extend(
-                f"        <highlight>{xml_cdata(highlight)}</highlight>"
-                for highlight in candidate.highlights
+            parts.append(
+                f"  <overview>{xml_cdata(candidate.overview)}</overview>"
             )
-            parts.append("      </highlights>")
-        parts.append("    </candidate>")
+        parts.extend(
+            f"  <highlight>{xml_cdata(highlight)}</highlight>"
+            for highlight in candidate.highlights
+        )
+        parts.append("</candidate>")
         blocks.append("\n".join(parts))
+
     return "\n".join(blocks)

@@ -12,7 +12,7 @@
 APP_NAME: "WisePen Chat Service"
 SERVICE_NAME: "wisepen-chat-service"
 SERVICE_HOST: "0.0.0.0"     # 生产环境改为实际内网 IP 或 0.0.0.0
-SERVICE_PORT: 8000
+SERVICE_PORT: 19904
 DEV: true
 
 # --- LLM 统一网关 ---

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from chat.application.utils.llm_clients import QueryClient, build_query_client
 from chat.core.config.app_settings import settings
@@ -14,27 +13,19 @@ CONTEXT_INDEXING_SYSTEM_PROMPT = """\
 
 # 任务
 
-结合 `parent_text` 和 `child_text` 生成一段上下文补充，让后续 embedding 和 lexical indexing 更稳定。
+为 `child_text` 生成简短的 `indexing_context`，补充它在文档中的局部语义位置和检索所需上下文，使 embedding 和 lexical indexing 更稳定。
 
-# 输入
+# 规则
 
-运行期输入是 XML：
-
-- `<metadata>` 包含 `<section_path>`，描述 chunk 所处章节。
-- `<parent_text>` 是 `child_text` 所在父块，只用于判断 `child_text` 的局部语义位置。
-- `<child_text>` 是需要补充上下文的目标片段。
-
-# 基本规则
-
-- 只能使用输入中已经给出的信息，不要补充外部知识。
-- 不要改写 `child_text` 的事实。
-- `indexing_context` 只补充检索需要的上下文，不抽取实体、关系或关键词列表。
-- `indexing_context` 必须短，控制在 120 个中文字以内。
-- 只输出严格 JSON，不要 Markdown 或解释。
+- 严格依据 `parent_text`、`section_path` 和 `child_text` 中的信息生成内容。
+- 结合 `parent_text` 判断 `child_text` 的局部语义位置，并通过 `section_path` 补充章节语境。
+- 使用输入内容的主体语言；多语言混合时优先跟随 `child_text` 的主要语言。
+- 保持简短：中文控制在 120 字以内，其他语言采用相当的简短篇幅。
+- 输出内容仅包含严格 JSON 对象。
 
 # 输出格式
 
-只输出一个 JSON 对象，结构为 `{"indexing_context": "这个片段在文档中的局部语义位置和必要上下文"}` 。
+{"indexing_context": "这个片段在文档中的局部语义位置和必要上下文"}
 """
 
 
@@ -54,8 +45,8 @@ class ContextIndexingService:
         )
 
     async def build(
-            self,
-            payload: ContextIndexingInput,
+        self,
+        payload: ContextIndexingInput,
     ) -> ContextIndexingResult:
         try:
             response = await self._client.aquery(
@@ -83,24 +74,21 @@ class ContextIndexingService:
 
 
 def _build_llm_prompt(payload: ContextIndexingInput) -> str:
-    """把 Context Indexing 输入整理成单次小模型提示词。"""
+    """按缓存友好的顺序组织 Context Indexing 输入。"""
     section_path = " > ".join(payload.child_chunk.section_path) or "（无章节信息）"
     return "\n".join(
         (
-            "<context_indexing_input>",
-            "  <metadata>",
-            f"    <section_path>{section_path}</section_path>",
-            "  </metadata>",
-            "",
-            "  <parent_text usage=\"只用于判断 child_text 在文档中的局部语义位置；"
-            "不要从这一段抽取实体、关系或关键词列表\">",
+            "<parent_text>",
             payload.parent_text.strip(),
-            "  </parent_text>",
+            "</parent_text>",
             "",
-            "  <child_text usage=\"indexing_context 必须只围绕这一段生成\">",
+            "<section_path>",
+            section_path,
+            "</section_path>",
+            "",
+            "<child_text>",
             payload.child_chunk.text.strip(),
-            "  </child_text>",
-            "</context_indexing_input>",
+            "</child_text>",
         )
     )
 
@@ -108,7 +96,7 @@ def _build_llm_prompt(payload: ContextIndexingInput) -> str:
 def _parse_llm_payload(content: str) -> str:
     """解析并校验 Context Indexing 小模型输出。"""
     # LLM 输出是外部边界，即使 prompt 要求 JSON，也必须做结构校验。
-    payload: Any = json.loads(content)
+    payload = json.loads(content)
     if not isinstance(payload, dict):
         raise ValueError("Context indexing response must be a JSON object.")
 
@@ -119,9 +107,9 @@ def _parse_llm_payload(content: str) -> str:
 
 
 def _compose_indexing_text(
-        *,
-        payload: ContextIndexingInput,
-        indexing_context: str,
+    *,
+    payload: ContextIndexingInput,
+    indexing_context: str,
 ) -> str:
     # indexing_text 服务检索；最终引用仍使用原始 evidence_text。
     parts = [
@@ -129,9 +117,8 @@ def _compose_indexing_text(
         ("上下文补充", indexing_context),
         ("正文", payload.child_chunk.text),
     ]
-    lines = [
+    return "\n".join(
         f"{label}: {value.strip()}"
         for label, value in parts
         if value and value.strip()
-    ]
-    return "\n".join(lines)
+    )
