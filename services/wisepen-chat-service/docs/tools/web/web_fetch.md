@@ -32,7 +32,7 @@
 
 ```text
 input urls
-  -> URL validation
+  -> per-URL validation; invalid URLs are skipped
   -> FetchCoordinator.fetch_many
   -> per URL: WebContentCacheService.read_markdown_page
   -> static page fetch
@@ -82,11 +82,11 @@ src/chat/application/tools/common/web_content_cache/
 | 字段 | 说明 |
 | --- | --- |
 | `visible_result.items` | 每个成功 URL 的轻量元数据，包含 `source_url`、`title`、`file_ref`、`file_label`。 |
-| `visible_result.failed` | 单 URL 失败列表；批量中单项失败不阻断其它 URL。 |
-| `visible_result.warnings` | 批量级 warning。 |
 | `cacheable_texts` | HTML Markdown。超出内联阈值后变成 `cnt_*`。 |
 
-visible result 不直接携带 Markdown，避免大正文污染模型上下文。
+visible result 不直接携带 Markdown，也不暴露单 URL 失败详情。无效 URL 或抓取失败只写内部日志；同批成功结果始终正常返回。
+
+当 `items` 为空时会额外返回 `warning`：所有输入 URL 都未通过安全校验时为 `all_urls_invalid`；存在合法 URL 但没有成功抓取结果时为 `no_results`。
 
 ## 工具链协作
 

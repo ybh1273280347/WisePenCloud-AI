@@ -47,7 +47,7 @@ class WebFetchTool:
 
     复用 FetchCoordinator 的静态抓取 -> 浏览器 fallback 链路 + 清洗 + 质量判断。
     HTML 页面返回清洗后的 markdown；非 HTML 文件返回统一的 file_* 引用。
-    单个 URL 失败不阻塞其他，转为 failed 项。
+    单个 URL 失败不阻塞其他，失败详情只保留在内部日志。
 
     与 web_crawl 的区别：
     - web_fetch 抓取一批独立 URL，URL 之间无关联
@@ -87,7 +87,7 @@ class WebFetchTool:
                     "  - HTML page: returns title and cleaned markdown.\n"
                     "  - Non-HTML file: returns file_ref (file_*) and file_label; pass file_ref to document_parse to extract content.\n"
                     "  - Avoid producing this file_ref handoff when the original user input was already an obvious direct file URL; document_parse can parse those URLs directly.\n"
-                    "  - Per-URL failure is returned in the failed list with a reason; do NOT silently drop failed URLs.\n"
+                    "  - Per-URL failures do not interrupt successful results.\n"
                     "  - Within one session, do NOT re-fetch the same url unless new information is required.\n"
                 ),
                 parameters_schema=ToolParametersSchema(PARAMETERS_SCHEMA),
@@ -115,13 +115,23 @@ class WebFetchTool:
             try:
                 urls.append(await validate_public_http_url_async(url))
             except UrlSecurityError as exc:
-                raise ToolExecutionError(
+                warn(
+                    "web fetch url skipped.",
+                    url=url,
                     reason="invalid_url",
                     detail_reason=str(exc),
-                    retryable=False,
-                ) from exc
+                )
 
-        # 2. 调用批量异步核心抓取服务
+        if not urls:
+            return ToolReturn(
+                tag="web_fetch_result",
+                visible_result={
+                    "items": (),
+                    "warning": "all_urls_invalid",
+                },
+                cacheable_texts=(),
+            )
+
         user_id = str(context["user_id"])
         session_id = str(context["session_id"])
 
@@ -154,6 +164,13 @@ class WebFetchTool:
 
         cacheable_texts = tuple(r.markdown for r in batch.items if r.markdown)
 
+        for failure in batch.failed:
+            warn(
+                "web fetch url failed.",
+                url=failure.url,
+                reason=failure.reason,
+            )
+
         # visible_result 中只保留模型可直接消费的来源和下游定位符，正文走 cacheable_texts。
         visible_items = []
         for r in batch.items:
@@ -166,10 +183,9 @@ class WebFetchTool:
                 item["file_label"] = r.file_label
             visible_items.append(item)
 
-        visible_result: dict[str, object] = {
-            "items": tuple(visible_items),
-            "failed": batch.failed,
-        }
+        visible_result: dict[str, object] = {"items": tuple(visible_items)}
+        if not visible_items:
+            visible_result["warning"] = "no_results"
 
         return ToolReturn(
             tag="web_fetch_result",
