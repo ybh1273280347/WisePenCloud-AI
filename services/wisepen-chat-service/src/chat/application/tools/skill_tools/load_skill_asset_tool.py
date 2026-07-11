@@ -120,25 +120,36 @@ class LoadSkillAssetTool:
         skill_id = (kwargs.get("skill_id") or "").strip()
         path = (kwargs.get("path") or "").strip()
 
-        object_key = context["skill_asset_object_key"]
-        try:
-            raw = await self._file_loader.load_by_object_key(object_key)
-        except Exception as e:
-            warn(
-                "skill asset load failed.",
-                e=e,
-                skill_id=skill_id,
-                path=path,
-                object_key=object_key,
-                reason="skill_asset_load_failed",
-                audit_message="技能资产对象读取失败，已包装为可重试工具错误。",
-            )
-            raise ToolExecutionError(
-                reason="Skill Asset Load Failed",
-                detail_reason=f"Failed to load skill asset: {type(e).__name__}",
-                retryable=True,
-                metadata={"skill_id": skill_id, "path": path, "object_key": object_key, "detail": str(e)},
-            )
+        if is_builtin_skill_id(skill_id):
+            try:
+                raw = read_builtin_skill_asset(skill_id, path)
+            except Exception as exc:
+                raise ToolExecutionError(
+                    reason="Skill Asset Load Failed",
+                    detail_reason=f"Failed to load builtin skill asset: {type(exc).__name__}",
+                    retryable=False,
+                    metadata={"skill_id": skill_id, "path": path, "detail": str(exc)},
+                ) from exc
+        else:
+            object_key = context["skill_asset_object_key"]
+            try:
+                raw = await self._file_loader.load_by_object_key(object_key)
+            except Exception as exc:
+                warn(
+                    "skill asset load failed.",
+                    e=exc,
+                    skill_id=skill_id,
+                    path=path,
+                    object_key=object_key,
+                    reason="skill_asset_load_failed",
+                    audit_message="技能资产对象读取失败，已包装为可重试工具错误。",
+                )
+                raise ToolExecutionError(
+                    reason="Skill Asset Load Failed",
+                    detail_reason=f"Failed to load skill asset: {type(exc).__name__}",
+                    retryable=True,
+                    metadata={"skill_id": skill_id, "path": path, "object_key": object_key, "detail": str(exc)},
+                ) from exc
 
         # Loader 返回 bytes：资产可能是文本（.md / .py / .json）也可能是二进制（.png / .pdf / .wasm ...）
         # 在给 LLM 的边界上做 UTF-8 严格解码，拒绝不可文本化的二进制资产

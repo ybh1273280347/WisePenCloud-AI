@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Any, List, Mapping
 
 from pydantic import BaseModel, Field

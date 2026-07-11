@@ -10,6 +10,11 @@ from chat.application.tools.core import (
 )
 from chat.application.tools.skill_tools.common import AllowedSkillIdCheck, build_skill_output_placeholder, \
     SkillPermissionCheck
+from chat.application.tools.skill_tools.utils.builtin_skills import (
+    get_builtin_skill,
+    is_builtin_skill_id,
+    read_builtin_skill_asset,
+)
 from chat.domain.entities import Skill
 from chat.domain.interfaces import FileLoader
 from chat.service_client import AIAssetClient
@@ -99,7 +104,8 @@ class LoadSkillTool:
             lines.append("")
             lines.append("<assets_manifest>")
             for asset in skill.assets_manifest:
-                if asset.path == "/SKILL.md": continue
+                if asset.path == "/SKILL.md":
+                    continue
                 lines.append(
                     f"-(path={asset.path} kind={asset.kind} size={asset.size_bytes}): {asset.description}"
                 )
@@ -118,23 +124,34 @@ class LoadSkillTool:
                 metadata={"skill_id": skill.skill_id},
             )
 
-        try:
-            raw = await self._file_loader.load_by_object_key(skill_md_asset.object_key)
-        except Exception as e:
-            warn(
-                "skill load failed.",
-                e=e,
-                skill_id=skill.skill_id,
-                object_key=skill.skill_md_object_key,
-                reason="skill_md_load_failed",
-                audit_message="Skill.md 对象读取失败，已包装为可重试工具错误。",
-            )
-            raise ToolExecutionError(
-                reason="Skill.md Load Failed",
-                detail_reason=f"Failed to load asset: {type(e).__name__}",
-                retryable=True,
-                metadata={"skill_id": skill.skill_id, "object_key": skill_md_asset.object_key, "detail": str(e)},
-            )
+        if is_builtin_skill_id(skill.skill_id):
+            try:
+                raw = read_builtin_skill_asset(skill.skill_id, "/SKILL.md")
+            except Exception as exc:
+                raise ToolExecutionError(
+                    reason="Skill.md Load Failed",
+                    detail_reason=f"Failed to load builtin asset: {type(exc).__name__}",
+                    retryable=False,
+                    metadata={"skill_id": skill.skill_id, "path": "/SKILL.md", "detail": str(exc)},
+                ) from exc
+        else:
+            try:
+                raw = await self._file_loader.load_by_object_key(skill_md_asset.object_key)
+            except Exception as exc:
+                warn(
+                    "skill load failed.",
+                    e=exc,
+                    skill_id=skill.skill_id,
+                    object_key=skill_md_asset.object_key,
+                    reason="skill_md_load_failed",
+                    audit_message="Skill.md 对象读取失败，已包装为可重试工具错误。",
+                )
+                raise ToolExecutionError(
+                    reason="Skill.md Load Failed",
+                    detail_reason=f"Failed to load asset: {type(exc).__name__}",
+                    retryable=True,
+                    metadata={"skill_id": skill.skill_id, "object_key": skill_md_asset.object_key, "detail": str(exc)},
+                ) from exc
 
         try:
             skill_md = raw.decode("utf-8")

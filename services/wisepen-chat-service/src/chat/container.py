@@ -64,7 +64,14 @@ from chat.application.tools.session_tools import (
     ToolContentRerankReadTool,
     ToolContentSequentialReadTool,
 )
-from chat.application.tools.skill_tools import LoadSkillAssetTool, LoadSkillTool
+from chat.application.tools.skill_tools import (
+    CreateSkillInfoTool,
+    GetSkillInfoTool,
+    LoadSkillAssetTool,
+    LoadSkillTool,
+    UpdateSkillInfoTool,
+    UploadSkillDraftAssetTool,
+)
 from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillMatcher
 from chat.application.tools.search_tools.anysearch_search_tool import AnySearchSearchTool
 from chat.application.tools.search_tools.baidu_qianfan_search_tool import BaiduQianfanSearchTool
@@ -856,6 +863,22 @@ class Container(containers.DeclarativeContainer):
         resource_client=resource_client,
         file_loader=oss_file_loader,
         max_output_chars=settings.TOOL_RESULT_MAX_CHARS,
+    )
+    create_skill_info_tool = providers.Singleton(
+        CreateSkillInfoTool,
+        ai_asset_client=ai_asset_client,
+    )
+    get_skill_info_tool = providers.Singleton(
+        GetSkillInfoTool,
+        ai_asset_client=ai_asset_client,
+    )
+    update_skill_info_tool = providers.Singleton(
+        UpdateSkillInfoTool,
+        ai_asset_client=ai_asset_client,
+    )
+    upload_skill_draft_asset_tool = providers.Singleton(
+        UploadSkillDraftAssetTool,
+        ai_asset_client=ai_asset_client,
     )
     # --- Tool Registry ---
     tool_providers = providers.List(

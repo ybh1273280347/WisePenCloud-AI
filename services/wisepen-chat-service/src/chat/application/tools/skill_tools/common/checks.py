@@ -55,7 +55,7 @@ class SkillPermissionCheck(ToolPreflightHook):
                 user_id=SecurityContextHolder.get_user_id(),
                 group_role_map=SecurityContextHolder.get_group_role_map(),
             )
-        except Exception as e:
+        except Exception:
             return ToolPreflightResult(ok=False, message=f"Failed to check permission for skill '{skill_id}'.")
 
         if res_check_permission_res and res_check_permission_res.allows("VIEW"):
