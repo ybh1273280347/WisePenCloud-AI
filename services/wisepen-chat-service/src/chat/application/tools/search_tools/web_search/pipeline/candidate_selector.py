@@ -8,7 +8,7 @@ from chat.application.tools.search_tools.web_search.pipeline.candidates_builder 
 from chat.application.utils.llm_clients import QueryClient, build_query_client
 from chat.application.utils.xml_markup import xml_attr, xml_cdata
 from chat.core.config.app_settings import settings
-from common.logger import info
+from common.logger import info, warn
 
 CANDIDATE_SELECTOR_SYSTEM_PROMPT = """\
 # 角色
@@ -81,14 +81,24 @@ async def _select_candidate_ids(
     query_client = client or build_query_client(
         model=settings.QUERY_MODEL,
     )
-    result = await query_client.aquery(
-        prompt=_build_selector_prompt(
-            search_query=search_query,
-            candidates_xml=candidates_xml,
-        ),
-        system_prompt=CANDIDATE_SELECTOR_SYSTEM_PROMPT,
-        max_tokens=256,
-    )
+    try:
+        result = await query_client.aquery(
+            prompt=_build_selector_prompt(
+                search_query=search_query,
+                candidates_xml=candidates_xml,
+            ),
+            system_prompt=CANDIDATE_SELECTOR_SYSTEM_PROMPT,
+            max_tokens=1024,
+        )
+    except Exception as exc:
+        # 候选选择仅优化推荐顺序，不能阻断已成功的 provider 搜索。
+        warn(
+            "search candidate selection skipped.",
+            search_query=search_query.strip()[:80],
+            reason=exc.__class__.__name__,
+        )
+        return []
+
     info(
         "selector.select_candidate_ids",
         search_query=search_query.strip()[:80],

@@ -25,10 +25,16 @@ class MongoRagAclProjectionRepository:
     - upsert_projection: 写入或更新投影文档
     """
 
-    __slots__ = ("_projector",)
+    __slots__ = ("_projector", "_resource_database_name")
 
-    def __init__(self, *, projector: RagAclProjectionProjector) -> None:
+    def __init__(
+            self,
+            *,
+            projector: RagAclProjectionProjector,
+            resource_database_name: str,
+    ) -> None:
         self._projector = projector
+        self._resource_database_name = resource_database_name
 
     async def get_projection(self, resource_id: str) -> RagResourceAclProjection | None:
         document = await RagAclProjectionDocument.find_one(
@@ -52,9 +58,11 @@ class MongoRagAclProjectionRepository:
         )
 
     async def load_resource_projection(self, resource_id: str) -> RagResourceAclProjection | None:
-        raw = await RagAclProjectionDocument.get_pymongo_collection().database[
-            _RESOURCE_ITEMS_COLLECTION
-        ].find_one(_resource_item_query(resource_id))
+        projection_collection = RagAclProjectionDocument.get_pymongo_collection()
+        resource_collection = projection_collection.database.client[
+            self._resource_database_name
+        ][_RESOURCE_ITEMS_COLLECTION]
+        raw = await resource_collection.find_one(_resource_item_query(resource_id))
         if raw is None:
             return None
         return self._projector.from_resource_item({**raw, "_id": str(raw["_id"])})

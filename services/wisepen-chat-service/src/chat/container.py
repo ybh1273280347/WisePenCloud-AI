@@ -256,6 +256,7 @@ def _build_qdrant_client() -> AsyncQdrantClient | None:
         host=host,
         port=settings.QDRANT_PORT,
         api_key=settings.QDRANT_PASSWORD or None,
+        https=False,
         check_compatibility=False,
     )
 
@@ -456,6 +457,7 @@ class Container(containers.DeclarativeContainer):
     rag_acl_projection_repository = providers.Singleton(
         MongoRagAclProjectionRepository,
         projector=rag_acl_projection_projector,
+        resource_database_name=settings.RESOURCE_PERMISSION_MONGODB_DB_NAME,
     )
     elasticsearch_client = providers.Singleton(
         _build_elasticsearch_client,

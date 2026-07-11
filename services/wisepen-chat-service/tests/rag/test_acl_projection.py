@@ -196,10 +196,15 @@ async def test_mongo_acl_projection_repository_loads_resource_item_from_pymongo_
         "specifiedUsersGrantedActionsMask": {"reader": 2},
         "computedGroupAcls": {},
     }
+    resource_database = {
+        "wisepen_resource_items": _FakeResourceCollection(raw_resource),
+    }
     collection = _FakeProjectionCollection(
-        database={
-            "wisepen_resource_items": _FakeResourceCollection(raw_resource),
-        }
+        database=_FakeProjectionDatabase(
+            client=_FakeMongoClient({
+                "wisepen_res_permission": resource_database,
+            }),
+        ),
     )
     monkeypatch.setattr(
         RagAclProjectionDocument,
@@ -208,6 +213,7 @@ async def test_mongo_acl_projection_repository_loads_resource_item_from_pymongo_
     )
     repository = MongoRagAclProjectionRepository(
         projector=RagAclProjectionProjector(),
+        resource_database_name="wisepen_res_permission",
     )
 
     projection = await repository.load_resource_projection("res-1")
@@ -216,7 +222,7 @@ async def test_mongo_acl_projection_repository_loads_resource_item_from_pymongo_
     assert projection.resource_id == "res-1"
     assert projection.owner_id == "owner-1"
     assert projection.readable_users == ("reader",)
-    assert collection.database["wisepen_resource_items"].queries == [{"_id": "res-1"}]
+    assert resource_database["wisepen_resource_items"].queries == [{"_id": "res-1"}]
 
 
 @pytest.mark.anyio
@@ -230,10 +236,15 @@ async def test_mongo_acl_projection_repository_loads_object_id_resource_item(
         "specifiedUsersGrantedActionsMask": {"reader": 2},
         "computedGroupAcls": {},
     }
+    resource_database = {
+        "wisepen_resource_items": _FakeResourceCollection(raw_resource),
+    }
     collection = _FakeProjectionCollection(
-        database={
-            "wisepen_resource_items": _FakeResourceCollection(raw_resource),
-        }
+        database=_FakeProjectionDatabase(
+            client=_FakeMongoClient({
+                "wisepen_res_permission": resource_database,
+            }),
+        ),
     )
     monkeypatch.setattr(
         RagAclProjectionDocument,
@@ -242,6 +253,7 @@ async def test_mongo_acl_projection_repository_loads_object_id_resource_item(
     )
     repository = MongoRagAclProjectionRepository(
         projector=RagAclProjectionProjector(),
+        resource_database_name="wisepen_res_permission",
     )
 
     projection = await repository.load_resource_projection(str(object_id))
@@ -250,7 +262,7 @@ async def test_mongo_acl_projection_repository_loads_object_id_resource_item(
     assert projection.resource_id == str(object_id)
     assert projection.owner_id == "owner-1"
     assert projection.readable_users == ("reader",)
-    assert collection.database["wisepen_resource_items"].queries == [{"_id": object_id}]
+    assert resource_database["wisepen_resource_items"].queries == [{"_id": object_id}]
 
 
 class _RecordingAclProjectionRepository:
@@ -283,8 +295,21 @@ class _RecordingAclProjectionUpdater(RagAclProjectionUpdater):
 
 
 class _FakeProjectionCollection:
-    def __init__(self, *, database: dict[str, object]) -> None:
+    def __init__(self, *, database: _FakeProjectionDatabase) -> None:
         self.database = database
+
+
+class _FakeProjectionDatabase:
+    def __init__(self, *, client: _FakeMongoClient) -> None:
+        self.client = client
+
+
+class _FakeMongoClient:
+    def __init__(self, databases: dict[str, dict[str, object]]) -> None:
+        self.databases = databases
+
+    def __getitem__(self, database_name: str) -> dict[str, object]:
+        return self.databases[database_name]
 
 
 class _FakeResourceCollection:

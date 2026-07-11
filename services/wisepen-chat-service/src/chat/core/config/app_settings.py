@@ -62,6 +62,7 @@ class AppSettings(BaseModel):
 
     MONGODB_URL: str  # MongoDB 连接串
     MONGODB_DB_NAME: str  # MongoDB 数据库名
+    RESOURCE_PERMISSION_MONGODB_DB_NAME: str = "wisepen_res_permission"  # resource-service 权限事实库
 
     QDRANT_HOST: str  # Qdrant 主机地址
     QDRANT_PORT: int  # Qdrant 端口

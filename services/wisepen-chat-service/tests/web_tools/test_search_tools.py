@@ -58,7 +58,7 @@ class _AdapterQueryClient:
         raise AssertionError("test stub should not be called")
 
 
-def _build_query_client():
+def _build_query_client(**kwargs):
     return _AdapterQueryClient()
 
 
@@ -120,6 +120,10 @@ from chat.application.tools.search_tools.web_search.core.sources import (
     WebSearchSourceKind,
 )
 from chat.application.tools.search_tools.web_search.pipeline.candidates_builder import build_candidates
+from chat.application.tools.search_tools.web_search.pipeline.candidate_selector import (
+    _select_candidate_ids,
+    select_recommended_ids,
+)
 from chat.application.tools.search_tools.web_search.pipeline.search_executor import WebSearchResult
 from chat.application.tools.search_tools.web_search.providers.models import (
     ProviderSearchResponse,
@@ -294,3 +298,33 @@ async def test_base_provider_academic_search_falls_back_to_web() -> None:
     result = await WebOnlySearcher().search_academic(query="papers", max_results=10)
 
     assert result is response
+
+
+@pytest.mark.anyio
+async def test_candidate_selection_failure_falls_back_to_provider_order(
+        monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class QuotaExceededClient:
+        async def aquery(self, **kwargs):
+            raise RuntimeError("query model quota exceeded")
+
+    selected_ids = await _select_candidate_ids(
+        search_query="rag paper",
+        candidates_xml="<candidate id=\"[1]\"/>",
+        client=QuotaExceededClient(),
+    )
+    assert selected_ids == []
+
+    monkeypatch.setattr(
+        "chat.application.tools.search_tools.web_search.pipeline.candidate_selector.build_query_client",
+        lambda **kwargs: QuotaExceededClient(),
+    )
+
+    recommended_ids = await select_recommended_ids(
+        search_query="rag paper",
+        candidates=build_candidates(_result().responses),
+        max_recommended_candidates=5,
+        fallback_candidates_count=3,
+    )
+
+    assert recommended_ids == ("[1]",)

@@ -50,7 +50,7 @@ dependencies = [
     "zeroentropy",        # ZeroEntropy 重排 (Rerank) / SDK 能力
     # --- Vector & Graph Databases (向量库与图数据库) ---
     "qdrant-client",      # Qdrant 密集向量数据库客户端
-    "elasticsearch[async]", # Elasticsearch 异步高级检索客户端
+    "elasticsearch[async]>=8,<9", # Elasticsearch 异步高级检索客户端
     "neo4j",              # Neo4j 图数据库基础客户端
     "neo4j-graphrag",     # Neo4j GraphRAG 知识图谱构建与检索
     # 4. UTILITIES & COMPUTE (数值计算、格式化、加密与内部库)

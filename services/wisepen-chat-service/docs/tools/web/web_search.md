@@ -58,6 +58,7 @@ query
 - provider 工具不读取“当前激活搜索配置”，而是按自己的 provider 读取用户 API key。
 - `platform_search` 只解析平台默认/会员源，不会被 custom credential 路由劫持。
 - 平台默认源的能力是 `web=True, academic=False`；academic mode 会回退 web，能力声明仍保持不支持原生学术检索。
+- 候选选择小模型只优化 `recommended_ids`；调用失败时按 provider 原始顺序推荐，不能阻断搜索结果。
 - OpenAlex 水合链路已删除；工具输出只来自 provider 原生搜索结果。
 
 ## 输出
