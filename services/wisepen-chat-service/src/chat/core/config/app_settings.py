@@ -5,7 +5,6 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from chat.core.config.bootstrap_settings import bootstrap_settings
 from chat.core.config.nacos import nacos_client_manager
 from common.logger import error, info
 
@@ -122,15 +121,13 @@ class AppSettings(BaseModel):
     PADDLE_OCR_API_URL: str  # PaddleOCR 服务 API URL
     PADDLE_OCR_MODEL: str  # PaddleOCR 模型名
 
-    # ── MinerU Cloud (PDF 云端解析) ─────────────────────────────────────
-    MINERU_API_BASE_URL: str = "https://mineru.net"
-    MINERU_CLOUD_TOKEN: str = bootstrap_settings.MINERU_CLOUD_TOKEN
-    MINERU_MODEL_VERSION: str | None = None
-    MINERU_POLL_INTERVAL_SECONDS: float = 2.0
-    MINERU_TASK_TIMEOUT_SECONDS: float = 600.0
-    MINERU_UPLOAD_TIMEOUT_SECONDS: float = 120.0
-    MINERU_DOWNLOAD_TIMEOUT_SECONDS: float = 120.0
-    MINERU_MAX_DOWNLOAD_BYTES: int = 104_857_600
+    # ── MinerU（PDF 解析服务）───────────────────────────────────────────
+    MINERU_API_URL: str = "http://wisepen-dev-server:8000/file_parse"
+    MINERU_CONNECT_TIMEOUT_SECONDS: float = 20.0
+    MINERU_WRITE_TIMEOUT_SECONDS: float = 1800.0
+    MINERU_READ_TIMEOUT_SECONDS: float = 3600.0
+    MINERU_POOL_TIMEOUT_SECONDS: float = 20.0
+    MINERU_MAX_RESPONSE_BYTES: int = 104_857_600
 
     # ── Web Search Gateways (搜索引擎基础设施网关) ──────────────────────
     WEB_SEARCH_FOURGET_BASE_URL: str = "http://127.0.0.1:8088"  # Fourget 搜索网关

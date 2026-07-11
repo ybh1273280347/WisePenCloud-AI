@@ -204,14 +204,12 @@ def _build_document_parse_service(
     return DocumentParseService(
         mineru_converter=MinerUConverter(
             http_client=http_client,
-            api_base_url=settings.MINERU_API_BASE_URL,
-            api_key=settings.MINERU_CLOUD_TOKEN,
-            model_version=settings.MINERU_MODEL_VERSION,
-            poll_interval_seconds=settings.MINERU_POLL_INTERVAL_SECONDS,
-            task_timeout_seconds=settings.MINERU_TASK_TIMEOUT_SECONDS,
-            upload_timeout_seconds=settings.MINERU_UPLOAD_TIMEOUT_SECONDS,
-            download_timeout_seconds=settings.MINERU_DOWNLOAD_TIMEOUT_SECONDS,
-            max_download_bytes=settings.MINERU_MAX_DOWNLOAD_BYTES,
+            api_url=settings.MINERU_API_URL,
+            connect_timeout_seconds=settings.MINERU_CONNECT_TIMEOUT_SECONDS,
+            write_timeout_seconds=settings.MINERU_WRITE_TIMEOUT_SECONDS,
+            read_timeout_seconds=settings.MINERU_READ_TIMEOUT_SECONDS,
+            pool_timeout_seconds=settings.MINERU_POOL_TIMEOUT_SECONDS,
+            max_response_bytes=settings.MINERU_MAX_RESPONSE_BYTES,
         )
     )
 
@@ -319,12 +317,14 @@ def _build_web_fetch_http_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
         timeout=httpx.Timeout(WEB_FETCH_HTTP_TIMEOUT_SECONDS),
         transport=transport,
-        trust_env=False,
     )
 
 
 async def _provide_mineru_http_client() -> AsyncIterator[httpx.AsyncClient]:
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+            follow_redirects=False,
+            trust_env=False,
+    ) as client:
         yield client
 
 
@@ -684,7 +684,6 @@ class Container(containers.DeclarativeContainer):
     web_search_http_client = providers.Singleton(
         httpx.AsyncClient,
         timeout=httpx.Timeout(WEB_SEARCH_HTTP_TIMEOUT_SECONDS),
-        trust_env=False,
     )
     platform_default_searcher = providers.Singleton(
         _build_platform_default_searcher,

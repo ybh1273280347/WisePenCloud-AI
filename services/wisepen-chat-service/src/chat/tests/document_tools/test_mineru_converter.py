@@ -1,12 +1,14 @@
-from io import BytesIO
 import json
+from io import BytesIO
 from pathlib import Path
 import zipfile
 
 import httpx
 import pytest
 
-from chat.application.tools.document_tools.document_parse.converters.pdf import MinerUConverter
+from chat.application.tools.document_tools.document_parse.converters.pdf import (
+    MinerUConverter,
+)
 from chat.application.tools.document_tools.document_parse.core.errors import (
     DocumentTooLargeError,
     RemoteParserError,
@@ -22,192 +24,211 @@ def _zip_bytes(files: dict[str, bytes]) -> bytes:
     return output.getvalue()
 
 
-def _converter(client: httpx.AsyncClient, **kwargs: object) -> MinerUConverter:
-    options = {
-        "poll_interval_seconds": 0.01,
-        "task_timeout_seconds": 0.2,
-        **kwargs,
-    }
+def _converter(
+        client: httpx.AsyncClient,
+        **kwargs: object,
+) -> MinerUConverter:
     return MinerUConverter(
         http_client=client,
-        api_base_url="https://mineru.example",
-        api_key="secret-token",
-        **options,
+        api_url="http://mineru.internal/file_parse",
+        **kwargs,
     )
 
 
-@pytest.mark.asyncio
-async def test_mineru_converter_uploads_polls_and_extracts_markdown(tmp_path: Path) -> None:
-    file_path = tmp_path / "sample.pdf"
-    file_path.write_bytes(b"%PDF-test")
-    result_zip = _zip_bytes({
-        "result/full.md": "# Parsed".encode(),
-        "result/sample_content_list.json": json.dumps([{
+def _successful_zip(*, image_target: str = "images/figure.png") -> bytes:
+    return _zip_bytes({
+        "document/auto/document.md": (
+            f"# Parsed\n\n![]({image_target})"
+        ).encode(),
+        "document/auto/document_content_list.json": json.dumps([{
             "type": "text",
             "text": "Parsed",
             "text_level": 1,
             "page_idx": 0,
         }]).encode(),
+        "document/auto/images/figure.png": b"image-bytes",
     })
-    uploaded: list[bytes] = []
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v4/file-urls/batch":
-            assert request.headers["authorization"] == "Bearer secret-token"
-            return httpx.Response(200, json={"code": 0, "data": {"batch_id": "batch-1", "file_urls": ["https://upload.example/file"]}})
-        if request.url.host == "upload.example":
-            uploaded.append(await request.aread())
-            return httpx.Response(200)
-        if request.url.path == "/api/v4/extract-results/batch/batch-1":
-            return httpx.Response(200, json={"code": 0, "data": {"extract_result": [{"file_name": "sample.pdf", "state": "done", "full_zip_url": "https://download.example/result.zip"}]}})
-        if request.url.host == "download.example":
-            return httpx.Response(200, content=result_zip, headers={"content-length": str(len(result_zip))})
-        raise AssertionError(f"Unexpected request: {request.url}")
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        result = await _converter(client).convert(file_path, file_name=file_path.name)
-
-    assert uploaded == [b"%PDF-test"]
-    assert result.markdown == "<!-- page 1 -->\n\n# Parsed"
 
 
 @pytest.mark.asyncio
-async def test_mineru_converter_adds_pdf_extension_to_extensionless_upload_name(
+async def test_mineru_converter_uses_run_01_form_and_embeds_result(
         tmp_path: Path,
 ) -> None:
     file_path = tmp_path / "download"
     file_path.write_bytes(b"%PDF-test")
-    result_zip = _zip_bytes({"result/full.md": b"# Parsed"})
+    result_zip = _successful_zip()
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v4/file-urls/batch":
-            payload = json.loads(request.content)
-            assert payload["files"][0]["name"] == "1706.03762.pdf"
-            return httpx.Response(200, json={
-                "data": {
-                    "batch_id": "batch-1",
-                    "file_urls": ["https://upload.example/file"],
-                }
-            })
-        if request.url.host == "upload.example":
-            return httpx.Response(200)
-        if request.url.path == "/api/v4/extract-results/batch/batch-1":
-            return httpx.Response(200, json={
-                "data": {
-                    "extract_result": [{
-                        "file_name": "1706.03762.pdf",
-                        "state": "done",
-                        "full_zip_url": "https://download.example/result.zip",
-                    }]
-                }
-            })
-        if request.url.host == "download.example":
-            return httpx.Response(200, content=result_zip)
-        raise AssertionError(f"Unexpected request: {request.url}")
+        assert request.url == "http://mineru.internal/file_parse"
+        body = await request.aread()
+        for name, value in {
+            "backend": "pipeline",
+            "parse_method": "auto",
+            "formula_enable": "true",
+            "table_enable": "true",
+            "return_md": "true",
+            "return_content_list": "true",
+            "return_middle_json": "true",
+            "return_model_output": "false",
+            "return_images": "true",
+            "response_format_zip": "true",
+            "return_original_file": "false",
+            "start_page_id": "0",
+            "end_page_id": "99999",
+        }.items():
+            assert f'name="{name}"\r\n\r\n{value}'.encode() in body
+        assert b'filename="1706.03762.pdf"' in body
+        assert b"%PDF-test" in body
+        return httpx.Response(
+            200,
+            content=result_zip,
+            headers={"content-type": "application/zip"},
+        )
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+    async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+    ) as client:
         result = await _converter(client).convert(
             file_path,
             file_name="1706.03762",
+        )
+
+    assert result.markdown.startswith("<!-- page 1 -->\n\n# Parsed")
+    assert "data:image/png;base64,aW1hZ2UtYnl0ZXM=" in result.markdown
+    assert "images/figure.png" not in result.markdown
+
+
+@pytest.mark.asyncio
+async def test_mineru_converter_preserves_pdf_upload_extension(
+        tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "sample.pdf"
+    file_path.write_bytes(b"%PDF-test")
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = await request.aread()
+        assert b'filename="sample.pdf"' in body
+        return httpx.Response(200, content=_zip_bytes({"full.md": b"# Parsed"}))
+
+    async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+    ) as client:
+        result = await _converter(client).convert(
+            file_path,
+            file_name="sample.pdf",
         )
 
     assert result.markdown == "# Parsed"
 
 
 @pytest.mark.asyncio
-async def test_mineru_converter_reports_remote_failure_with_trace(tmp_path: Path) -> None:
+async def test_mineru_converter_reports_http_error_detail(
+        tmp_path: Path,
+) -> None:
     file_path = tmp_path / "sample.pdf"
     file_path.write_bytes(b"%PDF-test")
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v4/file-urls/batch":
-            return httpx.Response(200, json={"data": {"batch_id": "batch-1", "file_urls": ["https://upload.example/file"]}})
-        if request.url.host == "upload.example":
-            return httpx.Response(200)
-        return httpx.Response(200, json={"data": {"extract_result": [{"state": "failed", "err_msg": "parse rejected", "trace_id": "trace-1"}]}})
+        return httpx.Response(422, json={"detail": "unsupported file"})
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(RemoteParserError, match=r"parse rejected, trace_id=trace-1"):
-            await _converter(client).convert(file_path, file_name=file_path.name)
+    async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(RemoteParserError, match="unsupported file"):
+            await _converter(client).convert(file_path, file_name="sample.pdf")
 
 
 @pytest.mark.asyncio
-async def test_mineru_converter_times_out_pending_task(tmp_path: Path) -> None:
+async def test_mineru_converter_maps_request_timeout(
+        tmp_path: Path,
+) -> None:
     file_path = tmp_path / "sample.pdf"
     file_path.write_bytes(b"%PDF-test")
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v4/file-urls/batch":
-            return httpx.Response(200, json={"data": {"batch_id": "batch-1", "file_urls": ["https://upload.example/file"]}})
-        if request.url.host == "upload.example":
-            return httpx.Response(200)
-        return httpx.Response(200, json={"data": {"extract_result": [{"state": "running"}]}})
+        raise httpx.ReadTimeout("timed out", request=request)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+    async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+    ) as client:
         with pytest.raises(RemoteParserTimeoutError):
-            await _converter(client, task_timeout_seconds=0.05).convert(file_path, file_name=file_path.name)
+            await _converter(client).convert(file_path, file_name="sample.pdf")
 
 
 @pytest.mark.asyncio
-async def test_mineru_converter_maps_http_error(tmp_path: Path) -> None:
+async def test_mineru_converter_rejects_non_zip_response(
+        tmp_path: Path,
+) -> None:
     file_path = tmp_path / "sample.pdf"
     file_path.write_bytes(b"%PDF-test")
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(503, text="unavailable")
+        return httpx.Response(200, text="not a zip")
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(RemoteParserError, match=r"HTTP 503"):
-            await _converter(client).convert(file_path, file_name=file_path.name)
-
-
-@pytest.mark.asyncio
-async def test_mineru_converter_maps_business_error(tmp_path: Path) -> None:
-    file_path = tmp_path / "sample.pdf"
-    file_path.write_bytes(b"%PDF-test")
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"code": 4001, "msg": "quota exceeded", "trace_id": "trace-2"})
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(RemoteParserError, match=r"quota exceeded, trace_id=trace-2"):
-            await _converter(client).convert(file_path, file_name=file_path.name)
+    async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(RemoteParserError, match="did not return a ZIP"):
+            await _converter(client).convert(file_path, file_name="sample.pdf")
 
 
 @pytest.mark.asyncio
-async def test_mineru_converter_rejects_zip_without_markdown(tmp_path: Path) -> None:
+async def test_mineru_converter_rejects_zip_without_markdown(
+        tmp_path: Path,
+) -> None:
     file_path = tmp_path / "sample.pdf"
     file_path.write_bytes(b"%PDF-test")
     result_zip = _zip_bytes({"result.json": b"{}"})
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v4/file-urls/batch":
-            return httpx.Response(200, json={"data": {"batch_id": "batch-1", "file_urls": ["https://upload.example/file"]}})
-        if request.url.host == "upload.example":
-            return httpx.Response(200)
-        if request.url.path == "/api/v4/extract-results/batch/batch-1":
-            return httpx.Response(200, json={"data": {"extract_result": [{"state": "done", "full_zip_url": "https://download.example/result.zip"}]}})
         return httpx.Response(200, content=result_zip)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(RemoteParserError, match=r"does not contain final Markdown"):
-            await _converter(client).convert(file_path, file_name=file_path.name)
+    async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(RemoteParserError, match="does not contain final Markdown"):
+            await _converter(client).convert(file_path, file_name="sample.pdf")
 
 
 @pytest.mark.asyncio
-async def test_mineru_converter_limits_download_size(tmp_path: Path) -> None:
+async def test_mineru_converter_limits_response_size(
+        tmp_path: Path,
+) -> None:
     file_path = tmp_path / "sample.pdf"
     file_path.write_bytes(b"%PDF-test")
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v4/file-urls/batch":
-            return httpx.Response(200, json={"data": {"batch_id": "batch-1", "file_urls": ["https://upload.example/file"]}})
-        if request.url.host == "upload.example":
-            return httpx.Response(200)
-        if request.url.path == "/api/v4/extract-results/batch/batch-1":
-            return httpx.Response(200, json={"data": {"extract_result": [{"state": "done", "full_zip_url": "https://download.example/result.zip"}]}})
-        return httpx.Response(200, content=b"too large", headers={"content-length": "9"})
+        return httpx.Response(
+            200,
+            content=b"PKtoo large",
+            headers={"content-length": "11"},
+        )
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+    async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+    ) as client:
         with pytest.raises(DocumentTooLargeError):
-            await _converter(client, max_download_bytes=4).convert(file_path, file_name=file_path.name)
+            await _converter(client, max_response_bytes=4).convert(
+                file_path,
+                file_name="sample.pdf",
+            )
+
+
+@pytest.mark.asyncio
+async def test_mineru_converter_rejects_missing_markdown_image(
+        tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "sample.pdf"
+    file_path.write_bytes(b"%PDF-test")
+    result_zip = _zip_bytes({
+        "document.md": b"![](images/missing.png)",
+    })
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=result_zip)
+
+    async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(RemoteParserError, match="references missing image"):
+            await _converter(client).convert(file_path, file_name="sample.pdf")
