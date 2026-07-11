@@ -92,7 +92,7 @@ class ToolContentRegexReadTool:
                     "Find exact regular-expression matches from cached tool output across one or more content_ids.\n"
                     "\n"
                     "WHEN TO TRIGGER:\n"
-                    "  - MUST trigger when a previous tool returned a <content_receipt> and you need exact pattern matching.\n"
+                    "  - MUST trigger when a previous tool returned content_receipts and you need exact pattern matching.\n"
                     "  - SHOULD trigger for IDs, URLs, headings, names, citations, or other precise text patterns.\n"
                     "DO NOT TRIGGER when:\n"
                     "  - You need natural-language retrieval — use tool_content_rerank_read instead.\n"

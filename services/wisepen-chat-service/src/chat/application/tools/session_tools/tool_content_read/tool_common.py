@@ -29,7 +29,7 @@ CONTENT_IDS_SCHEMA: dict[str, Any] = {
     "minItems": 1,
     "maxItems": 64,
     "description": (
-        "Required. One or more cnt_* ids from previous <content_receipt> values. "
+        "Required. One or more cnt_* ids from previous content_receipts values. "
         "Multiple ids are split into bounded internal read batches."
     ),
 }

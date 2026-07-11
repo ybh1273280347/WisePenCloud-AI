@@ -34,7 +34,7 @@ ToolScope disclosure
 | 自定义 preflight | `ToolPreflightHook` | 做权限、白名单、manifest path 等跨字段/外部校验。 | 不得把权限校验散落在多个 service。 |
 | 执行超时 | `ToolPolicy.timeout_seconds` | 对 tool call 施加统一超时。 | 不得在普通业务代码里另造不一致超时策略，外部 SDK 边界除外。 |
 | 递归渲染 | `ToolOutputRenderer` | 渲染普通 Python 返回值或 `ToolReturn`。 | 不得手写 XML 或为渲染创建私有 result payload。 |
-| 大文本输出缓存 | `ToolOutputCache` | 将 `ToolReturn.cacheable_texts` 内联或转成 `cnt_*`。 | 不得手写 `<content_receipt>` 或自建大文本读取协议。 |
+| 大文本输出缓存 | `ToolOutputCache` | 将 `ToolReturn.cacheable_texts` 内联或转成 `cnt_*`。 | 不得手写 `content_receipts` 或自建大文本读取协议。 |
 | 内容存储 | `ToolContentStore` | 会话内短期文本存储、chunk/index、receipt。 | 不得把 `cnt_*` 当永久业务 ID。 |
 | 文件移交 | `ToolRunFileStore` | 工具间短期文件引用 `tfile_*`，按用户和会话隔离。 | 不得传本地路径、OSS key、base64 作为工具间文件协议。 |
 | URL 内容缓存 | `WebContentCacheService` + Redis content repository | URL 到 HTML/文件占位/解析 Markdown 的缓存路径。 | web/document 不得维护第二套 URL cache。 |

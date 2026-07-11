@@ -58,7 +58,7 @@ class MathSolveTool:
         """执行结构化数学任务，返回值交给统一工具渲染器递归处理。"""
         task = str(kwargs["task"])
         try:
-            # 不在工具层手动转 dict/XML；统一工具渲染器会递归处理 dataclass 返回值。
+            # 不在工具层手动转 dict/JSON；统一工具渲染器会递归处理 dataclass 返回值。
             return await self._solver.solve(task, dict(kwargs))
         except ToolExecutionError:
             raise

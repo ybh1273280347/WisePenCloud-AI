@@ -4,7 +4,7 @@
 
 实现入口：`src/chat/application/tools/session_tools/tool_content_rerank_read_tool.py`
 
-`tool_content_rerank_read` 从 `ToolContentStore` 中读取已有 `cnt_*` 内容。它用于上一轮工具返回 `<content_receipt>` 后，对一个或多个内容做跨文档语义检索。
+`tool_content_rerank_read` 从 `ToolContentStore` 中读取已有 `cnt_*` 内容。它用于上一轮工具返回 `content_receipts` 后，对一个或多个内容做跨文档语义检索。
 
 ## 何时使用
 

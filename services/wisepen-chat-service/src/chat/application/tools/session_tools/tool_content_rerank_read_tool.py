@@ -91,7 +91,7 @@ class ToolContentRerankReadTool:
                     "Rerank focused windows from cached tool output across one or more content_ids.\n"
                     "\n"
                     "WHEN TO TRIGGER:\n"
-                    "  - MUST trigger when a previous tool returned a <content_receipt> and you need natural-language retrieval.\n"
+                    "  - MUST trigger when a previous tool returned content_receipts and you need natural-language retrieval.\n"
                     "  - SHOULD trigger when you need answer-relevant evidence across one or more cached documents.\n"
                     "DO NOT TRIGGER when:\n"
                     "  - You need exact pattern matching — use tool_content_regex_read instead.\n"

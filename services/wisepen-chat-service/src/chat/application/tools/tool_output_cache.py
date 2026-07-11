@@ -9,7 +9,11 @@ from chat.application.tools.common.tool_content_store.store import (
 )
 from chat.application.tools.core.definition import ToolDefinition
 from chat.application.tools.core.llm.renderer import RenderToolResult
-from chat.application.tools.tool_output_renderer import RenderedToolOutput, render_tool_xml
+from chat.application.tools.tool_output_renderer import (
+    RenderedToolOutput,
+    build_tool_result_payload,
+    render_tool_output,
+)
 from common.logger import warn
 
 
@@ -34,7 +38,7 @@ class ToolOutputCache:
             tool_definition: ToolDefinition | None,
             context: dict[str, Any],
     ) -> RenderToolResult:
-        """根据文本包大小，动态将 cacheable_texts 渲染为内联 XML 文本或持久化内容回执。"""
+        """根据文本包大小，将 cacheable_texts 内联或转换为内容回执。"""
         model_text = rendered.rendered_text
         cacheable_texts = tuple(text for text in rendered.cacheable_texts if text)
 
@@ -42,15 +46,16 @@ class ToolOutputCache:
         if cacheable_texts:
             total_chars = sum(len(text) for text in cacheable_texts)
 
-            # 分支 A: 文本总量在安全窗口内 -> 直接内联嵌入 CDATA 块
+            # 分支 A: 文本总量在安全窗口内 -> 直接内联 JSON 数组
             if total_chars <= self._inline_max_chars:
-                model_text = render_tool_xml(
-                    root_tag=rendered.root_tag,
-                    payload=rendered.visible_result,
-                    inline_contents=cacheable_texts,
+                model_text = render_tool_output(
+                    build_tool_result_payload(
+                        rendered.visible_result,
+                        inline_contents=cacheable_texts,
+                    )
                 )
 
-            # 分支 B: 文本量超限 -> 降级驱动存仓，仅返回轻量化的 XML 引用凭证
+            # 分支 B: 文本量超限 -> 降级存仓，仅返回轻量内容回执
             else:
                 receipts = []
                 for index, text in enumerate(cacheable_texts):
@@ -97,15 +102,16 @@ class ToolOutputCache:
                             audit_message="工具输出内容超过 ToolContentStore 入库上限，该文本不会出现在模型输出凭证中。",
                         )
 
-                # 只要有一条单据存仓成功，就重构重写发送给模型的 XML 树
+                # 只要有一条单据存仓成功，就重构模型可见 JSON。
                 if receipts:
                     receipt_payloads = tuple(
                         _content_receipt_payload(r) for r in receipts
                     )
-                    model_text = render_tool_xml(
-                        root_tag=rendered.root_tag,
-                        payload=rendered.visible_result,
-                        content_receipts=receipt_payloads,
+                    model_text = render_tool_output(
+                        build_tool_result_payload(
+                            rendered.visible_result,
+                            content_receipts=receipt_payloads,
+                        )
                     )
 
         # 2. 持久化输出裁剪：若配置了不持久化输出，生成动态文本占位符预防膨胀
@@ -141,7 +147,7 @@ class ToolOutputCache:
 
 
 def _content_receipt_payload(receipt: ToolContentReceipt) -> dict[str, Any]:
-    """将底层的 ToolContentReceipt 核心实体拍平为对模型可见的 XML 清晰字典载荷。"""
+    """将底层 ToolContentReceipt 拍平为模型可见 JSON。"""
     return {
         "content_id": receipt.content_id,
         "chunk_count": receipt.chunk_count,

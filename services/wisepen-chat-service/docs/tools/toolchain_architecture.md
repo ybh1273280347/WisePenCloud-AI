@@ -30,7 +30,7 @@ ToolInvocation
 
 工具可以返回普通结构，也可以返回 `ToolReturn`：
 
-- `tag`：渲染成 XML 根节点。
+- `tag`：内部结果类别标识，不参与模型 JSON 编码。
 - `visible_result`：直接给模型看的轻量结构化结果。
 - `cacheable_texts`：大段正文、Markdown 或解析结果，交给 `ToolOutputCache` 生成 `cnt_*`。
 

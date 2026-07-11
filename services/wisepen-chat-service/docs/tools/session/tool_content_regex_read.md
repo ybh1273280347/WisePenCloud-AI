@@ -4,7 +4,7 @@
 
 实现入口：`src/chat/application/tools/session_tools/tool_content_regex_read_tool.py`
 
-`tool_content_regex_read` 从 `ToolContentStore` 中读取已有 `cnt_*` 内容。它用于上一轮工具返回 `<content_receipt>` 后，对一个或多个内容做正则匹配并展开命中窗口。
+`tool_content_regex_read` 从 `ToolContentStore` 中读取已有 `cnt_*` 内容。它用于上一轮工具返回 `content_receipts` 后，对一个或多个内容做正则匹配并展开命中窗口。
 
 ## 何时使用
 

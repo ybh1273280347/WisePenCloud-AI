@@ -17,7 +17,7 @@
 - `str` / `int` / `float` / `bool`
 - `None`
 
-普通返回值只会由 `ToolOutputRenderer` 渲染为模型可见 XML，不进入 `ToolContentStore`。
+普通返回值只会由 `ToolOutputRenderer` 渲染为模型可见的紧凑 JSON，不进入 `ToolContentStore`。
 
 **注意**：普通返回值由统一工具渲染器递归渲染，工具不要手动把 dataclass / dict / list 转成专用 result payload。统一渲染就是返回边界。
 
@@ -48,10 +48,10 @@ return ToolReturn(
 
 字段规则：
 
-- `tag` 是 XML 根标签，必须是合法 XML tag。
+- `tag` 是内部结果类别标识，不参与模型 JSON 编码。
 - `visible_result` 放模型马上需要理解的结构化信息。
 - `cacheable_texts` 只放运行时托管的大文本。
-- 不在 `visible_result` 中暴露 `cacheable_texts` 的内部下标；后续读取凭证由统一缓存切面追加 `<contents>` 或 `<content_receipt>`。
+- 不在 `visible_result` 中暴露 `cacheable_texts` 的内部下标；后续读取凭证由统一缓存切面追加 `contents` 或 `content_receipts` 字段。
 - 不再在工具返回中提示下一步工具；工具链选择由工具描述、文档和模型当前任务目标共同决定。
 
 ## 分批缓存规则
@@ -59,16 +59,16 @@ return ToolReturn(
 `ToolOutputCache` 只处理 `RenderedToolOutput.cacheable_texts`：
 
 1. 过滤空文本。
-2. 总长度不超过 `settings.TOOL_RESULT_MAX_CHARS` 时内联为 `<contents>`。
+2. 总长度不超过 `settings.TOOL_RESULT_MAX_CHARS` 时内联为 `contents` 数组。
 3. 超过阈值时，每段 `cacheable_texts[i]` 单独写入 `ToolContentStore`。
 4. 每段成功写入后生成一个独立 `cnt_*`。
-5. 渲染多个 `<content_receipt>` 给模型。
+5. 渲染 `content_receipts` 数组给模型。
 6. 错误输出不进入 `ToolContentStore`。
 
 不要做：
 
 - 把多文件、多来源、多窗口文本提前拼成一个大 `cacheable_texts`。
-- 在工具内部手写 `<content_receipt>`。
+- 在工具内部手写内容回执 JSON。
 - 在工具内部另建 Redis 缓存协议来替代 `ToolOutputCache`。
 - 把普通 `dict/list` 的大字段当作自动缓存入口。
 

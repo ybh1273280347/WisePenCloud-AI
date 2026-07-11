@@ -2,86 +2,80 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from decimal import Decimal
+from pathlib import Path
+from uuid import UUID
+
+from pydantic import BaseModel
 
 from chat.application.tools.core.execution.result import ToolExecutionResult
 from chat.application.tools.core.llm.invocation import ToolInvocation
 from chat.application.tools.core.tool_return import ToolReturn
-from chat.application.tools import tool_output_renderer as renderer_module
 from chat.application.tools.tool_output_renderer import (
     ToolOutputRenderer,
-    _render_regular_return,
-    render_tool_xml,
+    build_tool_result_payload,
+    render_tool_output,
 )
 
 
-def test_render_tool_xml_filters_none_fields_and_items() -> None:
-    rendered = render_tool_xml(
-        root_tag="result",
-        payload={
-            "title": "example",
-            "empty_field": None,
-            "nested": {
-                "keep": "value",
-                "drop": None,
-            },
-            "items": [
-                "first",
-                None,
-                {"name": "kept", "unused": None},
-            ],
-        },
+class _PayloadModel(BaseModel):
+    name: str
+
+
+def test_render_tool_output_uses_compact_json() -> None:
+    rendered = render_tool_output({
+        "status": "success",
+        "data": {"items": [1, 2, 3]},
+        "meta": {"cached": False},
+    })
+
+    assert rendered == (
+        '{"status":"success","data":{"items":[1,2,3]},'
+        '"meta":{"cached":false}}'
     )
 
-    assert "<empty_field>" not in rendered
-    assert "<drop>" not in rendered
-    assert rendered.count("<item>") == 2
-    assert "<title>example</title>" in rendered
-    assert "<name>kept</name>" in rendered
+
+def test_render_tool_output_adapts_common_tool_value_types() -> None:
+    rendered = json.loads(render_tool_output({
+        "model": _PayloadModel(name="test"),
+        "decimal": Decimal("1.20"),
+        "path": Path("report.pdf"),
+        "binary": b"\xff\x00",
+        "set": {"b", "a"},
+        "datetime": datetime(2026, 7, 12, tzinfo=timezone.utc),
+        "uuid": UUID("12345678-1234-5678-1234-567812345678"),
+    }))
+
+    assert rendered["model"] == {"name": "test"}
+    assert rendered["decimal"] == "1.20"
+    assert rendered["path"] == "report.pdf"
+    assert rendered["binary"] == "\ufffd\u0000"
+    assert set(rendered["set"]) == {"a", "b"}
+    assert rendered["datetime"] == "2026-07-12T00:00:00+00:00"
+    assert rendered["uuid"] == "12345678-1234-5678-1234-567812345678"
 
 
-def test_regular_return_none_keeps_empty_root() -> None:
-    visible_result, rendered = _render_regular_return(root_tag="result", value=None)
+def test_render_tool_output_textualizes_unknown_type() -> None:
+    rendered = json.loads(render_tool_output({"value": object()}))
 
-    assert visible_result == {}
-    assert rendered == "<result/>\n"
+    assert rendered["value"].startswith("<object object at 0x")
 
 
-def test_render_tool_xml_removes_xml_invalid_control_characters() -> None:
-    rendered = render_tool_xml(
-        root_tag="result",
-        payload={"text": "before\x00after\x0btext"},
+def test_build_tool_result_payload_keeps_contents_and_receipts() -> None:
+    payload = build_tool_result_payload(
+        {"status": "success"},
+        inline_contents=("markdown",),
+        content_receipts=({"content_id": "cnt_1"},),
     )
 
-    assert "\x00" not in rendered
-    assert "\x0b" not in rendered
-    assert "beforeaftertext" in rendered
-
-
-def test_render_tool_xml_falls_back_to_raw_json_when_xml_rendering_fails(
-        monkeypatch,
-) -> None:
-    def raise_render_error(*args, **kwargs):
-        raise RuntimeError("renderer unavailable")
-
-    monkeypatch.setattr(
-        renderer_module,
-        "_mapping_element",
-        raise_render_error,
-    )
-
-    rendered = render_tool_xml(
-        root_tag="result",
-        payload={"query": "DeepSeek\x00latest"},
-        inline_contents=("detail",),
-    )
-
-    assert json.loads(rendered) == {
-        "result": {"query": "DeepSeek\x00latest"},
-        "contents": ["detail"],
+    assert payload == {
+        "status": "success",
+        "contents": ("markdown",),
+        "content_receipts": ({"content_id": "cnt_1"},),
     }
 
 
-def test_render_result_falls_back_when_tool_return_tag_is_invalid() -> None:
+def test_tool_return_tag_does_not_affect_json_rendering() -> None:
     now = datetime.now(timezone.utc)
     tool_result = ToolExecutionResult(
         tool_invocation=ToolInvocation(
@@ -90,7 +84,7 @@ def test_render_result_falls_back_when_tool_return_tag_is_invalid() -> None:
             tool_call_arguments={},
         ),
         tool_output=ToolReturn(
-            tag="invalid tag",
+            tag="exa_search_result",
             visible_result={"query": "DeepSeek"},
         ),
         started_at=now,
@@ -99,6 +93,4 @@ def test_render_result_falls_back_when_tool_return_tag_is_invalid() -> None:
 
     rendered = ToolOutputRenderer.render_result(tool_result=tool_result)
 
-    assert json.loads(rendered.rendered_text) == {
-        "result": {"query": "DeepSeek"},
-    }
+    assert json.loads(rendered.rendered_text) == {"query": "DeepSeek"}

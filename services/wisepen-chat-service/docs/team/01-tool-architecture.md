@@ -54,7 +54,7 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 
 普通工具直接返回普通 Python 值，例如 `dict`、`list`、dataclass、Pydantic model、scalar 或 `None`。统一工具渲染器 `ToolOutputRenderer` 会递归标准化并渲染结果。
 
-**注意**：工具不要为了“结构化”手动转 result，不要手写 XML，也不要为普通返回值增加私有 result_builder。统一渲染就是返回边界。
+**注意**：工具不要为了“结构化”手动序列化 JSON，也不要为普通返回值增加私有 result_builder。统一渲染就是返回边界。
 
 ## 工具族复用原则
 
