@@ -90,13 +90,13 @@ POST settings.MINERU_API_URL
   -> pipeline / auto / formula + table
   -> 接收受大小限制的 ZIP
   -> 优先读取 full.md，或唯一 Markdown 文件
+  -> 要求唯一 content_list.json
   -> 使用 content_list.json 的 page_idx 注入 <!-- page N -->
-  -> 将 ZIP 内相对图片转换为 Base64 data URI
 ```
 
-MinerU 请求参数与 `src/chat/benchmark/cloud_mineru.py` 的 `run_01` 保持一致。服务地址、连接/上传/读取/连接池超时和最大响应字节数来自 `app_settings`；不再使用 MinerU 公有云 token、签名上传 URL、batch ID 或轮询任务。
+MinerU 使用部署版 `/file_parse` 协议。服务地址、连接/上传/读取/连接池超时和最大响应字节数来自 `app_settings`；不再使用 MinerU 公有云 token、签名上传 URL、batch ID 或轮询任务。请求返回 Markdown 和唯一的 legacy `content_list.json`，不请求独立图片或 middle JSON。
 
-页码从 1 开始，并插在每页第一个非空正文 Markdown 块之前。只有所有页面都能在最终 Markdown 中唯一且顺序定位时才注入；content list 缺失、结果文件错配或任一页定位不可靠时，完整返回 MinerU 原始 Markdown，不输出部分或推测页码。图片、表格、代码等块仅用于定位，内容仍交给后续 chunking engine 处理。
+页码从 1 开始，并插在每页第一个非空正文 Markdown 块之前。唯一 content list 缺失、结果文件错配或格式不合法时，PDF 解析失败；页码锚点无法可靠定位时，完整返回 MinerU 原始 Markdown，不输出部分或推测页码。图片、表格、代码等块仅用于定位，内容仍交给后续 chunking engine 处理。
 
 ## 输出与缓存
 

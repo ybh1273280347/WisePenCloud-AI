@@ -112,6 +112,7 @@ class ToolPolicy:
     risk_level: ToolRiskLevel = ToolRiskLevel.LOW  # 风险级别
 
     required_context_keys: tuple[str, ...] = ()  # 需要的上下文Key
+    required_allowed_builtin_skill_ids: tuple[str, ...] = ()  # 需要的内置 Skill
 
     max_output_chars: int | None = None  # 输出最大字符数（超过后截断）
     allow_parallel: bool = False  # 允许并行

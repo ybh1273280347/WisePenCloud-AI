@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Mapping, Optional, Set
+from typing import List, Optional, Set
 
 import httpx
 
@@ -25,6 +25,7 @@ class AIAssetClient:
             rpc: RpcClient,
             *,
             service_name: str = _DEFAULT_SERVICE_NAME,
+            upload_timeout: float = 30.0,
     ) -> None:
         self._rpc = rpc
         self._service_name = service_name

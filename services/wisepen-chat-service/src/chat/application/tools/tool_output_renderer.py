@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Mapping
@@ -16,9 +17,13 @@ from chat.application.tools.core.llm.renderer import RenderToolResult
 from chat.application.tools.core.tool_return import ToolReturn
 
 logging.getLogger("dicttoxml").setLevel(logging.WARNING)
+_LOGGER = logging.getLogger(__name__)
 
 _DEFAULT_ROOT_TAG = "result"
 _XML_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*")
+_INVALID_XML_CHAR_RE = re.compile(
+    r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,21 +50,41 @@ class ToolOutputRenderer:
         invocation = tool_result.tool_invocation
         output = tool_result.tool_output
 
-        if isinstance(output, ToolReturn):
-            root_tag = _validate_xml_tag(output.tag)
-            visible_result = _normalize_mapping(output.visible_result)
-            cacheable_texts = tuple(map(str, output.cacheable_texts))
-            rendered_text = render_tool_xml(
-                root_tag=root_tag,
-                payload=visible_result,
+        root_tag = _DEFAULT_ROOT_TAG
+        visible_result: dict[str, Any] = {}
+        cacheable_texts: tuple[str, ...] = ()
+
+        try:
+            if isinstance(output, ToolReturn):
+                root_tag = _validate_xml_tag(output.tag)
+                visible_result = _normalize_mapping(output.visible_result)
+                cacheable_texts = tuple(map(str, output.cacheable_texts))
+                rendered_text = render_tool_xml(
+                    root_tag=root_tag,
+                    payload=visible_result,
+                )
+            else:
+                visible_result, rendered_text = _render_regular_return(output)
+        except Exception as exc:
+            _LOGGER.warning(
+                "tool output rendering failed; returning raw result.",
+                exc_info=exc,
             )
-        else:
+
             root_tag = _DEFAULT_ROOT_TAG
-            visible_result, rendered_text = _render_regular_return(
-                root_tag,
-                output,
-            )
+            visible_result = {}
             cacheable_texts = ()
+
+            rendered_text = _raw_result_text(
+                output.visible_result
+                if isinstance(output, ToolReturn)
+                else output,
+                inline_contents=(
+                    tuple(map(str, output.cacheable_texts))
+                    if isinstance(output, ToolReturn)
+                    else ()
+                ),
+            )
 
         return RenderedToolOutput(
             tool_name=invocation.tool_name,
@@ -75,6 +100,25 @@ class ToolOutputRenderer:
     def render_error_result(*, tool_result: ToolExecutionResult) -> RenderToolResult:
         """渲染失败输出。错误内容不计入 ToolContentStore 缓存。"""
         invocation = tool_result.tool_invocation
+        error = tool_result.tool_execution_error
+
+        if error is None:
+            payload = {
+                "error": {
+                    "reason": "unknown_tool_error",
+                    "retryable": False,
+                    "metadata": {},
+                }
+            }
+        else:
+            payload = {
+                "error": {
+                    "reason": error.reason,
+                    "detail_reason": error.detail_reason,
+                    "retryable": error.retryable,
+                    "metadata": error.metadata,
+                }
+            }
 
         return RenderToolResult(
             tool_call_id=invocation.tool_call_id,
@@ -82,7 +126,7 @@ class ToolOutputRenderer:
             persisted_output_placeholder=None,
             tool_output=render_tool_xml(
                 root_tag=_DEFAULT_ROOT_TAG,
-                payload=_error_payload(tool_result),
+                payload=payload,
             ),
         )
 
@@ -90,82 +134,92 @@ class ToolOutputRenderer:
 def render_tool_xml(
         *,
         root_tag: str,
-        payload: dict[str, Any],
+        payload: Mapping[Any, Any],
         inline_contents: tuple[str, ...] = (),
         content_receipts: tuple[dict[str, Any], ...] = (),
 ) -> str:
     """将结构化工具结果渲染为 XML。"""
-    root = _mapping_element(
-        _validate_xml_tag(root_tag),
-        _normalize_mapping(payload),
-    )
-
-    if inline_contents:
-        contents = etree.SubElement(root, "contents")
-        if len(inline_contents) == 1:
-            contents.text = etree.CDATA(inline_contents[0])
-        else:
-            for content in inline_contents:
-                item = etree.SubElement(contents, "item")
-                item.text = etree.CDATA(content)
-
-    if content_receipts:
-        receipt_payload: Mapping[Any, Any] = (
-            content_receipts[0]
-            if len(content_receipts) == 1
-            else {"items": content_receipts}
+    try:
+        root = _mapping_element(
+            _validate_xml_tag(root_tag),
+            _normalize_mapping(payload),
         )
-        root.append(
-            _mapping_element(
-                "content_receipt",
-                _normalize_mapping(receipt_payload),
+
+        if inline_contents:
+            contents = etree.SubElement(root, "contents")
+
+            if len(inline_contents) == 1:
+                contents.text = etree.CDATA(
+                    _sanitize_xml_text(inline_contents[0])
+                )
+            else:
+                for content in inline_contents:
+                    item = etree.SubElement(contents, "item")
+                    item.text = etree.CDATA(_sanitize_xml_text(content))
+
+        if content_receipts:
+            receipt_payload: Mapping[Any, Any] = (
+                content_receipts[0]
+                if len(content_receipts) == 1
+                else {"items": content_receipts}
             )
+            root.append(
+                _mapping_element(
+                    "content_receipt",
+                    _normalize_mapping(receipt_payload),
+                )
+            )
+
+        return _serialize(root)
+    except Exception as exc:
+        _LOGGER.warning(
+            "tool XML rendering failed; returning raw result.",
+            exc_info=exc,
+        )
+        return _raw_result_text(
+            payload,
+            inline_contents=inline_contents,
+            content_receipts=content_receipts,
         )
 
-    return _serialize(root)
 
-
-def _render_regular_return(
-        root_tag: str,
-        value: Any,
-) -> tuple[dict[str, Any], str]:
+def _render_regular_return(value: Any) -> tuple[dict[str, Any], str]:
     normalized = _normalize(value)
+
+    if isinstance(normalized, list):
+        normalized = {"items": normalized}
 
     if isinstance(normalized, dict):
         return normalized, render_tool_xml(
-            root_tag=root_tag,
+            root_tag=_DEFAULT_ROOT_TAG,
             payload=normalized,
         )
 
-    if isinstance(normalized, list):
-        payload = {"items": normalized}
-        return payload, render_tool_xml(
-            root_tag=root_tag,
-            payload=payload,
-        )
+    root = etree.Element(_DEFAULT_ROOT_TAG)
 
-    root = etree.Element(root_tag)
     if normalized is not None:
         root.text = (
-            "true" if normalized
-            else "false"
-        ) if isinstance(normalized, bool) else str(normalized)
+            str(normalized).lower()
+            if isinstance(normalized, bool)
+            else str(normalized)
+        )
 
     return {}, _serialize(root)
 
 
 def _mapping_element(
-        root_tag: str,
-        payload: dict[str, Any],
+        tag: str,
+        payload: Mapping[str, Any],
 ) -> etree._Element:
-    xml = dicttoxml(
-        payload,
-        custom_root=root_tag,
-        attr_type=False,
-        item_func=lambda _: "item",
-        xml_declaration=False,
+    return etree.fromstring(
+        dicttoxml(
+            payload,
+            custom_root=tag,
+            attr_type=False,
+            item_func=lambda _: "item",
+            xml_declaration=False,
+        )
     )
-    return etree.fromstring(xml)
 
 
 def _serialize(element: etree._Element) -> str:
@@ -198,44 +252,52 @@ def _normalize(value: Any) -> Any:
     if isinstance(value, Mapping):
         return _normalize_mapping(value)
 
-    if isinstance(value, list | tuple):
+    if isinstance(value, (list, tuple)):
         return [
             normalized
             for item in value
             if (normalized := _normalize(item)) is not None
         ]
 
-    if isinstance(value, str | int | float | bool) or value is None:
+    if isinstance(value, str):
+        return _sanitize_xml_text(value)
+
+    if isinstance(value, (int, float, bool)) or value is None:
         return value
 
-    return str(value)
-
-
-def _error_payload(
-        tool_result: ToolExecutionResult,
-) -> dict[str, Any]:
-    error = tool_result.tool_execution_error
-
-    if error is None:
-        return {
-            "error": {
-                "reason": "unknown_tool_error",
-                "retryable": False,
-                "metadata": {},
-            }
-        }
-
-    return _normalize_mapping({
-        "error": {
-            "reason": error.reason,
-            "detail_reason": error.detail_reason,
-            "retryable": error.retryable,
-            "metadata": error.metadata,
-        }
-    })
+    return _sanitize_xml_text(str(value))
 
 
 def _validate_xml_tag(tag: str) -> str:
     if not tag or _XML_NAME_RE.fullmatch(tag) is None:
         raise ValueError(f"Invalid XML root tag: {tag!r}")
     return tag
+
+
+def _sanitize_xml_text(text: str) -> str:
+    return _INVALID_XML_CHAR_RE.sub("", text)
+
+
+def _raw_result_text(
+        payload: Any,
+        *,
+        inline_contents: tuple[str, ...] = (),
+        content_receipts: tuple[dict[str, Any], ...] = (),
+) -> str:
+    raw_result: dict[str, Any] = {"result": payload}
+
+    if inline_contents:
+        raw_result["contents"] = inline_contents
+
+    if content_receipts:
+        raw_result["content_receipts"] = content_receipts
+
+    try:
+        return json.dumps(
+            raw_result,
+            ensure_ascii=False,
+            default=str,
+            indent=2,
+        )
+    except Exception:
+        return repr(raw_result)
