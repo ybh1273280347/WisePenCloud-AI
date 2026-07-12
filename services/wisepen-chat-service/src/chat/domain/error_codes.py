@@ -14,10 +14,7 @@ class ChatErrorCode(IErrorCode):
     PROVIDER_IN_USE = (40013, "供应商仍被模型使用")
     PROVIDER_FORBIDDEN = (40014, "无权访问该供应商")
 
-    # --- Web Search 凭证相关 ---
-    WEB_SEARCH_CREDENTIAL_INVALID = (40031, "搜索凭证无效")
-
-    # --- 模型相关 ---
+    # --- LLM 相关 ---
     MODEL_NOT_FOUND = (40021, "模型不存在")
     MODEL_ALREADY_EXISTS = (40022, "模型已存在")
     MODEL_MAPPING_NOT_FOUND = (40023, "模型供应商映射不存在")

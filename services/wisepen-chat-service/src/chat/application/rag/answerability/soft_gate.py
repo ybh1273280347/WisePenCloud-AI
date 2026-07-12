@@ -71,7 +71,7 @@ class AnswerabilitySoftGate:
     __slots__ = ("_client",)
 
     def __init__(self, *, client: QueryClient | None = None) -> None:
-        self._client = client or build_query_client(model=settings.QUERY_MODEL)
+        self._client = client or build_query_client(model=settings.QUERY_MODEL, thinking="disabled")
 
     async def evaluate(
             self,

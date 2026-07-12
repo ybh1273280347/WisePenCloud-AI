@@ -6,8 +6,6 @@ from chat.application.tools.search_tools.web_search.providers.baidu_qianfan impo
     map_baidu_qianfan_response,
 )
 from chat.application.tools.search_tools.web_search.providers.models import SearchProviderName
-from chat.application.tools.search_tools.web_search.core.runtime_context import WebSearchRuntimeConfig
-from chat.application.tools.search_tools.web_search.core.sources import WebSearchSourceKind
 from chat.application.tools.search_tools.web_search.factories.search_source_factory import (
     SearchSourceFactory,
 )
@@ -97,11 +95,9 @@ def test_search_source_factory_builds_baidu_qianfan_searcher() -> None:
         baidu_qianfan_base_url="https://qianfan.baidubce.com",
     )
 
-    source = factory.build(WebSearchRuntimeConfig(
-        source_kind=WebSearchSourceKind.CUSTOM,
+    source = factory.build(
         provider=SearchProviderName.BAIDU_QIANFAN,
         api_key="qianfan-key",
-        source_id="custom:baidu_qianfan:test",
-    ))
+    )
 
     assert isinstance(source.searcher, BaiduQianfanSearcher)

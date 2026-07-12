@@ -100,9 +100,9 @@ provider/platform search tool
   -> web_fetch
 ```
 
-搜索工具不是默认暴露工具。每轮只根据当前用户 active 搜索凭证暴露一个入口：平台 active 暴露 `platform_search`，custom active 暴露对应 provider 工具，无 active 凭证则不暴露搜索工具。
+`platform_search` 无需用户配置并默认可见。custom provider 工具通过统一 `ToolConfigSpec` 声明 API key；`ToolRegistry` 只暴露当前用户已启用且配置完整的工具，并把配置固化到请求级 `ToolScope`。
 
-所有搜索工具由同一个 `BaseSearchTool` 表达，并通过同一个 `SearchSourceFactory` 构造平台或 custom source。平台默认源仅声明 web 能力；academic mode 在不支持原生学术检索的 source 上回退 web。
+所有搜索工具由同一个 `BaseSearchTool` 表达，并通过同一个 `SearchSourceFactory` 构造平台默认或固定 provider source。不存在运行期 source resolver；custom 工具直接使用自身 ToolConfig 中的 API key。平台默认源仅声明 web 能力；academic mode 在不支持原生学术检索的 source 上回退 web。
 
 ### Web 工具
 
@@ -141,5 +141,4 @@ cnt_* receipt
 ## 后续优化方向
 
 - 给 provider search 工具补端到端回归：search -> fetch -> read。
-- 给 `platform_search` 增加平台会员 provider 的配置可观测性。
 - 持续调优 `web_fetch` / `document_parse` / `image_ocr` 提示词中的文件边界。

@@ -21,6 +21,7 @@ from common.security import require_login
 
 router = APIRouter()
 
+
 def _build_tool_response(tool: Tool, entity: UserToolConfig | None) -> ToolResponse:
     definition = tool.definition
     config_spec = definition.config_spec
@@ -33,7 +34,6 @@ def _build_tool_response(tool: Tool, entity: UserToolConfig | None) -> ToolRespo
             enabled=True,
         )
 
-    # 检查用户是否有配置、必填项是否完整
     configured = False
     missing_keys: list[str] = []
     if entity is not None:
@@ -78,7 +78,7 @@ async def list_user_tools(
     tool_config_repo: ToolConfigRepository = Depends(Provide[Container.tool_config_repo]),
 ):
     configs = await tool_config_repo.list_tool_configs(user_id)
-    configs = { config.tool_name: config for config in configs}
+    configs = {config.tool_name: config for config in configs}
 
     return R.success(data=ListUserToolsResponse(
         tools=[
@@ -140,24 +140,19 @@ async def update_user_tool_config(
     if tool is None:
         raise ServiceException(ChatErrorCode.TOOL_NOT_FOUND)
 
-    # 工具本身需要可配置
     config_spec = tool.definition.config_spec
     if config_spec is None:
         raise ServiceException(ChatErrorCode.TOOL_CONFIG_INVALID, "tool does not support user config")
-
-
     property_names = set(config_spec.schema.get("properties") or {})
     secret_names = set(config_spec.secret_keys)
 
     if req.config is not None:
         if not isinstance(req.config, dict):
             raise ServiceException(ChatErrorCode.TOOL_CONFIG_INVALID, "config must be an object")
-        # 排除未知参数
         unknown = set(req.config) - property_names
         if unknown:
             raise ServiceException(ChatErrorCode.TOOL_CONFIG_INVALID, f"unknown config keys: {sorted(unknown)}")
 
-        # 保密字段不能出现在 config 中
         secret_in_config = set(req.config) & secret_names
         if secret_in_config:
             raise ServiceException(
@@ -168,27 +163,32 @@ async def update_user_tool_config(
     if req.secret_config is not None:
         if not isinstance(req.secret_config, dict):
             raise ServiceException(ChatErrorCode.TOOL_CONFIG_INVALID, "secret_config must be an object")
-        # 排除未知保密参数
         unknown_secret = set(req.secret_config) - secret_names
         if unknown_secret:
             raise ServiceException(
-                ChatErrorCode.TOOL_CONFIG_INVALID,f"unknown secret config keys: {sorted(unknown_secret)}")
+                ChatErrorCode.TOOL_CONFIG_INVALID,
+                f"unknown secret config keys: {sorted(unknown_secret)}",
+            )
 
-        # 保密字段不能为空
-        invalid_secret = [key for key, value in req.secret_config.items() if not isinstance(value, str) or not value.strip()]
+        invalid_secret = [
+            key
+            for key, value in req.secret_config.items()
+            if not value.strip()
+        ]
         if invalid_secret:
             raise ServiceException(
                 ChatErrorCode.TOOL_CONFIG_INVALID,
                 f"secret config values must be non-blank strings: {sorted(invalid_secret)}",
             )
 
-    existing = await tool_config_repo.get_tool_config(user_id, req.tool_name) # 是否已存在配置
+    existing = await tool_config_repo.get_tool_config(user_id, req.tool_name)
 
     config = dict(existing.config if existing is not None else {})
-    if req.config is not None: config.update(req.config)
+    if req.config is not None:
+        config.update(req.config)
     secret_config = dict(existing.secret_config if existing is not None else {})
-    if req.secret_config is not None: secret_config.update(req.secret_config)
-
+    if req.secret_config is not None:
+        secret_config.update(req.secret_config)
 
     entity = await tool_config_repo.upsert_tool_config(
         user_id=user_id,

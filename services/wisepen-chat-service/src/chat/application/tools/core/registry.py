@@ -22,8 +22,10 @@ class ToolScope:
             for name, config in (configs or {}).items()
             if name in self._tools
         }
-        self._schemas: list[dict[str, Any]] = [schema_renderer(tool.definition.llm_spec) for tool in
-                                               self._tools.values()]
+        self._schemas = [
+            schema_renderer(tool.definition.llm_spec)
+            for tool in self._tools.values()
+        ]
 
     def schemas(self) -> list[dict[str, Any]]:
         return list(self._schemas)
@@ -94,8 +96,9 @@ class ToolRegistry:
                 continue
 
             explicitly_exposed = name in expose_tool_name_set
-            skill_exposed = (policy.required_allowed_builtin_skill_ids and
-                             set(policy.required_allowed_builtin_skill_ids).issubset(set(context.get("allowed_skill_ids") or [])))
+            skill_exposed = bool(policy.required_allowed_builtin_skill_ids) and set(
+                policy.required_allowed_builtin_skill_ids,
+            ).issubset(set(context.get("allowed_skill_ids") or []))
 
             if not policy.expose_by_default:
                 if explicitly_exposed or skill_exposed:
@@ -104,7 +107,7 @@ class ToolRegistry:
 
             if allow_tool_name_set is not None and name not in allow_tool_name_set:
                 continue
-            if policy.expose_by_default and name in deny_tool_name_set:
+            if name in deny_tool_name_set:
                 continue
 
             filtered_tools[name] = tool
@@ -141,14 +144,14 @@ class ToolRegistry:
                 continue
 
             merged_config = {**entity.config, **entity.secret_config}
-            if any(not _has_config_value(merged_config.get(key)) for key in config_spec.required_keys):
+            if any(
+                    (value := merged_config.get(key)) is None
+                    or isinstance(value, str) and not value.strip()
+                    for key in config_spec.required_keys
+            ):
                 continue
 
             configured_tool_names.add(name)
             tool_configs[name] = merged_config
 
         return configured_tool_names, tool_configs
-
-
-def _has_config_value(value: Any) -> bool:
-    return value is not None and (not isinstance(value, str) or bool(value.strip()))

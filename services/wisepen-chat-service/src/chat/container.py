@@ -96,9 +96,6 @@ from chat.application.tools.web_tools.fetch_services.fetchers import (
     StaticPageFetcher,
     StealthyPageFetcher,
 )
-from chat.application.tools.search_tools.web_search.runtime_context_resolver import (
-    WebSearchRuntimeContextResolver,
-)
 from chat.application.tools.search_tools.web_search.factories.search_source_factory import (
     SearchSourceFactory,
 )
@@ -503,6 +500,7 @@ class Container(containers.DeclarativeContainer):
     rag_graph_query_client = providers.Singleton(
         build_query_client,
         model=settings.QUERY_MODEL,
+        thinking="disabled",
     )
     rag_knowledge_graph_builder = providers.Singleton(
         Neo4jGraphRagKnowledgeGraphBuilder,
@@ -691,11 +689,6 @@ class Container(containers.DeclarativeContainer):
         _build_platform_default_searcher,
         http_client=web_search_http_client,
     )
-    web_search_runtime_context_resolver = providers.Singleton(
-        WebSearchRuntimeContextResolver,
-        platform_member_provider=settings.WEB_SEARCH_PLATFORM_MEMBER_PROVIDER,
-        platform_member_api_key=settings.WEB_SEARCH_PLATFORM_MEMBER_API_KEY,
-    )
     web_search_source_factory = providers.Singleton(
         SearchSourceFactory,
         http_client=web_search_http_client,
@@ -808,31 +801,26 @@ class Container(containers.DeclarativeContainer):
         PlatformSearchTool,
         search_pipeline=web_search_pipeline,
         source_factory=web_search_source_factory,
-        runtime_context_resolver=web_search_runtime_context_resolver,
     )
     exa_search_tool = providers.Singleton(
         ExaSearchTool,
         search_pipeline=web_search_pipeline,
         source_factory=web_search_source_factory,
-        runtime_context_resolver=web_search_runtime_context_resolver,
     )
     tavily_search_tool = providers.Singleton(
         TavilySearchTool,
         search_pipeline=web_search_pipeline,
         source_factory=web_search_source_factory,
-        runtime_context_resolver=web_search_runtime_context_resolver,
     )
     anysearch_search_tool = providers.Singleton(
         AnySearchSearchTool,
         search_pipeline=web_search_pipeline,
         source_factory=web_search_source_factory,
-        runtime_context_resolver=web_search_runtime_context_resolver,
     )
     baidu_qianfan_search_tool = providers.Singleton(
         BaiduQianfanSearchTool,
         search_pipeline=web_search_pipeline,
         source_factory=web_search_source_factory,
-        runtime_context_resolver=web_search_runtime_context_resolver,
     )
     web_crawl_tool = providers.Singleton(
         WebCrawlTool,

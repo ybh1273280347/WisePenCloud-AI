@@ -12,7 +12,6 @@ class WebSearchSourceKind(StrEnum):
     """运行时搜索源类型，表示密钥归属和缓存域。"""
 
     PLATFORM_DEFAULT = "platform_default"
-    PLATFORM_MEMBER = "platform_member"
     CUSTOM = "custom"
 
 
@@ -41,21 +40,6 @@ class PlatformDefaultSearchSource:
     @property
     def capability(self) -> SearchCapability:
         return SearchCapability(web=True, academic=False)
-
-
-@dataclass(frozen=True, slots=True)
-class PlatformMemberSearchSource:
-    """会员平台搜索源，使用平台密钥调用可复用 provider adapter。"""
-
-    provider: SearchProviderName
-    source_id: str
-    searcher: ProviderSearcher
-    api_key: str
-    kind: WebSearchSourceKind = WebSearchSourceKind.PLATFORM_MEMBER
-
-    @property
-    def capability(self) -> SearchCapability:
-        return self.provider.capability
 
 
 @dataclass(frozen=True, slots=True)

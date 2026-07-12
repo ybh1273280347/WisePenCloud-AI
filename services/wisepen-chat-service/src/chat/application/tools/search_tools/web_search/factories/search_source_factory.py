@@ -8,12 +8,9 @@ from chat.application.tools.search_tools.web_search.core.errors import (
     WebSearchCustomApiKeyInvalid,
     WebSearchInternalError,
 )
-from chat.application.tools.search_tools.web_search.core.runtime_context import WebSearchRuntimeConfig
 from chat.application.tools.search_tools.web_search.core.sources import (
     CustomSearchSource,
     PlatformDefaultSearchSource,
-    PlatformMemberSearchSource,
-    WebSearchSourceKind,
 )
 from chat.application.tools.search_tools.web_search.providers.models import SearchProviderName
 from chat.application.tools.search_tools.web_search.searchers import (
@@ -38,38 +35,32 @@ class SearchSourceFactory:
     anysearch_base_url: str
     baidu_qianfan_base_url: str
 
-    def build(self, config: WebSearchRuntimeConfig) -> PlatformDefaultSearchSource | PlatformMemberSearchSource | CustomSearchSource:
-        if config.source_kind == WebSearchSourceKind.PLATFORM_DEFAULT:
+    def build(
+            self,
+            *,
+            provider: SearchProviderName | None,
+            api_key: str | None,
+    ) -> PlatformDefaultSearchSource | CustomSearchSource:
+        if provider is None:
             return PlatformDefaultSearchSource(searcher=self.platform_default_searcher)
 
-        if config.provider is None or not config.api_key:
+        if not api_key:
             raise WebSearchInternalError(
-                provider=config.provider,
-                reason="搜索源缺少 provider 或 API key",
+                provider=provider,
+                reason="搜索源缺少 API key",
             )
 
+        source_id = f"custom:{provider.value}"
         searcher = self._build_provider_searcher(
-            provider=config.provider,
-            api_key=config.api_key,
-            source_id=config.source_id,
+            provider=provider,
+            api_key=api_key,
+            source_id=source_id,
         )
-        if config.source_kind == WebSearchSourceKind.PLATFORM_MEMBER:
-            return PlatformMemberSearchSource(
-                provider=config.provider,
-                source_id=config.source_id,
-                searcher=searcher,
-                api_key=config.api_key,
-            )
-        if config.source_kind == WebSearchSourceKind.CUSTOM:
-            return CustomSearchSource(
-                provider=config.provider,
-                source_id=config.source_id,
-                searcher=searcher,
-                api_key=config.api_key,
-            )
-        raise WebSearchInternalError(
-            provider=config.provider,
-            reason="未知搜索源类型",
+        return CustomSearchSource(
+            provider=provider,
+            source_id=source_id,
+            searcher=searcher,
+            api_key=api_key,
         )
 
     def _build_provider_searcher(

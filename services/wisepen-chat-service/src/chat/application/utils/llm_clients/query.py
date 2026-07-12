@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from openai import AsyncOpenAI, OpenAI
 
 from chat.core.config.app_settings import settings
 
 Message = dict[str, Any]
+ThinkingMode = Literal["enabled", "disabled"]
 
 
 @dataclass(frozen=True)
@@ -29,8 +30,10 @@ class QueryClient:
             *,
             api_base: str,
             api_key: str,
+            thinking: ThinkingMode | None = None,
     ) -> None:
         self.model = model
+        self.thinking = thinking
         self._async_client = AsyncOpenAI(base_url=api_base, api_key=api_key)
         self._sync_client = OpenAI(base_url=api_base, api_key=api_key)
 
@@ -93,8 +96,15 @@ class QueryClient:
             ),
             "max_tokens": max_tokens,
         }
+
         if response_format is not None:
             kwargs["response_format"] = response_format
+
+        if self.thinking is not None:
+            kwargs["extra_body"] = {
+                "thinking": {"type": self.thinking},
+            }
+
         return kwargs
 
     @staticmethod
@@ -105,27 +115,26 @@ class QueryClient:
             messages: list[Message] | None,
     ) -> list[Message]:
         result: list[Message] = []
+
         if system_prompt:
             result.append({"role": "system", "content": system_prompt})
-        for message in messages or []:
-            result.append(
-                {
-                    "role": str(message.get("role") or "user"),
-                    "content": str(message.get("content") or ""),
-                }
-            )
+
+        result.extend(
+            {
+                "role": str(message.get("role") or "user"),
+                "content": str(message.get("content") or ""),
+            }
+            for message in messages or ()
+        )
         result.append({"role": "user", "content": prompt})
         return result
 
     @staticmethod
     def _parse_response(response: Any) -> QueryResult:
         choices = response.choices or []
-        content = ""
-        if choices:
-            message = choices[0].message
-            content = str(message.content or "")
-        usage = response.usage
-        usage_tokens = int(usage.total_tokens or 0) if usage is not None else 0
+        content = str(choices[0].message.content or "") if choices else ""
+        usage_tokens = int(response.usage.total_tokens or 0) if response.usage else 0
+
         return QueryResult(
             content=content,
             raw=response,
@@ -133,10 +142,15 @@ class QueryClient:
         )
 
 
-@lru_cache(maxsize=1)
-def build_query_client(*, model: str) -> QueryClient:
+@lru_cache
+def build_query_client(
+        *,
+        model: str,
+        thinking: ThinkingMode | None = None,
+) -> QueryClient:
     return QueryClient(
         model=model,
         api_base=settings.LLM_BASE_URL,
         api_key=settings.LLM_API_KEY,
+        thinking=thinking,
     )

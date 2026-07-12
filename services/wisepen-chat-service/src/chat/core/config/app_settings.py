@@ -135,14 +135,6 @@ class AppSettings(BaseModel):
     WEB_SEARCH_TAVILY_BASE_URL: str = "https://api.tavily.com"  # Tavily 搜索网关
     WEB_SEARCH_ANYSEARCH_BASE_URL: str = "https://api.anysearch.com"  # AnySearch 搜索网关
     WEB_SEARCH_BAIDU_QIANFAN_BASE_URL: str = "https://qianfan.baidubce.com"  # 百度千帆搜索网关
-    WEB_SEARCH_PLATFORM_MEMBER_PROVIDER: Literal[
-                                             "exa",
-                                             "tavily",
-                                             "anysearch",
-                                             "baidu_qianfan",
-                                         ] | None = None  # 会员平台源当前路由到的 provider；None 表示未启用
-    WEB_SEARCH_PLATFORM_MEMBER_API_KEY: str | None = None  # 会员平台源使用的平台密钥
-
     # ── Internal Service Gateways (内部服务网关) ────────────────────────
     NOTE_COLLAB_GATEWAY_BASE_URL: str  # Note Collab 服务内部网关 base URL
 

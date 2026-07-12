@@ -134,7 +134,7 @@ async def execute(self, context: dict[str, Any], **kwargs: Any) -> Any:
 - 默认暴露工具受 `allow_tool_name_set` 和 `deny_tool_name_set` 过滤。
 - `ToolScope.schemas()` 是本轮稳定快照，运行期 LLM 调用必须使用它。
 
-搜索工具属于默认隐藏工具：`ChatTurnCoordinator` 只按当前用户 active 搜索凭证动态解禁一个搜索工具。平台 active 凭证解禁 `platform_search`；custom active 凭证只解禁对应 provider 工具；没有 active 搜索凭证时不暴露搜索工具。
+搜索工具不再由 `ChatTurnCoordinator` 动态解禁。`platform_search` 无需用户配置并默认可见；custom provider 工具声明统一 `ToolConfigSpec`，由 `ToolRegistry.derive()` 根据当前用户配置是否完整、启用来决定可见性，并把解密后的配置固化到本轮 `ToolScope`。
 
 如果将来要让 deny 也能压制隐藏工具，需要先修改 `derive()`，不能只改业务调用方。
 

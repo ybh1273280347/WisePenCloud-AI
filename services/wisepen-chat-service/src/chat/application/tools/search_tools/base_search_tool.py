@@ -25,11 +25,7 @@ from chat.application.tools.search_tools.web_search.factories.search_source_fact
 )
 from chat.application.tools.search_tools.web_search.providers.models import SearchMode, SearchProviderName
 from chat.application.tools.search_tools.web_search.result_builder import build_search_tool_return
-from chat.application.tools.search_tools.web_search.runtime_context_resolver import (
-    WebSearchRuntimeContextResolver,
-)
 from chat.application.tools.search_tools.web_search.search_pipeline import SearchPipeline
-from common.core.exceptions import ServiceException
 
 DEFAULT_SEARCH_RESULTS = 10
 MAX_SEARCH_RESULTS = 20
@@ -69,7 +65,6 @@ class BaseSearchTool:
     __slots__ = (
         "_definition",
         "_provider",
-        "_runtime_context_resolver",
         "_search_pipeline",
         "_source_factory",
         "_tool_name",
@@ -82,13 +77,11 @@ class BaseSearchTool:
             provider: SearchProviderName | None,
             search_pipeline: SearchPipeline,
             source_factory: SearchSourceFactory,
-            runtime_context_resolver: WebSearchRuntimeContextResolver,
     ) -> None:
         self._tool_name = tool_name
         self._provider = provider
         self._search_pipeline = search_pipeline
         self._source_factory = source_factory
-        self._runtime_context_resolver = runtime_context_resolver
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name=tool_name,
@@ -120,19 +113,25 @@ class BaseSearchTool:
         max_results = max(1, min(kwargs.get("max_results") or DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS))
 
         try:
-            runtime_config = await self._runtime_context_resolver.resolve(
+            api_key = None
+            if self._provider is not None:
+                api_key = str((config or {}).get("api_key") or "").strip()
+                if not api_key:
+                    raise WebSearchCustomApiKeyMissing(
+                        provider=self._provider,
+                        reason="缺少工具配置中的 API key",
+                    )
+
+            source = self._source_factory.build(
                 provider=self._provider,
-                config=config,
+                api_key=api_key,
             )
-            source = self._source_factory.build(runtime_config)
             pipeline_result = await self._search_pipeline.search(
                 query=query,
                 max_results=max_results,
                 source=source,
                 mode=mode,
             )
-        except ServiceException as exc:
-            raise self._execution_error("api_key_missing", exc, retryable=False) from exc
         except WebSearchCustomApiKeyMissing as exc:
             raise self._execution_error("api_key_missing", exc, retryable=False) from exc
         except WebSearchCustomApiKeyInvalid as exc:
@@ -200,6 +199,7 @@ def _config_spec(provider: SearchProviderName | None) -> ToolConfigSpec | None:
                     "type": "string",
                     "title": "API Key",
                     "description": f"API key for {provider.value} search.",
+                    "writeOnly": True,
                 },
             },
             "additionalProperties": False,

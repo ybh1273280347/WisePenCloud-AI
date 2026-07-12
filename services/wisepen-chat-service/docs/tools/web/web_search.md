@@ -16,7 +16,7 @@
 
 | 工具 | 搜索源 | 说明 |
 | --- | --- | --- |
-| `platform_search` | 平台默认源或平台会员源 | 通用默认搜索工具；平台会员源按配置路由到 provider。 |
+| `platform_search` | 平台默认源 | 无需用户配置的通用默认搜索工具。 |
 | `exa_search` | 用户 Exa API key | 支持 `mode=web` 和 `mode=academic`。 |
 | `tavily_search` | 用户 Tavily API key | 原生 web；academic mode 回退 web。 |
 | `anysearch_search` | 用户 AnySearch API key | 原生 web；academic mode 回退 web。 |
@@ -24,11 +24,12 @@
 
 不再存在独立 `web_search` 或 `academic_search` 工具。学术检索是支持该能力的 provider 工具上的显式 `mode=academic`。
 
-搜索工具默认隐藏，每轮只按当前用户 `WebSearchCredential.is_active` 动态解禁一个入口：
+搜索工具使用统一 ToolConfig 配置与可见性链路：
 
-- active 平台凭证（`platform_default` 或 `platform_member`）：暴露 `platform_search`。
-- active custom 凭证：只暴露该 provider 对应的搜索工具。
-- 没有 active 搜索凭证：不暴露搜索工具。
+- `platform_search` 无需用户配置，默认可见并固定使用平台默认源。
+- custom provider 工具声明 `config_spec.api_key`，用户通过 `/chat/tool` 接口维护配置。
+- custom provider 配置完整且启用时工具可见；缺少 API key、配置禁用或配置不存在时隐藏。
+- API key 由 `ToolExecutor` 通过可信 `config` 参数注入，不进入模型参数 schema。
 
 ## 输入
 
@@ -55,8 +56,8 @@ query
 约束：
 
 - 工具只执行一次显式 query，不内置 fallback query。
-- provider 工具不读取“当前激活搜索配置”，而是按自己的 provider 读取用户 API key。
-- `platform_search` 只解析平台默认/会员源，不会被 custom credential 路由劫持。
+- provider 工具只读取统一 ToolConfig 注入的 `api_key`，不访问独立搜索凭据仓储。
+- `platform_search` 固定使用平台默认源，不读取用户 ToolConfig。
 - 平台默认源的能力是 `web=True, academic=False`；academic mode 会回退 web，能力声明仍保持不支持原生学术检索。
 - 候选选择小模型只优化 `recommended_ids`；调用失败时按 provider 原始顺序推荐，不能阻断搜索结果。
 - OpenAlex 水合链路已删除；工具输出只来自 provider 原生搜索结果。
@@ -93,4 +94,3 @@ query
 | 搜索源统一工厂 | `search_tools/web_search/factories/search_source_factory.py` |
 | Provider adapter | `search_tools/web_search/searchers/` |
 | Provider payload/mapper | `search_tools/web_search/providers/` |
-| 运行期平台源解析 | `search_tools/web_search/runtime_context_resolver.py` |

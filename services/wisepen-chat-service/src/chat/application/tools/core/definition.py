@@ -95,6 +95,43 @@ class ToolLLMSpec:
 
 
 @dataclass(frozen=True)
+class ToolConfigSpec:
+    schema: dict[str, Any]
+    required_keys: tuple[str, ...] = ()
+    secret_keys: tuple[str, ...] = ()
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.schema, dict):
+            raise TypeError("config_spec.schema must be a dict.")
+        if self.schema.get("type") != "object":
+            raise ValueError("config_spec.schema.type must be 'object'.")
+
+        properties = self.schema.get("properties", {})
+        if not isinstance(properties, dict):
+            raise ValueError("config_spec.schema.properties must be a dict.")
+
+        required_keys = tuple(self.required_keys or ())
+        secret_keys = tuple(self.secret_keys or ())
+        if not all(isinstance(item, str) for item in required_keys):
+            raise ValueError("config_spec.required_keys must contain only strings.")
+        if not all(isinstance(item, str) for item in secret_keys):
+            raise ValueError("config_spec.secret_keys must contain only strings.")
+
+        unknown_required = [key for key in required_keys if key not in properties]
+        unknown_secret = [key for key in secret_keys if key not in properties]
+        if unknown_required:
+            raise ValueError(f"config_spec.required_keys contains unknown keys: {unknown_required}")
+        if unknown_secret:
+            raise ValueError(f"config_spec.secret_keys contains unknown keys: {unknown_secret}")
+        if self.version < 1:
+            raise ValueError("config_spec.version must be positive.")
+
+        object.__setattr__(self, "required_keys", required_keys)
+        object.__setattr__(self, "secret_keys", secret_keys)
+
+
+@dataclass(frozen=True)
 class ToolPolicy:
     """工具策略"""
     expose_by_default: bool = False  # 是否默认暴露给模型
@@ -122,6 +159,7 @@ class ToolPolicy:
 class ToolDefinition:
     llm_spec: ToolLLMSpec
     policy: ToolPolicy = field(default_factory=ToolPolicy)
+    config_spec: ToolConfigSpec | None = None
     preflight_hooks: tuple['ToolPreflightHook', ...] = ()
 
 

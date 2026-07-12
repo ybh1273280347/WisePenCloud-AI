@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 from typing import Any
 
+from chat.core.security import SecretCipher
 from chat.domain.entities.tool_config import UserToolConfig
 from chat.domain.repositories.tool_config_repo import ToolConfigRepository
-from chat.core.security import SecretCipher
 
 
 class MongoToolConfigRepository(ToolConfigRepository):

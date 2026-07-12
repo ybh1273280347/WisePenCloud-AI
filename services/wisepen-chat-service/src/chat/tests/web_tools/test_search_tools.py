@@ -7,7 +7,6 @@ import pytest
 
 from chat.application.tools.search_tools.exa_search_tool import ExaSearchTool
 from chat.application.tools.search_tools.platform_search_tool import PlatformSearchTool
-from chat.application.tools.search_tools.web_search.core.runtime_context import WebSearchRuntimeConfig
 from chat.application.tools.search_tools.web_search.core.sources import (
     PlatformDefaultSearchSource,
     WebSearchSourceKind,
@@ -45,36 +44,22 @@ class FakeSearchPipeline:
         )
 
 
-class FakeRuntimeContextResolver:
+class FakeSearchSourceFactory:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-    async def resolve(
+    def build(
             self,
             *,
-            user_id: str,
             provider: SearchProviderName | None,
-    ) -> WebSearchRuntimeConfig:
-        self.calls.append({"user_id": user_id, "provider": provider})
-        return WebSearchRuntimeConfig(
-            source_kind=(WebSearchSourceKind.PLATFORM_DEFAULT if provider is None else WebSearchSourceKind.CUSTOM),
+            api_key: str | None,
+    ):
+        self.calls.append({"provider": provider, "api_key": api_key})
+        return types.SimpleNamespace(
+            kind=(WebSearchSourceKind.PLATFORM_DEFAULT if provider is None else WebSearchSourceKind.CUSTOM),
             provider=provider,
             source_id="platform_default" if provider is None else f"custom:{provider.value}",
-            api_key=None if provider is None else "custom-key",
-        )
-
-
-class FakeSearchSourceFactory:
-    def __init__(self) -> None:
-        self.calls: list[WebSearchRuntimeConfig] = []
-
-    def build(self, config: WebSearchRuntimeConfig):
-        self.calls.append(config)
-        return types.SimpleNamespace(
-            kind=config.source_kind,
-            provider=config.provider,
-            source_id=config.source_id,
-            api_key=config.api_key,
+            api_key=api_key,
             searcher=object(),
         )
 
@@ -104,23 +89,23 @@ def _result(query: str = "rag paper") -> WebSearchResult:
 
 @pytest.mark.anyio
 async def test_exa_search_uses_unified_runtime_source_and_pipeline() -> None:
-    resolver = FakeRuntimeContextResolver()
     source_factory = FakeSearchSourceFactory()
     pipeline = FakeSearchPipeline(_result())
     tool = ExaSearchTool(
         search_pipeline=pipeline,
         source_factory=source_factory,
-        runtime_context_resolver=resolver,
     )
 
     result = await tool.execute(
         {"user_id": "user-1", "session_id": "session-1"},
+        config={"api_key": "custom-key"},
         query="rag paper",
         mode="academic",
     )
 
-    assert resolver.calls == [{"user_id": "user-1", "provider": SearchProviderName.EXA}]
-    assert source_factory.calls[0].source_kind == WebSearchSourceKind.CUSTOM
+    assert source_factory.calls == [
+        {"provider": SearchProviderName.EXA, "api_key": "custom-key"},
+    ]
     assert pipeline.calls[0]["mode"] == SearchMode.ACADEMIC
     assert result.tag == "exa_search_result"
     assert result.visible_result["mode"] == "academic"
@@ -130,13 +115,11 @@ async def test_exa_search_uses_unified_runtime_source_and_pipeline() -> None:
 
 @pytest.mark.anyio
 async def test_platform_search_resolves_platform_source_only() -> None:
-    resolver = FakeRuntimeContextResolver()
     source_factory = FakeSearchSourceFactory()
     pipeline = FakeSearchPipeline(_result("platform query"))
     tool = PlatformSearchTool(
         search_pipeline=pipeline,
         source_factory=source_factory,
-        runtime_context_resolver=resolver,
     )
 
     result = await tool.execute(
@@ -144,8 +127,7 @@ async def test_platform_search_resolves_platform_source_only() -> None:
         query="platform query",
     )
 
-    assert resolver.calls == [{"user_id": "user-1", "provider": None}]
-    assert source_factory.calls[0].source_kind == WebSearchSourceKind.PLATFORM_DEFAULT
+    assert source_factory.calls == [{"provider": None, "api_key": None}]
     assert pipeline.calls[0]["mode"] == SearchMode.WEB
     assert result.tag == "platform_search_result"
     assert result.visible_result["mode"] == "web"

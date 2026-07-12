@@ -42,6 +42,7 @@ class ContextIndexingService:
         # 允许注入 client 是为了单测时替换成 fake，生产路径按用途固定小模型配置。
         self._client = client or build_query_client(
             model=settings.QUERY_MODEL,
+            thinking="disabled",
         )
 
     async def build(

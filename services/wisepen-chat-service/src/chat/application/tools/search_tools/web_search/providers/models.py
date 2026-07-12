@@ -26,16 +26,6 @@ class SearchProviderName(StrEnum):
             return SearchCapability(web=True, academic=True)
         return SearchCapability(web=True, academic=False)
 
-    @property
-    def supports_custom_credential(self) -> bool:
-        """是否允许用户上传自己的 API key。"""
-        return self in {
-            SearchProviderName.EXA,
-            SearchProviderName.TAVILY,
-            SearchProviderName.ANYSEARCH,
-            SearchProviderName.BAIDU_QIANFAN,
-        }
-
 
 class SearchMode(StrEnum):
     WEB = "web"

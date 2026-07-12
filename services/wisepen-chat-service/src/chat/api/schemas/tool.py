@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -20,9 +20,9 @@ class ListUserToolsResponse(BaseModel):
 
 class UpdateUserToolConfigRequest(BaseModel):
     tool_name: str
-    enabled: Optional[bool] = None
-    config: Optional[dict[str, Any]] = None
-    secret_config: Optional[dict[str, str]] = None
+    enabled: bool | None = None
+    config: dict[str, Any] | None = None
+    secret_config: dict[str, str] | None = None
 
 
 class DeleteUserToolConfigRequest(BaseModel):

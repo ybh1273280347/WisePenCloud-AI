@@ -46,12 +46,12 @@ src/chat/application/tools/web_tools/
 
 - 不再新增独立 `academic_search` 工具。
 - 不再引入 OpenAlex 水合链路。
-- `platform_search` 只走平台默认/会员源解析，不读取 custom credential。
-- provider 工具只按自身 provider 读取用户 API key，不使用“当前激活搜索配置”做路由。
+- `platform_search` 固定使用平台默认源，不读取用户 ToolConfig。
+- provider 工具只声明自身 provider，并从统一 ToolConfig 接收自己的 API key。
 - 平台默认搜索源声明 `SearchCapability(web=True, academic=False)`；收到 academic mode 时宽容回退 web，不视为原生支持学术检索。
 - 所有搜索工具共享 `query/mode/max_results` schema，不按 academic 参数是否存在做额外能力查表。
 - 搜索候选直接暴露 URL，由 `web_fetch(urls=[...])` 消费。
-- 搜索工具默认隐藏，由 `ChatTurnCoordinator` 按 `WebSearchCredential.is_active` 动态解禁；新增 provider 工具时必须补充 active custom provider 到工具名的映射。
+- custom 搜索工具声明统一 `ToolConfigSpec`，至少包含 secret `api_key`；无需在 `ChatTurnCoordinator` 维护动态暴露映射。
 
 ## 百度千帆
 
