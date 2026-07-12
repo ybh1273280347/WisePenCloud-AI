@@ -4,7 +4,9 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends, Query
 
 from chat.api.schemas.tool import (
+    BuiltinToolResponse,
     DeleteUserToolConfigRequest,
+    InitBuiltinToolsResponse,
     ListUserToolsResponse,
     ToolResponse,
     UpdateUserToolConfigRequest,
@@ -31,7 +33,8 @@ def _build_tool_response(tool: Tool, entity: UserToolConfig | None) -> ToolRespo
             description=definition.llm_spec.description,
             requires_config=False,
             configured=True,
-            enabled=True,
+            enabled=entity.enabled if definition.policy.user_toggleable and entity is not None else True,
+            user_toggleable=definition.policy.user_toggleable,
         )
 
     configured = False
@@ -49,6 +52,7 @@ def _build_tool_response(tool: Tool, entity: UserToolConfig | None) -> ToolRespo
         requires_config=True,
         configured=configured,
         enabled=entity.enabled if entity is not None else True,
+        user_toggleable=False,
         missing_config_keys=missing_keys,
         config_schema=dict(config_spec.schema),
         secret_fingerprints={
@@ -57,6 +61,67 @@ def _build_tool_response(tool: Tool, entity: UserToolConfig | None) -> ToolRespo
             if key in config_spec.secret_keys
         },
     )
+
+
+def _is_user_toggleable_builtin(tool: Tool) -> bool:
+    definition = tool.definition
+    return definition.config_spec is None and definition.policy.user_toggleable
+
+
+async def _initialize_builtin_tools(
+        *,
+        user_id: str,
+        tool_registry: ToolRegistry,
+        tool_config_repo: ToolConfigRepository,
+) -> list[BuiltinToolResponse]:
+    configs = {
+        config.tool_name: config
+        for config in await tool_config_repo.list_tool_configs(user_id)
+    }
+    responses: list[BuiltinToolResponse] = []
+
+    for name, tool in sorted(tool_registry.tools().items(), key=lambda item: item[0]):
+        if not _is_user_toggleable_builtin(tool):
+            continue
+
+        config = configs.get(name)
+        if config is None:
+            config = await tool_config_repo.upsert_tool_config(
+                user_id=user_id,
+                tool_name=name,
+                enabled=True,
+                config={},
+                secret_config={},
+                secret_fingerprints={},
+                schema_version=1,
+            )
+        responses.append(BuiltinToolResponse(
+            name=tool.definition.llm_spec.name,
+            description=tool.definition.llm_spec.description,
+            enabled=config.enabled,
+        ))
+
+    return responses
+
+
+@router.post(
+    "/initBuiltinTools",
+    response_model=R[InitBuiltinToolsResponse],
+    summary="初始化可启停内置 Tool",
+)
+@inject
+async def init_builtin_tools(
+    user_id: str = Depends(require_login),
+    tool_registry: ToolRegistry = Depends(Provide[Container.tool_registry]),
+    tool_config_repo: ToolConfigRepository = Depends(Provide[Container.tool_config_repo]),
+):
+    tools = await _initialize_builtin_tools(
+        user_id=user_id,
+        tool_registry=tool_registry,
+        tool_config_repo=tool_config_repo,
+    )
+    return R.success(data=InitBuiltinToolsResponse(tools=tools))
+
 
 @router.get(
     "/listUserTools",
@@ -84,6 +149,7 @@ async def list_user_tools(
         tools=[
             _build_tool_response(tool, configs.get(name))
             for name, tool in sorted(tool_registry.tools().items(), key=lambda item: item[0])
+            if tool.definition.policy.expose_to_ui
         ],
     ))
 
@@ -142,7 +208,27 @@ async def update_user_tool_config(
 
     config_spec = tool.definition.config_spec
     if config_spec is None:
-        raise ServiceException(ChatErrorCode.TOOL_CONFIG_INVALID, "tool does not support user config")
+        if not _is_user_toggleable_builtin(tool):
+            raise ServiceException(ChatErrorCode.TOOL_CONFIG_INVALID, "tool does not support user config")
+        if req.enabled is None:
+            raise ServiceException(ChatErrorCode.TOOL_CONFIG_INVALID, "enabled is required")
+        if req.config not in (None, {}) or req.secret_config not in (None, {}):
+            raise ServiceException(
+                ChatErrorCode.TOOL_CONFIG_INVALID,
+                "toggleable builtin tool only accepts enabled",
+            )
+
+        entity = await tool_config_repo.upsert_tool_config(
+            user_id=user_id,
+            tool_name=req.tool_name,
+            enabled=req.enabled,
+            config={},
+            secret_config={},
+            secret_fingerprints={},
+            schema_version=1,
+        )
+        return R.success(data=_build_tool_response(tool, entity))
+
     property_names = set(config_spec.schema.get("properties") or {})
     secret_names = set(config_spec.secret_keys)
 

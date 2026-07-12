@@ -135,6 +135,8 @@ class ToolConfigSpec:
 class ToolPolicy:
     """工具策略"""
     expose_by_default: bool = False  # 是否默认暴露给模型
+    expose_to_ui: bool = False  # 是否在用户工具控制台展示
+    user_toggleable: bool = False  # 是否允许用户在工具控制台启停
 
     timeout_seconds: float | None = None  # 超时时间
     timeout_strategy: ToolTimeoutStrategy = ToolTimeoutStrategy.CANCEL_TASK  # 超时后策略

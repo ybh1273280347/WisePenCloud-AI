@@ -148,6 +148,8 @@ class DocumentParseTool:
             ),
             policy=ToolPolicy(
                 expose_by_default=True,
+                expose_to_ui=True,
+                user_toggleable=True,
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 required_context_keys=("user_id", "session_id"),

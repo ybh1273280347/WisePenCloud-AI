@@ -90,6 +90,8 @@ class BaseSearchTool:
             ),
             policy=ToolPolicy(
                 expose_by_default=True,
+                expose_to_ui=True,
+                user_toggleable=provider is None,
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 timeout_seconds=WEB_SEARCH_TOOL_TIMEOUT_SECONDS,

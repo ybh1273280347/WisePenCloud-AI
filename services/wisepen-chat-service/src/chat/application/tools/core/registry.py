@@ -83,7 +83,7 @@ class ToolRegistry:
         deny_tool_name_set = deny_tool_name_set or set()
 
         tools: dict[str, Tool] = dict(self._tools)
-        configured_tool_names, tool_configs = await self._resolve_tool_configs(
+        configured_tool_names, tool_configs, disabled_tool_names = await self._resolve_tool_configs(
             user_id=user_id,
             tools=tools,
         )
@@ -91,6 +91,9 @@ class ToolRegistry:
         filtered_tools: dict[str, Tool] = {}
         for name, tool in tools.items():
             policy = tool.definition.policy
+
+            if name in disabled_tool_names:
+                continue
 
             if tool.definition.config_spec is not None and name not in configured_tool_names:
                 continue
@@ -126,20 +129,27 @@ class ToolRegistry:
             *,
             user_id: str,
             tools: dict[str, Tool],
-    ) -> tuple[set[str], dict[str, dict[str, Any]]]:
+    ) -> tuple[set[str], dict[str, dict[str, Any]], set[str]]:
+        # 获取需要配置，且已经配置好的 tool
         entities = {
             entity.tool_name: entity
             for entity in await self._tool_config_repo.list_tool_configs(user_id)
         }
         configured_tool_names: set[str] = set()
         tool_configs: dict[str, dict[str, Any]] = {}
+        disabled_tool_names: set[str] = set()
 
         for name, tool in tools.items():
             config_spec = tool.definition.config_spec
+            # 不需要配置的 tool
             if config_spec is None:
+                entity = entities.get(name)
+                if tool.definition.policy.user_toggleable and entity is not None and not entity.enabled:
+                    disabled_tool_names.add(name)
                 continue
 
             entity = entities.get(name)
+            # 需要配置，但是数据库中不存在配置或未启用
             if entity is None or not entity.enabled:
                 continue
 
@@ -154,4 +164,4 @@ class ToolRegistry:
             configured_tool_names.add(name)
             tool_configs[name] = merged_config
 
-        return configured_tool_names, tool_configs
+        return configured_tool_names, tool_configs, disabled_tool_names

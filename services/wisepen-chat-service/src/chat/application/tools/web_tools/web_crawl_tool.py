@@ -121,6 +121,8 @@ class WebCrawlTool:
             ),
             policy=ToolPolicy(
                 expose_by_default=True,
+                expose_to_ui=True,
+                user_toggleable=True,
                 persist_output=True,
                 risk_level=ToolRiskLevel.MEDIUM,
                 timeout_seconds=WEB_CRAWL_TOOL_TIMEOUT_SECONDS,

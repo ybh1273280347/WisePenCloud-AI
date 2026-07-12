@@ -50,13 +50,6 @@ from chat.application.tools.document_tools.ocr import (
     PaddleCloudClient,
     PaddleCloudConfig,
 )
-from chat.application.tools.math_tools import (
-    CalculusSolveTool,
-    EquationSolveTool,
-    ExpressionSolveTool,
-    LinearAlgebraSolveTool,
-    StatsSolveTool,
-)
 from chat.application.tools.rag_tools import RagKnowledgeSearchTool
 from chat.application.tools.session_tools import (
     GetHistoricalChatMessagesTool,
@@ -752,13 +745,6 @@ class Container(containers.DeclarativeContainer):
     # Tool 本身：最终注册到 ToolRegistry 的工具实例
     # ==================================================================
 
-    # --- Math Tools ---
-    calculus_solver_tool = providers.Singleton(CalculusSolveTool)
-    linear_algebra_solver_tool = providers.Singleton(LinearAlgebraSolveTool)
-    equation_solver_tool = providers.Singleton(EquationSolveTool)
-    stats_solver_tool = providers.Singleton(StatsSolveTool)
-    expression_solver_tool = providers.Singleton(ExpressionSolveTool)
-
     # --- Document Tools ---
     document_parse_tool = providers.Singleton(
         DocumentParseTool,
@@ -872,11 +858,6 @@ class Container(containers.DeclarativeContainer):
     tool_providers = providers.List(
         document_parse_tool,
         image_ocr_tool,
-        calculus_solver_tool,
-        linear_algebra_solver_tool,
-        equation_solver_tool,
-        stats_solver_tool,
-        expression_solver_tool,
         tool_content_rerank_read_tool,
         tool_content_regex_read_tool,
         tool_content_sequential_read_tool,

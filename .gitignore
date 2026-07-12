@@ -51,6 +51,7 @@ services/wisepen-chat-service/docs/add_tool_guide.md
 services/wisepen-chat-service/docs/tool_architecture_report.md
 services/wisepen-chat-service/test/
 services/wisepen-chat-service/src/chat/application/tools/common/*.html
+services/wisepen-chat-service/src/chat/application/tools/deprecated/
 services/wisepen-chat-service/src/chat/application/tools/common/**/*_design.html
 
 # WisePen chat service docs: only stable team/tool docs are committed.

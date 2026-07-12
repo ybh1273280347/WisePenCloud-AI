@@ -9,6 +9,7 @@ class ToolResponse(BaseModel):
     requires_config: bool
     configured: bool
     enabled: bool
+    user_toggleable: bool = False
     missing_config_keys: list[str] = Field(default_factory=list)
     config_schema: dict[str, Any] = Field(default_factory=dict)
     secret_fingerprints: dict[str, str] = Field(default_factory=dict)
@@ -27,3 +28,14 @@ class UpdateUserToolConfigRequest(BaseModel):
 
 class DeleteUserToolConfigRequest(BaseModel):
     tool_name: str
+
+
+class BuiltinToolResponse(BaseModel):
+    name: str
+    description: str
+    enabled: bool
+
+
+class InitBuiltinToolsResponse(BaseModel):
+    tools: list[BuiltinToolResponse] = Field(default_factory=list)
+
