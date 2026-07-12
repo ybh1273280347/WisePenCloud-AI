@@ -88,7 +88,12 @@ class GetHistoricalChatMessagesTool:
     def definition(self) -> ToolDefinition:
         return self._definition
 
-    async def execute(self, context: dict[str, Any], **kwargs: Any) -> str:
+    async def execute(
+        self,
+        context: dict[str, Any],
+        config: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> str:
         # session_id 从系统注入的 context 读取
         session_id = str(context.get("session_id") or "").strip()
         if not session_id:

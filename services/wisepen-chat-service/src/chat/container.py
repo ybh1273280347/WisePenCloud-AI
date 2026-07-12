@@ -124,9 +124,7 @@ from chat.core.persistence.mongo.rag_acl_projection_repository import (
 )
 from chat.core.persistence.mongo.rag_corpus_repository import MongoRagCorpusRepository
 from chat.core.persistence.mongo.session_repository import MongoSessionRepository
-from chat.core.persistence.mongo.web_search_credential_repository import (
-    MongoWebSearchCredentialRepository,
-)
+from chat.core.persistence.mongo.tool_config_repository import MongoToolConfigRepository
 from chat.core.persistence.neo4j import RagNeo4jRepository
 from chat.core.persistence.qdrant import RagQdrantRepository
 from chat.core.persistence.redis.hot_context import RedisHotContext
@@ -152,6 +150,7 @@ from chat.core.providers import (
     QwenAdapter,
 )
 from chat.core.security import SecretCipher
+from chat.domain.repositories import ToolConfigRepository
 from chat.service_client import FileStorageClient, AIAssetClient, ResourceClient
 from common.cloud.service_discovery import ServiceDiscovery
 from common.http.rpc_client import RpcClient
@@ -173,8 +172,11 @@ async def _provide_nacos_naming() -> NacosNamingService:
     return await nacos_client_manager.get_naming_client()
 
 
-def _build_registry(tool_providers: List[providers.Provider]) -> ToolRegistry:
-    registry = ToolRegistry()
+def _build_registry(
+        tool_providers: List[providers.Provider],
+        tool_config_repo: ToolConfigRepository,
+) -> ToolRegistry:
+    registry = ToolRegistry(tool_config_repo=tool_config_repo)
     for provider in tool_providers:
         registry.register(provider)
     return registry
@@ -383,8 +385,8 @@ class Container(containers.DeclarativeContainer):
         SecretCipher,
         encryption_key=settings.SECRET_ENCRYPTION_KEY,
     )
-    web_search_credential_repo = providers.Singleton(
-        MongoWebSearchCredentialRepository,
+    tool_config_repo = providers.Singleton(
+        MongoToolConfigRepository,
         secret_cipher=secret_cipher,
     )
     redis_client = providers.Singleton(_build_redis_client)
@@ -691,7 +693,6 @@ class Container(containers.DeclarativeContainer):
     )
     web_search_runtime_context_resolver = providers.Singleton(
         WebSearchRuntimeContextResolver,
-        credential_repository=web_search_credential_repo,
         platform_member_provider=settings.WEB_SEARCH_PLATFORM_MEMBER_PROVIDER,
         platform_member_api_key=settings.WEB_SEARCH_PLATFORM_MEMBER_API_KEY,
     )
@@ -910,6 +911,7 @@ class Container(containers.DeclarativeContainer):
     tool_registry = providers.Singleton(
         _build_registry,
         tool_providers=tool_providers,
+        tool_config_repo=tool_config_repo,
     )
 
     # Application 层组件
@@ -926,7 +928,6 @@ class Container(containers.DeclarativeContainer):
         hot_context_repo=hot_context_repo,
         tool_registry=tool_registry,
         tool_dispatcher=tool_dispatcher,
-        web_search_credential_repo=web_search_credential_repo,
         kafka_producer=kafka_producer,
         skill_matcher=skill_matcher,
         agent_resolver=agent_resolver,

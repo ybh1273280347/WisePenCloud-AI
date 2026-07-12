@@ -4,6 +4,7 @@ from typing import Any
 
 from chat.application.tools.core import (
     ToolDefinition,
+    ToolConfigSpec,
     ToolExecutionError,
     ToolLLMSpec,
     ToolParametersSchema,
@@ -95,28 +96,33 @@ class BaseSearchTool:
                 parameters_schema=ToolParametersSchema(PARAMETERS_SCHEMA),
             ),
             policy=ToolPolicy(
-                expose_by_default=False,
+                expose_by_default=True,
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 timeout_seconds=WEB_SEARCH_TOOL_TIMEOUT_SECONDS,
                 cache_chunked=False,
-                required_context_keys=("user_id",),
             ),
+            config_spec=_config_spec(provider),
         )
 
     @property
     def definition(self) -> ToolDefinition:
         return self._definition
 
-    async def execute(self, context: dict[str, Any], **kwargs: Any) -> ToolReturn:
+    async def execute(
+            self,
+            context: dict[str, Any],
+            config: dict[str, Any] | None = None,
+            **kwargs: Any,
+    ) -> ToolReturn:
         query = kwargs["query"].strip()
         mode = SearchMode(str(kwargs.get("mode") or SearchMode.WEB.value))
         max_results = max(1, min(kwargs.get("max_results") or DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS))
 
         try:
             runtime_config = await self._runtime_context_resolver.resolve(
-                user_id=str(context["user_id"]),
                 provider=self._provider,
+                config=config,
             )
             source = self._source_factory.build(runtime_config)
             pipeline_result = await self._search_pipeline.search(
@@ -180,4 +186,24 @@ def _tool_description(provider: SearchProviderName | None) -> str:
         "EXECUTION RULES:\n"
         "  - Execute exactly one explicit query per tool call.\n"
         "  - If results need evidence, fetch selected candidate URLs with web_fetch.\n"
+    )
+
+
+def _config_spec(provider: SearchProviderName | None) -> ToolConfigSpec | None:
+    if provider is None:
+        return None
+    return ToolConfigSpec(
+        schema={
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "type": "string",
+                    "title": "API Key",
+                    "description": f"API key for {provider.value} search.",
+                },
+            },
+            "additionalProperties": False,
+        },
+        required_keys=("api_key",),
+        secret_keys=("api_key",),
     )

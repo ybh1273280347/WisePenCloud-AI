@@ -36,11 +36,10 @@ from chat.api.endpoints import chat as chat_endpoints
 from chat.api.endpoints import session as session_endpoints
 from chat.api.endpoints import memory as memory_endpoints
 from chat.api.endpoints import model as model_endpoints
-from chat.api.endpoints import web_search as web_search_endpoints
-from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping
+from chat.api.endpoints import tool as tool_endpoints
+from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping, UserToolConfig
 from chat.domain.entities.rag_acl import RagAclProjectionDocument
 from chat.domain.entities.rag_corpus import RagChildChunkDocument, RagParentChunkDocument
-from chat.domain.entities.web_search_credential import WebSearchCredential
 
 # 避免 HTTP 代理拦截内部中间件请求。
 no_proxy = ",".join(filter(None, [
@@ -67,7 +66,7 @@ async def lifespan(app: FastAPI):
             Provider,
             Model,
             ModelProviderMapping,
-            WebSearchCredential,
+            UserToolConfig,
             RagAclProjectionDocument,
             RagParentChunkDocument,
             RagChildChunkDocument,
@@ -192,7 +191,7 @@ container.wire(
         session_endpoints,
         memory_endpoints,
         model_endpoints,
-        web_search_endpoints,
+        tool_endpoints,
     ]
 )  # 注入依赖到路由模块
 app = FastAPI(title=bootstrap_settings.APP_NAME, lifespan=lifespan, docs_url="/docs")

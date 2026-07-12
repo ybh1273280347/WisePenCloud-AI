@@ -1,5 +1,6 @@
 from chat.application.tools.core.definition import (
     Tool,
+    ToolConfigSpec,
     ToolDefinition,
     ToolLLMSpec,
     ToolOutput,
@@ -45,6 +46,7 @@ from chat.application.tools.core.tool_return import ToolReturn
 __all__ = [
     # definition
     "Tool",
+    "ToolConfigSpec",
     "ToolDefinition",
     "ToolLLMSpec",
     "ToolOutput",

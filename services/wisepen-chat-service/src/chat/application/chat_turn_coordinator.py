@@ -13,10 +13,6 @@ from chat.application.query_loop_runtime import QueryLoopRuntime
 from chat.application.token_counter import TokenCounter
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
-from chat.application.tools.search_tools.exposure import (
-    WebSearchCredentialExposureRepository,
-    active_search_tool_names,
-)
 from chat.application.tools.skill_tools.utils.skill_matcher import SkillMatcher
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
@@ -58,7 +54,6 @@ class ChatTurnCoordinator:
             hot_context_repo: HotContextRepository,
             tool_registry: ToolRegistry,
             tool_dispatcher: ToolDispatcher,
-            web_search_credential_repo: WebSearchCredentialExposureRepository,
             kafka_producer: KafkaProducerClient,
             skill_matcher: SkillMatcher,
             agent_resolver: AgentResolver | None = None,
@@ -70,7 +65,6 @@ class ChatTurnCoordinator:
             message_repo=message_repo, session_repo=session_repo, hot_context_repo=hot_context_repo
         )
         self._tool_registry = tool_registry
-        self._web_search_credential_repo = web_search_credential_repo
         self._query_loop_runtime = QueryLoopRuntime(
             llm_provider_resolver=llm_provider_resolver,
             token_counter=token_counter,
@@ -206,23 +200,18 @@ class ChatTurnCoordinator:
             # 若不启用Tool，则allow_tool_name_set为空
             allow_tool_name_set: Set[str] = set()
         else:
-            expose_tool_name_set.update(
-                await active_search_tool_names(
-                    user_id=user_id,
-                    credential_repository=self._web_search_credential_repo,
-                )
-            )
             # 若用户指定了 user_defined_allow_tool_names，则覆盖 agent 预设的 allow_tool_names
             allow_tool_name_set = user_defined_allow_tool_names or tool_and_skill_policy.allow_tool_names or None
 
         # 若用户指定了 user_defined_deny_tool_names，则覆盖 agent 预设的 deny_tool_names
         deny_tool_name_set = user_defined_deny_tool_names or tool_and_skill_policy.deny_tool_names or None
 
-        tool_scope = self._tool_registry.derive(
+        tool_scope = await self._tool_registry.derive(
             tool_context=tool_context,
             expose_tool_name_set=expose_tool_name_set,
             allow_tool_name_set=allow_tool_name_set,
             deny_tool_name_set=deny_tool_name_set,
+            user_id=user_id
         )
 
         # 对话中的全部附件

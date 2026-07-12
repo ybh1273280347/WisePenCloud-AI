@@ -130,5 +130,10 @@ class Tool(Protocol):
     def definition(self) -> ToolDefinition:
         ...
 
-    async def execute(self, context: Dict[str, Any], **kwargs) -> ToolOutput:
+    async def execute(
+        self,
+        context: Dict[str, Any],
+        config: Dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ToolOutput:
         ...
