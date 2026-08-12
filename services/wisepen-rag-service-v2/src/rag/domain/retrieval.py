@@ -1,6 +1,6 @@
 """检索块及其权威证据引用。"""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from rag.utils.chunkers import SourceSpan
 
@@ -18,6 +18,13 @@ class RetrievalChunk:
     source_spans: list[SourceSpan] = field(default_factory=list)
     page_labels: list[str] = field(default_factory=list)
     anchor_labels: list[str] = field(default_factory=list)
+
+    def with_contextual_text(self, contextual_text: str) -> "RetrievalChunk":
+        """返回只增强索引文本的副本，保留原文和证据坐标。"""
+        return replace(
+            self,
+            index_text=f"Context: {contextual_text}\n\n{self.index_text}",
+        )
 
 
 @dataclass(slots=True)

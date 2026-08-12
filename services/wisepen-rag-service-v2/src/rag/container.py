@@ -8,6 +8,7 @@ from dependency_injector import containers, providers
 from pymongo import AsyncMongoClient
 
 from rag.application.rag.acl import PermissionAuthorizer
+from rag.application.rag.index import ContextualTextIndexer
 from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
 from rag.core.persistence.mongo import (
     MongoAppliedContentReader,
@@ -65,6 +66,12 @@ class Container(containers.DeclarativeContainer):
     )
     resource_acl_store = providers.Singleton(MongoResourceAclStore)
     generation_cache_store = providers.Singleton(MongoGenerationCacheStore)
+    contextual_text_client = providers.Dependency()
+    contextual_text_indexer = providers.Singleton(
+        ContextualTextIndexer,
+        client=contextual_text_client,
+        cache=generation_cache_store,
+    )
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,
         reader=resource_acl_store,

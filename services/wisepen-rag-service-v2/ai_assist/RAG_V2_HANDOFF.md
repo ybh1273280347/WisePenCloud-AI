@@ -37,7 +37,8 @@ base:     origin/main @ e1af497f7
 | CP09 | `b16b7d630` | ACL 领域规则、READ/ACL 面向对象用例和 dependency-injector 容器装配。 |
 | CP10 | `06d46fb3d` | 上游权威 ACL reader、本地 Beanie ACL store、revision 幂等 upsert 和资源删除。 |
 | CP10.1 | `fb931795e` | 将 ACL 的 Mongo 序列化/反序列化统一收敛到现有 `mappers/serializer.py` 与 `mappers/deserializer.py`。 |
-| 当前 CP11 | 待提交 | 合并为单一 generation cache collection，按资源和 cache kind 批量读写及删除。 |
+| CP11 | `df411431c` | 合并为单一 generation cache collection，按资源和 cache kind 批量读写及删除。 |
+| 当前 CP12 | 待提交 | Contextual indexing 生成、严格响应解析、缓存复用和只增强 `index_text`。 |
 
 ## 3. 当前架构事实
 
@@ -144,15 +145,15 @@ uv run python -m compileall -q src tests           -> passed
 最近一次工作树验证：
 
 ```text
-uv run pytest -q                                  -> 53 passed
+uv run pytest -q                                  -> 63 passed
 uv run python -m compileall -q src tests           -> passed
 ```
 
-CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器装配测试；CP11 新增 generation cache 的批量命中、类别/资源隔离、覆盖和删除测试；当前仍没有真实 Mongo/Beanie 集成测试。
+CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器装配测试；CP11 新增 generation cache 的批量命中、类别/资源隔离、覆盖和删除测试；CP12 新增 contextual text 的 cache hit/miss、严格响应、跳过和原文不变测试；当前仍没有真实 Mongo/Beanie 集成测试。
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`。当前 CP11 正在完成 generation cache；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
+CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`。当前 CP12 正在完成 contextual indexing；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
 
 CP08.1 的稳定边界：
 
@@ -188,7 +189,7 @@ tests/rag/test_index_contracts.py
 
 ## 7. 下一步任务
 
-当前 checkpoint 是 CP11：模型生成缓存。
+当前 checkpoint 是 CP12：Contextual indexing。
 
 CP11 的稳定边界：
 
@@ -196,6 +197,15 @@ CP11 的稳定边界：
 - `GenerationCacheStore` 只按 resource、cache kind 和 opaque cache key 做批量 get/set/delete。
 - cache key 的 prompt、schema、model、input 配方由对应的生成 application 自己拥有，不下沉到通用缓存仓储。
 - generation cache 是 RAG 派生数据；资源删除必须按 resource ID 清理全部 cache kind。
+- `container.py` 只声明 `contextual_text_client` dependency；配置中心和 LLM client 的实际创建留给服务启动组合层，避免导入容器时触发 Nacos。
+
+CP12 的稳定边界：
+
+- `ContextualTextIndexer` 位于 `application/rag/index`，只处理结构化 revision 的 RetrievalChunk。
+- `flat_text` 和 `empty` revision 直接跳过，不调用模型、不写 contextual cache。
+- 模型输入由 section path、Section preview、所属 ReadingBlock 原文和目标 chunk 原文组成；响应必须是带非空 `contextual_text` 字符串的 JSON 对象。
+- 成功结果只通过 `RetrievalChunk.with_contextual_text()` 增强 `index_text`；raw text、source spans、page/anchor labels 和 SourceRef 身份不变。
+- 生成异常直接抛出；不写入空值、错误字符串或 reason 列表。
 
 CP09 已完成：
 

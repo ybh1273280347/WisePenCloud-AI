@@ -70,14 +70,14 @@
 
 它替代 `KnowledgeGraphProjectionRepository`。写入的是知识图谱，不再创造 `KnowledgeGraphProjection` 业务实体。
 
-#### `ModelGenerationCache`
+#### `GenerationCacheStore`
 
 缓存 index 内两类昂贵且确定性的模型结果：
 
 - RetrievalChunk contextual text。
 - GraphRAG 候选抽取结果。
 
-使用 `resource_id + cache_kind + cache_key` 读写字符串 payload。`cache_kind` 是必要的存储判别枚举，不是对外业务字段。cache key 必须包含 prompt/schema/model/profile 和完整输入指纹。
+使用 `resource_id + cache_kind + cache_key` 读写字符串 payload。`cache_kind` 是必要的存储判别枚举，不是对外业务字段。cache key 必须包含 prompt/schema/model/profile 和完整输入指纹，但具体配方由产生该 key 的 application 能力拥有，`GenerationCacheStore` 不解释 key。
 
 ### 2.2 locate
 
@@ -191,8 +191,8 @@ structure、page、section 是不同方法和返回契约，但共用同一个�
 | `KnowledgeNavigationStateRepository` | 保留职责并改为 `NavigationStateStore` | state 有独立 TTL、原子集合扩展和跨请求生命周期，确实需要仓储。 |
 | `RagAclProjectionRepository` | 拆为 `AuthoritativeAclReader` 与 `ResourceAclStore` | v1 一个类同时访问上游库和本地库，混淆权威来源与本地读取。 |
 | `RagAclProjectionTarget` | 删除 | 通用 target 隐藏 Qdrant/Neo4j 两个明确副作用和失败位置。 |
-| `RagContextIndexingRepository` | 与 graph extraction cache 合并为 `ModelGenerationCache` | 两者都是 resource-scoped、content-addressed 的模型生成缓存，生命周期一致。 |
-| `KnowledgeGraphDerivedRepository` | 与 contextual cache 合并 | `derived` 过于抽象，且实际只保存 GraphRAG 模型输出缓存。 |
+| `RagContextIndexingRepository` | 与 graph extraction cache 合并为 `GenerationCacheStore` | 两者都是 resource-scoped、content-addressed 的模型生成缓存，生命周期一致。 |
+| `KnowledgeGraphDerivedRepository` | 与 contextual cache 合并为 `GenerationCacheStore` | `derived` 过于抽象，且实际只保存 GraphRAG 模型输出缓存。 |
 | `RagResourceDeletionTarget` | 删除 | 通过 duck typing 遍历 target 会隐藏删除顺序和遗漏；index 删除用例应显式调用每个 store。 |
 
 ## 4. Mongo 数据设计
