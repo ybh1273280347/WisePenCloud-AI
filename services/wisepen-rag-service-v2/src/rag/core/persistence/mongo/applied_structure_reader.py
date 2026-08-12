@@ -1,7 +1,7 @@
 """已发布文档结构读取 port 的 Beanie adapter。"""
 
+from rag.core.persistence.mongo.mappers.deserializer import to_section
 from rag.domain.entities import SectionEntity
-from rag.domain.mappers import to_section
 from rag.domain.read_content import DocumentStructureResult
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.applied_structure_reader import AppliedStructureReader

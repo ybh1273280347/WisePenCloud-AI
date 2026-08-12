@@ -2,9 +2,9 @@
 
 from collections.abc import Sequence
 
+from rag.core.persistence.mongo.mappers.deserializer import to_source_part
 from rag.domain.content_revision import SourcePart
 from rag.domain.entities import SourcePartEntity
-from rag.domain.mappers import to_source_part
 from rag.domain.repositories.source_part_reader import SourcePartReader
 from rag.utils.chunkers import SourceSpan
 

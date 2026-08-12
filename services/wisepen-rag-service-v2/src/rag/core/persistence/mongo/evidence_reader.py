@@ -3,6 +3,11 @@
 from collections.abc import Sequence
 from hashlib import sha256
 
+from rag.core.persistence.mongo.mappers.deserializer import (
+    to_reading_block,
+    to_section,
+    to_source_ref,
+)
 from rag.core.persistence.mongo.source_part_reader import MongoSourcePartReader
 from rag.domain.entities import ReadingBlockEntity, SectionEntity, SourceRefEntity
 from rag.domain.evidence import (
@@ -10,7 +15,6 @@ from rag.domain.evidence import (
     EvidenceRecord,
     EvidenceRevisionError,
 )
-from rag.domain.mappers import to_reading_block, to_section, to_source_ref
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.evidence_reader import EvidenceReader
 from rag.domain.services.text_assembler import assemble_source_text

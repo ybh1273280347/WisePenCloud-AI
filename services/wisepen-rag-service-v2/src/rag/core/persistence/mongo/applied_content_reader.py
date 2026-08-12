@@ -4,10 +4,10 @@ from collections.abc import Sequence
 
 from pymongo import ASCENDING
 
+from rag.core.persistence.mongo.mappers.deserializer import to_reading_block, to_section
 from rag.core.persistence.mongo.source_part_reader import MongoSourcePartReader
 from rag.domain.document_structure import Section
 from rag.domain.entities import ReadingBlockEntity, SectionEntity
-from rag.domain.mappers import to_reading_block, to_section
 from rag.domain.read_content import (
     ContentWindow,
     SectionContent,

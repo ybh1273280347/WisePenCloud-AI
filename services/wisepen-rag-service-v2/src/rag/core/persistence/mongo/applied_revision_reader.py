@@ -1,7 +1,7 @@
 """当前 applied revision 查询的 Beanie adapter。"""
 
+from rag.core.persistence.mongo.mappers.deserializer import to_content_revision
 from rag.domain.entities import ContentRevisionEntity, ResourceIndexStateEntity
-from rag.domain.mappers import to_content_revision
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 
 

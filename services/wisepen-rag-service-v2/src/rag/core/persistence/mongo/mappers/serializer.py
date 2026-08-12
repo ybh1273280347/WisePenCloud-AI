@@ -1,9 +1,7 @@
-"""领域事实与 Mongo 字段之间的纯结构映射。"""
-
-from collections.abc import Sequence
+"""领域事实到 Mongo 文档字段的序列化。"""
 
 from rag.domain.content_revision import ContentRevision, SourcePart
-from rag.domain.document_structure import PageRange, Section, StructureMode
+from rag.domain.document_structure import Section
 from rag.domain.reading import ReadingBlock
 from rag.domain.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
@@ -41,7 +39,10 @@ def source_part_document(part: SourcePart) -> dict[str, object]:
     }
 
 
-def section_document(revision: ContentRevision, section: Section) -> dict[str, object]:
+def section_document(
+    revision: ContentRevision,
+    section: Section,
+) -> dict[str, object]:
     return {
         "resource_id": revision.resource_id,
         "content_revision": revision.content_revision,
@@ -97,88 +98,3 @@ def source_ref_document(
 
 def span_document(span: SourceSpan) -> dict[str, int]:
     return {"start_offset": span.start_offset, "end_offset": span.end_offset}
-
-
-def to_content_revision(record: object) -> ContentRevision:
-    return ContentRevision(
-        resource_id=str(record.resource_id),
-        content_revision=str(record.content_revision),
-        document_version=int(record.document_version),
-        content_hash=str(record.content_hash),
-        index_schema_version=str(record.index_schema_version),
-        structure_mode=StructureMode(str(record.structure_mode)),
-        total_length=int(record.total_length),
-        pages=[
-            PageRange(
-                page_index=int(page.page_index),
-                page_label=str(page.page_label),
-                source_span=SourceSpan(
-                    int(page.start_offset),
-                    int(page.end_offset),
-                ),
-            )
-            for page in record.pages
-        ],
-    )
-
-
-def to_source_part(record: object) -> SourcePart:
-    return SourcePart(
-        resource_id=str(record.resource_id),
-        content_revision=str(record.content_revision),
-        part_index=int(record.part_index),
-        source_span=SourceSpan(int(record.start_offset), int(record.end_offset)),
-        text=str(record.text),
-    )
-
-
-def to_section(record: object) -> Section:
-    return Section(
-        section_id=str(record.section_id),
-        title=str(record.title),
-        level=int(record.level),
-        parent_section_id=(
-            str(record.parent_section_id)
-            if record.parent_section_id is not None
-            else None
-        ),
-        ordinal=int(record.ordinal),
-        section_path=[str(value) for value in record.section_path],
-        own_span=SourceSpan(int(record.own_start), int(record.own_end)),
-        subtree_span=SourceSpan(int(record.own_start), int(record.subtree_end)),
-        preview=str(record.preview),
-    )
-
-
-def to_reading_block(record: object) -> ReadingBlock:
-    return ReadingBlock(
-        block_id=str(record.block_id),
-        section_id=str(record.section_id),
-        ordinal=int(record.ordinal),
-        raw_text=str(record.raw_text),
-        source_spans=to_source_spans(record.source_spans),
-        page_labels=[str(value) for value in record.page_labels],
-        anchor_labels=[str(value) for value in record.anchor_labels],
-    )
-
-
-def to_source_ref(record: object) -> SourceRef:
-    return SourceRef(
-        ref_id=str(record.ref_id),
-        resource_id=str(record.resource_id),
-        content_revision=str(record.content_revision),
-        chunk_id=str(record.chunk_id),
-        reading_block_id=str(record.reading_block_id),
-        section_id=str(record.section_id),
-        section_path=[str(value) for value in record.section_path],
-        source_spans=to_source_spans(record.source_spans),
-        page_labels=[str(value) for value in record.page_labels],
-        anchor_labels=[str(value) for value in record.anchor_labels],
-    )
-
-
-def to_source_spans(records: Sequence[object]) -> list[SourceSpan]:
-    return [
-        SourceSpan(int(record.start_offset), int(record.end_offset))
-        for record in records
-    ]

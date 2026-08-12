@@ -1,8 +1,12 @@
 """图构建输入读取 port 的 Beanie adapter。"""
 
+from rag.core.persistence.mongo.mappers.deserializer import (
+    to_reading_block,
+    to_section,
+    to_source_ref,
+)
 from rag.core.persistence.mongo.source_part_reader import MongoSourcePartReader
 from rag.domain.entities import ReadingBlockEntity, SectionEntity, SourceRefEntity
-from rag.domain.mappers import to_reading_block, to_section, to_source_ref
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.graph_build_source_reader import (
     GraphBuildSource,
