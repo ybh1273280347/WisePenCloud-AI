@@ -10,13 +10,13 @@
 branch:   codex/rag-v2
 worktree: D:\WisePenCloud-AI\WisePenCloud-AI-rag-v2
 base:     origin/main @ e1af497f7e0666317b258c279befc6a8ec46efdf
-scope:    wisepen-rag-service-v2/**
+scope:    services/wisepen-rag-service-v2/**
 ```
 
 规则：
 
 - 不切换、不提交、不清理持久 `formal_pr` 工作区；它只作为 v1 行为排查来源。
-- v2 分支只提交 `wisepen-rag-service-v2/**`。旧 `services/wisepen-rag-service/**` 仅作为只读行为来源。
+- v2 分支只提交 `services/wisepen-rag-service-v2/**`，依赖 checkpoint 允许同步根 `uv.lock`。旧 `services/wisepen-rag-service/**` 仅作为只读行为来源。
 - Chat/Common/MCP 调整不进入该分支；真正切流需要调用方改动时另开对应边界提交。
 - 每个 checkpoint 保留独立 commit，不 squash、不 amend 已交付 checkpoint。
 - 分支始终以创建时记录的 `origin/main` 为评审基线，不继承 `formal_pr` 的混合历史。
@@ -29,7 +29,7 @@ git diff --cached --stat
 git diff --check -- wisepen-rag-service-v2
 ```
 
-暂存区一旦出现 `wisepen-rag-service-v2/**` 之外的路径，立即停止提交并排查。
+暂存区一旦出现 `services/wisepen-rag-service-v2/**` 和已声明的根 `uv.lock` 之外的路径，立即停止提交并排查。
 
 ## 2. Checkpoint 完成标准
 
@@ -66,20 +66,21 @@ rag-v2 cpNN: <单一职责描述>
 
 Commit：`rag-v2 cp00: establish architecture and migration baseline`
 
-### CP01：项目与测试骨架
+### CP01：稳定 Utils、配置与包骨架
 
 范围：
 
-- v2 自己的 Python project metadata。
-- 最小 `src`/`tests` 目录。
-- 不加载外部配置和数据库的 package import 测试。
-- 最小 lint、pytest、compile 命令。
+- 完整迁移稳定 `utils`，但剔除 RAG v1 的 `ranking/presets.py`。
+- 补齐 utils 和 core/config 实际导入的 project dependencies。
+- 迁移稳定 `core/config`，并为服务名、Kafka group 和存储 namespace 使用 v2 默认值。
+- 建立空的 API、六个 application/rag 能力、domain 和 persistence 包占位。
+- 为纯 utils 增加最小 smoke tests。
 
-验收：空服务包可导入，空测试集/骨架测试可独立运行。
+验收：依赖锁可解析，utils smoke tests、ruff 和 compileall 通过，`presets.py` 不存在。
 
-排除：FastAPI app、Nacos、Mongo、Qdrant、Neo4j、Redis 和任何业务模型。
+排除：FastAPI endpoint、application 实现、持久化实现、容器装配和任何 v2 RAG preset。
 
-Commit：`rag-v2 cp01: scaffold isolated service project`
+Commit：`rag-v2 cp01: migrate stable utilities and configuration`
 
 ### CP02：原文坐标与结构事实
 
