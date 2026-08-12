@@ -106,3 +106,15 @@ async def test_writer_skips_revision_after_clearing_old_graph() -> None:
     assert any("DELETE relation" in query for query in queries)
     assert any("DELETE mention" in query for query in queries)
     assert "graph_status = 'skipped'" in queries[skip_index]
+
+
+@pytest.mark.asyncio
+async def test_writer_deletes_resource_group_acl_orphans_with_resource() -> None:
+    driver = _Driver()
+    writer = Neo4jKnowledgeGraphWriter(driver=driver, database="rag-v2")
+
+    await writer.delete_resources(["resource-1"])
+
+    queries = [query for query, _ in driver.calls]
+    assert "DETACH DELETE resource" in queries[0]
+    assert "RagV2ResourceGroupAcl" in queries[-1]

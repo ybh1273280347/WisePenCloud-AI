@@ -14,6 +14,7 @@ from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import (
     ContextualTextIndexer,
     KnowledgeGraphExtractor,
+    ResourceDeleter,
     ResourceIndexer,
 )
 from rag.application.rag.index.graph_extraction import QueryClientGraphRagLLM
@@ -279,6 +280,14 @@ class Container(containers.DeclarativeContainer):
         retrieval_writer=retrieval_index_writer,
         graph_extractor=knowledge_graph_extractor,
         graph_writer=knowledge_graph_writer,
+    )
+    resource_deleter = providers.Singleton(
+        ResourceDeleter,
+        resource_writer=resource_index_writer,
+        retrieval_writer=retrieval_index_writer,
+        graph_writer=knowledge_graph_writer,
+        generation_cache=generation_cache_store,
+        acl_store=resource_acl_store,
     )
     discovered_section_reader = providers.Singleton(
         DiscoveredSectionReader,

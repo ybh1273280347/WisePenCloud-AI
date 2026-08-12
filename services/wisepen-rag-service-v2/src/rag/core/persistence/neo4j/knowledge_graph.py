@@ -141,6 +141,12 @@ WHERE NOT node:{_RESOURCE_LABEL} AND NOT (node)--()
 DELETE node
 """
 
+_DELETE_ORPHAN_GROUP_ACLS = """
+MATCH (acl:RagV2ResourceGroupAcl)
+WHERE NOT ()-[:RAG_V2_HAS_GROUP_ACL]->(acl)
+DELETE acl
+"""
+
 
 class Neo4jKnowledgeGraphWriter(KnowledgeGraphWriter):
     """将合并后的知识图谱写入 v2 专属 Neo4j namespace。"""
@@ -254,7 +260,6 @@ class Neo4jKnowledgeGraphWriter(KnowledgeGraphWriter):
             _DELETE_ORPHAN_NODES,
             database_=self._database,
         )
-
     async def skip(
         self,
         *,
@@ -304,5 +309,9 @@ class Neo4jKnowledgeGraphWriter(KnowledgeGraphWriter):
         )
         await self._driver.execute_query(
             _DELETE_ORPHAN_NODES,
+            database_=self._database,
+        )
+        await self._driver.execute_query(
+            _DELETE_ORPHAN_GROUP_ACLS,
             database_=self._database,
         )

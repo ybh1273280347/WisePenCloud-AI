@@ -1,6 +1,10 @@
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
 from rag.application.rag.expand import KnowledgeGraphExpander
-from rag.application.rag.index import ContextualTextIndexer, ResourceIndexer
+from rag.application.rag.index import (
+    ContextualTextIndexer,
+    ResourceDeleter,
+    ResourceIndexer,
+)
 from rag.application.rag.locate import ReadingEntryLocator
 from rag.application.rag.read import (
     DiscoveredSectionReader,
@@ -46,6 +50,7 @@ def test_container_builds_read_objects_with_explicit_persistence_dependencies() 
     container.knowledge_graph_writer.override(object())
     container.embedding_client.override(object())
     assert isinstance(container.resource_indexer(), ResourceIndexer)
+    assert isinstance(container.resource_deleter(), ResourceDeleter)
 
     container.redis_client.override(object())
     container.config.navigation_state_ttl_seconds.from_value(3600)

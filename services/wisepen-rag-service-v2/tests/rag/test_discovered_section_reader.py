@@ -151,6 +151,20 @@ async def test_reader_rejects_revision_change_and_acl_revocation() -> None:
         )
 
 
+@pytest.mark.asyncio
+async def test_reader_rejects_old_state_after_resource_state_is_deleted() -> None:
+    with pytest.raises(SectionRevisionChangedError):
+        await _reader(
+            revision=None,
+            state_store=_StateStore(_state()),
+        ).get(
+            state_id="nav-1",
+            session_id="session-1",
+            permission_scope=PermissionScope(user_id="user-1"),
+            section_ids=["section-1"],
+        )
+
+
 def _reader(
     *,
     revision,

@@ -188,13 +188,20 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
                 {"content_revision": {"$in": revision_ids}}
             ).delete_many()
 
+    async def clear_resource_states(self, resource_ids: Sequence[str]) -> None:
+        ids = list(dict.fromkeys(resource_ids))
+        if not ids:
+            return
+        await ResourceIndexStateEntity.find({"resource_id": {"$in": ids}}).delete_many()
+
     async def delete_resources(self, resource_ids: Sequence[str]) -> None:
         ids = list(dict.fromkeys(resource_ids))
         if not ids:
             return
-        revisions = await ContentRevisionEntity.find({"resource_id": {"$in": ids}}).to_list()
+        revisions = await ContentRevisionEntity.find(
+            {"resource_id": {"$in": ids}}
+        ).to_list()
         revision_ids = [entity.content_revision for entity in revisions]
-        await ResourceIndexStateEntity.find({"resource_id": {"$in": ids}}).delete_many()
         if not revision_ids:
             return
         for entity_type in (

@@ -54,7 +54,8 @@ base:     origin/main @ e1af497f7
 | CP21 | `4a3e5961` | EXPAND 有界图遍历、路径排序、逐边 VERIFY 和并发安全的 known node 原子扩展。 |
 | CP22 | `8e05be98` | 有状态 Section READ：state/ACL/revision 校验、完整正文读取与 frontier 原子扩展。 |
 | CP23 | `7e3a1a224` | 权威 ACL 刷新、本地单调写入、Qdrant/Neo4j 显式同步和统一图查询 predicate。 |
-| CP24 | 当前工作树 | ResourceIndexer 编排结构、contextual、embedding、Mongo/Qdrant 发布、图 publish/skip 和重试补偿。 |
+| CP24 | `cb73b1a57` | ResourceIndexer 编排结构、contextual、embedding、Mongo/Qdrant 发布、图 publish/skip 和重试补偿。 |
+| CP25 | 当前工作树 | 先清 Mongo 发布指针 fail closed，再并行删除内容、缓存、Qdrant、Neo4j 和本地 ACL。 |
 
 ## 3. 当前架构事实
 
@@ -286,6 +287,13 @@ CP24 文档索引编排边界：
 - 发布顺序固定为 Mongo stage、Qdrant staged、Mongo applied CAS、Qdrant activate/cleanup、Neo4j publish/skip、Mongo 旧 revision 清理。
 - `ALREADY_APPLIED` 重试不会提前返回，仍补偿 Qdrant 和 Neo4j；任一步真实失败直接抛出，由相同事件重试收敛。
 - sectioned 文档抽取并发布知识图，flat_text/empty 明确 skip；三种结构均不创建伪图谱或额外状态实体。
+
+CP25 资源删除编排边界：
+
+- `ResourceDeleter` 先调用 `ResourceIndexWriter.clear_resource_states()` 清除 applied/staged 指针，保证后端物理清理开始前 READ/VERIFY 已 fail closed。
+- 随后用 `TaskGroup` 并行删除 Qdrant points、Neo4j 图与 group ACL、Mongo 内容 revision、generation cache 和本地 ACL；任一失败直接抛出 `ExceptionGroup`。
+- Mongo 内容删除按 `resource_id` 查询 revision，不依赖仍然存在的 index state，因此第一步已成功或 state 原本缺失时重试仍能收敛。
+- Redis navigation state 不扫描删除；旧 state 在 applied revision 缺失后由 READ/EXPAND/VERIFY 拒绝，随后由 TTL 回收。
 
 CP13 的实现边界：
 
