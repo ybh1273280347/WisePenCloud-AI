@@ -61,6 +61,8 @@ async def test_search_uses_active_acl_filter_and_hybrid_fusion() -> None:
                 "raw_text": "原文",
                 "section_id": "section-1",
                 "section_path": ["标题"],
+                "source_spans": [{"start_offset": 0, "end_offset": 2}],
+                "page_labels": ["1"],
                 "anchor_labels": ["page-1"],
                 "source_ref_id": "ref-1",
             },
@@ -71,6 +73,7 @@ async def test_search_uses_active_acl_filter_and_hybrid_fusion() -> None:
 
     assert candidates[0].chunk_id == "chunk-1"
     assert candidates[0].score == 0.75
+    assert candidates[0].source_spans[0].end_offset == 2
     assert client.request["query"].fusion is qdrant_models.Fusion.RRF
     assert client.request["prefetch"][0].using == "dense"
     assert client.request["prefetch"][1].using == "sparse"

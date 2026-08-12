@@ -43,7 +43,8 @@ base:     origin/main @ e1af497f7
 | CP14 | `20c13cd3a` | Qdrant dense/BM25 混合候选召回、active/resource/ACL 过滤和最小候选映射。 |
 | CP15 | `86d7f888` | Redis 单 hash navigation state、统一 TTL 和 Lua 原子扩展。 |
 | CP15.1 | `537c52265` | Redis navigation state 曾将映射收敛到 persistence/mappers。 |
-| CP15.2 | 当前 | 纠正过度集中映射：Mongo 按 readers/writers 组织并私有映射，Redis/Qdrant 映射直接内联。 |
+| CP15.2 | `a571def8` | 纠正过度集中映射：Mongo 按 readers/writers 组织并私有映射，Redis/Qdrant 映射直接内联。 |
+| CP16 | 当前 | LOCATE 主链：混合召回、最终 ACL/revision 过滤、应用层排序、VERIFY 回源和阅读入口状态。 |
 
 ## 3. 当前架构事实
 
@@ -159,7 +160,7 @@ CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器�
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`，CP13 已提交为 `21ac955f8`，CP14 已提交为 `20c13cd3a`，CP15 已提交为 `86d7f888`，CP15.1 已提交为 `537c52265`。当前工作树是 CP15.2 持久化职责纠正；CP16 LOCATE 已暂存，待本 checkpoint 验证提交后恢复。
+CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`，CP13 已提交为 `21ac955f8`，CP14 已提交为 `20c13cd3a`，CP15 已提交为 `86d7f888`，CP15.1 已提交为 `537c52265`，CP15.2 已提交为 `a571def8`。当前工作树只包含 CP16 LOCATE 主链。
 
 CP08.1 的稳定边界：
 
@@ -257,6 +258,15 @@ CP15 的实现边界：
 - Redis 状态的 hash/JSON 映射私有内联在唯一的 `navigation_state_store.py` 中，不建立 mappers 子目录。
 - create 写入完整 hash 后设置统一 TTL；两个 add 操作用 Lua 原子检查主 key、合并集合并续期主 key，状态不存在直接抛出 `NavigationStateNotFoundError`。
 - CP15 不实现 LOCATE/READ/EXPAND 用例、state 用户/session 校验或删除编排；这些由 CP16、CP22、CP21/CP25 的 application 负责。
+
+CP16 的实现边界：
+
+- `ReadingEntryLocator` 只编排 query embedding、Qdrant 候选、应用层 ranking、最终 ACL/applied revision 过滤、VERIFY 回源和 navigation state 创建。
+- semantic query 只 embedding 一次；未提供 lexical query 时复用 semantic query，显式空 lexical query 直接抛出。
+- ranking candidate identity 使用 `resource_id + content_revision + chunk_id`，不依赖 chunk ID 跨资源唯一；输出按 `(resource_id, reading_block_id)` 去重，同一 Section 可以保留多个 block 证据。
+- `RELEVANT` 与 `UNCERTAIN` 返回已核验 Section 入口；`IRRELEVANT` 创建空 navigation state，且不回源 VERIFY。
+- Qdrant payload 增加 `source_spans` 和 `page_labels` 供 VERIFY 比对；最终正文和结构仍来自 Mongo applied revision，结构 revision 在 VERIFY 后再次核对以拒绝并发切换。
+- CP16 不装配 Agent/MCP 展示语义，不返回 reason/status 包装，不实现知识节点解析。
 
 ## 8. 接手禁区
 

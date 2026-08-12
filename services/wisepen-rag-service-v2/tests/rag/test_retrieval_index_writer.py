@@ -127,6 +127,10 @@ async def test_write_initializes_collection_and_stages_contract_payload() -> Non
     point = client.points[0]
     assert point.payload["active"] is False
     assert point.payload["source_ref_id"] == "ref-chunk-1"
+    assert point.payload["source_spans"] == [
+        {"start_offset": 0, "end_offset": 4}
+    ]
+    assert point.payload["page_labels"] == []
     assert "chunk_index" not in point.payload
     assert point.vector["dense"] == [0.1, 0.2, 0.3]
     assert isinstance(point.vector["sparse"], qdrant_models.Document)

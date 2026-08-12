@@ -6,15 +6,18 @@
 
 from dependency_injector import containers, providers
 from pymongo import AsyncMongoClient
+from zeroentropy import AsyncZeroEntropy
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.index import ContextualTextIndexer
+from rag.application.rag.locate import ReadingEntryLocator
 from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
 from rag.core.persistence.mongo import (
     MongoAppliedContentReader,
     MongoAppliedRevisionReader,
     MongoAppliedStructureReader,
     MongoAuthoritativeAclReader,
+    MongoEvidenceReader,
     MongoGenerationCacheStore,
     MongoResourceAclStore,
     MongoSourcePartReader,
@@ -24,6 +27,18 @@ from rag.core.persistence.qdrant import (
     QdrantRetrievalIndexWriter,
 )
 from rag.core.persistence.redis import RedisNavigationStateStore
+from rag.utils.ranking import RankingPipeline
+from rag.utils.ranking.diversifiers import MmrDiversifier, MmrDiversifierConfig
+from rag.utils.ranking.fusion import WeightedRrfFusion
+from rag.utils.ranking.relevance_gate import (
+    HighLowRelevanceGate,
+    HighLowRelevanceGateConfig,
+)
+from rag.utils.ranking.rerankers import (
+    ZeroEntropyReranker,
+    ZeroEntropyRerankerConfig,
+)
+from rag.utils.ranking.tokenizer import ThuLacRankingTokenizer
 
 
 def _build_authoritative_resource_collection(
@@ -35,6 +50,40 @@ def _build_authoritative_resource_collection(
 
 def _build_qdrant_bm25_options(tokenizer: str) -> dict[str, str]:
     return {"tokenizer": tokenizer}
+
+
+def _build_locate_ranking_pipeline(
+    *,
+    zero_entropy_client: AsyncZeroEntropy,
+    reranker_model: str,
+    low_watermark: float,
+    high_watermark: float,
+    uncertain_limit: int,
+) -> RankingPipeline:
+    tokenizer = ThuLacRankingTokenizer()
+    return RankingPipeline(
+        fusion=WeightedRrfFusion(),
+        reranker=ZeroEntropyReranker(
+            client=zero_entropy_client,
+            config=ZeroEntropyRerankerConfig(model=reranker_model),
+        ),
+        gate=HighLowRelevanceGate(
+            HighLowRelevanceGateConfig(
+                low_watermark=low_watermark,
+                high_watermark=high_watermark,
+                uncertain_limit=uncertain_limit,
+            )
+        ),
+        diversifiers=(
+            MmrDiversifier(
+                tokenizer=tokenizer,
+                config=MmrDiversifierConfig(
+                    lambda_mult=0.78,
+                    same_group_similarity=0.95,
+                ),
+            ),
+        ),
+    )
 
 
 class Container(containers.DeclarativeContainer):
@@ -50,6 +99,11 @@ class Container(containers.DeclarativeContainer):
     )
     applied_content_reader = providers.Singleton(
         MongoAppliedContentReader,
+        revisions=applied_revision_reader,
+        source_parts=source_part_reader,
+    )
+    evidence_reader = providers.Singleton(
+        MongoEvidenceReader,
         revisions=applied_revision_reader,
         source_parts=source_part_reader,
     )
@@ -114,6 +168,27 @@ class Container(containers.DeclarativeContainer):
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,
         reader=resource_acl_store,
+    )
+    embedding_client = providers.Dependency()
+    zero_entropy_client = providers.Dependency()
+    locate_ranking_pipeline = providers.Singleton(
+        _build_locate_ranking_pipeline,
+        zero_entropy_client=zero_entropy_client,
+        reranker_model=config.reranker_model,
+        low_watermark=config.rerank_relevance_low_watermark,
+        high_watermark=config.rerank_relevance_high_watermark,
+        uncertain_limit=config.rerank_uncertain_limit,
+    )
+    reading_entry_locator = providers.Singleton(
+        ReadingEntryLocator,
+        embedding_client=embedding_client,
+        candidate_search=candidate_search,
+        ranking_pipeline=locate_ranking_pipeline,
+        authorizer=permission_authorizer,
+        evidence_reader=evidence_reader,
+        revision_reader=applied_revision_reader,
+        structure_reader=applied_structure_reader,
+        state_store=navigation_state_store,
     )
 
 

@@ -1,5 +1,6 @@
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.index import ContextualTextIndexer
+from rag.application.rag.locate import ReadingEntryLocator
 from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
 from rag.container import Container
 from rag.core.persistence.mongo import MongoGenerationCacheStore
@@ -36,3 +37,11 @@ def test_container_builds_read_objects_with_explicit_persistence_dependencies() 
     container.redis_client.override(object())
     container.config.navigation_state_ttl_seconds.from_value(3600)
     assert isinstance(container.navigation_state_store(), RedisNavigationStateStore)
+
+    container.embedding_client.override(object())
+    container.zero_entropy_client.override(object())
+    container.config.reranker_model.from_value("reranker-v1")
+    container.config.rerank_relevance_low_watermark.from_value(0.2)
+    container.config.rerank_relevance_high_watermark.from_value(0.6)
+    container.config.rerank_uncertain_limit.from_value(3)
+    assert isinstance(container.reading_entry_locator(), ReadingEntryLocator)

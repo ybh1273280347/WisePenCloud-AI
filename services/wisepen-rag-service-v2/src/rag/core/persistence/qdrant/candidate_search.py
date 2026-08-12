@@ -8,6 +8,7 @@ from qdrant_client import models as qdrant_models
 from rag.core.persistence.qdrant.acl_filter import permission_filter
 from rag.domain.repositories.candidate_search import CandidateSearch
 from rag.domain.retrieval import CandidateSearchRequest, RetrievalCandidate
+from rag.utils.chunkers import SourceSpan
 
 
 class QdrantCandidateSearch(CandidateSearch):
@@ -110,6 +111,8 @@ _PAYLOAD_FIELDS = [
     "raw_text",
     "section_id",
     "section_path",
+    "source_spans",
+    "page_labels",
     "anchor_labels",
     "source_ref_id",
 ]
@@ -130,6 +133,8 @@ def _to_domain(
         resource_id=_required_text(payload, "resource_id"),
         content_revision=_required_text(payload, "content_revision"),
         raw_text=_required_text(payload, "raw_text"),
+        source_spans=_required_spans(payload, "source_spans"),
+        page_labels=_required_text_list(payload, "page_labels"),
         anchor_labels=_required_text_list(payload, "anchor_labels"),
         source_ref_id=_required_text(payload, "source_ref_id"),
         score=float(score),
@@ -153,3 +158,24 @@ def _required_text_list(
     if not all(isinstance(item, str) for item in value):
         raise TypeError(f"Qdrant candidate payload field {field_name} is invalid")
     return list(value)
+
+
+def _required_spans(
+    payload: Mapping[str, object],
+    field_name: str,
+) -> list[SourceSpan]:
+    value = payload.get(field_name)
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise TypeError(f"Qdrant candidate payload field {field_name} is invalid")
+    spans: list[SourceSpan] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            raise TypeError(f"Qdrant candidate payload field {field_name} is invalid")
+        start_offset = item.get("start_offset")
+        end_offset = item.get("end_offset")
+        if not isinstance(start_offset, int) or not isinstance(end_offset, int):
+            raise TypeError(f"Qdrant candidate payload field {field_name} is invalid")
+        spans.append(SourceSpan(start_offset, end_offset))
+    if not spans:
+        raise ValueError(f"Qdrant candidate payload field {field_name} is empty")
+    return spans

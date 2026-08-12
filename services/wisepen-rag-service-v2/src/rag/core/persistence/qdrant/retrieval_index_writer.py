@@ -325,6 +325,14 @@ def _to_payload(
         "section_id": chunk.section_id,
         "raw_text": chunk.raw_text,
         "section_path": list(chunk.section_path),
+        "source_spans": [
+            {
+                "start_offset": span.start_offset,
+                "end_offset": span.end_offset,
+            }
+            for span in chunk.source_spans
+        ],
+        "page_labels": list(chunk.page_labels),
         "anchor_labels": list(chunk.anchor_labels),
         "source_ref_id": source_ref.ref_id,
         "embedding_key": embedding_key,

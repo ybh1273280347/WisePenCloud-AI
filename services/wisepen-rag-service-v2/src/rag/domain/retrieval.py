@@ -67,6 +67,8 @@ class RetrievalCandidate:
     resource_id: str
     content_revision: str
     raw_text: str
+    source_spans: list[SourceSpan]
+    page_labels: list[str]
     anchor_labels: list[str]
     source_ref_id: str
     score: float
