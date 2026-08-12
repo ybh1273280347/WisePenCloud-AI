@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from rag.application.rag.acl import PermissionAuthorizer
+from rag.application.rag.locate.ports import MentionLookup
 from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.acl import PermissionScope
 from rag.domain.document_structure import Section
@@ -90,6 +91,7 @@ class ReadingEntryLocator:
         "_candidate_search",
         "_embedding_client",
         "_evidence_verifier",
+        "_mention_lookup",
         "_ranking_pipeline",
         "_revision_reader",
         "_state_store",
@@ -104,6 +106,7 @@ class ReadingEntryLocator:
         ranking_pipeline: RankingPipeline,
         authorizer: PermissionAuthorizer,
         evidence_verifier: EvidenceVerifier,
+        mention_lookup: MentionLookup,
         revision_reader: AppliedRevisionReader,
         structure_reader: AppliedStructureReader,
         state_store: NavigationStateStore,
@@ -113,6 +116,7 @@ class ReadingEntryLocator:
         self._ranking_pipeline = ranking_pipeline
         self._authorizer = authorizer
         self._evidence_verifier = evidence_verifier
+        self._mention_lookup = mention_lookup
         self._revision_reader = revision_reader
         self._structure_reader = structure_reader
         self._state_store = state_store
@@ -207,12 +211,17 @@ class ReadingEntryLocator:
 
         records = await self._verify_selected(selected)
         sections = await self._build_sections(records)
+        nodes = await self._mention_lookup.find_nodes(
+            evidence=records,
+            permission_scope=request.permission_scope,
+            limit=request.max_results,
+        )
         state = await self._state_store.create(
             user_id=request.permission_scope.user_id,
             session_id=request.session_id,
             root_query=semantic_query,
             known_sections=_known_sections(sections),
-            known_node_ids=[],
+            known_node_ids=[node.node_id for node in nodes],
         )
         return LocateResult(
             state_id=state.state_id,

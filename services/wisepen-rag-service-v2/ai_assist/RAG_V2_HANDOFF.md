@@ -48,7 +48,8 @@ base:     origin/main @ e1af497f7
 | CP16.1 | `85679b1a` | 将 VERIFY 证据校验改为注入式 `EvidenceVerifier`。 |
 | CP17 | `06f98b6d` | GraphRAG 窗口抽取、连续 evidence 校验、候选缓存及 cache 重校验。 |
 | CP18 | `4bb407d5` | NFKC/大小写规范化、节点/关系/evidence 合并、MENTIONS 和稳定 graph revision。 |
-| CP19 | 当前工作树 | Neo4j v2 namespace、KnowledgeGraphWriter 和 building/published/skipped CAS 发布状态机。 |
+| CP19 | `4d39d2dc` | Neo4j v2 namespace、KnowledgeGraphWriter 和 building/published/skipped CAS 发布状态机。 |
+| CP20 | 当前工作树 | MentionLookup 按已核验 SourceRef、published graph、revision 和 ACL 发现初始节点并写入 navigation state。 |
 
 ## 3. 当前架构事实
 
@@ -243,6 +244,12 @@ CP17-19 图谱边界：
 - `domain/knowledge_graph.py` 中的 `KnowledgeGraph` 是 CP19 写入 port 的输入事实，不是 Neo4j document，也不承载 Agent 展示语义。
 - `domain/repositories/knowledge_graph_writer.py` 只暴露 schema 初始化、begin build、publish、skip、delete；状态查询不混入写入 port。
 - `core/persistence/neo4j/knowledge_graph.py` 使用 v2 专属 labels、关系类型和 constraint。所有发布先校验 `document_version`/`content_revision`，最后 CAS 标记 `published` 或 `skipped`；旧 revision 直接抛出 `KnowledgeGraphRevisionSupersededError`。
+
+CP20 节点入口边界：
+
+- `locate/ports.py` 的 `MentionLookup` 只从 VERIFY 已核验的 `EvidenceRecord` 发现图节点，不新增 SourceRef 包装模型。
+- `Neo4jMentionLookup` 先调用统一 `PermissionAuthorizer`，再查询当前 `published` graph；不在 Neo4j adapter 内复制 ACL 规则。
+- `ReadingEntryLocator` 只把稳定 node ID 写入 `NavigationState.known_node_ids`，不改变 LOCATE 面向调用方的 Section/evidence 返回契约。
 
 CP13 的实现边界：
 

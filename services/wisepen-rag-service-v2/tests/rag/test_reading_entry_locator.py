@@ -9,6 +9,7 @@ from rag.domain.acl import PermissionScope, ResourceAcl
 from rag.domain.content_revision import ContentRevision
 from rag.domain.document_structure import Section, StructureMode
 from rag.domain.evidence import EvidenceRecord
+from rag.domain.knowledge_graph import KnowledgeNode, KnowledgeNodeKind
 from rag.domain.navigation import NavigationState
 from rag.domain.read_content import DocumentStructureResult
 from rag.domain.reading import ReadingBlock
@@ -105,6 +106,14 @@ class _StateStore:
         state = NavigationState(state_id="nav-1", **kwargs)
         self.created.append(state)
         return state
+
+
+class _MentionLookup:
+    def __init__(self, nodes=None):
+        self.nodes = nodes or []
+
+    async def find_nodes(self, **kwargs):
+        return self.nodes
 
 
 class _RankingPipeline:
@@ -230,6 +239,15 @@ async def test_locate_embeds_once_reranks_and_keeps_multiple_blocks_in_one_secti
         ranking_pipeline=ranking,
         authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
         evidence_verifier=EvidenceVerifier(reader=_EvidenceReader(records)),
+        mention_lookup=_MentionLookup(
+            [
+                KnowledgeNode(
+                    node_id="node-1",
+                    kind=KnowledgeNodeKind.ENTITY,
+                    label="Alpha",
+                )
+            ]
+        ),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
             DocumentStructureResult(revision=revision, sections=[root, section, sibling])
@@ -257,6 +275,7 @@ async def test_locate_embeds_once_reranks_and_keeps_multiple_blocks_in_one_secti
     ]
     assert result.sections[0].frontier.next == sibling
     assert set(state_store.created[0].known_sections) == {"root", "section-1", "section-2"}
+    assert state_store.created[0].known_node_ids == ["node-1"]
 
 
 @pytest.mark.asyncio
@@ -275,6 +294,7 @@ async def test_locate_filters_acl_and_old_revisions_before_reranking():
         ranking_pipeline=ranking,
         authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
         evidence_verifier=EvidenceVerifier(reader=_EvidenceReader(records)),
+        mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
             DocumentStructureResult(revision=revision, sections=[section])
@@ -322,6 +342,7 @@ async def test_locate_keeps_same_chunk_id_from_different_resources_distinct():
             reader=_AclReader({"resource-1", "resource-2"})
         ),
         evidence_verifier=EvidenceVerifier(reader=_EvidenceReader(records)),
+        mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader(
             {"resource-1": first_revision, "resource-2": second_revision}
         ),
@@ -366,6 +387,7 @@ async def test_locate_irrelevant_decision_creates_empty_state_without_verificati
         ranking_pipeline=_RankingPipeline([], decision=RankDecision.IRRELEVANT),
         authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
         evidence_verifier=EvidenceVerifier(reader=evidence_reader),
+        mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
             DocumentStructureResult(revision=revision, sections=[])
@@ -405,6 +427,7 @@ async def test_locate_uncertain_decision_keeps_verified_entry():
                 {candidate.source_ref_id: _record(candidate, section, revision)}
             )
         ),
+        mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
             DocumentStructureResult(revision=revision, sections=[section])
@@ -441,6 +464,7 @@ async def test_locate_rejects_revision_change_after_evidence_verification():
                 {candidate.source_ref_id: _record(candidate, section, revision)}
             )
         ),
+        mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
             DocumentStructureResult(revision=changed_revision, sections=[section])

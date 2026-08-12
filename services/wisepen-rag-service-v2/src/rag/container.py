@@ -26,7 +26,7 @@ from rag.core.persistence.mongo import (
     MongoResourceAclStore,
     MongoSourcePartReader,
 )
-from rag.core.persistence.neo4j import Neo4jKnowledgeGraphWriter
+from rag.core.persistence.neo4j import Neo4jKnowledgeGraphWriter, Neo4jMentionLookup
 from rag.core.persistence.qdrant import (
     QdrantCandidateSearch,
     QdrantRetrievalIndexWriter,
@@ -205,6 +205,12 @@ class Container(containers.DeclarativeContainer):
         PermissionAuthorizer,
         reader=resource_acl_store,
     )
+    mention_lookup = providers.Singleton(
+        Neo4jMentionLookup,
+        driver=neo4j_driver,
+        database=config.neo4j_database,
+        authorizer=permission_authorizer,
+    )
     embedding_client = providers.Dependency()
     zero_entropy_client = providers.Dependency()
     locate_ranking_pipeline = providers.Singleton(
@@ -222,6 +228,7 @@ class Container(containers.DeclarativeContainer):
         ranking_pipeline=locate_ranking_pipeline,
         authorizer=permission_authorizer,
         evidence_verifier=evidence_verifier,
+        mention_lookup=mention_lookup,
         revision_reader=applied_revision_reader,
         structure_reader=applied_structure_reader,
         state_store=navigation_state_store,

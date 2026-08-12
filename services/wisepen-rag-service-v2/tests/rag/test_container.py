@@ -39,6 +39,7 @@ def test_container_builds_read_objects_with_explicit_persistence_dependencies() 
     assert isinstance(container.navigation_state_store(), RedisNavigationStateStore)
 
     container.embedding_client.override(object())
+    container.mention_lookup.override(object())
     container.zero_entropy_client.override(object())
     container.config.reranker_model.from_value("reranker-v1")
     container.config.rerank_relevance_low_watermark.from_value(0.2)
