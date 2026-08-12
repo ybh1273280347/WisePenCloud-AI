@@ -36,6 +36,7 @@ base:     origin/main @ e1af497f7
 | CP08.4 | `a8eeaaef6` | 将 Beanie 内容实体模块从 `content_index.py` 重命名为 `rag_content.py`。 |
 | CP09 | `b16b7d630` | ACL 领域规则、READ/ACL 面向对象用例和 dependency-injector 容器装配。 |
 | 当前 CP10 | 待提交 | 上游权威 ACL reader、本地 Beanie ACL store、revision 幂等 upsert 和资源删除。 |
+| CP10.1 | 待提交 | 将 ACL 的 Mongo 序列化/反序列化统一收敛到现有 `mappers/serializer.py` 与 `mappers/deserializer.py`。 |
 
 ## 3. 当前架构事实
 
@@ -157,7 +158,8 @@ CP08.1 的稳定边界：
 CP08.2 的稳定边界：
 
 - `core/persistence/mongo/mappers/serializer.py` 只负责领域事实到 Mongo 字段的序列化。
-- `core/persistence/mongo/mappers/deserializer.py` 只负责 Mongo Entity 到领域事实的反序列化。
+- `core/persistence/mongo/mappers/deserializer.py` 负责 Mongo Entity 或上游记录到领域事实的反序列化，并在不满足外部数据契约时直接抛出异常。
+- 内容和 ACL 映射统一使用这两个文件；仓储 adapter 不再私有复制 `*_document` 或 `to_*` 映射函数。
 - `domain/services/text_assembler.py` 只负责 SourcePart 长度、重叠、间隙和连续覆盖校验，以及原文组装。
 - `SourcePartReader` 和 `MongoSourcePartReader` 只负责 SourcePart 查询，不负责文本组装。
 - `content_records.py`、`source_text.py` 已删除；Mongo reader 不再通过 `model_dump()` 字典进入领域映射或文本组装。

@@ -1,5 +1,6 @@
 """领域事实到 Mongo 文档字段的序列化。"""
 
+from rag.domain.acl import ResourceAcl
 from rag.domain.content_revision import ContentRevision, SourcePart
 from rag.domain.document_structure import Section
 from rag.domain.reading import ReadingBlock
@@ -98,3 +99,22 @@ def source_ref_document(
 
 def span_document(span: SourceSpan) -> dict[str, int]:
     return {"start_offset": span.start_offset, "end_offset": span.end_offset}
+
+
+def resource_acl_document(resource_acl: ResourceAcl) -> dict[str, object]:
+    return {
+        "resource_id": resource_acl.resource_id,
+        "acl_revision": resource_acl.acl_revision,
+        "owner_id": resource_acl.owner_id,
+        "readable_users": list(resource_acl.readable_users),
+        "excluded_read_users": list(resource_acl.excluded_read_users),
+        "group_acls": [
+            {
+                "group_id": group_acl.group_id,
+                "is_readable": group_acl.default_readable,
+                "readable_users": list(group_acl.readable_users),
+                "excluded_read_users": list(group_acl.excluded_read_users),
+            }
+            for group_acl in resource_acl.group_acls
+        ],
+    }

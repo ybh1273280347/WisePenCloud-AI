@@ -5,7 +5,9 @@ from collections.abc import Mapping, Sequence
 from beanie.operators import In
 from pymongo.errors import DuplicateKeyError
 
-from rag.domain.acl import GroupResourceAcl, ResourceAcl
+from rag.core.persistence.mongo.mappers.deserializer import to_resource_acl
+from rag.core.persistence.mongo.mappers.serializer import resource_acl_document
+from rag.domain.acl import ResourceAcl
 from rag.domain.entities import ResourceAclEntity
 from rag.domain.repositories.resource_acl_store import ResourceAclStore
 
@@ -23,11 +25,11 @@ class MongoResourceAclStore(ResourceAclStore):
         entities = await ResourceAclEntity.find(
             In(ResourceAclEntity.resource_id, unique_resource_ids)
         ).to_list()
-        return {entity.resource_id: _to_resource_acl(entity) for entity in entities}
+        return {entity.resource_id: to_resource_acl(entity) for entity in entities}
 
     async def save_if_newer(self, resource_acl: ResourceAcl) -> bool:
         collection = ResourceAclEntity.get_pymongo_collection()
-        document = _resource_acl_document(resource_acl)
+        document = resource_acl_document(resource_acl)
         try:
             result = await collection.update_one(
                 {
@@ -60,41 +62,3 @@ class MongoResourceAclStore(ResourceAclStore):
             await ResourceAclEntity.find(
                 In(ResourceAclEntity.resource_id, unique_resource_ids)
             ).delete()
-
-
-def _resource_acl_document(resource_acl: ResourceAcl) -> dict[str, object]:
-    return {
-        "resource_id": resource_acl.resource_id,
-        "acl_revision": resource_acl.acl_revision,
-        "owner_id": resource_acl.owner_id,
-        "readable_users": list(resource_acl.readable_users),
-        "excluded_read_users": list(resource_acl.excluded_read_users),
-        "group_acls": [
-            {
-                "group_id": group_acl.group_id,
-                "is_readable": group_acl.default_readable,
-                "readable_users": list(group_acl.readable_users),
-                "excluded_read_users": list(group_acl.excluded_read_users),
-            }
-            for group_acl in resource_acl.group_acls
-        ],
-    }
-
-
-def _to_resource_acl(entity: ResourceAclEntity) -> ResourceAcl:
-    return ResourceAcl(
-        resource_id=entity.resource_id,
-        acl_revision=entity.acl_revision,
-        owner_id=entity.owner_id,
-        readable_users=list(entity.readable_users),
-        excluded_read_users=list(entity.excluded_read_users),
-        group_acls=[
-            GroupResourceAcl(
-                group_id=group_acl.group_id,
-                default_readable=group_acl.is_readable,
-                readable_users=list(group_acl.readable_users),
-                excluded_read_users=list(group_acl.excluded_read_users),
-            )
-            for group_acl in entity.group_acls
-        ],
-    )
