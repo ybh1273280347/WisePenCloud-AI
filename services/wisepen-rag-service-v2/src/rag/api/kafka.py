@@ -8,9 +8,9 @@ from collections.abc import Awaitable, Callable, Mapping
 from typing import Annotated, Any
 
 from aiokafka import AIOKafkaConsumer
-from common.logger import error, info, warn
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
+from common.logger import error, info, warn
 from rag.application.rag.acl import (
     AuthoritativeAclNotFoundError,
     ResourceAclRefresher,
@@ -102,14 +102,14 @@ class KafkaEventConsumer:
     """永久非法正文提交后跳过，真实处理失败保留当前 offset 并原地重试。"""
 
     def __init__(
-        self,
-        *,
-        bootstrap_servers: str,
-        topic: str,
-        group_id: str,
-        handler: EventHandler,
-        retry_delay_seconds: float = 1.0,
-        consumer_factory: Callable[..., Any] = AIOKafkaConsumer,
+            self,
+            *,
+            bootstrap_servers: str,
+            topic: str,
+            group_id: str,
+            handler: EventHandler,
+            retry_delay_seconds: float = 1.0,
+            consumer_factory: Callable[..., Any] = AIOKafkaConsumer,
     ) -> None:
         if not bootstrap_servers.strip() or not topic.strip() or not group_id.strip():
             raise ValueError("Kafka bootstrap servers, topic and group ID are required")

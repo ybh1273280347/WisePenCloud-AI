@@ -1,31 +1,26 @@
-from .navigation import (
-    ExpandRequest,
-    ExpandResponse,
-    LocateRequest,
-    LocateResponse,
-    ReadSectionsRequest,
-    ReadSectionsResponse,
+from .expand import (
+    GraphExpandRequest,
+    GraphExpandResponse,
+    SectionExpandRequest,
+    SectionExpandResponse,
 )
-from .resources import (
-    ContentWindowResponse,
+from .locate import CandidateLocateRequest, CandidateLocateResponse
+from .read import (
     DocumentStructureResponse,
     PageContentRequest,
     ResourceRequest,
     SectionContentRequest,
-    SectionContentResponse,
 )
 
 __all__ = [
-    "ContentWindowResponse",
     "DocumentStructureResponse",
-    "ExpandRequest",
-    "ExpandResponse",
-    "LocateRequest",
-    "LocateResponse",
+    "GraphExpandRequest",
+    "GraphExpandResponse",
+    "CandidateLocateRequest",
+    "CandidateLocateResponse",
     "PageContentRequest",
-    "ReadSectionsRequest",
-    "ReadSectionsResponse",
     "ResourceRequest",
+    "SectionExpandRequest",
+    "SectionExpandResponse",
     "SectionContentRequest",
-    "SectionContentResponse",
 ]

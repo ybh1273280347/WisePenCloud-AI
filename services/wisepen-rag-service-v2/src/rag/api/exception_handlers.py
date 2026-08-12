@@ -1,10 +1,11 @@
 """RAG HTTP adapter 的业务异常响应契约。"""
 
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
 from common.core.domain import R
 from common.core.exceptions import ServiceException
 from common.logger import warn
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 
 
 def setup_rag_exception_handler(app: FastAPI) -> None:
@@ -12,8 +13,8 @@ def setup_rag_exception_handler(app: FastAPI) -> None:
 
     @app.exception_handler(ServiceException)
     async def service_exception_handler(
-        request: Request,
-        error: ServiceException,
+            request: Request,
+            error: ServiceException,
     ) -> JSONResponse:
         warn(
             "rag business exception handled.",

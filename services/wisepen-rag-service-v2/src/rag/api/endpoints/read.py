@@ -1,20 +1,18 @@
-"""将确定性 READ application 用例暴露为内部 HTTP endpoints。"""
+"""将资源结构和正文读取暴露为内部 HTTP endpoints。"""
 
 from typing import Annotated
+
+from dependency_injector.wiring import Provide, inject
+from fastapi import APIRouter, Depends
 
 from common.core.domain import R
 from common.core.exceptions import ServiceException
 from common.security import SecurityContextHolder, require_login
-from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, Depends
-
 from rag.api.schemas import (
-    ContentWindowResponse,
     DocumentStructureResponse,
     PageContentRequest,
     ResourceRequest,
     SectionContentRequest,
-    SectionContentResponse,
 )
 from rag.application.rag.read import (
     ContentNotFoundError,
@@ -24,6 +22,7 @@ from rag.application.rag.read import (
 from rag.container import Container
 from rag.domain.acl import PermissionScope
 from rag.domain.error_codes import RagErrorCode
+from rag.domain.read_content import ContentWindow, SectionContent
 
 router = APIRouter()
 
@@ -38,12 +37,12 @@ ContentReader = Annotated[
 ]
 
 
-@router.post("/document-structure", response_model=R[DocumentStructureResponse])
+@router.post("/getDocumentStructure", response_model=R[DocumentStructureResponse])
 @inject
-async def document_structure(
-    request: ResourceRequest,
-    user_id: AuthenticatedUser,
-    reader: StructureReader,
+async def get_document_structure(
+        request: ResourceRequest,
+        user_id: AuthenticatedUser,
+        reader: StructureReader,
 ) -> R[DocumentStructureResponse]:
     try:
         result = await reader.get(
@@ -62,26 +61,19 @@ async def document_structure(
             content_revision=revision.content_revision,
             structure_mode=revision.structure_mode.value,
             total_length=revision.total_length,
-            pages=[
-                {
-                    "page_index": page.page_index,
-                    "page_label": page.page_label,
-                    "source_span": page.source_span,
-                }
-                for page in revision.pages
-            ],
+            pages=revision.pages,
             sections=result.sections,
         )
     )
 
 
-@router.post("/page-content", response_model=R[dict[str, ContentWindowResponse]])
+@router.post("/getPageContent", response_model=R[dict[str, ContentWindow]])
 @inject
-async def page_content(
-    request: PageContentRequest,
-    user_id: AuthenticatedUser,
-    reader: ContentReader,
-) -> R[dict[str, ContentWindowResponse]]:
+async def get_page_content(
+        request: PageContentRequest,
+        user_id: AuthenticatedUser,
+        reader: ContentReader,
+) -> R[dict[str, ContentWindow]]:
     try:
         result = await reader.get_pages(
             resource_id=request.resource_id,
@@ -92,21 +84,16 @@ async def page_content(
         raise ServiceException(RagErrorCode.RESOURCE_CONTENT_NOT_FOUND) from error
     except Exception as error:
         raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
-    return R.success(
-        {
-            key: ContentWindowResponse.model_validate(value, from_attributes=True)
-            for key, value in result.items()
-        }
-    )
+    return R.success(result)
 
 
-@router.post("/section-content", response_model=R[dict[str, SectionContentResponse]])
+@router.post("/getSectionContent", response_model=R[dict[str, SectionContent]])
 @inject
-async def section_content(
-    request: SectionContentRequest,
-    user_id: AuthenticatedUser,
-    reader: ContentReader,
-) -> R[dict[str, SectionContentResponse]]:
+async def get_section_content(
+        request: SectionContentRequest,
+        user_id: AuthenticatedUser,
+        reader: ContentReader,
+) -> R[dict[str, SectionContent]]:
     try:
         result = await reader.get_sections(
             resource_id=request.resource_id,
@@ -117,12 +104,7 @@ async def section_content(
         raise ServiceException(RagErrorCode.RESOURCE_CONTENT_NOT_FOUND) from error
     except Exception as error:
         raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
-    return R.success(
-        {
-            key: SectionContentResponse.model_validate(value, from_attributes=True)
-            for key, value in result.items()
-        }
-    )
+    return R.success(result)
 
 
 def _permission_scope(user_id: str) -> PermissionScope:
