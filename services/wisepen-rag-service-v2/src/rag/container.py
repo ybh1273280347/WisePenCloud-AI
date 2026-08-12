@@ -5,6 +5,7 @@
 """
 
 from dependency_injector import containers, providers
+from neo4j import AsyncGraphDatabase
 from pymongo import AsyncMongoClient
 from zeroentropy import AsyncZeroEntropy
 
@@ -25,6 +26,7 @@ from rag.core.persistence.mongo import (
     MongoResourceAclStore,
     MongoSourcePartReader,
 )
+from rag.core.persistence.neo4j import Neo4jKnowledgeGraphWriter
 from rag.core.persistence.qdrant import (
     QdrantCandidateSearch,
     QdrantRetrievalIndexWriter,
@@ -158,6 +160,16 @@ class Container(containers.DeclarativeContainer):
         cache=generation_cache_store,
         source_reader=graph_build_source_reader,
         max_concurrency=config.knowledge_graph_extraction_max_concurrency,
+    )
+    neo4j_driver = providers.Singleton(
+        AsyncGraphDatabase.driver,
+        uri=config.neo4j_uri,
+        auth=(config.neo4j_user, config.neo4j_password),
+    )
+    knowledge_graph_writer = providers.Singleton(
+        Neo4jKnowledgeGraphWriter,
+        driver=neo4j_driver,
+        database=config.neo4j_database,
     )
     qdrant_client = providers.Dependency()
     qdrant_bm25_options = providers.Factory(

@@ -6,6 +6,10 @@ from .candidate_search import CandidateSearch
 from .evidence_reader import EvidenceReader
 from .generation_cache import GenerationCacheStore
 from .graph_build_source_reader import GraphBuildSource, GraphBuildSourceReader
+from .knowledge_graph_writer import (
+    KnowledgeGraphRevisionSupersededError,
+    KnowledgeGraphWriter,
+)
 from .navigation_state_store import NavigationStateStore
 from .resource_acl_reader import ResourceAclReader
 from .resource_acl_store import ResourceAclStore
@@ -23,6 +27,8 @@ __all__ = [
     "GenerationCacheStore",
     "GraphBuildSource",
     "GraphBuildSourceReader",
+    "KnowledgeGraphRevisionSupersededError",
+    "KnowledgeGraphWriter",
     "NavigationStateStore",
     "ResourceAclReader",
     "ResourceAclStore",

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from hashlib import sha256
 
 from rag.utils.chunkers import SourceSpan
 
@@ -66,6 +67,14 @@ class KnowledgeAssertion(StrEnum):
     NEGATED = "negated"
     CONDITIONAL = "conditional"
     UNCERTAIN = "uncertain"
+
+
+class GraphStatus(StrEnum):
+    """资源图在 Neo4j 中的发布状态。"""
+
+    BUILDING = "building"
+    PUBLISHED = "published"
+    SKIPPED = "skipped"
 
 
 @dataclass(slots=True)
@@ -149,3 +158,9 @@ class KnowledgeGraph:
     nodes: list[KnowledgeNode] = field(default_factory=list)
     mentions: list[KnowledgeMention] = field(default_factory=list)
     relations: list[KnowledgeRelation] = field(default_factory=list)
+
+
+def resource_node_id(resource_id: str) -> str:
+    """返回 Resource 节点在图事实和 Neo4j 中共用的稳定 ID。"""
+    digest = sha256(f"resource\0{resource_id}".encode()).hexdigest()
+    return f"kn_{digest[:32]}"

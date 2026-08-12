@@ -44,7 +44,11 @@ base:     origin/main @ e1af497f7
 | CP15 | `86d7f888` | Redis 单 hash navigation state、统一 TTL 和 Lua 原子扩展。 |
 | CP15.1 | `537c52265` | Redis navigation state 曾将映射收敛到 persistence/mappers。 |
 | CP15.2 | `a571def8` | 纠正过度集中映射：Mongo 按 readers/writers 组织并私有映射，Redis/Qdrant 映射直接内联。 |
-| CP16 | 当前 | LOCATE 主链：混合召回、最终 ACL/revision 过滤、应用层排序、VERIFY 回源和阅读入口状态。 |
+| CP16 | `417962e8` | LOCATE 主链：混合召回、最终 ACL/revision 过滤、应用层排序、VERIFY 回源和阅读入口状态。 |
+| CP16.1 | `85679b1a` | 将 VERIFY 证据校验改为注入式 `EvidenceVerifier`。 |
+| CP17 | `06f98b6d` | GraphRAG 窗口抽取、连续 evidence 校验、候选缓存及 cache 重校验。 |
+| CP18 | `4bb407d5` | NFKC/大小写规范化、节点/关系/evidence 合并、MENTIONS 和稳定 graph revision。 |
+| CP19 | 当前工作树 | Neo4j v2 namespace、KnowledgeGraphWriter 和 building/published/skipped CAS 发布状态机。 |
 
 ## 3. 当前架构事实
 
@@ -230,7 +234,15 @@ CP09 已明确排除：
 - HTTP、Kafka、Agent 业务语义。
 - 修改 VERIFY 的证据校验。
 
-后续顺序仍以 `Migration.md` 为准：CP12 contextual indexing，CP13-14 Qdrant，CP15 Redis state，CP16 LOCATE，CP17-19 图谱，CP20-25 导航/编排/删除，CP26-28 adapters，CP29 集成门。
+后续顺序仍以 `Migration.md` 为准：CP20 MentionLookup/LOCATE 节点入口，CP21 EXPAND，CP22 有状态 READ，CP23 ACL 同步，CP24 文档完成编排，CP25 删除编排，CP26-28 adapters，CP29 集成门。
+
+CP17-19 图谱边界：
+
+- `index/graph_extraction` 只负责窗口、GraphRAG 候选和确定性校验；缓存保存候选，不等于已发布图。
+- `index/graph_merge.py` 只负责节点规范化、等价合并、关系/evidence 去重、MENTIONS 和 graph revision，不使用 `projection` 命名。
+- `domain/knowledge_graph.py` 中的 `KnowledgeGraph` 是 CP19 写入 port 的输入事实，不是 Neo4j document，也不承载 Agent 展示语义。
+- `domain/repositories/knowledge_graph_writer.py` 只暴露 schema 初始化、begin build、publish、skip、delete；状态查询不混入写入 port。
+- `core/persistence/neo4j/knowledge_graph.py` 使用 v2 专属 labels、关系类型和 constraint。所有发布先校验 `document_version`/`content_revision`，最后 CAS 标记 `published` 或 `skipped`；旧 revision 直接抛出 `KnowledgeGraphRevisionSupersededError`。
 
 CP13 的实现边界：
 
