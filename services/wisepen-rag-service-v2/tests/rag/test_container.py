@@ -3,7 +3,10 @@ from rag.application.rag.index import ContextualTextIndexer
 from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
 from rag.container import Container
 from rag.core.persistence.mongo import MongoGenerationCacheStore
-from rag.core.persistence.qdrant import QdrantRetrievalIndexWriter
+from rag.core.persistence.qdrant import (
+    QdrantCandidateSearch,
+    QdrantRetrievalIndexWriter,
+)
 
 
 def test_container_builds_read_objects_with_explicit_persistence_dependencies() -> None:
@@ -27,3 +30,4 @@ def test_container_builds_read_objects_with_explicit_persistence_dependencies() 
     container.config.qdrant_sparse_vector_name.from_value("sparse")
     container.config.qdrant_bm25_tokenizer.from_value("multilingual")
     assert isinstance(container.retrieval_index_writer(), QdrantRetrievalIndexWriter)
+    assert isinstance(container.candidate_search(), QdrantCandidateSearch)

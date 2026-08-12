@@ -2,6 +2,7 @@ from .applied_content_reader import AppliedContentReader
 from .applied_revision_reader import AppliedRevisionReader
 from .applied_structure_reader import AppliedStructureReader
 from .authoritative_acl_reader import AuthoritativeAclReader
+from .candidate_search import CandidateSearch
 from .evidence_reader import EvidenceReader
 from .generation_cache import GenerationCacheStore
 from .graph_build_source_reader import GraphBuildSource, GraphBuildSourceReader
@@ -16,6 +17,7 @@ __all__ = [
     "AppliedRevisionReader",
     "AppliedStructureReader",
     "AuthoritativeAclReader",
+    "CandidateSearch",
     "EvidenceReader",
     "GenerationCacheStore",
     "GraphBuildSource",

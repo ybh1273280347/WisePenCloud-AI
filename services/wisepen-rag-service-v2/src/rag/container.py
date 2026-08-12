@@ -19,7 +19,10 @@ from rag.core.persistence.mongo import (
     MongoResourceAclStore,
     MongoSourcePartReader,
 )
-from rag.core.persistence.qdrant import QdrantRetrievalIndexWriter
+from rag.core.persistence.qdrant import (
+    QdrantCandidateSearch,
+    QdrantRetrievalIndexWriter,
+)
 
 
 def _build_authoritative_resource_collection(
@@ -88,6 +91,15 @@ class Container(containers.DeclarativeContainer):
         collection_name=config.qdrant_collection_name,
         dense_vector_size=config.embedding_dimensions,
         embedding_profile=config.embedding_profile,
+        dense_vector_name=config.qdrant_dense_vector_name,
+        sparse_vector_name=config.qdrant_sparse_vector_name,
+        bm25_options=qdrant_bm25_options,
+    )
+    candidate_search = providers.Singleton(
+        QdrantCandidateSearch,
+        client=qdrant_client,
+        collection_name=config.qdrant_collection_name,
+        dense_vector_size=config.embedding_dimensions,
         dense_vector_name=config.qdrant_dense_vector_name,
         sparse_vector_name=config.qdrant_sparse_vector_name,
         bm25_options=qdrant_bm25_options,
