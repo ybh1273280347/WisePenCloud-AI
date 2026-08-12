@@ -247,3 +247,38 @@ async def test_verify_rejects_missing_ref_and_wrong_chunk_ownership() -> None:
                 )
             ],
         )
+
+
+@pytest.mark.asyncio
+async def test_verify_refs_accepts_only_quote_from_authoritative_source() -> None:
+    markdown, structure, blocks, _, refs, revision = _evidence_facts()
+    record = EvidenceRecord(
+        revision=revision,
+        source_ref=refs[0],
+        reading_block=blocks[0],
+        section=next(
+            section
+            for section in structure.sections
+            if section.section_id == refs[0].section_id
+        ),
+        source_text=markdown[
+            refs[0].source_spans[0].start_offset : refs[0].source_spans[0].end_offset
+        ],
+    )
+    verifier = EvidenceVerifier(reader=_EvidenceReader(record))
+
+    verified = await verifier.verify_refs(
+        resource_id=revision.resource_id,
+        content_revision=revision.content_revision,
+        source_ref_ids=[refs[0].ref_id],
+        quotes=["正文内容"],
+    )
+
+    assert verified == [record]
+    with pytest.raises(EvidenceCorruptError):
+        await verifier.verify_refs(
+            resource_id=revision.resource_id,
+            content_revision=revision.content_revision,
+            source_ref_ids=[refs[0].ref_id],
+            quotes=["不存在的断言"],
+        )

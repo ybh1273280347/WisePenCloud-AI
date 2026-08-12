@@ -53,6 +53,35 @@ class EvidenceVerifier:
             verified.append(record)
         return verified
 
+    async def verify_refs(
+        self,
+        *,
+        resource_id: str,
+        content_revision: str,
+        source_ref_ids: Sequence[str],
+        quotes: Sequence[str],
+    ) -> list[EvidenceRecord]:
+        """核验图关系引用仍属于当前 applied revision 的权威原文。"""
+        ids = list(dict.fromkeys(source_ref_ids))
+        records = await self._reader.read_applied_evidence(
+            resource_id,
+            content_revision,
+            ids,
+        )
+        if records is None:
+            raise EvidenceNotFoundError(resource_id)
+        if set(records) != set(ids):
+            missing = next(ref_id for ref_id in ids if ref_id not in records)
+            raise EvidenceNotFoundError(missing)
+
+        ordered = [records[ref_id] for ref_id in ids]
+        for quote in dict.fromkeys(quotes):
+            if not quote or not any(quote in record.source_text for record in ordered):
+                raise EvidenceCorruptError(
+                    f"knowledge evidence quote is absent from {resource_id}"
+                )
+        return ordered
+
     @staticmethod
     def _verify_candidate(
         candidate: EvidenceCandidate,

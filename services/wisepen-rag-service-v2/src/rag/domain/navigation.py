@@ -3,6 +3,10 @@
 from dataclasses import dataclass, field
 
 
+class NavigationStateNotFoundError(RuntimeError):
+    """导航状态不存在、已过期或不属于当前用户会话。"""
+
+
 @dataclass(slots=True)
 class KnownSection:
     """导航状态中已经发现的 Section 及发现时的资源 revision。"""

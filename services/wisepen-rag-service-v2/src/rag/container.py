@@ -10,6 +10,7 @@ from pymongo import AsyncMongoClient
 from zeroentropy import AsyncZeroEntropy
 
 from rag.application.rag.acl import PermissionAuthorizer
+from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import ContextualTextIndexer, KnowledgeGraphExtractor
 from rag.application.rag.index.graph_extraction import QueryClientGraphRagLLM
 from rag.application.rag.locate import ReadingEntryLocator
@@ -26,7 +27,11 @@ from rag.core.persistence.mongo import (
     MongoResourceAclStore,
     MongoSourcePartReader,
 )
-from rag.core.persistence.neo4j import Neo4jKnowledgeGraphWriter, Neo4jMentionLookup
+from rag.core.persistence.neo4j import (
+    Neo4jGraphTraversal,
+    Neo4jKnowledgeGraphWriter,
+    Neo4jMentionLookup,
+)
 from rag.core.persistence.qdrant import (
     QdrantCandidateSearch,
     QdrantRetrievalIndexWriter,
@@ -42,6 +47,11 @@ from rag.utils.ranking.relevance_gate import (
 from rag.utils.ranking.rerankers import (
     ZeroEntropyReranker,
     ZeroEntropyRerankerConfig,
+)
+from rag.utils.ranking.scorers import (
+    BM25Scorer,
+    FieldedBM25Scorer,
+    FieldedBM25ScorerConfig,
 )
 from rag.utils.ranking.tokenizer import ThuLacRankingTokenizer
 
@@ -87,6 +97,30 @@ def _build_locate_ranking_pipeline(
                     same_group_similarity=0.95,
                 ),
             ),
+        ),
+    )
+
+
+def _build_expand_ranking_pipeline(
+    *,
+    zero_entropy_client: AsyncZeroEntropy,
+    reranker_model: str,
+) -> RankingPipeline:
+    tokenizer = ThuLacRankingTokenizer()
+    return RankingPipeline(
+        scorers=(
+            BM25Scorer(tokenizer=tokenizer),
+            FieldedBM25Scorer(
+                tokenizer=tokenizer,
+                config=FieldedBM25ScorerConfig(
+                    field_weights={"nodes": 2.0, "relations": 2.0},
+                ),
+            ),
+        ),
+        fusion=WeightedRrfFusion(),
+        reranker=ZeroEntropyReranker(
+            client=zero_entropy_client,
+            config=ZeroEntropyRerankerConfig(model=reranker_model),
         ),
     )
 
@@ -211,6 +245,12 @@ class Container(containers.DeclarativeContainer):
         database=config.neo4j_database,
         authorizer=permission_authorizer,
     )
+    graph_traversal = providers.Singleton(
+        Neo4jGraphTraversal,
+        driver=neo4j_driver,
+        database=config.neo4j_database,
+        authorizer=permission_authorizer,
+    )
     embedding_client = providers.Dependency()
     zero_entropy_client = providers.Dependency()
     locate_ranking_pipeline = providers.Singleton(
@@ -220,6 +260,11 @@ class Container(containers.DeclarativeContainer):
         low_watermark=config.rerank_relevance_low_watermark,
         high_watermark=config.rerank_relevance_high_watermark,
         uncertain_limit=config.rerank_uncertain_limit,
+    )
+    expand_ranking_pipeline = providers.Singleton(
+        _build_expand_ranking_pipeline,
+        zero_entropy_client=zero_entropy_client,
+        reranker_model=config.reranker_model,
     )
     reading_entry_locator = providers.Singleton(
         ReadingEntryLocator,
@@ -231,6 +276,13 @@ class Container(containers.DeclarativeContainer):
         mention_lookup=mention_lookup,
         revision_reader=applied_revision_reader,
         structure_reader=applied_structure_reader,
+        state_store=navigation_state_store,
+    )
+    knowledge_graph_expander = providers.Singleton(
+        KnowledgeGraphExpander,
+        traversal=graph_traversal,
+        ranking_pipeline=expand_ranking_pipeline,
+        evidence_verifier=evidence_verifier,
         state_store=navigation_state_store,
     )
 

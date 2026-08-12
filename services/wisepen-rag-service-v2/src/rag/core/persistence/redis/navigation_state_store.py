@@ -6,7 +6,11 @@ from uuid import uuid4
 
 from redis.asyncio import Redis
 
-from rag.domain.navigation import KnownSection, NavigationState
+from rag.domain.navigation import (
+    KnownSection,
+    NavigationState,
+    NavigationStateNotFoundError,
+)
 from rag.domain.repositories.navigation_state_store import NavigationStateStore
 
 _KEY_PREFIX = "wisepen:rag:v2:navigation-state:"
@@ -30,7 +34,7 @@ return 1
 
 _ADD_NODES_SCRIPT = """
 if redis.call('EXISTS', KEYS[1]) == 0 then
-    return 0
+    return nil
 end
 local current = redis.call('HGET', KEYS[1], ARGV[1])
 local nodes = cjson.decode(current or '[]')
@@ -39,20 +43,18 @@ for _, node_id in ipairs(nodes) do
     seen[node_id] = true
 end
 local additions = cjson.decode(ARGV[2])
+local added = {}
 for _, node_id in ipairs(additions) do
     if not seen[node_id] then
         table.insert(nodes, node_id)
+        table.insert(added, node_id)
         seen[node_id] = true
     end
 end
 redis.call('HSET', KEYS[1], ARGV[1], cjson.encode(nodes))
 redis.call('EXPIRE', KEYS[1], ARGV[3])
-return 1
+return cjson.encode(added)
 """
-
-
-class NavigationStateNotFoundError(RuntimeError):
-    """状态在原子扩展前已过期或不存在。"""
 
 
 class RedisNavigationStateStore(NavigationStateStore):
@@ -114,7 +116,7 @@ class RedisNavigationStateStore(NavigationStateStore):
         *,
         state_id: str,
         node_ids: Sequence[str],
-    ) -> None:
+    ) -> list[str]:
         result = await self._redis.eval(
             _ADD_NODES_SCRIPT,
             1,
@@ -123,8 +125,15 @@ class RedisNavigationStateStore(NavigationStateStore):
             json.dumps(list(dict.fromkeys(node_ids)), ensure_ascii=False),
             self._ttl_seconds,
         )
-        if result != 1:
+        if result is None:
             raise NavigationStateNotFoundError(state_id)
+        value = result.decode() if isinstance(result, bytes) else result
+        added = json.loads(value)
+        if not isinstance(added, list) or not all(
+            isinstance(node_id, str) for node_id in added
+        ):
+            raise TypeError(f"navigation state {state_id} returned invalid node IDs")
+        return added
 
     @staticmethod
     def _key(state_id: str) -> str:

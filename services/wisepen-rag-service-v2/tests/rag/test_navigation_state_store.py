@@ -28,18 +28,20 @@ class _Redis:
     async def eval(self, script, numkeys, key, field, value, ttl):
         self.eval_calls.append((script, numkeys, key, field, value, ttl))
         if key not in self.hashes:
-            return 0
+            return 0 if field == "known_sections" else None
         current = json.loads(self.hashes[key][field])
         additions = json.loads(value)
         if field == "known_sections":
             current.update(additions)
         else:
+            added = []
             for node_id in additions:
                 if node_id not in current:
                     current.append(node_id)
+                    added.append(node_id)
         self.hashes[key][field] = json.dumps(current, ensure_ascii=False)
         self.expirations.append((key, ttl))
-        return 1
+        return 1 if field == "known_sections" else json.dumps(added)
 
 
 def _store(redis: _Redis) -> RedisNavigationStateStore:
@@ -99,12 +101,16 @@ async def test_add_operations_use_atomic_scripts_and_refresh_same_ttl() -> None:
             )
         },
     )
-    await store.add_known_nodes(state_id=state.state_id, node_ids=["node-2", "node-2"])
+    added = await store.add_known_nodes(
+        state_id=state.state_id,
+        node_ids=["node-2", "node-2"],
+    )
 
     loaded = await store.get(state.state_id)
     assert loaded is not None
     assert loaded.known_sections["section-2"].resource_id == "resource-2"
     assert loaded.known_node_ids == ["node-2"]
+    assert added == ["node-2"]
     assert len(redis.eval_calls) == 2
     assert redis.expirations[-2:] == [(redis.eval_calls[0][2], 3600), (redis.eval_calls[1][2], 3600)]
 

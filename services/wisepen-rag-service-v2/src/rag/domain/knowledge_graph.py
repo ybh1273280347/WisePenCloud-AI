@@ -34,6 +34,7 @@ class KnowledgeRelationProfile(StrEnum):
 
 
 class KnowledgeRelationType(StrEnum):
+    MENTIONS = "MENTIONS"
     ABOUT = "ABOUT"
     RELATED_TO = "RELATED_TO"
     PART_OF = "PART_OF"

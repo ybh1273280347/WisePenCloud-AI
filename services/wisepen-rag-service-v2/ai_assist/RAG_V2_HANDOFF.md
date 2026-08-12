@@ -49,7 +49,9 @@ base:     origin/main @ e1af497f7
 | CP17 | `06f98b6d` | GraphRAG 窗口抽取、连续 evidence 校验、候选缓存及 cache 重校验。 |
 | CP18 | `4bb407d5` | NFKC/大小写规范化、节点/关系/evidence 合并、MENTIONS 和稳定 graph revision。 |
 | CP19 | `4d39d2dc` | Neo4j v2 namespace、KnowledgeGraphWriter 和 building/published/skipped CAS 发布状态机。 |
-| CP20 | 当前工作树 | MentionLookup 按已核验 SourceRef、published graph、revision 和 ACL 发现初始节点并写入 navigation state。 |
+| CP19.1 | `693296c9` | 将知识关系稳定身份统一为 Repo.md 冻结的 `edge_id`。 |
+| CP20 | `a9c2e06d` | MentionLookup 按已核验 SourceRef、published graph、revision 和 ACL 发现初始节点并写入 navigation state。 |
+| CP21 | 当前工作树 | EXPAND 有界图遍历、路径排序、逐边 VERIFY 和并发安全的 known node 原子扩展。 |
 
 ## 3. 当前架构事实
 
@@ -250,6 +252,14 @@ CP20 节点入口边界：
 - `locate/ports.py` 的 `MentionLookup` 只从 VERIFY 已核验的 `EvidenceRecord` 发现图节点，不新增 SourceRef 包装模型。
 - `Neo4jMentionLookup` 先调用统一 `PermissionAuthorizer`，再查询当前 `published` graph；不在 Neo4j adapter 内复制 ACL 规则。
 - `ReadingEntryLocator` 只把稳定 node ID 写入 `NavigationState.known_node_ids`，不改变 LOCATE 面向调用方的 Section/evidence 返回契约。
+
+CP21 EXPAND 边界：
+
+- `expand/ports.py` 的 `GraphTraversal` 只查询 node、edge、path 与 evidence SourceRef 身份，不排序、不读取正文、不修改 state。
+- `Neo4jGraphTraversal` 只使用固定方向/深度 pattern，并要求 evidence resource 的 graph 仍为当前 `published` revision；统一 ACL 在返回前复查。
+- `KnowledgeGraphExpander` 校验 state 用户/session 与 seed 白名单，按请求 query 或 root query 排序，逐 edge 调用 `EvidenceVerifier.verify_refs()`，最后原子扩展 known nodes。
+- `NavigationStateStore.add_known_nodes()` 返回本次原子操作实际新增的 node IDs；并发调用只允许一个结果返回对应新路径，不使用 `get -> compare -> add`。
+- EXPAND 返回领域 node、edge、path 和权威 `EvidenceRecord`，不组装 HTTP/MCP/Agent 文案。
 
 CP13 的实现边界：
 

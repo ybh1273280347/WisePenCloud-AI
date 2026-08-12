@@ -1,4 +1,5 @@
 from rag.application.rag.acl import PermissionAuthorizer
+from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import ContextualTextIndexer
 from rag.application.rag.locate import ReadingEntryLocator
 from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
@@ -40,9 +41,12 @@ def test_container_builds_read_objects_with_explicit_persistence_dependencies() 
 
     container.embedding_client.override(object())
     container.mention_lookup.override(object())
+    container.graph_traversal.override(object())
+    container.expand_ranking_pipeline.override(object())
     container.zero_entropy_client.override(object())
     container.config.reranker_model.from_value("reranker-v1")
     container.config.rerank_relevance_low_watermark.from_value(0.2)
     container.config.rerank_relevance_high_watermark.from_value(0.6)
     container.config.rerank_uncertain_limit.from_value(3)
     assert isinstance(container.reading_entry_locator(), ReadingEntryLocator)
+    assert isinstance(container.knowledge_graph_expander(), KnowledgeGraphExpander)
