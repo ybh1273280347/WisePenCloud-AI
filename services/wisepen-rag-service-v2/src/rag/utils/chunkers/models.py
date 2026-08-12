@@ -63,10 +63,19 @@ class TextBlock:
 
 @dataclass(frozen=True, slots=True)
 class SourceSpan:
-    """最终 chunk 引用的原文半开区间。"""
+    """Python 字符坐标系中的原文半开区间。
+
+    该类型会参与 chunk source span 去重，因此保留不可变和可哈希语义。
+    """
 
     start_offset: int
     end_offset: int
+
+    def __post_init__(self) -> None:
+        if self.start_offset < 0:
+            raise ValueError("start_offset must be non-negative")
+        if self.end_offset < self.start_offset:
+            raise ValueError("end_offset must not be less than start_offset")
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,3 +1,4 @@
 from .chunker import MarkdownChunker
+from .parser import MarkdownParser
 
-__all__ = ["MarkdownChunker"]
+__all__ = ["MarkdownChunker", "MarkdownParser"]
