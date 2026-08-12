@@ -128,7 +128,7 @@ def _build_sections(
         raise ValueError("heading is missing its source offset")
 
     root = Section(
-        section_id=_section_id(
+        section_id=build_section_id(
             resource_id=resource_id,
             content_revision=content_revision,
             kind="root",
@@ -179,7 +179,7 @@ def _build_sections(
             raise ValueError("heading is missing its source offset")
 
         section = Section(
-            section_id=_section_id(
+            section_id=build_section_id(
                 resource_id=resource_id,
                 content_revision=content_revision,
                 kind="heading",
@@ -200,7 +200,7 @@ def _build_sections(
     return sections
 
 
-def _section_id(
+def build_section_id(
     *,
     resource_id: str,
     content_revision: str,
