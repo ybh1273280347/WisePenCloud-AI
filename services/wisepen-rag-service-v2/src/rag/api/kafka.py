@@ -16,7 +16,7 @@ from rag.application.rag.acl import (
     ResourceAclRefresher,
 )
 from rag.application.rag.index import ResourceIndexer
-from rag.core.persistence import ResourceDeletionService
+from rag.core.persistence.resource_deletion import ResourceDeletionService
 
 NonEmptyText = Annotated[
     str,
