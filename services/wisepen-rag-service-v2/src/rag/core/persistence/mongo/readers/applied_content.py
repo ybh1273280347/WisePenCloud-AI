@@ -4,7 +4,6 @@ from collections.abc import Sequence
 
 from pymongo import ASCENDING
 
-from rag.core.persistence.mongo.mappers.deserializer import to_reading_block, to_section
 from rag.domain.document_structure import Section
 from rag.domain.entities import ReadingBlockEntity, SectionEntity
 from rag.domain.read_content import (
@@ -17,6 +16,7 @@ from rag.domain.repositories.applied_content_reader import AppliedContentReader
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.source_part_reader import SourcePartReader
 from rag.domain.services.text_assembler import assemble_source_text
+from rag.utils.chunkers import SourceSpan
 
 
 class MongoAppliedContentReader(AppliedContentReader):
@@ -67,7 +67,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                 }
             ).to_list()
             page_blocks = [
-                to_reading_block(entity)
+                _to_reading_block(entity)
                 for entity in blocks
                 if any(
                     span.start_offset < page.source_span.end_offset
@@ -106,7 +106,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                 "content_revision": revision.content_revision,
             }
         ).sort("+own_start").to_list()
-        all_sections = [to_section(entity) for entity in entities]
+        all_sections = [_to_section(entity) for entity in entities]
         sections_by_id = {section.section_id: section for section in all_sections}
         selected = [sections_by_id[section_id] for section_id in requested_ids if section_id in sections_by_id]
         if not selected:
@@ -120,7 +120,7 @@ class MongoAppliedContentReader(AppliedContentReader):
         ).sort([("section_id", ASCENDING), ("ordinal", ASCENDING)]).to_list()
         blocks_by_section: dict[str, list[ReadingBlock]] = {}
         for entity in blocks:
-            block = to_reading_block(entity)
+            block = _to_reading_block(entity)
             blocks_by_section.setdefault(block.section_id, []).append(block)
         siblings_by_parent: dict[str | None, list[Section]] = {}
         for section in all_sections:
@@ -142,3 +142,32 @@ class MongoAppliedContentReader(AppliedContentReader):
                 ),
             )
         return result
+
+
+def _to_section(record: SectionEntity) -> Section:
+    return Section(
+        section_id=record.section_id,
+        title=record.title,
+        level=record.level,
+        parent_section_id=record.parent_section_id,
+        ordinal=record.ordinal,
+        section_path=list(record.section_path),
+        own_span=SourceSpan(record.own_start, record.own_end),
+        subtree_span=SourceSpan(record.own_start, record.subtree_end),
+        preview=record.preview,
+    )
+
+
+def _to_reading_block(record: ReadingBlockEntity) -> ReadingBlock:
+    return ReadingBlock(
+        block_id=record.block_id,
+        section_id=record.section_id,
+        ordinal=record.ordinal,
+        raw_text=record.raw_text,
+        source_spans=[
+            SourceSpan(span.start_offset, span.end_offset)
+            for span in record.source_spans
+        ],
+        page_labels=list(record.page_labels),
+        anchor_labels=list(record.anchor_labels),
+    )

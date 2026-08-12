@@ -633,14 +633,14 @@ application/rag/acl/ports.py
 建议 adapter 布局按后端和事实命名：
 
 ```text
-persistence/mongo/resource_index_writer.py
-persistence/mongo/applied_structure_reader.py
-persistence/mongo/applied_content_reader.py
-persistence/mongo/graph_build_source_reader.py
-persistence/mongo/evidence_reader.py
-persistence/mongo/generation_cache.py
+persistence/mongo/readers/applied_structure.py
+persistence/mongo/readers/applied_content.py
+persistence/mongo/readers/graph_build_source.py
+persistence/mongo/readers/evidence.py
+persistence/mongo/writers/resource_index.py
+persistence/mongo/generation_store.py
 persistence/mongo/resource_acl_store.py
-persistence/mongo/authoritative_acl_reader.py
+persistence/mongo/readers/authoritative_acl.py
 persistence/qdrant/retrieval_index_writer.py
 persistence/qdrant/candidate_search.py
 persistence/neo4j/knowledge_graph_writer.py
@@ -650,9 +650,7 @@ persistence/neo4j/graph_acl_writer.py
 persistence/redis/navigation_state_store.py
 ```
 
-Mongo adapter 使用 `domain/entities` 中的 Beanie Document；同后端 adapter 可以共享私有 serialization 和 query helper，但共享代码不能反向成为 application 的 `common` 模块。
-
-Mongo 持久化映射的共享职责固定为：`core/persistence/mongo/mappers/serializer.py` 负责领域事实到 Mongo 字段的序列化，`core/persistence/mongo/mappers/deserializer.py` 负责 Mongo Entity 或上游记录到领域事实的反序列化。内容映射与 ACL 映射都遵循这两个文件的统一布局；仓储文件只负责查询、写入和删除，不重复实现字段转换。`domain/services/text_assembler.py` 负责 SourcePart 连续覆盖校验和文本组装，`SourcePartReader` 负责分片查询。不得在 Mongo 目录恢复同时包含 serializer、deserializer 和文本业务规则的 `content_records.py`，也不得用无仓储归属的 `source_text.py` 承载跨 reader 查询。
+Mongo adapter 使用 `domain/entities` 中的 Beanie Document；字段转换属于实际消费该转换的 adapter，reader 内定义私有 `_to_domain()`，writer/store 内定义私有 `_to_document()`。少量重复优于提前集中到大 mappers；只有至少两个 Mongo adapter 真实复用同一序列化契约时，才新增 `shared_serializers.py`。Redis 和 Qdrant 的 adapter 数量少，序列化和反序列化直接内联，不建立 mappers 子目录。`domain/services/text_assembler.py` 负责 SourcePart 连续覆盖校验和文本组装，`SourcePartReader` 负责分片查询。
 
 ## 11. 明确禁止
 

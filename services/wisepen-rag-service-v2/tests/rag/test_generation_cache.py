@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from rag.core.persistence.mongo.generation_cache import MongoGenerationCacheStore
+from rag.core.persistence.mongo import MongoGenerationCacheStore
 from rag.domain.entities import GenerationCacheEntity
 from rag.domain.generation_cache import GenerationCacheKind
 

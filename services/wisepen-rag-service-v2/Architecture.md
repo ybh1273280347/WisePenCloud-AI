@@ -297,7 +297,7 @@ Mongo / Qdrant / Neo4j / Redis / model clients
 
 已发布内容读取拆为三个独立职责：`AppliedStructureReader` 只获取结构事实，`AppliedContentReader` 按页或 Section 获取正文，`GraphBuildSourceReader` 只为 index 内的图构建阶段提供指定 revision 的输入。结构构建函数位于 `index/structure.py`，已发布结构获取位于 `read/structure.py`。
 
-Mongo 持久化共享代码也必须按职能拆分：`core/persistence/mongo/mappers/serializer.py` 只做领域事实到 Mongo 字段的序列化，`core/persistence/mongo/mappers/deserializer.py` 只做 Mongo Entity 到领域事实的反序列化；`domain/services/text_assembler.py` 负责 SourcePart 的连续覆盖校验和原文组装；`SourcePartReader` 及其 Mongo adapter 只负责查询分片。禁止恢复 `content_records.py`、`source_text.py` 这类同时包含映射、领域校验和查询的混合文件。
+持久化字段映射默认属于实际执行读写的 adapter：reader 使用私有 `_to_domain()`，writer/store 使用私有 `_to_document()`。Mongo adapter 较多，因此按 `readers/`、`writers/` 组织；只有同一转换被至少两个 adapter 实际复用且语义完全一致时，才允许新增后端内部的 `shared_serializers.py`，当前没有满足条件的 Mongo 序列化器。Redis 和 Qdrant adapter 数量少，映射直接内联，不建立子目录或通用 mappers。`domain/services/text_assembler.py` 只负责 SourcePart 的连续覆盖校验和原文组装；`SourcePartReader` 只负责查询分片。
 
 ## 11. 架构变更规则
 

@@ -2,7 +2,6 @@
 
 from collections.abc import Sequence
 
-from rag.core.persistence.mongo.mappers.deserializer import to_source_part
 from rag.domain.content_revision import SourcePart
 from rag.domain.entities import SourcePartEntity
 from rag.domain.repositories.source_part_reader import SourcePartReader
@@ -30,4 +29,14 @@ class MongoSourcePartReader(SourcePartReader):
                 }
             )
         entities = await SourcePartEntity.find(query).sort("+part_index").to_list()
-        return [to_source_part(entity) for entity in entities]
+        return [_to_domain(entity) for entity in entities]
+
+
+def _to_domain(record: SourcePartEntity) -> SourcePart:
+    return SourcePart(
+        resource_id=record.resource_id,
+        content_revision=record.content_revision,
+        part_index=record.part_index,
+        source_span=SourceSpan(record.start_offset, record.end_offset),
+        text=record.text,
+    )

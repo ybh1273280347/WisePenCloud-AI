@@ -1,0 +1,1 @@
+"""Mongo read adapters."""

@@ -5,14 +5,6 @@ from collections.abc import Sequence
 from pymongo.errors import DuplicateKeyError
 
 from rag.application.rag.index.revisions import build_content_revision_id, decide_stage
-from rag.core.persistence.mongo.mappers.deserializer import to_resource_index_state
-from rag.core.persistence.mongo.mappers.serializer import (
-    reading_block_document,
-    revision_document,
-    section_document,
-    source_part_document,
-    source_ref_document,
-)
 from rag.domain.content_revision import ContentRevision, ResourceIndexState, SourcePart
 from rag.domain.document_structure import Section
 from rag.domain.entities import (
@@ -62,7 +54,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         if action is not StageAction.STAGED:
             return action
 
-        stored_revision = ContentRevisionEntity(**revision_document(revision))
+        stored_revision = ContentRevisionEntity(**_revision_document(revision))
         existing_revision = await ContentRevisionEntity.find_one(
             {"content_revision": revision.content_revision}
         )
@@ -78,7 +70,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         parts = split_source_parts(revision, markdown)
         if parts:
             await SourcePartEntity.insert_many(
-                [SourcePartEntity(**source_part_document(part)) for part in parts]
+                [SourcePartEntity(**_source_part_document(part)) for part in parts]
             )
         for entity_type in (SectionEntity, ReadingBlockEntity, SourceRefEntity):
             await entity_type.find(
@@ -87,21 +79,21 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         if sections:
             await SectionEntity.insert_many(
                 [
-                    SectionEntity(**section_document(revision, section))
+                    SectionEntity(**_section_document(revision, section))
                     for section in sections
                 ]
             )
         if reading_blocks:
             await ReadingBlockEntity.insert_many(
                 [
-                    ReadingBlockEntity(**reading_block_document(revision, block))
+                    ReadingBlockEntity(**_reading_block_document(revision, block))
                     for block in reading_blocks
                 ]
             )
         if source_refs:
             await SourceRefEntity.insert_many(
                 [
-                    SourceRefEntity(**source_ref_document(revision, source_ref))
+                    SourceRefEntity(**_source_ref_document(revision, source_ref))
                     for source_ref in source_refs
                 ]
             )
@@ -168,7 +160,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         entity = await ResourceIndexStateEntity.find_one({"resource_id": resource_id})
         if entity is None:
             return None
-        return to_resource_index_state(entity)
+        return _to_domain(entity)
 
     async def delete_resources(self, resource_ids: Sequence[str]) -> None:
         ids = list(dict.fromkeys(resource_ids))
@@ -202,6 +194,109 @@ def split_source_parts(revision: ContentRevision, markdown: str) -> list[SourceP
         )
         for index, start in enumerate(range(0, len(markdown), _SOURCE_PART_CHARACTERS))
     ]
+
+
+def _to_domain(record: ResourceIndexStateEntity) -> ResourceIndexState:
+    return ResourceIndexState(
+        resource_id=record.resource_id,
+        staged_content_revision=record.staged_content_revision,
+        staged_document_version=record.staged_document_version,
+        applied_content_revision=record.applied_content_revision,
+        applied_document_version=record.applied_document_version,
+    )
+
+
+def _revision_document(revision: ContentRevision) -> dict[str, object]:
+    return {
+        "resource_id": revision.resource_id,
+        "content_revision": revision.content_revision,
+        "document_version": revision.document_version,
+        "content_hash": revision.content_hash,
+        "index_schema_version": revision.index_schema_version,
+        "structure_mode": revision.structure_mode.value,
+        "total_length": revision.total_length,
+        "pages": [
+            {
+                "page_index": page.page_index,
+                "page_label": page.page_label,
+                "start_offset": page.source_span.start_offset,
+                "end_offset": page.source_span.end_offset,
+            }
+            for page in revision.pages
+        ],
+    }
+
+
+def _source_part_document(part: SourcePart) -> dict[str, object]:
+    return {
+        "resource_id": part.resource_id,
+        "content_revision": part.content_revision,
+        "part_index": part.part_index,
+        "start_offset": part.source_span.start_offset,
+        "end_offset": part.source_span.end_offset,
+        "text": part.text,
+    }
+
+
+def _section_document(
+    revision: ContentRevision,
+    section: Section,
+) -> dict[str, object]:
+    return {
+        "resource_id": revision.resource_id,
+        "content_revision": revision.content_revision,
+        "section_id": section.section_id,
+        "title": section.title,
+        "level": section.level,
+        "parent_section_id": section.parent_section_id,
+        "ordinal": section.ordinal,
+        "section_path": list(section.section_path),
+        "preview": section.preview,
+        "own_start": section.own_span.start_offset,
+        "own_end": section.own_span.end_offset,
+        "subtree_end": section.subtree_span.end_offset,
+    }
+
+
+def _reading_block_document(
+    revision: ContentRevision,
+    block: ReadingBlock,
+) -> dict[str, object]:
+    return {
+        "resource_id": revision.resource_id,
+        "content_revision": revision.content_revision,
+        "block_id": block.block_id,
+        "section_id": block.section_id,
+        "ordinal": block.ordinal,
+        "raw_text": block.raw_text,
+        "source_spans": [_span_document(span) for span in block.source_spans],
+        "start_offset": block.source_spans[0].start_offset,
+        "end_offset": block.source_spans[-1].end_offset,
+        "page_labels": list(block.page_labels),
+        "anchor_labels": list(block.anchor_labels),
+    }
+
+
+def _source_ref_document(
+    revision: ContentRevision,
+    source_ref: SourceRef,
+) -> dict[str, object]:
+    return {
+        "resource_id": revision.resource_id,
+        "content_revision": revision.content_revision,
+        "ref_id": source_ref.ref_id,
+        "chunk_id": source_ref.chunk_id,
+        "reading_block_id": source_ref.reading_block_id,
+        "section_id": source_ref.section_id,
+        "section_path": list(source_ref.section_path),
+        "source_spans": [_span_document(span) for span in source_ref.source_spans],
+        "page_labels": list(source_ref.page_labels),
+        "anchor_labels": list(source_ref.anchor_labels),
+    }
+
+
+def _span_document(span: SourceSpan) -> dict[str, int]:
+    return {"start_offset": span.start_offset, "end_offset": span.end_offset}
 
 
 def _stage_state_filter(revision: ContentRevision) -> dict[str, object]:

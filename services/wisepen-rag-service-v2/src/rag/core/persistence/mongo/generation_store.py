@@ -5,8 +5,6 @@ from collections.abc import Mapping, Sequence
 from beanie.operators import In
 from pymongo import UpdateOne
 
-from rag.core.persistence.mongo.mappers.deserializer import to_generation_cache_values
-from rag.core.persistence.mongo.mappers.serializer import generation_cache_document
 from rag.domain.entities import GenerationCacheEntity
 from rag.domain.generation_cache import GenerationCacheKind
 from rag.domain.repositories.generation_cache import GenerationCacheStore
@@ -31,7 +29,7 @@ class MongoGenerationCacheStore(GenerationCacheStore):
             GenerationCacheEntity.cache_kind == cache_kind,
             In(GenerationCacheEntity.cache_key, unique_keys),
         ).to_list()
-        return to_generation_cache_values(records)
+        return {record.cache_key: record.payload for record in records}
 
     async def set_many(
         self,
@@ -52,7 +50,7 @@ class MongoGenerationCacheStore(GenerationCacheStore):
                         "cache_key": cache_key,
                     },
                     {
-                        "$set": generation_cache_document(
+                        "$set": _to_document(
                             resource_id=resource_id,
                             cache_kind=cache_kind,
                             cache_key=cache_key,
@@ -73,3 +71,18 @@ class MongoGenerationCacheStore(GenerationCacheStore):
         await GenerationCacheEntity.find(
             In(GenerationCacheEntity.resource_id, unique_resource_ids)
         ).delete()
+
+
+def _to_document(
+    *,
+    resource_id: str,
+    cache_kind: GenerationCacheKind,
+    cache_key: str,
+    payload: str,
+) -> dict[str, object]:
+    return {
+        "resource_id": resource_id,
+        "cache_kind": cache_kind.value,
+        "cache_key": cache_key,
+        "payload": payload,
+    }

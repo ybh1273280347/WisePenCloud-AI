@@ -42,7 +42,8 @@ base:     origin/main @ e1af497f7
 | CP13 | `21ac955f8` | Qdrant retrieval index 的 staged/active revision 写入、向量复用、旧 revision 清理和资源删除。 |
 | CP14 | `20c13cd3a` | Qdrant dense/BM25 混合候选召回、active/resource/ACL 过滤和最小候选映射。 |
 | CP15 | `86d7f888` | Redis 单 hash navigation state、统一 TTL 和 Lua 原子扩展。 |
-| CP15.1 | 当前 | Redis navigation state 的序列化/反序列化收敛到 persistence/mappers 两个文件，仓储只保留 Redis 行为。 |
+| CP15.1 | `537c52265` | Redis navigation state 曾将映射收敛到 persistence/mappers。 |
+| CP15.2 | 当前 | 纠正过度集中映射：Mongo 按 readers/writers 组织并私有映射，Redis/Qdrant 映射直接内联。 |
 
 ## 3. 当前架构事实
 
@@ -158,7 +159,7 @@ CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器�
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`，CP13 已提交为 `21ac955f8`，CP14 已提交为 `20c13cd3a`，CP15 已提交为 `86d7f888`。当前工作树只包含 CP15.1 的 mapper 风格收敛；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
+CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`，CP13 已提交为 `21ac955f8`，CP14 已提交为 `20c13cd3a`，CP15 已提交为 `86d7f888`，CP15.1 已提交为 `537c52265`。当前工作树是 CP15.2 持久化职责纠正；CP16 LOCATE 已暂存，待本 checkpoint 验证提交后恢复。
 
 CP08.1 的稳定边界：
 
@@ -171,9 +172,9 @@ CP08.1 的稳定边界：
 
 CP08.2 的稳定边界：
 
-- `core/persistence/mongo/mappers/serializer.py` 只负责领域事实到 Mongo 字段的序列化。
-- `core/persistence/mongo/mappers/deserializer.py` 负责 Mongo Entity 或上游记录到领域事实的反序列化，并在不满足外部数据契约时直接抛出异常。
-- 内容和 ACL 映射统一使用这两个文件；仓储 adapter 不再私有复制 `*_document` 或 `to_*` 映射函数。
+- Mongo reader/writer 按 `core/persistence/mongo/readers/` 与 `writers/` 组织，读写 store 保留在 Mongo 根目录。
+- 字段映射默认私有内联：reader 使用 `_to_domain()`，writer/store 使用 `_to_document()`；少量重复不抽成全局 mappers。
+- 只有至少两个 Mongo adapter 真实复用同一序列化契约时才允许增加 `shared_serializers.py`，当前没有满足条件的转换。
 - `domain/services/text_assembler.py` 只负责 SourcePart 长度、重叠、间隙和连续覆盖校验，以及原文组装。
 - `SourcePartReader` 和 `MongoSourcePartReader` 只负责 SourcePart 查询，不负责文本组装。
 - `content_records.py`、`source_text.py` 已删除；Mongo reader 不再通过 `model_dump()` 字典进入领域映射或文本组装。
@@ -234,7 +235,7 @@ CP13 的实现边界：
 
 - `RetrievalIndexWriter` 位于 `domain/repositories`，只接收 `RetrievalChunk`、`SourceRef`、`ResourceAcl` 和 dense vector，不暴露 Qdrant 原生类型。
 - `QdrantRetrievalIndexWriter` 位于 `core/persistence/qdrant`，负责 collection 创建、payload index、dense vector 复用、staged point 写入、revision 激活、旧 revision 清理和资源删除。
-- Qdrant payload 的领域到存储字段映射集中在 `core/persistence/qdrant/mappers/serializer.py`；CP13 没有候选读取，因此不新增反序列化器。
+- Qdrant payload 的序列化和候选反序列化分别私有内联在实际 writer/search adapter 中，不建立 mappers 子目录。
 - staged point 的 `active` 固定为 `false`；Mongo applied CAS 成功后由 `activate_revision()` 设置当前 revision 为 active，并关闭旧 revision 的召回可见性，随后由 `delete_other_revisions()` 清理旧 point。
 - payload 保留 `resource_id`、`content_revision`、`active`、chunk/SourceRef 身份、原文检索字段、embedding key 和 ACL 字段；明确不写入 v1 的 `chunk_index`。
 - native BM25 使用 Qdrant `Document(text=chunk.index_text, model="qdrant/bm25")`，dense vector 必须符合配置维度；缺失向量、SourceRef 或 revision 归属错误直接抛出。
@@ -253,7 +254,7 @@ CP15 的实现边界：
 - `NavigationState` 与 `KnownSection` 位于 `domain/navigation.py`；Section 映射同时保存 `resource_id` 和发现时的 `content_revision`。
 - `NavigationStateStore` 位于 `domain/repositories`，只暴露 create/get/add sections/add nodes，不暴露 Redis key、hash 或 Lua 类型。
 - `RedisNavigationStateStore` 使用一个 `wisepen:rag:v2:navigation-state:<state_id>` hash；`known_sections` 和 `known_nodes` 作为 JSON 字段，避免 v1 多 key 结构产生孤立状态。
-- Redis 状态的领域到 hash/JSON 字段映射统一放在 `core/persistence/redis/mappers/serializer.py` 和 `deserializer.py`；仓储不再内置 `_serialize_*`、`_deserialize_*` 或字段校验辅助函数。
+- Redis 状态的 hash/JSON 映射私有内联在唯一的 `navigation_state_store.py` 中，不建立 mappers 子目录。
 - create 写入完整 hash 后设置统一 TTL；两个 add 操作用 Lua 原子检查主 key、合并集合并续期主 key，状态不存在直接抛出 `NavigationStateNotFoundError`。
 - CP15 不实现 LOCATE/READ/EXPAND 用例、state 用户/session 校验或删除编排；这些由 CP16、CP22、CP21/CP25 的 application 负责。
 

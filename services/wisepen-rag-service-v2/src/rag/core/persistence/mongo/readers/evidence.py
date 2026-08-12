@@ -3,24 +3,20 @@
 from collections.abc import Sequence
 from hashlib import sha256
 
-from rag.core.persistence.mongo.mappers.deserializer import (
-    to_reading_block,
-    to_section,
-    to_source_ref,
-)
-from rag.core.persistence.mongo.source_part_reader import MongoSourcePartReader
+from rag.domain.document_structure import Section
 from rag.domain.entities import ReadingBlockEntity, SectionEntity, SourceRefEntity
 from rag.domain.evidence import (
     EvidenceCorruptError,
     EvidenceRecord,
     EvidenceRevisionError,
 )
+from rag.domain.reading import ReadingBlock
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.evidence_reader import EvidenceReader
+from rag.domain.repositories.source_part_reader import SourcePartReader
+from rag.domain.retrieval import SourceRef
 from rag.domain.services.text_assembler import assemble_source_text
 from rag.utils.chunkers import SourceSpan
-
-from .applied_revision_reader import MongoAppliedRevisionReader
 
 
 class MongoEvidenceReader(EvidenceReader):
@@ -28,10 +24,12 @@ class MongoEvidenceReader(EvidenceReader):
 
     def __init__(
         self,
-        revisions: AppliedRevisionReader | None = None,
+        *,
+        revisions: AppliedRevisionReader,
+        source_parts: SourcePartReader,
     ) -> None:
-        self._revisions = revisions or MongoAppliedRevisionReader()
-        self._source_parts = MongoSourcePartReader()
+        self._revisions = revisions
+        self._source_parts = source_parts
 
     async def read_applied_evidence(
         self,
@@ -57,15 +55,15 @@ class MongoEvidenceReader(EvidenceReader):
         ref_entities = await SourceRefEntity.find(
             {"resource_id": resource_id, "content_revision": content_revision, "ref_id": {"$in": requested_ids}}
         ).to_list()
-        refs = [to_source_ref(entity) for entity in ref_entities]
+        refs = [_to_source_ref(entity) for entity in ref_entities]
         blocks = await ReadingBlockEntity.find(
             {"resource_id": resource_id, "content_revision": content_revision, "block_id": {"$in": list({ref.reading_block_id for ref in refs})}}
         ).to_list()
         sections = await SectionEntity.find(
             {"resource_id": resource_id, "content_revision": content_revision, "section_id": {"$in": list({ref.section_id for ref in refs})}}
         ).to_list()
-        blocks_by_id = {block.block_id: to_reading_block(block) for block in blocks}
-        sections_by_id = {section.section_id: to_section(section) for section in sections}
+        blocks_by_id = {block.block_id: _to_reading_block(block) for block in blocks}
+        sections_by_id = {section.section_id: _to_section(section) for section in sections}
         records: dict[str, EvidenceRecord] = {}
         for source_ref in refs:
             block = blocks_by_id.get(source_ref.reading_block_id)
@@ -80,3 +78,50 @@ class MongoEvidenceReader(EvidenceReader):
                 source_text=assemble_source_text(parts, source_ref.source_spans),
             )
         return records
+
+
+def _to_section(record: SectionEntity) -> Section:
+    return Section(
+        section_id=record.section_id,
+        title=record.title,
+        level=record.level,
+        parent_section_id=record.parent_section_id,
+        ordinal=record.ordinal,
+        section_path=list(record.section_path),
+        own_span=SourceSpan(record.own_start, record.own_end),
+        subtree_span=SourceSpan(record.own_start, record.subtree_end),
+        preview=record.preview,
+    )
+
+
+def _to_reading_block(record: ReadingBlockEntity) -> ReadingBlock:
+    return ReadingBlock(
+        block_id=record.block_id,
+        section_id=record.section_id,
+        ordinal=record.ordinal,
+        raw_text=record.raw_text,
+        source_spans=[
+            SourceSpan(span.start_offset, span.end_offset)
+            for span in record.source_spans
+        ],
+        page_labels=list(record.page_labels),
+        anchor_labels=list(record.anchor_labels),
+    )
+
+
+def _to_source_ref(record: SourceRefEntity) -> SourceRef:
+    return SourceRef(
+        ref_id=record.ref_id,
+        resource_id=record.resource_id,
+        content_revision=record.content_revision,
+        chunk_id=record.chunk_id,
+        reading_block_id=record.reading_block_id,
+        section_id=record.section_id,
+        section_path=list(record.section_path),
+        source_spans=[
+            SourceSpan(span.start_offset, span.end_offset)
+            for span in record.source_spans
+        ],
+        page_labels=list(record.page_labels),
+        anchor_labels=list(record.anchor_labels),
+    )

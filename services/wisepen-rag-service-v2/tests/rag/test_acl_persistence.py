@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from bson import ObjectId
 
-from rag.core.persistence.mongo.authoritative_acl_reader import (
+from rag.core.persistence.mongo.readers.authoritative_acl import (
     AuthoritativeAclError,
     MongoAuthoritativeAclReader,
 )

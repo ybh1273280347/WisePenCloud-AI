@@ -4,14 +4,11 @@ import asyncio
 from collections.abc import Mapping, Sequence
 from hashlib import sha256
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
-from rag.core.persistence.qdrant.mappers.serializer import (
-    retrieval_point_id,
-    retrieval_point_payload,
-)
 from rag.domain.acl import ResourceAcl
 from rag.domain.repositories.retrieval_index_writer import RetrievalIndexWriter
 from rag.domain.retrieval import RetrievalChunk, SourceRef
@@ -147,7 +144,7 @@ class QdrantRetrievalIndexWriter(RetrievalIndexWriter):
 
             points.append(
                 qdrant_models.PointStruct(
-                    id=retrieval_point_id(content_revision, chunk.chunk_id),
+                    id=_point_id(content_revision, chunk.chunk_id),
                     vector={
                         self._dense_vector_name: list(vector),
                         self._sparse_vector_name: qdrant_models.Document(
@@ -156,7 +153,7 @@ class QdrantRetrievalIndexWriter(RetrievalIndexWriter):
                             options=self._bm25_options or None,
                         ),
                     },
-                    payload=retrieval_point_payload(
+                    payload=_to_payload(
                         resource_id=resource_id,
                         content_revision=content_revision,
                         chunk=chunk,
@@ -296,6 +293,55 @@ def _source_refs_by_chunk(
             raise ValueError(f"source refs contain duplicate chunk {source_ref.chunk_id}")
         refs_by_chunk[source_ref.chunk_id] = source_ref
     return refs_by_chunk
+
+
+def _point_id(content_revision: str, chunk_id: str) -> str:
+    """为 revision 和 chunk 生成可重试复用的 Qdrant point ID。"""
+    return str(
+        uuid5(
+            NAMESPACE_URL,
+            f"wisepen-rag-v2-retrieval-chunk:{content_revision}:{chunk_id}",
+        )
+    )
+
+
+def _to_payload(
+    *,
+    resource_id: str,
+    content_revision: str,
+    chunk: RetrievalChunk,
+    source_ref: SourceRef,
+    embedding_key: str,
+    resource_acl: ResourceAcl,
+    active: bool,
+) -> dict[str, Any]:
+    """序列化召回、权限过滤和最终回源实际消费的字段。"""
+    return {
+        "resource_id": resource_id,
+        "content_revision": content_revision,
+        "active": active,
+        "chunk_id": chunk.chunk_id,
+        "reading_block_id": chunk.reading_block_id,
+        "section_id": chunk.section_id,
+        "raw_text": chunk.raw_text,
+        "section_path": list(chunk.section_path),
+        "anchor_labels": list(chunk.anchor_labels),
+        "source_ref_id": source_ref.ref_id,
+        "embedding_key": embedding_key,
+        "acl_revision": resource_acl.acl_revision,
+        "owner_id": resource_acl.owner_id,
+        "readable_users": list(resource_acl.readable_users),
+        "excluded_read_users": list(resource_acl.excluded_read_users),
+        "group_acls": [
+            {
+                "group_id": group_acl.group_id,
+                "is_readable": group_acl.default_readable,
+                "readable_users": list(group_acl.readable_users),
+                "excluded_read_users": list(group_acl.excluded_read_users),
+            }
+            for group_acl in resource_acl.group_acls
+        ],
+    }
 
 
 def _payload_indexes() -> tuple[tuple[str, qdrant_models.PayloadSchemaType], ...]:
