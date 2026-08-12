@@ -652,6 +652,8 @@ persistence/redis/navigation_state_store.py
 
 Mongo adapter 使用 `domain/entities` 中的 Beanie Document；同后端 adapter 可以共享私有 serialization 和 query helper，但共享代码不能反向成为 application 的 `common` 模块。
 
+内容持久化的共享职责固定为：`domain/mappers.py` 负责 Entity 与领域事实的字段映射，`domain/services/text_assembler.py` 负责 SourcePart 连续覆盖校验和文本组装，`SourcePartReader` 负责分片查询。不得在 Mongo 目录恢复同时包含 serializer、deserializer 和文本业务规则的 `content_records.py`，也不得用无仓储归属的 `source_text.py` 承载跨 reader 查询。
+
 ## 11. 明确禁止
 
 - 禁止恢复 `ResourceSnapshotRepository`，或把 structure/page/section 再塞回 snapshot result。

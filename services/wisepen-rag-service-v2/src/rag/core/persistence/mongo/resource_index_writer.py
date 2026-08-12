@@ -5,13 +5,6 @@ from collections.abc import Sequence
 from pymongo.errors import DuplicateKeyError
 
 from rag.application.rag.index.revisions import build_content_revision_id, decide_stage
-from rag.core.persistence.mongo.content_records import (
-    reading_block_document,
-    revision_document,
-    section_document,
-    source_part_document,
-    source_ref_document,
-)
 from rag.domain.content_revision import ContentRevision, ResourceIndexState, SourcePart
 from rag.domain.document_structure import Section
 from rag.domain.entities import (
@@ -21,6 +14,13 @@ from rag.domain.entities import (
     SectionEntity,
     SourcePartEntity,
     SourceRefEntity,
+)
+from rag.domain.mappers import (
+    reading_block_document,
+    revision_document,
+    section_document,
+    source_part_document,
+    source_ref_document,
 )
 from rag.domain.reading import ReadingBlock
 from rag.domain.repositories import ResourceIndexWriter, StageAction

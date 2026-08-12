@@ -297,6 +297,8 @@ Mongo / Qdrant / Neo4j / Redis / model clients
 
 已发布内容读取拆为三个独立职责：`AppliedStructureReader` 只获取结构事实，`AppliedContentReader` 按页或 Section 获取正文，`GraphBuildSourceReader` 只为 index 内的图构建阶段提供指定 revision 的输入。结构构建函数位于 `index/structure.py`，已发布结构获取位于 `read/structure.py`。
 
+Mongo 持久化共享代码也必须按职能拆分：`domain/mappers.py` 只做领域事实与持久化字段的结构转换；`domain/services/text_assembler.py` 负责 SourcePart 的连续覆盖校验和原文组装；`SourcePartReader` 及其 Mongo adapter 只负责查询分片。禁止恢复 `content_records.py`、`source_text.py` 这类同时包含映射、领域校验和查询的混合文件。
+
 ## 11. 架构变更规则
 
 以下变化必须先修改本文档并完成边界评审：

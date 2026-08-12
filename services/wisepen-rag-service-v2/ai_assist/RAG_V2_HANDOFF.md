@@ -30,7 +30,8 @@ base:     origin/main @ e1af497f7
 | CP07 | `57befb093` | 完成无状态 READ：structure、pages、sections、frontier、ReadingBlock 顺序。 |
 | CP06.2 | `0ce994168` | 删除错误的双轨 persistence 构造；Mongo adapter 不再接受 `database` 参数或 `_BeanieCollection`。 |
 | CP08 | `81a47997e` | VERIFY 回源闭环。 |
-| 当前 CP08.1 | 待提交 | 拆分 index 写入、结构获取、正文获取和图构建输入读取边界。 |
+| CP08.1 | `79c350634` | 拆分 index 写入、结构获取、正文获取和图构建输入读取边界。 |
+| 当前 CP08.2 | 待提交 | 拆分 Mongo 内容映射、SourcePart 文本组装和分片查询职责。 |
 
 ## 3. 当前架构事实
 
@@ -138,7 +139,7 @@ uv run python -m compileall -q src tests           -> passed
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`。当前 CP08.1 正在完成 `index`/`read` 仓储边界重整；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
+CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`。当前 CP08.2 正在完成 Mongo 内容共享职责重整；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
 
 CP08.1 的稳定边界：
 
@@ -148,6 +149,13 @@ CP08.1 的稳定边界：
 - `GraphBuildSourceReader` 只为 index 图构建阶段读取指定 revision 的输入。
 - `index/structure.py` 构建结构事实，`read/structure.py` 获取已发布结构。
 - READ application 动作统一为 `get_document_structure`、`get_pages`、`get_sections`。
+
+CP08.2 的稳定边界：
+
+- `domain/mappers.py` 只负责 Beanie entity 与领域事实之间的字段映射。
+- `domain/services/text_assembler.py` 只负责 SourcePart 长度、重叠、间隙和连续覆盖校验，以及原文组装。
+- `SourcePartReader` 和 `MongoSourcePartReader` 只负责 SourcePart 查询，不负责文本组装。
+- `content_records.py`、`source_text.py` 已删除；Mongo reader 不再通过 `model_dump()` 字典进入领域映射或文本组装。
 
 ```text
 ai_assist/RAG_V2_HANDOFF.md

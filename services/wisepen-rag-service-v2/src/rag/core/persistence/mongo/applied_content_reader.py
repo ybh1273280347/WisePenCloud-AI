@@ -4,14 +4,10 @@ from collections.abc import Sequence
 
 from pymongo import ASCENDING
 
-from rag.core.persistence.mongo.applied_revision import get_applied_revision
-from rag.core.persistence.mongo.content_records import to_reading_block, to_section
-from rag.core.persistence.mongo.source_text import get_source_text
+from rag.core.persistence.mongo.source_part_reader import MongoSourcePartReader
 from rag.domain.document_structure import Section
-from rag.domain.entities import (
-    ReadingBlockEntity,
-    SectionEntity,
-)
+from rag.domain.entities import ReadingBlockEntity, SectionEntity
+from rag.domain.mappers import to_reading_block, to_section
 from rag.domain.read_content import (
     ContentWindow,
     SectionContent,
@@ -19,17 +15,28 @@ from rag.domain.read_content import (
 )
 from rag.domain.reading import ReadingBlock
 from rag.domain.repositories.applied_content_reader import AppliedContentReader
+from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
+from rag.domain.services.text_assembler import assemble_source_text
+
+from .applied_revision_reader import MongoAppliedRevisionReader
 
 
 class MongoAppliedContentReader(AppliedContentReader):
     """只从 Beanie entities 读取 applied revision 正文。"""
+
+    def __init__(
+        self,
+        revisions: AppliedRevisionReader | None = None,
+    ) -> None:
+        self._revisions = revisions or MongoAppliedRevisionReader()
+        self._source_parts = MongoSourcePartReader()
 
     async def get_applied_pages(
         self,
         resource_id: str,
         page_labels: Sequence[str],
     ) -> dict[str, ContentWindow] | None:
-        revision = await get_applied_revision(resource_id)
+        revision = await self._revisions.get_applied_revision(resource_id)
         if revision is None:
             return None
         requested_labels = list(dict.fromkeys(page_labels))
@@ -39,7 +46,11 @@ class MongoAppliedContentReader(AppliedContentReader):
         ]
         windows: dict[str, ContentWindow] = {}
         for page in selected_pages:
-            text = await get_source_text(revision.content_revision, [page.source_span])
+            parts = await self._source_parts.get_parts(
+                revision.content_revision,
+                [page.source_span],
+            )
+            text = assemble_source_text(parts, [page.source_span])
             sections = await SectionEntity.find(
                 {
                     "resource_id": resource_id,
@@ -57,7 +68,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                 }
             ).to_list()
             page_blocks = [
-                to_reading_block(entity.model_dump())
+                to_reading_block(entity)
                 for entity in blocks
                 if any(
                     span.start_offset < page.source_span.end_offset
@@ -84,7 +95,7 @@ class MongoAppliedContentReader(AppliedContentReader):
         resource_id: str,
         section_ids: Sequence[str],
     ) -> dict[str, SectionContent] | None:
-        revision = await get_applied_revision(resource_id)
+        revision = await self._revisions.get_applied_revision(resource_id)
         if revision is None:
             return None
         requested_ids = list(dict.fromkeys(section_ids))
@@ -96,7 +107,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                 "content_revision": revision.content_revision,
             }
         ).sort("+own_start").to_list()
-        all_sections = [to_section(entity.model_dump()) for entity in entities]
+        all_sections = [to_section(entity) for entity in entities]
         sections_by_id = {section.section_id: section for section in all_sections}
         selected = [sections_by_id[section_id] for section_id in requested_ids if section_id in sections_by_id]
         if not selected:
@@ -110,7 +121,7 @@ class MongoAppliedContentReader(AppliedContentReader):
         ).sort([("section_id", ASCENDING), ("ordinal", ASCENDING)]).to_list()
         blocks_by_section: dict[str, list[ReadingBlock]] = {}
         for entity in blocks:
-            block = to_reading_block(entity.model_dump())
+            block = to_reading_block(entity)
             blocks_by_section.setdefault(block.section_id, []).append(block)
         siblings_by_parent: dict[str | None, list[Section]] = {}
         for section in all_sections:
