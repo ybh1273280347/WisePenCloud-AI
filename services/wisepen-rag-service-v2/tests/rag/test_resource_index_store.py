@@ -47,6 +47,9 @@ def _database() -> tuple[MagicMock, dict[str, MagicMock]]:
             "wisepen_rag_v2_resource_index_states",
             "wisepen_rag_v2_content_revisions",
             "wisepen_rag_v2_source_parts",
+            "wisepen_rag_v2_sections",
+            "wisepen_rag_v2_reading_blocks",
+            "wisepen_rag_v2_source_refs",
         )
     }
     for collection in collections.values():
@@ -170,7 +173,13 @@ async def test_stage_writes_source_before_staged_pointer() -> None:
         "wisepen_rag_v2_resource_index_states"
     ].update_one.side_effect = record_pointer
 
-    action = await store.stage_revision(revision, "# 标题\n\n正文🙂。")
+    action = await store.stage_revision(
+        revision,
+        "# 标题\n\n正文🙂。",
+        [],
+        [],
+        [],
+    )
 
     assert action is StageAction.STAGED
     assert events == ["revision", "delete_parts", "insert_parts", "staged_pointer"]
@@ -183,7 +192,7 @@ async def test_stage_rejects_revision_identity_that_does_not_match_source() -> N
     revision = _revision(markdown="原文")
 
     with pytest.raises(ValueError, match="identity"):
-        await store.stage_revision(revision, "修文")
+        await store.stage_revision(revision, "修文", [], [], [])
 
     collections["wisepen_rag_v2_content_revisions"].replace_one.assert_not_awaited()
 
@@ -222,7 +231,13 @@ async def test_already_applied_revision_does_not_rewrite_source() -> None:
     }
     store = MongoResourceIndexStore(database)
 
-    action = await store.stage_revision(revision, "# 标题\n\n正文🙂。")
+    action = await store.stage_revision(
+        revision,
+        "# 标题\n\n正文🙂。",
+        [],
+        [],
+        [],
+    )
 
     assert action is StageAction.ALREADY_APPLIED
     collections["wisepen_rag_v2_content_revisions"].replace_one.assert_not_awaited()
@@ -240,7 +255,13 @@ async def test_stale_revision_does_not_rewrite_source() -> None:
     }
     store = MongoResourceIndexStore(database)
 
-    action = await store.stage_revision(revision, "# 标题\n\n正文🙂。")
+    action = await store.stage_revision(
+        revision,
+        "# 标题\n\n正文🙂。",
+        [],
+        [],
+        [],
+    )
 
     assert action is StageAction.STALE
     collections["wisepen_rag_v2_content_revisions"].replace_one.assert_not_awaited()

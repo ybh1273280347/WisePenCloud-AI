@@ -1,12 +1,15 @@
 """index 能力使用的 Mongo revision/source port 与确定性版本规则。"""
 
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from enum import StrEnum
 from hashlib import sha256
 from typing import Protocol
 
 from rag.domain.content_revision import ContentRevision, ResourceIndexState
-from rag.domain.document_structure import DocumentStructure
+from rag.domain.document_structure import DocumentStructure, Section
+from rag.domain.reading import ReadingBlock
+from rag.domain.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
 
 INDEX_SCHEMA_VERSION = "rag-v2-content:v1"
@@ -20,6 +23,18 @@ class StageAction(StrEnum):
     STALE = "stale"
 
 
+@dataclass(slots=True)
+class GraphBuildSource:
+    """指定 applied revision 的图构建权威输入。"""
+
+    resource_id: str
+    content_revision: str
+    markdown: str
+    sections: list[Section] = field(default_factory=list)
+    reading_blocks: list[ReadingBlock] = field(default_factory=list)
+    source_refs: list[SourceRef] = field(default_factory=list)
+
+
 class ResourceIndexStore(Protocol):
     """管理资源内容 revision、权威原文和 staged/applied 指针。"""
 
@@ -29,6 +44,9 @@ class ResourceIndexStore(Protocol):
         self,
         revision: ContentRevision,
         markdown: str,
+        sections: Sequence[Section],
+        reading_blocks: Sequence[ReadingBlock],
+        source_refs: Sequence[SourceRef],
     ) -> StageAction: ...
 
     async def apply_revision(self, revision: ContentRevision) -> None: ...
@@ -42,6 +60,14 @@ class ResourceIndexStore(Protocol):
         content_revision: str,
         source_spans: Sequence[SourceSpan],
     ) -> str: ...
+
+    async def read_graph_build_source(
+        self,
+        resource_id: str,
+        content_revision: str,
+    ) -> GraphBuildSource: ...
+
+    async def delete_resources(self, resource_ids: Sequence[str]) -> None: ...
 
 
 def create_content_revision(

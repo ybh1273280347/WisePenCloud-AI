@@ -75,7 +75,15 @@ def build_reading_blocks(
             raise ValueError("empty document must not contain sections")
         return []
     if structure.mode is StructureMode.FLAT_TEXT:
-        return _build_flat_text_reading_blocks(
+        blocks = _build_flat_text_reading_blocks(
+            resource_id=resource_id,
+            content_revision=content_revision,
+            markdown=markdown,
+            structure=structure,
+            sections=sections,
+        )
+    else:
+        blocks = _build_section_reading_blocks(
             resource_id=resource_id,
             content_revision=content_revision,
             markdown=markdown,
@@ -83,13 +91,14 @@ def build_reading_blocks(
             sections=sections,
         )
 
-    return _build_section_reading_blocks(
-        resource_id=resource_id,
-        content_revision=content_revision,
-        markdown=markdown,
-        structure=structure,
-        sections=sections,
-    )
+    blocks_by_section: dict[str, list[ReadingBlock]] = {}
+    for block in blocks:
+        blocks_by_section.setdefault(block.section_id, []).append(block)
+    for section in sections:
+        section.preview = " ".join(
+            block.raw_text for block in blocks_by_section.get(section.section_id, [])
+        ).replace("\n", " ")[:500]
+    return blocks
 
 
 def _build_section_reading_blocks(

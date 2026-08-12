@@ -43,6 +43,7 @@ class Section:
     section_path: list[str]
     own_span: SourceSpan
     subtree_span: SourceSpan
+    preview: str = ""
 
 
 @dataclass(slots=True)
