@@ -2,6 +2,9 @@ import pytest
 
 from rag.application.rag.index import (
     build_content_revision_id,
+    build_reading_blocks,
+    build_retrieval_chunks,
+    build_source_refs,
     create_content_revision,
     parse_document_structure,
 )
@@ -12,8 +15,18 @@ from rag.application.rag.read import (
     read_pages,
     read_sections,
 )
+from rag.application.rag.verify import verify_candidates
 from rag.domain.content_revision import ResourceIndexState
+from rag.domain.evidence import (
+    EvidenceCandidate,
+    EvidenceCorruptError,
+    EvidenceNotFoundError,
+    EvidenceRecord,
+    EvidenceRevisionError,
+)
+from rag.domain.reading import ReadingBlock
 from rag.domain.repositories import StageAction
+from rag.domain.retrieval import RetrievalChunk, SourceRef
 from rag.utils.chunkers import SourceSpan
 
 
@@ -107,3 +120,127 @@ async def test_read_actions_raise_directly_when_content_is_missing() -> None:
         await read_pages(reader, resource_id="missing", page_labels=["1"])
     with pytest.raises(ContentNotFoundError):
         await read_sections(reader, resource_id="missing", section_ids=["section"])
+
+
+def _evidence_facts() -> tuple[str, object, list[ReadingBlock], list[RetrievalChunk], list[SourceRef], object]:
+    markdown = "# 标题\n\n正文内容。"
+    revision_id = build_content_revision_id(
+        resource_id="resource-1", document_version=1, markdown=markdown
+    )
+    structure = parse_document_structure(
+        resource_id="resource-1",
+        content_revision=revision_id,
+        markdown=markdown,
+    )
+    blocks = build_reading_blocks(
+        resource_id="resource-1",
+        content_revision=revision_id,
+        markdown=markdown,
+        structure=structure,
+        sections=structure.sections,
+    )
+    chunks = build_retrieval_chunks(
+        resource_id="resource-1",
+        content_revision=revision_id,
+        markdown=markdown,
+        structure=structure,
+        sections=structure.sections,
+        reading_blocks=blocks,
+    )
+    refs = build_source_refs(
+        resource_id="resource-1",
+        content_revision=revision_id,
+        markdown=markdown,
+        structure=structure,
+        sections=structure.sections,
+        reading_blocks=blocks,
+        retrieval_chunks=chunks,
+    )
+    revision = create_content_revision(
+        resource_id="resource-1",
+        document_version=1,
+        markdown=markdown,
+        structure=structure,
+    )
+    return markdown, structure, blocks, chunks, refs, revision
+
+
+class _EvidenceReader:
+    def __init__(self, record: EvidenceRecord) -> None:
+        self.record = record
+
+    async def read_applied_evidence(self, resource_id, content_revision, source_ref_ids):
+        if resource_id != self.record.revision.resource_id:
+            return None
+        if content_revision != self.record.revision.content_revision:
+            raise EvidenceRevisionError(content_revision)
+        return {self.record.source_ref.ref_id: self.record}
+
+
+@pytest.mark.asyncio
+async def test_verify_closes_index_to_authoritative_evidence() -> None:
+    markdown, structure, blocks, chunks, refs, revision = _evidence_facts()
+    record = EvidenceRecord(
+        revision=revision,
+        source_ref=refs[0],
+        reading_block=blocks[0],
+        section=next(section for section in structure.sections if section.section_id == refs[0].section_id),
+        source_text=markdown[refs[0].source_spans[0].start_offset : refs[0].source_spans[0].end_offset],
+    )
+    verified = await verify_candidates(
+        _EvidenceReader(record),
+        [
+            EvidenceCandidate(
+                resource_id=revision.resource_id,
+                content_revision=revision.content_revision,
+                source_ref_id=refs[0].ref_id,
+                chunk=chunks[0],
+            )
+        ],
+    )
+    assert verified == [record]
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_missing_ref_and_wrong_chunk_ownership() -> None:
+    _, structure, blocks, chunks, refs, revision = _evidence_facts()
+    record = EvidenceRecord(
+        revision=revision,
+        source_ref=refs[0],
+        reading_block=blocks[0],
+        section=next(section for section in structure.sections if section.section_id == refs[0].section_id),
+        source_text=chunks[0].raw_text,
+    )
+    reader = _EvidenceReader(record)
+    missing = EvidenceCandidate(
+        resource_id=revision.resource_id,
+        content_revision=revision.content_revision,
+        source_ref_id="missing",
+        chunk=chunks[0],
+    )
+    with pytest.raises(EvidenceNotFoundError):
+        await verify_candidates(reader, [missing])
+
+    wrong_chunk = RetrievalChunk(
+        chunk_id="wrong",
+        reading_block_id=chunks[0].reading_block_id,
+        section_id=chunks[0].section_id,
+        section_path=list(chunks[0].section_path),
+        raw_text=chunks[0].raw_text,
+        index_text=chunks[0].index_text,
+        source_spans=list(chunks[0].source_spans),
+        page_labels=list(chunks[0].page_labels),
+        anchor_labels=list(chunks[0].anchor_labels),
+    )
+    with pytest.raises(EvidenceCorruptError):
+        await verify_candidates(
+            reader,
+            [
+                EvidenceCandidate(
+                    resource_id=revision.resource_id,
+                    content_revision=revision.content_revision,
+                    source_ref_id=refs[0].ref_id,
+                    chunk=wrong_chunk,
+                )
+            ],
+        )
