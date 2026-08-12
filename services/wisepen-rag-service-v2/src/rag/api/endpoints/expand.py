@@ -16,7 +16,7 @@ from rag.api.schemas import (
     SectionExpandResponse,
 )
 from rag.application.rag.expand import (
-    ExpandRequest,
+    GraphExpandRequest,
     KnowledgeGraphExpander,
     SectionAccessRevokedError,
     SectionNotDiscoveredError,
@@ -53,7 +53,7 @@ async def expand_graph(
 ) -> R[GraphExpandResponse]:
     try:
         result = await expander.expand(
-            ExpandRequest(
+            GraphExpandRequest(
                 state_id=request.state_id,
                 session_id=request.session_id,
                 permission_scope=_permission_scope(user_id),
@@ -92,7 +92,7 @@ async def expand_sections(
         expander: TreeExpander,
 ) -> R[SectionExpandResponse]:
     try:
-        sections = await expander.expand(
+        result = await expander.expand(
             state_id=request.state_id,
             session_id=request.session_id,
             permission_scope=_permission_scope(user_id),
@@ -111,9 +111,7 @@ async def expand_sections(
     except Exception as error:
         raise ServiceException(RagErrorCode.NAVIGATION_FAILED) from error
     return R.success(
-        SectionExpandResponse.model_validate(
-            {"state_id": request.state_id, "sections": sections}
-        )
+        SectionExpandResponse.model_validate(result)
     )
 
 

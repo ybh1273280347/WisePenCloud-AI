@@ -1,15 +1,15 @@
 """沿 navigation state 扩展标题树，并返回本次展开的 Section 内容。"""
 
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 
 from rag.application.rag.acl import PermissionAuthorizer
+from rag.application.rag.read import AppliedContentReader, SectionView
 from rag.domain.acl import PermissionScope
 from rag.domain.navigation import (
     KnownSection,
     NavigationStateNotFoundError,
 )
-from rag.domain.read_content import SectionContent
-from rag.domain.repositories.applied_content_reader import AppliedContentReader
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.navigation_state_store import NavigationStateStore
 
@@ -28,6 +28,14 @@ class SectionRevisionChangedError(RuntimeError):
 
 class SectionRecordMissingError(RuntimeError):
     """state 中的已知 Section 在对应 applied revision 中缺失。"""
+
+
+@dataclass(slots=True)
+class SectionExpandResult:
+    """标题树展开结果，sections 保留请求顺序供 Agent 连续阅读。"""
+
+    state_id: str
+    sections: list[SectionView] = field(default_factory=list)
 
 
 class SectionTreeExpander:
@@ -53,7 +61,7 @@ class SectionTreeExpander:
         session_id: str,
         permission_scope: PermissionScope,
         section_ids: Sequence[str],
-    ) -> dict[str, SectionContent]:
+    ) -> SectionExpandResult:
         state = await self._state_store.get(state_id)
         if (
             state is None
@@ -71,7 +79,7 @@ class SectionTreeExpander:
         if unknown_ids:
             raise SectionNotDiscoveredError(unknown_ids[0])
         if not requested_ids:
-            return {}
+            return SectionExpandResult(state_id=state.state_id)
 
         ids_by_resource: dict[str, list[str]] = {}
         expected_revisions: dict[str, str] = {}
@@ -90,7 +98,7 @@ class SectionTreeExpander:
             expected_revisions,
             permission_scope,
         )
-        result: dict[str, SectionContent] = {}
+        contents_by_id = {}
         for resource_id, resource_section_ids in ids_by_resource.items():
             sections = await self._content_reader.get_applied_sections(
                 resource_id,
@@ -105,7 +113,7 @@ class SectionTreeExpander:
             ]
             if missing_ids:
                 raise SectionRecordMissingError(missing_ids[0])
-            result.update(sections)
+            contents_by_id.update(sections)
 
         # 权限或 revision 可能在正文查询期间变化，返回前必须再次 fail closed。
         await self._verify_resources(
@@ -114,7 +122,9 @@ class SectionTreeExpander:
             permission_scope,
         )
         discovered: dict[str, KnownSection] = {}
-        for content in result.values():
+        section_views: list[SectionView] = []
+        for section_id in requested_ids:
+            content = contents_by_id[section_id]
             known = state.known_sections[content.section.section_id]
             for section in (
                 content.section,
@@ -128,11 +138,20 @@ class SectionTreeExpander:
                         resource_id=known.resource_id,
                         content_revision=known.content_revision,
                     )
+            section_views.append(
+                SectionView(
+                    resource_id=known.resource_id,
+                    content_revision=known.content_revision,
+                    section=content.section,
+                    reading_blocks=content.reading_blocks,
+                    frontier=content.frontier,
+                )
+            )
         await self._state_store.add_known_sections(
             state_id=state.state_id,
             sections=discovered,
         )
-        return {section_id: result[section_id] for section_id in requested_ids}
+        return SectionExpandResult(state_id=state.state_id, sections=section_views)
 
     async def _verify_resources(
         self,

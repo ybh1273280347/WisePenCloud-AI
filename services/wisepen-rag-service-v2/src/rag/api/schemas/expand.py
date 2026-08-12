@@ -6,8 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from rag.application.rag.expand import TraversalDirection
 from rag.application.rag.expand.ports import TraversedEdge, TraversedPath
+from rag.application.rag.read import SectionFrontier
+from rag.domain.document_structure import Section
+from rag.domain.evidence import EvidenceRecord
 from rag.domain.knowledge_graph import KnowledgeNode, KnowledgeRelationType
-from rag.domain.read_content import SectionContent
+from rag.domain.reading import ReadingBlock
 from rag.utils.chunkers import SourceSpan
 
 NonEmptyText = Annotated[
@@ -26,7 +29,18 @@ class SectionExpandRequest(BaseModel):
 
 class SectionExpandResponse(BaseModel):
     state_id: str
-    sections: dict[str, SectionContent]
+    sections: list["SectionViewResponse"]
+
+
+class SectionViewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    resource_id: str
+    content_revision: str
+    section: Section
+    reading_blocks: list[ReadingBlock]
+    frontier: SectionFrontier
+    evidence: list[EvidenceRecord] = Field(default_factory=list)
 
 
 class GraphExpandRequest(BaseModel):

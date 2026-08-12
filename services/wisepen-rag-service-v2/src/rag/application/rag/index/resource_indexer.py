@@ -117,7 +117,7 @@ class ResourceIndexer:
         if action is StageAction.STALE:
             return action
 
-        chunks = await self._contextual_text.index_chunks(
+        chunks = await self._contextual_text.contextualize(
             resource_id=resource_id,
             structure=structure,
             reading_blocks=reading_blocks,

@@ -15,7 +15,7 @@ from rag.domain.navigation import (
     NavigationState,
     NavigationStateNotFoundError,
 )
-from rag.domain.read_content import SectionContent, SectionFrontier
+from rag.application.rag.read import SectionContent, SectionFrontier
 from rag.utils.chunkers import SourceSpan
 
 
@@ -92,7 +92,10 @@ async def test_expander_reads_known_section_and_adds_frontier() -> None:
         section_ids=["section-1"],
     )
 
-    assert list(result) == ["section-1"]
+    assert result.state_id == "nav-1"
+    assert [view.section.section_id for view in result.sections] == ["section-1"]
+    assert result.sections[0].resource_id == "resource-1"
+    assert result.sections[0].frontier.children == [child]
     assert set(state_store.added[0]["sections"]) == {"section-1", "child"}
 
 

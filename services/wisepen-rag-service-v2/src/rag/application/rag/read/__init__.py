@@ -1,14 +1,17 @@
-from rag.domain.read_content import (
+from .content import (
+    ContentNotFoundError,
     ContentWindow,
-    DocumentStructureResult,
+    DocumentContentReader,
     SectionContent,
     SectionFrontier,
+    SectionView,
 )
-
-from .content import ContentNotFoundError, DocumentContentReader
-from .structure import DocumentStructureReader
+from .ports import AppliedContentReader, AppliedStructureReader
+from .structure import DocumentStructureReader, DocumentStructureResult
 
 __all__ = [
+    "AppliedContentReader",
+    "AppliedStructureReader",
     "ContentNotFoundError",
     "ContentWindow",
     "DocumentContentReader",
@@ -16,4 +19,5 @@ __all__ = [
     "DocumentStructureResult",
     "SectionContent",
     "SectionFrontier",
+    "SectionView",
 ]

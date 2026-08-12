@@ -28,7 +28,7 @@ class UnknownSeedNodeError(RuntimeError):
 
 
 @dataclass(slots=True)
-class ExpandRequest:
+class GraphExpandRequest:
     state_id: str
     session_id: str
     permission_scope: PermissionScope
@@ -41,7 +41,7 @@ class ExpandRequest:
 
 
 @dataclass(slots=True)
-class ExpandResult:
+class GraphExpandResult:
     state_id: str
     nodes: list[KnowledgeNode] = field(default_factory=list)
     edges: list[TraversedEdge] = field(default_factory=list)
@@ -65,7 +65,7 @@ class KnowledgeGraphExpander:
         self._evidence_verifier = evidence_verifier
         self._state_store = state_store
 
-    async def expand(self, request: ExpandRequest) -> ExpandResult:
+    async def expand(self, request: GraphExpandRequest) -> GraphExpandResult:
         state = await self._state_store.get(request.state_id)
         if (
             state is None
@@ -108,7 +108,7 @@ class KnowledgeGraphExpander:
             if any(node.node_id not in known_node_ids for node in path.nodes)
         ]
         if not paths:
-            return ExpandResult(state_id=state.state_id)
+            return GraphExpandResult(state_id=state.state_id)
 
         effective_query = (request.query or state.root_query).strip()
         if not effective_query:
@@ -165,7 +165,7 @@ class KnowledgeGraphExpander:
             if any(node.node_id in added_node_ids for node in path.nodes)
         ]
         if not paths:
-            return ExpandResult(state_id=state.state_id)
+            return GraphExpandResult(state_id=state.state_id)
 
         nodes_by_id = {node.node_id: node for path in paths for node in path.nodes}
         edges_by_id = {edge.edge_id: edge for path in paths for edge in path.edges}
@@ -174,7 +174,7 @@ class KnowledgeGraphExpander:
             for edge in edges_by_id.values()
             for source_ref_id in edge.evidence_source_ref_ids
         }
-        return ExpandResult(
+        return GraphExpandResult(
             state_id=state.state_id,
             nodes=[nodes_by_id[node_id] for node_id in sorted(nodes_by_id)],
             edges=[edges_by_id[edge_id] for edge_id in sorted(edges_by_id)],

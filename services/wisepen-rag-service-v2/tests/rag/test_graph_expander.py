@@ -1,7 +1,7 @@
 import pytest
 
 from rag.application.rag.expand import (
-    ExpandRequest,
+    GraphExpandRequest,
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
 )
@@ -125,8 +125,8 @@ async def test_expand_returns_nothing_when_concurrent_call_added_nodes_first() -
     assert result.nodes == []
 
 
-def _request() -> ExpandRequest:
-    return ExpandRequest(
+def _request() -> GraphExpandRequest:
+    return GraphExpandRequest(
         state_id="nav-1",
         session_id="session-1",
         permission_scope=PermissionScope(user_id="user-1"),

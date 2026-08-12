@@ -13,7 +13,7 @@ from rag.api.schemas import (
     LocateRequest as LocateHttpRequest,
 )
 from rag.api.schemas import ReadSectionsRequest
-from rag.application.rag.expand import ExpandResult, UnknownSeedNodeError
+from rag.application.rag.expand import GraphExpandResult, UnknownSeedNodeError
 from rag.application.rag.expand.ports import TraversedEdge, TraversedPath
 from rag.application.rag.locate import (
     LocatedEvidence,
@@ -36,7 +36,7 @@ from rag.domain.knowledge_graph import (
     KnowledgeRelationType,
 )
 from rag.domain.navigation import NavigationStateNotFoundError
-from rag.domain.read_content import SectionContent, SectionFrontier
+from rag.application.rag.read import SectionContent, SectionFrontier
 from rag.domain.reading import ReadingBlock
 from rag.domain.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
@@ -262,7 +262,7 @@ async def test_expand_serializes_nodes_edges_paths_and_sources() -> None:
     )
     path = TraversedPath(nodes=[source, target], edges=[edge])
     expander = _Expander(
-        ExpandResult(
+        GraphExpandResult(
             state_id="state-1",
             nodes=[source, target],
             edges=[edge],

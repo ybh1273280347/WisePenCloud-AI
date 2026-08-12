@@ -95,7 +95,7 @@ async def test_contextual_text_generates_and_only_enhances_index_text() -> None:
     client = _Client()
     cache = _Cache()
 
-    result = await ContextualTextIndexer(client=client, cache=cache).index_chunks(
+    result = await ContextualTextIndexer(client=client, cache=cache).contextualize(
         resource_id="resource-1",
         structure=structure,
         reading_blocks=blocks,
@@ -123,7 +123,7 @@ async def test_contextual_text_cache_hit_skips_model() -> None:
     first_result = await ContextualTextIndexer(
         client=first_client,
         cache=cache,
-    ).index_chunks(
+    ).contextualize(
         resource_id="resource-1",
         structure=structure,
         reading_blocks=blocks,
@@ -134,7 +134,7 @@ async def test_contextual_text_cache_hit_skips_model() -> None:
     result = await ContextualTextIndexer(
         client=second_client,
         cache=cache,
-    ).index_chunks(
+    ).contextualize(
         resource_id="resource-1",
         structure=structure,
         reading_blocks=blocks,
@@ -152,7 +152,7 @@ async def test_contextual_text_skips_flat_text_and_empty_revisions(mode) -> None
     client = _Client()
     cache = _Cache()
 
-    result = await ContextualTextIndexer(client=client, cache=cache).index_chunks(
+    result = await ContextualTextIndexer(client=client, cache=cache).contextualize(
         resource_id="resource-1",
         structure=structure,
         reading_blocks=blocks,
@@ -173,7 +173,7 @@ async def test_contextual_text_rejects_invalid_model_response(content: str) -> N
         await ContextualTextIndexer(
             client=_Client(content),
             cache=_Cache(),
-        ).index_chunks(
+        ).contextualize(
             resource_id="resource-1",
             structure=structure,
             reading_blocks=blocks,

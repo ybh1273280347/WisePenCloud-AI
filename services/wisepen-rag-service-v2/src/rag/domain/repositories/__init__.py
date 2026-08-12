@@ -1,6 +1,4 @@
-from .applied_content_reader import AppliedContentReader
 from .applied_revision_reader import AppliedRevisionReader
-from .applied_structure_reader import AppliedStructureReader
 from .authoritative_acl_reader import AuthoritativeAclReader
 from .candidate_search import CandidateSearch
 from .evidence_reader import EvidenceReader
@@ -18,9 +16,7 @@ from .retrieval_index_writer import RetrievalIndexWriter
 from .source_part_reader import SourcePartReader
 
 __all__ = [
-    "AppliedContentReader",
     "AppliedRevisionReader",
-    "AppliedStructureReader",
     "AuthoritativeAclReader",
     "CandidateSearch",
     "EvidenceReader",

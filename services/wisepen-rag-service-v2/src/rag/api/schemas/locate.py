@@ -1,11 +1,11 @@
 """LOCATE endpoint 的请求与响应 schema。"""
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from rag.application.rag.read import SectionFrontier
 from rag.domain.document_structure import Section
 from rag.domain.knowledge_graph import KnowledgeNode
-from rag.domain.read_content import SectionFrontier
 from rag.utils.ranking import RankDecision
 
 NonEmptyText = Annotated[

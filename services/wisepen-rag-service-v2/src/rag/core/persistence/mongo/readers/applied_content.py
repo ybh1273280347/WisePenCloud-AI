@@ -4,15 +4,15 @@ from collections.abc import Sequence
 
 from pymongo import ASCENDING
 
-from rag.domain.document_structure import Section
-from rag.domain.entities import ReadingBlockEntity, SectionEntity
-from rag.domain.read_content import (
+from rag.application.rag.read import (
+    AppliedContentReader,
     ContentWindow,
     SectionContent,
     SectionFrontier,
 )
+from rag.domain.document_structure import Section
+from rag.domain.entities import ReadingBlockEntity, SectionEntity
 from rag.domain.reading import ReadingBlock
-from rag.domain.repositories.applied_content_reader import AppliedContentReader
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.source_part_reader import SourcePartReader
 from rag.domain.services.text_assembler import assemble_source_text

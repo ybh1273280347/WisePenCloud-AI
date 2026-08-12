@@ -52,7 +52,7 @@ class ContextualTextIndexer:
         self._client = client
         self._cache = cache
 
-    async def index_chunks(
+    async def contextualize(
         self,
         *,
         resource_id: str,
