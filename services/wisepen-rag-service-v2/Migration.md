@@ -215,14 +215,14 @@ Commit：`rag-v2 cp08: verify evidence against applied source`
 
 排除：ACL Mongo、Qdrant、Neo4j 和安全上下文 adapter；READ 不新增业务能力，只完成对象化装配。
 
-Commit：`rag-v2 cp09: define resource authorization rules`
+Commit：`rag-v2 cp09: objectify read and acl dependencies`
 
 ### CP10：ACL Mongo 边界
 
 范围：
 
-- AuthoritativeAclReader，只读上游 `wisepen_resource_items`。
-- ResourceAclStore，本地 `resource_acls`。
+- `AuthoritativeAclReader`，只读上游 `wisepen_resource_items`。
+- `ResourceAclStore`，读写 Beanie 实体对应的本地 `resource_acls` collection。
 - acl revision 幂等 upsert 与资源删除。
 - 权威读取与本地读取使用两个明确 adapter。
 

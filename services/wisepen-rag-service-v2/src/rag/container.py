@@ -1,10 +1,11 @@
 """RAG v2 的对象装配容器。
 
-容器只装配已经存在的能力和持久化 port。ACL 本地存储尚未进入 CP09，
-因此由调用方通过 ``resource_acl_reader`` 覆盖 CP10 的真实 adapter。
+容器只装配已经存在的能力和持久化 port；外部配置通过容器 configuration
+注入，避免导入模块时触发 Nacos 或数据库连接。
 """
 
 from dependency_injector import containers, providers
+from pymongo import AsyncMongoClient
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
@@ -12,12 +13,23 @@ from rag.core.persistence.mongo import (
     MongoAppliedContentReader,
     MongoAppliedRevisionReader,
     MongoAppliedStructureReader,
+    MongoAuthoritativeAclReader,
+    MongoResourceAclStore,
     MongoSourcePartReader,
 )
 
 
+def _build_authoritative_resource_collection(
+    mongo_client: AsyncMongoClient,
+    database_name: str,
+):
+    return mongo_client[database_name]["wisepen_resource_items"]
+
+
 class Container(containers.DeclarativeContainer):
     """管理 RAG READ/ACL 对象的单例依赖。"""
+
+    config = providers.Configuration()
 
     applied_revision_reader = providers.Singleton(MongoAppliedRevisionReader)
     source_part_reader = providers.Singleton(MongoSourcePartReader)
@@ -40,10 +52,20 @@ class Container(containers.DeclarativeContainer):
         reader=applied_content_reader,
     )
 
-    resource_acl_reader = providers.Dependency()
+    mongo_client = providers.Singleton(AsyncMongoClient, config.mongodb_url)
+    authoritative_resource_collection = providers.Singleton(
+        _build_authoritative_resource_collection,
+        mongo_client=mongo_client,
+        database_name=config.resource_permission_database_name,
+    )
+    authoritative_acl_reader = providers.Singleton(
+        MongoAuthoritativeAclReader,
+        collection=authoritative_resource_collection,
+    )
+    resource_acl_store = providers.Singleton(MongoResourceAclStore)
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,
-        reader=resource_acl_reader,
+        reader=resource_acl_store,
     )
 
 
