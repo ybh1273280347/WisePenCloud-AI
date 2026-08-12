@@ -44,9 +44,9 @@ TreeExpander = Annotated[
 ]
 
 
-@router.post("/expand", response_model=R[GraphExpandResponse])
+@router.post("/expandGraph", response_model=R[GraphExpandResponse])
 @inject
-async def expand(
+async def expand_graph(
         request: ExpandHttpRequest,
         user_id: AuthenticatedUser,
         expander: GraphExpander,
