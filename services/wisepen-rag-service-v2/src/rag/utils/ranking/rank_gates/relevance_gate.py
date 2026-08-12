@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ._utils import assign_ranks
-from .core import RankDecision, RankedCandidate, RankGateResult
+from .._utils import assign_ranks
+from ..core import RankDecision, RankedCandidate, RankGateResult
 
 
 @dataclass(frozen=True, slots=True)
