@@ -10,16 +10,18 @@ from rag.application.rag.index import (
     create_content_revision,
     parse_document_structure,
 )
-from rag.application.rag.index.resource_index_store import StageAction
+from rag.core.persistence.mongo.content_records import (
+    reading_block_document,
+    revision_document,
+    section_document,
+    source_part_document,
+    source_ref_document,
+)
 from rag.core.persistence.mongo.resource_index_store import (
     MongoResourceIndexStore,
-    _reading_block_document,
-    _revision_document,
-    _section_document,
-    _source_part_document,
-    _source_ref_document,
     split_source_parts,
 )
+from rag.domain.repositories import StageAction
 
 
 def _indexed_document():
@@ -261,7 +263,7 @@ async def test_graph_build_source_restores_applied_structure_and_evidence() -> N
     }
     collections[
         "wisepen_rag_v2_content_revisions"
-    ].find_one.return_value = _revision_document(revision)
+    ].find_one.return_value = revision_document(revision)
 
     def cursor(documents):
         value = MagicMock()
@@ -270,16 +272,16 @@ async def test_graph_build_source_restores_applied_structure_and_evidence() -> N
         return value
 
     collections["wisepen_rag_v2_source_parts"].find.return_value = cursor(
-        [_source_part_document(part) for part in split_source_parts(revision, markdown)]
+        [source_part_document(part) for part in split_source_parts(revision, markdown)]
     )
     collections["wisepen_rag_v2_sections"].find.return_value = cursor(
-        [_section_document(revision, section) for section in structure.sections]
+        [section_document(revision, section) for section in structure.sections]
     )
     collections["wisepen_rag_v2_reading_blocks"].find.return_value = cursor(
-        [_reading_block_document(revision, block) for block in blocks]
+        [reading_block_document(revision, block) for block in blocks]
     )
     collections["wisepen_rag_v2_source_refs"].find.return_value = cursor(
-        [_source_ref_document(revision, source_ref) for source_ref in refs]
+        [source_ref_document(revision, source_ref) for source_ref in refs]
     )
     store = MongoResourceIndexStore(database)
 

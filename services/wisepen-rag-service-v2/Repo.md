@@ -18,7 +18,7 @@
 ### 1.2 最终原则
 
 - application 依赖语义 port，不能依赖 Mongo Document、Qdrant Point、Neo4j Record 或 Redis key。
-- port 放在拥有该用例的能力目录中，使用 `Protocol` 表达依赖；不建立只有抽象方法和 `pass` 的 ABC 层级。
+- 仓储 port 放在 `domain/repositories`，使用 `Protocol` 表达跨层依赖；Beanie Mongo 文档实体放在 `domain/entities`。
 - persistence adapter 实现 port，domain 和 application 不反向导入 persistence model。
 - 仓储方法按业务动作命名，不使用 `projection`、`snapshot`、`materialize`、`derived` 等无法说明读写内容的词。
 - 批量参数使用 `Sequence`/`list`，按 key 返回的数据使用 `dict`；不把 tuple 当默认仓储契约。
@@ -613,9 +613,9 @@ Redis state 不主动扫描删除。由于每次 READ/EXPAND/VERIFY 都重新校
 建议 port 归属：
 
 ```text
-application/rag/index/ports.py
+domain/repositories/resource_index_repository.py
+domain/repositories/content_reader.py
 application/rag/locate/ports.py
-application/rag/read/ports.py
 application/rag/expand/ports.py
 application/rag/verify/ports.py
 application/rag/acl/ports.py
@@ -641,7 +641,7 @@ persistence/neo4j/graph_acl_writer.py
 persistence/redis/navigation_state_store.py
 ```
 
-同后端 adapter 可以共享私有 schema、serialization 和 query helper，但共享代码不能反向成为 application 的 `common` 模块。
+Mongo adapter 使用 `domain/entities` 中的 Beanie Document；同后端 adapter 可以共享私有 serialization 和 query helper，但共享代码不能反向成为 application 的 `common` 模块。
 
 ## 11. 明确禁止
 

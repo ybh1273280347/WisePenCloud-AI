@@ -157,6 +157,18 @@ Commit：`rag-v2 cp05: persist content revisions and source parts`
 
 Commit：`rag-v2 cp06: persist resource structure and evidence identities`
 
+### CP06.1：Beanie entities 与 domain repositories
+
+范围：
+
+- 将 Mongo collection schema 固化到 `domain/entities` 的 Beanie Document。
+- 将 `ResourceIndexStore`、`ContentReader` port 收归 `domain/repositories`。
+- 将 revision 身份与 staged 决策改名为 `application/rag/index/revisions.py`。
+
+验收：Beanie 依赖可解析，repository 不反向依赖 application model，既有 revision/store 测试保持通过。
+
+Commit：`rag-v2 cp06.1: align persistence with beanie entities and domain repositories`
+
 ### CP07：无状态 READ
 
 范围：

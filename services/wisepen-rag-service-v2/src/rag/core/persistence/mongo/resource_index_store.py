@@ -6,16 +6,26 @@ from pymongo import ASCENDING, IndexModel
 from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import DuplicateKeyError
 
-from rag.application.rag.index.resource_index_store import (
-    GraphBuildSource,
-    ResourceIndexStore,
-    StageAction,
+from rag.application.rag.index.revisions import (
     build_content_revision_id,
     decide_stage,
 )
+from rag.core.persistence.mongo.content_records import (
+    read_source_spans,
+    reading_block_document,
+    revision_document,
+    section_document,
+    source_part_document,
+    source_ref_document,
+    to_content_revision,
+    to_reading_block,
+    to_section,
+    to_source_ref,
+)
 from rag.domain.content_revision import ContentRevision, ResourceIndexState, SourcePart
-from rag.domain.document_structure import PageRange, Section, StructureMode
+from rag.domain.document_structure import Section
 from rag.domain.reading import ReadingBlock
+from rag.domain.repositories import GraphBuildSource, ResourceIndexStore, StageAction
 from rag.domain.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
 
@@ -28,6 +38,18 @@ _READING_BLOCKS = "wisepen_rag_v2_reading_blocks"
 _SOURCE_REFS = "wisepen_rag_v2_source_refs"
 
 
+class _BeanieCollection:
+    """延迟解析 Beanie Document 的底层 collection，等待 init_beanie 完成。"""
+
+    __slots__ = ("_document",)
+
+    def __init__(self, document: type) -> None:
+        self._document = document
+
+    def __getattr__(self, name: str):
+        return getattr(self._document.get_pymongo_collection(), name)
+
+
 class MongoResourceIndexStore(ResourceIndexStore):
     """以 staged/applied CAS 管理资源原文 revision。"""
 
@@ -38,17 +60,38 @@ class MongoResourceIndexStore(ResourceIndexStore):
         "_sections",
         "_source_parts",
         "_source_refs",
+        "_use_database_collections",
     )
 
-    def __init__(self, database: AsyncDatabase) -> None:
-        self._resource_index_states = database[_RESOURCE_INDEX_STATES]
-        self._content_revisions = database[_CONTENT_REVISIONS]
-        self._source_parts = database[_SOURCE_PARTS]
-        self._sections = database[_SECTIONS]
-        self._reading_blocks = database[_READING_BLOCKS]
-        self._source_refs = database[_SOURCE_REFS]
+    def __init__(self, database: AsyncDatabase | None = None) -> None:
+        from rag.domain.entities import (
+            ContentRevisionEntity,
+            ReadingBlockEntity,
+            ResourceIndexStateEntity,
+            SectionEntity,
+            SourcePartEntity,
+            SourceRefEntity,
+        )
+        self._use_database_collections = database is not None
+
+        if database is None:
+            self._resource_index_states = _BeanieCollection(ResourceIndexStateEntity)
+            self._content_revisions = _BeanieCollection(ContentRevisionEntity)
+            self._source_parts = _BeanieCollection(SourcePartEntity)
+            self._sections = _BeanieCollection(SectionEntity)
+            self._reading_blocks = _BeanieCollection(ReadingBlockEntity)
+            self._source_refs = _BeanieCollection(SourceRefEntity)
+        else:
+            self._resource_index_states = database[_RESOURCE_INDEX_STATES]
+            self._content_revisions = database[_CONTENT_REVISIONS]
+            self._source_parts = database[_SOURCE_PARTS]
+            self._sections = database[_SECTIONS]
+            self._reading_blocks = database[_READING_BLOCKS]
+            self._source_refs = database[_SOURCE_REFS]
 
     async def initialize(self) -> None:
+        if not self._use_database_collections:
+            return
         await self._resource_index_states.create_indexes(
             [
                 IndexModel(
@@ -199,7 +242,7 @@ class MongoResourceIndexStore(ResourceIndexStore):
 
         await self._content_revisions.replace_one(
             {"content_revision": revision.content_revision},
-            _revision_document(revision),
+            revision_document(revision),
             upsert=True,
         )
         await self._source_parts.delete_many(
@@ -208,7 +251,7 @@ class MongoResourceIndexStore(ResourceIndexStore):
         parts = split_source_parts(revision, markdown)
         if parts:
             await self._source_parts.insert_many(
-                [_source_part_document(part) for part in parts]
+                [source_part_document(part) for part in parts]
             )
         await self._sections.delete_many(
             {"content_revision": revision.content_revision}
@@ -221,16 +264,16 @@ class MongoResourceIndexStore(ResourceIndexStore):
         )
         if sections:
             await self._sections.insert_many(
-                [_section_document(revision, section) for section in sections]
+                [section_document(revision, section) for section in sections]
             )
         if reading_blocks:
             await self._reading_blocks.insert_many(
-                [_reading_block_document(revision, block) for block in reading_blocks]
+                [reading_block_document(revision, block) for block in reading_blocks]
             )
         if source_refs:
             await self._source_refs.insert_many(
                 [
-                    _source_ref_document(revision, source_ref)
+                    source_ref_document(revision, source_ref)
                     for source_ref in source_refs
                 ]
             )
@@ -322,7 +365,7 @@ class MongoResourceIndexStore(ResourceIndexStore):
         )
         if document is None:
             return None
-        return _to_content_revision(document)
+        return to_content_revision(document)
 
     async def read_source_text(
         self,
@@ -358,7 +401,7 @@ class MongoResourceIndexStore(ResourceIndexStore):
             .sort("part_index", ASCENDING)
             .to_list()
         )
-        return _read_source_spans(
+        return read_source_spans(
             content_revision=content_revision,
             documents=documents,
             source_spans=source_spans,
@@ -403,11 +446,11 @@ class MongoResourceIndexStore(ResourceIndexStore):
             resource_id=resource_id,
             content_revision=content_revision,
             markdown=markdown,
-            sections=[_to_section(document) for document in section_documents],
+            sections=[to_section(document) for document in section_documents],
             reading_blocks=[
-                _to_reading_block(document) for document in block_documents
+                to_reading_block(document) for document in block_documents
             ],
-            source_refs=[_to_source_ref(document) for document in ref_documents],
+            source_refs=[to_source_ref(document) for document in ref_documents],
         )
 
     async def delete_resources(self, resource_ids: Sequence[str]) -> None:
@@ -484,188 +527,6 @@ def _stage_state_filter(revision: ContentRevision) -> dict[str, object]:
     }
 
 
-def _revision_document(revision: ContentRevision) -> dict[str, object]:
-    return {
-        "resource_id": revision.resource_id,
-        "content_revision": revision.content_revision,
-        "document_version": revision.document_version,
-        "content_hash": revision.content_hash,
-        "index_schema_version": revision.index_schema_version,
-        "structure_mode": revision.structure_mode.value,
-        "total_length": revision.total_length,
-        "pages": [
-            {
-                "page_index": page.page_index,
-                "page_label": page.page_label,
-                "start_offset": page.source_span.start_offset,
-                "end_offset": page.source_span.end_offset,
-            }
-            for page in revision.pages
-        ],
-    }
-
-
-def _source_part_document(part: SourcePart) -> dict[str, object]:
-    return {
-        "resource_id": part.resource_id,
-        "content_revision": part.content_revision,
-        "part_index": part.part_index,
-        "start_offset": part.source_span.start_offset,
-        "end_offset": part.source_span.end_offset,
-        "text": part.text,
-    }
-
-
-def _section_document(
-    revision: ContentRevision,
-    section: Section,
-) -> dict[str, object]:
-    return {
-        "resource_id": revision.resource_id,
-        "content_revision": revision.content_revision,
-        "section_id": section.section_id,
-        "title": section.title,
-        "level": section.level,
-        "parent_section_id": section.parent_section_id,
-        "ordinal": section.ordinal,
-        "section_path": list(section.section_path),
-        "preview": section.preview,
-        "own_start": section.own_span.start_offset,
-        "own_end": section.own_span.end_offset,
-        "subtree_end": section.subtree_span.end_offset,
-    }
-
-
-def _reading_block_document(
-    revision: ContentRevision,
-    block: ReadingBlock,
-) -> dict[str, object]:
-    return {
-        "resource_id": revision.resource_id,
-        "content_revision": revision.content_revision,
-        "block_id": block.block_id,
-        "section_id": block.section_id,
-        "ordinal": block.ordinal,
-        "raw_text": block.raw_text,
-        "source_spans": [_span_document(span) for span in block.source_spans],
-        "start_offset": block.source_spans[0].start_offset,
-        "end_offset": block.source_spans[-1].end_offset,
-        "page_labels": list(block.page_labels),
-        "anchor_labels": list(block.anchor_labels),
-    }
-
-
-def _source_ref_document(
-    revision: ContentRevision,
-    source_ref: SourceRef,
-) -> dict[str, object]:
-    return {
-        "resource_id": revision.resource_id,
-        "content_revision": revision.content_revision,
-        "ref_id": source_ref.ref_id,
-        "chunk_id": source_ref.chunk_id,
-        "reading_block_id": source_ref.reading_block_id,
-        "section_id": source_ref.section_id,
-        "section_path": list(source_ref.section_path),
-        "source_spans": [_span_document(span) for span in source_ref.source_spans],
-        "page_labels": list(source_ref.page_labels),
-        "anchor_labels": list(source_ref.anchor_labels),
-    }
-
-
-def _span_document(span: SourceSpan) -> dict[str, int]:
-    return {
-        "start_offset": span.start_offset,
-        "end_offset": span.end_offset,
-    }
-
-
-def _to_content_revision(document: dict[str, object]) -> ContentRevision:
-    return ContentRevision(
-        resource_id=str(document["resource_id"]),
-        content_revision=str(document["content_revision"]),
-        document_version=int(document["document_version"]),
-        content_hash=str(document["content_hash"]),
-        index_schema_version=str(document["index_schema_version"]),
-        structure_mode=StructureMode(str(document["structure_mode"])),
-        total_length=int(document["total_length"]),
-        pages=[
-            PageRange(
-                page_index=int(page["page_index"]),
-                page_label=str(page["page_label"]),
-                source_span=SourceSpan(
-                    int(page["start_offset"]),
-                    int(page["end_offset"]),
-                ),
-            )
-            for page in document.get("pages", [])
-        ],
-    )
-
-
-def _to_section(document: dict[str, object]) -> Section:
-    return Section(
-        section_id=str(document["section_id"]),
-        title=str(document["title"]),
-        level=int(document["level"]),
-        parent_section_id=(
-            str(document["parent_section_id"])
-            if document.get("parent_section_id") is not None
-            else None
-        ),
-        ordinal=int(document["ordinal"]),
-        section_path=[str(value) for value in document.get("section_path", [])],
-        own_span=SourceSpan(
-            int(document["own_start"]),
-            int(document["own_end"]),
-        ),
-        subtree_span=SourceSpan(
-            int(document["own_start"]),
-            int(document["subtree_end"]),
-        ),
-        preview=str(document.get("preview", "")),
-    )
-
-
-def _to_reading_block(document: dict[str, object]) -> ReadingBlock:
-    return ReadingBlock(
-        block_id=str(document["block_id"]),
-        section_id=str(document["section_id"]),
-        ordinal=int(document["ordinal"]),
-        raw_text=str(document["raw_text"]),
-        source_spans=_to_source_spans(document.get("source_spans", [])),
-        page_labels=[str(value) for value in document.get("page_labels", [])],
-        anchor_labels=[str(value) for value in document.get("anchor_labels", [])],
-    )
-
-
-def _to_source_ref(document: dict[str, object]) -> SourceRef:
-    return SourceRef(
-        ref_id=str(document["ref_id"]),
-        resource_id=str(document["resource_id"]),
-        content_revision=str(document["content_revision"]),
-        chunk_id=str(document["chunk_id"]),
-        reading_block_id=str(document["reading_block_id"]),
-        section_id=str(document["section_id"]),
-        section_path=[str(value) for value in document.get("section_path", [])],
-        source_spans=_to_source_spans(document.get("source_spans", [])),
-        page_labels=[str(value) for value in document.get("page_labels", [])],
-        anchor_labels=[str(value) for value in document.get("anchor_labels", [])],
-    )
-
-
-def _to_source_spans(documents: object) -> list[SourceSpan]:
-    if not isinstance(documents, list):
-        raise RuntimeError("stored source spans must be a list")
-    return [
-        SourceSpan(
-            int(document["start_offset"]),
-            int(document["end_offset"]),
-        )
-        for document in documents
-    ]
-
-
 def _validate_structure_records(
     *,
     revision: ContentRevision,
@@ -717,45 +578,3 @@ def _validate_structure_records(
             raise ValueError(f"source ref {source_ref.ref_id} has invalid section path")
         if not source_ref.source_spans:
             raise ValueError(f"source ref {source_ref.ref_id} has no source span")
-
-
-def _read_source_spans(
-    *,
-    content_revision: str,
-    documents: list[dict[str, object]],
-    source_spans: Sequence[SourceSpan],
-) -> str:
-    fragments: list[str] = []
-    for span in source_spans:
-        cursor = span.start_offset
-        span_fragments: list[str] = []
-        for document in documents:
-            start_offset = int(document["start_offset"])
-            end_offset = int(document["end_offset"])
-            text = str(document["text"])
-            if end_offset - start_offset != len(text):
-                raise RuntimeError(
-                    f"content revision {content_revision} has an invalid source part"
-                )
-            if end_offset <= cursor:
-                continue
-            if start_offset >= span.end_offset:
-                break
-            if start_offset > cursor:
-                raise RuntimeError(
-                    f"content revision {content_revision} source parts have a gap"
-                )
-
-            fragment_end = min(end_offset, span.end_offset)
-            span_fragments.append(
-                text[cursor - start_offset : fragment_end - start_offset]
-            )
-            cursor = fragment_end
-            if cursor == span.end_offset:
-                break
-        if cursor != span.end_offset:
-            raise RuntimeError(
-                f"content revision {content_revision} source parts do not cover span"
-            )
-        fragments.append("".join(span_fragments))
-    return "\n\n".join(fragments)

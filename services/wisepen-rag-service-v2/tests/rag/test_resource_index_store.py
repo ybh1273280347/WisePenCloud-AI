@@ -7,12 +7,13 @@ from rag.application.rag.index import (
     create_content_revision,
     parse_document_structure,
 )
-from rag.application.rag.index.resource_index_store import StageAction, decide_stage
+from rag.application.rag.index.revisions import decide_stage
 from rag.core.persistence.mongo.resource_index_store import (
     MongoResourceIndexStore,
     split_source_parts,
 )
 from rag.domain.content_revision import ResourceIndexState
+from rag.domain.repositories import StageAction
 from rag.utils.chunkers import SourceSpan
 
 

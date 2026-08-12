@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "WisePen RAG service v2"
 requires-python = ">=3.11"
 dependencies = [
+    "beanie>=2,<3",
     "bm25s>=0.3.9",
     "jieba>=0.42.1",
     "langchain-text-splitters>=1.0,<2",

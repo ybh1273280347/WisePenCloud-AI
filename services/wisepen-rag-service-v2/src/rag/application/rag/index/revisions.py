@@ -1,73 +1,12 @@
-"""index 能力使用的 Mongo revision/source port 与确定性版本规则。"""
+"""内容 revision 身份与 staged 决策规则。"""
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field
-from enum import StrEnum
 from hashlib import sha256
-from typing import Protocol
 
 from rag.domain.content_revision import ContentRevision, ResourceIndexState
-from rag.domain.document_structure import DocumentStructure, Section
-from rag.domain.reading import ReadingBlock
-from rag.domain.retrieval import SourceRef
-from rag.utils.chunkers import SourceSpan
+from rag.domain.document_structure import DocumentStructure
+from rag.domain.repositories.resource_index_repository import StageAction
 
 INDEX_SCHEMA_VERSION = "rag-v2-content:v1"
-
-
-class StageAction(StrEnum):
-    """文档事件相对当前资源索引状态的处理动作。"""
-
-    STAGED = "staged"
-    ALREADY_APPLIED = "already_applied"
-    STALE = "stale"
-
-
-@dataclass(slots=True)
-class GraphBuildSource:
-    """指定 applied revision 的图构建权威输入。"""
-
-    resource_id: str
-    content_revision: str
-    markdown: str
-    sections: list[Section] = field(default_factory=list)
-    reading_blocks: list[ReadingBlock] = field(default_factory=list)
-    source_refs: list[SourceRef] = field(default_factory=list)
-
-
-class ResourceIndexStore(Protocol):
-    """管理资源内容 revision、权威原文和 staged/applied 指针。"""
-
-    async def initialize(self) -> None: ...
-
-    async def stage_revision(
-        self,
-        revision: ContentRevision,
-        markdown: str,
-        sections: Sequence[Section],
-        reading_blocks: Sequence[ReadingBlock],
-        source_refs: Sequence[SourceRef],
-    ) -> StageAction: ...
-
-    async def apply_revision(self, revision: ContentRevision) -> None: ...
-
-    async def read_state(self, resource_id: str) -> ResourceIndexState | None: ...
-
-    async def read_revision(self, content_revision: str) -> ContentRevision | None: ...
-
-    async def read_source_text(
-        self,
-        content_revision: str,
-        source_spans: Sequence[SourceSpan],
-    ) -> str: ...
-
-    async def read_graph_build_source(
-        self,
-        resource_id: str,
-        content_revision: str,
-    ) -> GraphBuildSource: ...
-
-    async def delete_resources(self, resource_ids: Sequence[str]) -> None: ...
 
 
 def create_content_revision(
@@ -124,12 +63,7 @@ def build_content_revision_id(
 
     content_hash = sha256(markdown.encode("utf-8")).hexdigest()
     identity = "\0".join(
-        (
-            resource_id,
-            str(document_version),
-            content_hash,
-            index_schema_version,
-        )
+        (resource_id, str(document_version), content_hash, index_schema_version)
     )
     return f"rrev_{sha256(identity.encode('utf-8')).hexdigest()[:32]}"
 
