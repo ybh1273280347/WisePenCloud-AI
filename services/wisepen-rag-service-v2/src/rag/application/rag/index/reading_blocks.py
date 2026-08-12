@@ -201,7 +201,7 @@ def _split_flat_text_source_spans(markdown: str) -> list[list[SourceSpan]]:
     if not effective_spans:
         return []
 
-    rendered_text = _render_source_text(markdown, effective_spans)
+    rendered_text = render_source_text(markdown, effective_spans)
     chunks = (
         PlainTextChunker(
             PlainTextChunkerConfig(
@@ -214,7 +214,7 @@ def _split_flat_text_source_spans(markdown: str) -> list[list[SourceSpan]]:
     )
 
     return [
-        _map_rendered_spans_to_source(
+        map_rendered_spans_to_source(
             local_spans=list(chunk.source_spans),
             source_spans=effective_spans,
         )
@@ -248,22 +248,16 @@ def _reading_block(
     source_spans: list[SourceSpan],
     structure: DocumentStructure,
 ) -> ReadingBlock:
-    span_identity = ";".join(
-        f"{span.start_offset}:{span.end_offset}" for span in source_spans
-    )
-    identity = "\0".join(
-        (
-            resource_id,
-            content_revision,
-            section.section_id,
-            span_identity,
-        )
-    )
     return ReadingBlock(
-        block_id=f"rsb_{sha256(identity.encode('utf-8')).hexdigest()[:32]}",
+        block_id=build_reading_block_id(
+            resource_id=resource_id,
+            content_revision=content_revision,
+            section_id=section.section_id,
+            source_spans=source_spans,
+        ),
         section_id=section.section_id,
         ordinal=ordinal,
-        raw_text=_render_source_text(markdown, source_spans),
+        raw_text=render_source_text(markdown, source_spans),
         source_spans=source_spans,
         page_labels=[
             page.page_label
@@ -278,13 +272,34 @@ def _reading_block(
     )
 
 
-def _render_source_text(markdown: str, source_spans: list[SourceSpan]) -> str:
+def build_reading_block_id(
+    *,
+    resource_id: str,
+    content_revision: str,
+    section_id: str,
+    source_spans: list[SourceSpan],
+) -> str:
+    span_identity = ";".join(
+        f"{span.start_offset}:{span.end_offset}" for span in source_spans
+    )
+    identity = "\0".join(
+        (
+            resource_id,
+            content_revision,
+            section_id,
+            span_identity,
+        )
+    )
+    return f"rsb_{sha256(identity.encode('utf-8')).hexdigest()[:32]}"
+
+
+def render_source_text(markdown: str, source_spans: list[SourceSpan]) -> str:
     return "\n\n".join(
         markdown[span.start_offset : span.end_offset] for span in source_spans
     )
 
 
-def _map_rendered_spans_to_source(
+def map_rendered_spans_to_source(
     *,
     local_spans: list[SourceSpan],
     source_spans: list[SourceSpan],
