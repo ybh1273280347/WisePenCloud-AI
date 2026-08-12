@@ -1,5 +1,6 @@
 """Mongo 记录和实体到领域事实的反序列化。"""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -8,6 +9,7 @@ from rag.domain.content_revision import ContentRevision, SourcePart
 from rag.domain.document_structure import PageRange, Section, StructureMode
 from rag.domain.entities import (
     ContentRevisionEntity,
+    GenerationCacheEntity,
     ReadingBlockEntity,
     ResourceAclEntity,
     SectionEntity,
@@ -21,6 +23,12 @@ from rag.utils.chunkers import SourceSpan
 
 class AuthoritativeAclError(ValueError):
     """上游资源 ACL 数据不满足 RAG 所需契约。"""
+
+
+def to_generation_cache_values(
+    records: Sequence[GenerationCacheEntity],
+) -> dict[str, str]:
+    return {record.cache_key: record.payload for record in records}
 
 
 def to_content_revision(record: ContentRevisionEntity) -> ContentRevision:

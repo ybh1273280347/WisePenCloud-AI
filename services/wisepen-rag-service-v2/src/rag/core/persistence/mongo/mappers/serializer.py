@@ -3,6 +3,7 @@
 from rag.domain.acl import ResourceAcl
 from rag.domain.content_revision import ContentRevision, SourcePart
 from rag.domain.document_structure import Section
+from rag.domain.generation_cache import GenerationCacheKind
 from rag.domain.reading import ReadingBlock
 from rag.domain.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
@@ -117,4 +118,19 @@ def resource_acl_document(resource_acl: ResourceAcl) -> dict[str, object]:
             }
             for group_acl in resource_acl.group_acls
         ],
+    }
+
+
+def generation_cache_document(
+    *,
+    resource_id: str,
+    cache_kind: GenerationCacheKind,
+    cache_key: str,
+    payload: str,
+) -> dict[str, object]:
+    return {
+        "resource_id": resource_id,
+        "cache_kind": cache_kind.value,
+        "cache_key": cache_key,
+        "payload": payload,
     }

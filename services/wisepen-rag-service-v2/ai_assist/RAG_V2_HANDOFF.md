@@ -35,8 +35,9 @@ base:     origin/main @ e1af497f7
 | CP08.3 | `9d0a1bc46` | 将持久化映射器从 domain 移回 Mongo persistence，并收敛为 serializer/deserializer 两个文件。 |
 | CP08.4 | `a8eeaaef6` | 将 Beanie 内容实体模块从 `content_index.py` 重命名为 `rag_content.py`。 |
 | CP09 | `b16b7d630` | ACL 领域规则、READ/ACL 面向对象用例和 dependency-injector 容器装配。 |
-| 当前 CP10 | 待提交 | 上游权威 ACL reader、本地 Beanie ACL store、revision 幂等 upsert 和资源删除。 |
-| CP10.1 | 待提交 | 将 ACL 的 Mongo 序列化/反序列化统一收敛到现有 `mappers/serializer.py` 与 `mappers/deserializer.py`。 |
+| CP10 | `06d46fb3d` | 上游权威 ACL reader、本地 Beanie ACL store、revision 幂等 upsert 和资源删除。 |
+| CP10.1 | `fb931795e` | 将 ACL 的 Mongo 序列化/反序列化统一收敛到现有 `mappers/serializer.py` 与 `mappers/deserializer.py`。 |
+| 当前 CP11 | 待提交 | 合并为单一 generation cache collection，按资源和 cache kind 批量读写及删除。 |
 
 ## 3. 当前架构事实
 
@@ -140,11 +141,18 @@ uv run python -m compileall -q src tests           -> passed
 - chunk 与 SourceRef 身份不一致。
 - revision 不一致。
 
-CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器装配测试；当前仍没有真实 Mongo/Beanie 集成测试。
+最近一次工作树验证：
+
+```text
+uv run pytest -q                                  -> 53 passed
+uv run python -m compileall -q src tests           -> passed
+```
+
+CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器装配测试；CP11 新增 generation cache 的批量命中、类别/资源隔离、覆盖和删除测试；当前仍没有真实 Mongo/Beanie 集成测试。
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`。当前 CP10 正在完成 ACL Mongo 边界；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
+CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`。当前 CP11 正在完成 generation cache；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
 
 CP08.1 的稳定边界：
 
@@ -180,7 +188,14 @@ tests/rag/test_index_contracts.py
 
 ## 7. 下一步任务
 
-当前 checkpoint 是 CP10：ACL Mongo 边界。
+当前 checkpoint 是 CP11：模型生成缓存。
+
+CP11 的稳定边界：
+
+- `GenerationCacheEntity` 统一承载 `contextual_text` 与 `graph_candidates` 两类字符串 payload。
+- `GenerationCacheStore` 只按 resource、cache kind 和 opaque cache key 做批量 get/set/delete。
+- cache key 的 prompt、schema、model、input 配方由对应的生成 application 自己拥有，不下沉到通用缓存仓储。
+- generation cache 是 RAG 派生数据；资源删除必须按 resource ID 清理全部 cache kind。
 
 CP09 已完成：
 
@@ -198,7 +213,7 @@ CP09 已明确排除：
 - HTTP、Kafka、Agent 业务语义。
 - 修改 VERIFY 的证据校验。
 
-后续顺序仍以 `Migration.md` 为准：CP11 generation cache，CP12 contextual indexing，CP13-14 Qdrant，CP15 Redis state，CP16 LOCATE，CP17-19 图谱，CP20-25 导航/编排/删除，CP26-28 adapters，CP29 集成门。
+后续顺序仍以 `Migration.md` 为准：CP12 contextual indexing，CP13-14 Qdrant，CP15 Redis state，CP16 LOCATE，CP17-19 图谱，CP20-25 导航/编排/删除，CP26-28 adapters，CP29 集成门。
 
 ## 8. 接手禁区
 

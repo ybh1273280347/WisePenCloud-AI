@@ -2,6 +2,7 @@ from .deserializer import (
     AuthoritativeAclError,
     to_authoritative_resource_acl,
     to_content_revision,
+    to_generation_cache_values,
     to_reading_block,
     to_resource_acl,
     to_section,
@@ -9,6 +10,7 @@ from .deserializer import (
     to_source_ref,
 )
 from .serializer import (
+    generation_cache_document,
     reading_block_document,
     resource_acl_document,
     revision_document,
@@ -19,6 +21,7 @@ from .serializer import (
 
 __all__ = [
     "AuthoritativeAclError",
+    "generation_cache_document",
     "reading_block_document",
     "resource_acl_document",
     "revision_document",
@@ -27,6 +30,7 @@ __all__ = [
     "source_ref_document",
     "to_authoritative_resource_acl",
     "to_content_revision",
+    "to_generation_cache_values",
     "to_reading_block",
     "to_resource_acl",
     "to_section",

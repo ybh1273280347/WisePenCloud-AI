@@ -14,6 +14,7 @@ from rag.core.persistence.mongo import (
     MongoAppliedRevisionReader,
     MongoAppliedStructureReader,
     MongoAuthoritativeAclReader,
+    MongoGenerationCacheStore,
     MongoResourceAclStore,
     MongoSourcePartReader,
 )
@@ -63,6 +64,7 @@ class Container(containers.DeclarativeContainer):
         collection=authoritative_resource_collection,
     )
     resource_acl_store = providers.Singleton(MongoResourceAclStore)
+    generation_cache_store = providers.Singleton(MongoGenerationCacheStore)
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,
         reader=resource_acl_store,

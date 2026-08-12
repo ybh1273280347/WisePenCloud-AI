@@ -1,3 +1,4 @@
+from .generation_cache import GenerationCacheEntity
 from .rag_acl import GroupResourceAclEntity, ResourceAclEntity
 from .rag_content import (
     ContentRevisionEntity,
@@ -10,6 +11,7 @@ from .rag_content import (
 
 __all__ = [
     "ContentRevisionEntity",
+    "GenerationCacheEntity",
     "GroupResourceAclEntity",
     "ReadingBlockEntity",
     "ResourceAclEntity",

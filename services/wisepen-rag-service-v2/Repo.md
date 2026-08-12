@@ -370,7 +370,7 @@ cache_key
 payload
 ```
 
-索引：unique `(resource_id, cache_kind, cache_key)`，以及 `(resource_id)` 用于删除。
+索引：unique `(resource_id, cache_kind, cache_key)`。该复合索引以 `resource_id` 为前缀，也满足按资源删除的查询，不重复创建无独立消费的单字段索引。
 
 所有缓存限定在资源内，不保留 v1 graph cache 仅按 extraction key 全局查询的隐式跨资源复用。这样资源物理删除能完整清理私有派生数据，不会因为另一资源碰巧使用同一输入 hash 而留下归属不清的 payload。该变化只牺牲跨资源缓存命中率，不改变 RAG 能力结果。
 

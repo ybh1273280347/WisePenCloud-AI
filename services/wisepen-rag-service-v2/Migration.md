@@ -239,7 +239,7 @@ Commit：`rag-v2 cp10: separate authoritative and local ACL stores`
 - `generation_cache` collection。
 - `contextual_text` 与 `graph_candidates` 两个 cache kind。
 - resource-local get/set/delete。
-- prompt/schema/model/input cache key 规则。
+- 缓存 key 作为调用方计算的不透明内容寻址值保存；Contextual Indexing 和图抽取分别在自己的 application 模块冻结 prompt/schema/model/input 配方。
 
 验收：批量部分命中、kind 隔离、resource 隔离、覆盖和删除测试。
 
