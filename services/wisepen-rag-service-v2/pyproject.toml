@@ -12,6 +12,7 @@ dependencies = [
     "markdown-it-py>=4,<5",
     "mdit-py-plugins>=0.5,<1",
     "numpy>=2.4.6",
+    "neo4j-graphrag==1.18.0",
     "openai",
     "pydantic",
     "pydantic-settings",

@@ -9,7 +9,8 @@ from pymongo import AsyncMongoClient
 from zeroentropy import AsyncZeroEntropy
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.index import ContextualTextIndexer
+from rag.application.rag.index import ContextualTextIndexer, KnowledgeGraphExtractor
+from rag.application.rag.index.graph_extraction import QueryClientGraphRagLLM
 from rag.application.rag.locate import ReadingEntryLocator
 from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
 from rag.application.rag.verify import EvidenceVerifier
@@ -20,6 +21,7 @@ from rag.core.persistence.mongo import (
     MongoAuthoritativeAclReader,
     MongoEvidenceReader,
     MongoGenerationCacheStore,
+    MongoGraphBuildSourceReader,
     MongoResourceAclStore,
     MongoSourcePartReader,
 )
@@ -134,11 +136,28 @@ class Container(containers.DeclarativeContainer):
     )
     resource_acl_store = providers.Singleton(MongoResourceAclStore)
     generation_cache_store = providers.Singleton(MongoGenerationCacheStore)
+    graph_build_source_reader = providers.Singleton(
+        MongoGraphBuildSourceReader,
+        revisions=applied_revision_reader,
+        source_parts=source_part_reader,
+    )
     contextual_text_client = providers.Dependency()
     contextual_text_indexer = providers.Singleton(
         ContextualTextIndexer,
         client=contextual_text_client,
         cache=generation_cache_store,
+    )
+    graph_query_client = providers.Dependency()
+    graph_llm = providers.Singleton(
+        QueryClientGraphRagLLM,
+        client=graph_query_client,
+    )
+    knowledge_graph_extractor = providers.Singleton(
+        KnowledgeGraphExtractor,
+        llm=graph_llm,
+        cache=generation_cache_store,
+        source_reader=graph_build_source_reader,
+        max_concurrency=config.knowledge_graph_extraction_max_concurrency,
     )
     qdrant_client = providers.Dependency()
     qdrant_bm25_options = providers.Factory(

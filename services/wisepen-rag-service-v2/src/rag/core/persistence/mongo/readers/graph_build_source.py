@@ -44,13 +44,14 @@ class MongoGraphBuildSourceReader(GraphBuildSourceReader):
         ).to_list()
         blocks = await ReadingBlockEntity.find(
             {"resource_id": resource_id, "content_revision": content_revision}
-        ).sort([("section_id", 1), ("ordinal", 1)]).to_list()
+        ).sort([("start_offset", 1), ("ordinal", 1)]).to_list()
         refs = await SourceRefEntity.find(
             {"resource_id": resource_id, "content_revision": content_revision}
         ).to_list()
         return GraphBuildSource(
             resource_id=resource_id,
             content_revision=content_revision,
+            structure_mode=revision.structure_mode,
             markdown=assemble_source_text(parts, source_spans),
             sections=[_to_section(entity) for entity in sections],
             reading_blocks=[_to_reading_block(entity) for entity in blocks],
