@@ -29,8 +29,6 @@ class GraphBuildSource:
 
 
 class ResourceIndexStore(Protocol):
-    async def initialize(self) -> None: ...
-
     async def stage_revision(
         self,
         revision: ContentRevision,
