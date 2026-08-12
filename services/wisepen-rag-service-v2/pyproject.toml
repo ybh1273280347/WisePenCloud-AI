@@ -13,6 +13,7 @@ dependencies = [
     "openai",
     "pydantic",
     "pydantic-settings",
+    "pymongo>=4.17.0",
     "pyyaml",
     "thulac>=0.2.2",
     "wisepen-common",
