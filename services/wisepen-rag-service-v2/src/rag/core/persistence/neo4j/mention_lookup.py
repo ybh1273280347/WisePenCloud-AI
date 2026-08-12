@@ -15,15 +15,18 @@ from rag.domain.knowledge_graph import (
     KnowledgeNodeKind,
 )
 
-_FIND_NODES = f"""
+from .acl_predicate import acl_predicate
+
+_FIND_NODES = """
 UNWIND $evidence AS item
 MATCH (resource:RagV2ResourceNode {{resource_id: item.resource_id}})
       -[mention:RAG_V2_MENTION]->(node:RagV2Node)
-WHERE resource.graph_status = '{GraphStatus.PUBLISHED.value}'
+WHERE resource.graph_status = $published_status
   AND resource.content_revision = item.content_revision
   AND mention.source_content_revision = item.content_revision
   AND mention.graph_revision = resource.graph_revision
   AND item.source_ref_id IN mention.source_ref_ids
+  AND {acl_filter}
 RETURN DISTINCT node.node_id AS node_id,
        CASE
            WHEN node:RagV2EntityNode THEN 'Entity'
@@ -83,10 +86,16 @@ class Neo4jMentionLookup(MentionLookup):
         if not query_evidence:
             return []
 
+        acl_filter, acl_parameters = acl_predicate(
+            permission_scope,
+            resource_alias="resource",
+        )
         result = await self._driver.execute_query(
-            _FIND_NODES,
+            _FIND_NODES.format(acl_filter=acl_filter),
             evidence=query_evidence,
             limit=limit,
+            published_status=GraphStatus.PUBLISHED.value,
+            **acl_parameters,
             database_=self._database,
             routing_=RoutingControl.READ,
         )

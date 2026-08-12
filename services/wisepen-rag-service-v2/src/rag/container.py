@@ -9,7 +9,7 @@ from neo4j import AsyncGraphDatabase
 from pymongo import AsyncMongoClient
 from zeroentropy import AsyncZeroEntropy
 
-from rag.application.rag.acl import PermissionAuthorizer
+from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
 from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import ContextualTextIndexer, KnowledgeGraphExtractor
 from rag.application.rag.index.graph_extraction import QueryClientGraphRagLLM
@@ -32,12 +32,14 @@ from rag.core.persistence.mongo import (
     MongoSourcePartReader,
 )
 from rag.core.persistence.neo4j import (
+    Neo4jGraphAclWriter,
     Neo4jGraphTraversal,
     Neo4jKnowledgeGraphWriter,
     Neo4jMentionLookup,
 )
 from rag.core.persistence.qdrant import (
     QdrantCandidateSearch,
+    QdrantRetrievalAclWriter,
     QdrantRetrievalIndexWriter,
 )
 from rag.core.persistence.redis import RedisNavigationStateStore
@@ -224,6 +226,11 @@ class Container(containers.DeclarativeContainer):
         sparse_vector_name=config.qdrant_sparse_vector_name,
         bm25_options=qdrant_bm25_options,
     )
+    retrieval_acl_writer = providers.Singleton(
+        QdrantRetrievalAclWriter,
+        client=qdrant_client,
+        collection_name=config.qdrant_collection_name,
+    )
     candidate_search = providers.Singleton(
         QdrantCandidateSearch,
         client=qdrant_client,
@@ -242,6 +249,18 @@ class Container(containers.DeclarativeContainer):
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,
         reader=resource_acl_store,
+    )
+    graph_acl_writer = providers.Singleton(
+        Neo4jGraphAclWriter,
+        driver=neo4j_driver,
+        database=config.neo4j_database,
+    )
+    resource_acl_refresher = providers.Singleton(
+        ResourceAclRefresher,
+        authoritative_reader=authoritative_acl_reader,
+        local_store=resource_acl_store,
+        retrieval_writer=retrieval_acl_writer,
+        graph_writer=graph_acl_writer,
     )
     discovered_section_reader = providers.Singleton(
         DiscoveredSectionReader,

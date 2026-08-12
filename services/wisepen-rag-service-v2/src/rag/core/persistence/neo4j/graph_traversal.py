@@ -18,6 +18,8 @@ from rag.domain.knowledge_graph import (
     KnowledgeRelationType,
 )
 
+from .acl_predicate import acl_predicate
+
 _PATH_PATTERNS = {
     (TraversalDirection.OUT, 1): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1]->(target)",
     (TraversalDirection.OUT, 2): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1..2]->(target)",
@@ -52,6 +54,15 @@ class Neo4jGraphTraversal(GraphTraversal):
         if pattern is None:
             raise ValueError("graph traversal depth must be 1 or 2")
 
+        evidence_acl, acl_parameters = acl_predicate(
+            request.permission_scope,
+            resource_alias="evidence",
+        )
+        path_node_acl, _ = acl_predicate(
+            request.permission_scope,
+            resource_alias="path_node",
+        )
+
         result = await self._driver.execute_query(
             f"""
             MATCH (seed:RagV2Node)
@@ -60,6 +71,8 @@ class Neo4jGraphTraversal(GraphTraversal):
             WHERE target <> seed
               AND all(path_node IN nodes(path)
                 WHERE single(other IN nodes(path) WHERE other = path_node))
+              AND all(path_node IN nodes(path)
+                WHERE NOT path_node:RagV2ResourceNode OR {path_node_acl})
               AND all(relation IN relationships(path)
                 WHERE (size($relation_types) = 0
                        OR coalesce(relation.relation_type, 'MENTIONS')
@@ -71,6 +84,7 @@ class Neo4jGraphTraversal(GraphTraversal):
                     WHERE evidence.graph_status = '{GraphStatus.PUBLISHED.value}'
                       AND evidence.content_revision = relation.source_content_revision
                       AND evidence.graph_revision = relation.graph_revision
+                      AND {evidence_acl}
                   }})
             RETURN [path_node IN nodes(path) | {{
                      node_id: path_node.node_id,
@@ -106,6 +120,7 @@ class Neo4jGraphTraversal(GraphTraversal):
             seed_node_ids=list(dict.fromkeys(request.seed_node_ids)),
             relation_types=[item.value for item in request.relation_types],
             limit=request.limit,
+            **acl_parameters,
             database_=self._database,
             routing_=RoutingControl.READ,
         )

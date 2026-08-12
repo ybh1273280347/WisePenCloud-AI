@@ -43,7 +43,8 @@ _BEGIN_BUILD = f"""
 MERGE (resource:{_NODE_LABEL}:{_RESOURCE_LABEL} {{node_id: $node_id}})
 ON CREATE SET resource.document_version = $document_version
 WITH resource
-WHERE resource.document_version <= $document_version
+WHERE resource.document_version IS NULL
+   OR resource.document_version <= $document_version
 SET resource.resource_id = $resource_id,
     resource.content_revision = $content_revision,
     resource.document_version = $document_version,

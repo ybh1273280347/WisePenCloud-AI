@@ -1,4 +1,4 @@
-from rag.application.rag.acl import PermissionAuthorizer
+from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
 from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import ContextualTextIndexer
 from rag.application.rag.locate import ReadingEntryLocator
@@ -38,6 +38,9 @@ def test_container_builds_read_objects_with_explicit_persistence_dependencies() 
     container.config.qdrant_bm25_tokenizer.from_value("multilingual")
     assert isinstance(container.retrieval_index_writer(), QdrantRetrievalIndexWriter)
     assert isinstance(container.candidate_search(), QdrantCandidateSearch)
+    container.retrieval_acl_writer.override(object())
+    container.graph_acl_writer.override(object())
+    assert isinstance(container.resource_acl_refresher(), ResourceAclRefresher)
 
     container.redis_client.override(object())
     container.config.navigation_state_ttl_seconds.from_value(3600)

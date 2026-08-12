@@ -72,7 +72,8 @@ async def test_lookup_filters_published_revision_deduplicates_and_limits() -> No
     )
 
     query, parameters = driver.calls[0]
-    assert "resource.graph_status = 'published'" in query
+    assert "resource.graph_status = $published_status" in query
+    assert "resource.owner_id = $acl_user_id" in query
     assert "resource.content_revision = item.content_revision" in query
     assert "mention.graph_revision = resource.graph_revision" in query
     assert parameters["evidence"] == [
@@ -83,6 +84,7 @@ async def test_lookup_filters_published_revision_deduplicates_and_limits() -> No
         }
     ]
     assert parameters["limit"] == 3
+    assert parameters["published_status"] == "published"
     assert nodes[0].kind is KnowledgeNodeKind.ENTITY
     assert nodes[0].entity_type is KnowledgeEntityType.CONCEPT
 

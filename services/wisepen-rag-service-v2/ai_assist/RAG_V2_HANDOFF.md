@@ -52,7 +52,8 @@ base:     origin/main @ e1af497f7
 | CP19.1 | `693296c9` | 将知识关系稳定身份统一为 Repo.md 冻结的 `edge_id`。 |
 | CP20 | `a9c2e06d` | MentionLookup 按已核验 SourceRef、published graph、revision 和 ACL 发现初始节点并写入 navigation state。 |
 | CP21 | `4a3e5961` | EXPAND 有界图遍历、路径排序、逐边 VERIFY 和并发安全的 known node 原子扩展。 |
-| CP22 | 当前工作树 | 有状态 Section READ：state/ACL/revision 校验、完整正文读取与 frontier 原子扩展。 |
+| CP22 | `8e05be98` | 有状态 Section READ：state/ACL/revision 校验、完整正文读取与 frontier 原子扩展。 |
+| CP23 | 当前工作树 | 权威 ACL 刷新、本地单调写入、Qdrant/Neo4j 显式同步和统一图查询 predicate。 |
 
 ## 3. 当前架构事实
 
@@ -268,6 +269,14 @@ CP22 有状态 READ 边界：
 - state 必须匹配当前 user/session；未知 Section 直接抛 `SectionNotDiscoveredError`，不静默扩大读取范围。
 - 正文查询前后各执行一次统一 ACL 与 applied revision 校验，读取期间发生撤权或 revision 切换时 fail closed。
 - `AppliedContentReader` 返回完整 `SectionContent` 后，parent/previous/next/children 使用现有 `add_known_sections()` 原子加入同一 state。
+
+CP23 ACL 同步边界：
+
+- `ResourceAclRefresher` 读取上游权威 ACL、单调写入本地 store，再显式同步 Qdrant 与 Neo4j；后端失败通过 `TaskGroup` 直接抛出。
+- 本地已有相同 revision 时仍同步两个后端以补偿此前失败；本地 revision 更高时忽略旧事件，禁止旧 ACL 覆盖。
+- `QdrantRetrievalAclWriter` 与 `Neo4jGraphAclWriter` 只序列化统一 `ResourceAcl`，不自行解释权限规则。
+- Neo4j `acl_predicate()` 与 `ResourceAcl.can_read()` 保持 owner、直接用户、资源排除、managed/joined group 语义一致；MentionLookup/GraphTraversal 下推 predicate 后仍保留最终 `PermissionAuthorizer` 复查。
+- ACL 可以先创建 ResourceNode；KnowledgeGraphWriter 的首次 begin build 允许 `document_version IS NULL`，不会被 ACL 同步反向阻断。
 
 CP13 的实现边界：
 
