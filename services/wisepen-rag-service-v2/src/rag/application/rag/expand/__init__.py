@@ -4,7 +4,12 @@ from .graph_expander import (
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
 )
-from .ports import TraversalDirection
+from .graph_traversal import (
+    GraphTraversalRequest,
+    TraversalDirection,
+    TraversedEdge,
+    TraversedPath,
+)
 from .section_expander import (
     SectionExpandResult,
     SectionAccessRevokedError,
@@ -17,6 +22,7 @@ from .section_expander import (
 __all__ = [
     "GraphExpandRequest",
     "GraphExpandResult",
+    "GraphTraversalRequest",
     "KnowledgeGraphExpander",
     "SectionAccessRevokedError",
     "SectionExpandResult",
@@ -25,5 +31,7 @@ __all__ = [
     "SectionRevisionChangedError",
     "SectionTreeExpander",
     "TraversalDirection",
+    "TraversedEdge",
+    "TraversedPath",
     "UnknownSeedNodeError",
 ]

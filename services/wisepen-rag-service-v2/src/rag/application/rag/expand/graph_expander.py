@@ -2,13 +2,13 @@
 
 from dataclasses import dataclass, field
 
-from rag.application.rag.expand.ports import (
-    GraphTraversal,
+from rag.application.rag.expand.graph_traversal import (
     GraphTraversalRequest,
     TraversalDirection,
     TraversedEdge,
     TraversedPath,
 )
+from rag.application.rag.expand.ports import GraphTraversal
 from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.acl import PermissionScope
 from rag.domain.evidence import EvidenceRecord

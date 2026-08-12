@@ -5,7 +5,7 @@ from rag.application.rag.expand import (
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
 )
-from rag.application.rag.expand.ports import TraversedEdge, TraversedPath
+from rag.application.rag.expand.graph_traversal import TraversedEdge, TraversedPath
 from rag.domain.acl import PermissionScope
 from rag.domain.knowledge_graph import (
     KnowledgeNode,

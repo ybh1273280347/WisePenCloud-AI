@@ -3,13 +3,13 @@
 from neo4j import AsyncDriver, RoutingControl
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.expand.ports import (
-    GraphTraversal,
+from rag.application.rag.expand.graph_traversal import (
     GraphTraversalRequest,
     TraversalDirection,
     TraversedEdge,
     TraversedPath,
 )
+from rag.application.rag.expand.ports import GraphTraversal
 from rag.domain.knowledge_graph import (
     GraphStatus,
     KnowledgeEntityType,

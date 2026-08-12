@@ -14,7 +14,7 @@ from rag.api.schemas import (
 )
 from rag.api.schemas import ReadSectionsRequest
 from rag.application.rag.expand import GraphExpandResult, UnknownSeedNodeError
-from rag.application.rag.expand.ports import TraversedEdge, TraversedPath
+from rag.application.rag.expand.graph_traversal import TraversedEdge, TraversedPath
 from rag.application.rag.locate import (
     LocatedEvidence,
     LocatedSection,

@@ -5,7 +5,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from rag.application.rag.expand import TraversalDirection
-from rag.application.rag.expand.ports import TraversedEdge, TraversedPath
+from rag.application.rag.expand.graph_traversal import TraversedEdge, TraversedPath
 from rag.application.rag.read import SectionFrontier
 from rag.domain.document_structure import Section
 from rag.domain.evidence import EvidenceRecord

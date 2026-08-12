@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.expand.ports import (
+from rag.application.rag.expand.graph_traversal import (
     GraphTraversalRequest,
     TraversalDirection,
 )
