@@ -1,5 +1,9 @@
 from common.cloud.nacos_client import NacosClientManager
-from rag.core.config.bootstrap_settings import bootstrap_settings
+
+from rag.core.config.bootstrap_settings import RagBootstrapSettings
 
 
-nacos_client_manager = NacosClientManager(bootstrap_settings)
+def build_nacos_client_manager(
+    bootstrap_settings: RagBootstrapSettings,
+) -> NacosClientManager:
+    return NacosClientManager(bootstrap_settings)

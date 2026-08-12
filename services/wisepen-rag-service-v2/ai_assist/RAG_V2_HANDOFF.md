@@ -57,7 +57,8 @@ base:     origin/main @ e1af497f7
 | CP24 | `cb73b1a57` | ResourceIndexer 编排结构、contextual、embedding、Mongo/Qdrant 发布、图 publish/skip 和重试补偿。 |
 | CP25 | `ae9b0c44d` | 先清 Mongo 发布指针 fail closed，再并行删除内容、缓存、Qdrant、Neo4j 和本地 ACL。 |
 | CP26 | `e285530b0` | 确定性 document structure/page/section READ HTTP schema、统一 ACL 和资源读取错误码。 |
-| CP27 | 当前工作树 | LOCATE、发现后 Section READ、EXPAND HTTP schema、可信身份与导航错误映射。 |
+| CP27 | `98b0e3555` | LOCATE、发现后 Section READ、EXPAND HTTP schema、可信身份与导航错误映射。 |
+| CP28 | 当前工作树 | 三类 Kafka adapter、保序 offset 重试、显式运行时配置与服务生命周期装配。 |
 
 ## 3. 当前架构事实
 
@@ -312,6 +313,15 @@ CP27 HTTP Navigation adapter 边界：
 - locate 返回 state、相关性 decision、Section frontier 和已核验证据；expand 返回领域 node、edge、path 和 SourceRef 回源事实；不组装 Agent reason 或探索提示。
 - 请求 schema 使用 list，Section 最多 12 个、seed/relation type 最多 16 个、depth 只允许 1/2、结果最多 20 个，所有请求 `extra=forbid`。
 - state 不存在/过期/身份不匹配映射为 `NAVIGATION_STATE_NOT_FOUND`；撤权或 revision/evidence 失效映射为 `NAVIGATION_STATE_INVALIDATED`；未知 Section/seed 与输入错误映射为 `NAVIGATION_INVALID`；依赖失败映射为 `NAVIGATION_FAILED` 且不透传内部文本。
+
+CP28 Kafka 与服务生命周期边界：
+
+- Kafka adapter 校验 `resourceId/version/content`、`resourceId` 和 `typedResourceIds` 三类外部 payload，再分别调用 `ResourceIndexer`、`ResourceAclRefresher` 与 `ResourceDeleter`；application 不依赖 Kafka schema。
+- 永久非法 JSON/schema payload 抛 `KafkaPayloadError` 并提交该条 offset；application 或依赖失败保留当前 offset，在同一消息上原地重试，成功后只提交一次，禁止后续 commit 越过失败事件。
+- ACL 重算晚于资源删除到达时，`AuthoritativeAclNotFoundError` 作为终态 no-op；其余 ACL 同步失败仍重试。
+- 配置读取从模块导入移到 lifespan：导入 `rag.main` 不拉 Nacos、不连接存储；运行时显式加载配置并注入容器，配置缺失直接阻止启动。
+- lifespan 顺序为 Beanie、Qdrant、Neo4j schema/连接初始化，随后启动三类 consumer 和注册服务；任一步失败不会进入 ready，关闭时反向停止 consumer 并释放模型、Redis、Qdrant、Neo4j、Mongo 客户端。
+- HTTP 使用运行时加载的内部来源密钥和 `SecurityContextHolder`，container wiring 只装配 resources/navigation endpoints；保留 `/health` 与 OpenAPI 文档。
 
 CP13 的实现边界：
 

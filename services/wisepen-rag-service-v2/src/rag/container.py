@@ -4,11 +4,19 @@
 注入，避免导入模块时触发 Nacos 或数据库连接。
 """
 
+import redis.asyncio as redis
 from dependency_injector import containers, providers
 from neo4j import AsyncGraphDatabase
 from pymongo import AsyncMongoClient
+from qdrant_client import AsyncQdrantClient
 from zeroentropy import AsyncZeroEntropy
 
+from rag.api.kafka import (
+    AclRecalculateHandler,
+    DocumentReadyHandler,
+    KafkaEventConsumer,
+    ResourceDestroyHandler,
+)
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
 from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import (
@@ -25,6 +33,7 @@ from rag.application.rag.read import (
     DocumentStructureReader,
 )
 from rag.application.rag.verify import EvidenceVerifier
+from rag.core.config import AppSettings
 from rag.core.persistence.mongo import (
     MongoAppliedContentReader,
     MongoAppliedRevisionReader,
@@ -49,6 +58,7 @@ from rag.core.persistence.qdrant import (
     QdrantRetrievalIndexWriter,
 )
 from rag.core.persistence.redis import RedisNavigationStateStore
+from rag.utils.llm_clients import EmbeddingClient, QueryClient
 from rag.utils.ranking import RankingPipeline
 from rag.utils.ranking.diversifiers import MmrDiversifier, MmrDiversifierConfig
 from rag.utils.ranking.fusion import WeightedRrfFusion
@@ -77,6 +87,37 @@ def _build_authoritative_resource_collection(
 
 def _build_qdrant_bm25_options(tokenizer: str) -> dict[str, str]:
     return {"tokenizer": tokenizer}
+
+
+def _build_qdrant_client(
+    *,
+    host: str,
+    port: int,
+    api_key: str,
+) -> AsyncQdrantClient:
+    return AsyncQdrantClient(
+        host=host,
+        port=port,
+        api_key=api_key or None,
+        https=False,
+        cloud_inference=True,
+        check_compatibility=False,
+    )
+
+
+def _build_kafka_consumer(
+    *,
+    bootstrap_servers: str,
+    topic: str,
+    group_id: str,
+    handler,
+) -> KafkaEventConsumer:
+    return KafkaEventConsumer(
+        bootstrap_servers=bootstrap_servers,
+        topic=topic,
+        group_id=group_id,
+        handler=handler.handle,
+    )
 
 
 def _build_locate_ranking_pipeline(
@@ -208,7 +249,12 @@ class Container(containers.DeclarativeContainer):
         driver=neo4j_driver,
         database=config.neo4j_database,
     )
-    qdrant_client = providers.Dependency()
+    qdrant_client = providers.Singleton(
+        _build_qdrant_client,
+        host=config.qdrant_host,
+        port=config.qdrant_port,
+        api_key=config.qdrant_password,
+    )
     qdrant_bm25_options = providers.Factory(
         _build_qdrant_bm25_options,
         tokenizer=config.qdrant_bm25_tokenizer,
@@ -238,7 +284,11 @@ class Container(containers.DeclarativeContainer):
         sparse_vector_name=config.qdrant_sparse_vector_name,
         bm25_options=qdrant_bm25_options,
     )
-    redis_client = providers.Dependency()
+    redis_client = providers.Singleton(
+        redis.from_url,
+        config.redis_url,
+        decode_responses=True,
+    )
     navigation_state_store = providers.Singleton(
         RedisNavigationStateStore,
         redis_client=redis_client,
@@ -270,7 +320,13 @@ class Container(containers.DeclarativeContainer):
         retrieval_writer=retrieval_acl_writer,
         graph_writer=graph_acl_writer,
     )
-    embedding_client = providers.Dependency()
+    embedding_client = providers.Singleton(
+        EmbeddingClient,
+        model=config.embedding_model,
+        api_base=config.llm_base_url,
+        api_key=config.llm_api_key,
+        dimensions=config.embedding_dimensions,
+    )
     resource_indexer = providers.Singleton(
         ResourceIndexer,
         contextual_text=contextual_text_indexer,
@@ -309,7 +365,10 @@ class Container(containers.DeclarativeContainer):
         database=config.neo4j_database,
         authorizer=permission_authorizer,
     )
-    zero_entropy_client = providers.Dependency()
+    zero_entropy_client = providers.Singleton(
+        AsyncZeroEntropy,
+        api_key=config.zero_entropy_api_key,
+    )
     locate_ranking_pipeline = providers.Singleton(
         _build_locate_ranking_pipeline,
         zero_entropy_client=zero_entropy_client,
@@ -343,5 +402,115 @@ class Container(containers.DeclarativeContainer):
         state_store=navigation_state_store,
     )
 
+    document_ready_handler = providers.Singleton(
+        DocumentReadyHandler,
+        indexer=resource_indexer,
+    )
+    acl_recalculate_handler = providers.Singleton(
+        AclRecalculateHandler,
+        refresher=resource_acl_refresher,
+    )
+    resource_destroy_handler = providers.Singleton(
+        ResourceDestroyHandler,
+        deleter=resource_deleter,
+    )
+    document_ready_consumer = providers.Singleton(
+        _build_kafka_consumer,
+        bootstrap_servers=config.kafka_bootstrap_servers,
+        topic=config.kafka_document_ready_topic,
+        group_id=config.kafka_document_ready_group_id,
+        handler=document_ready_handler,
+    )
+    acl_recalculate_consumer = providers.Singleton(
+        _build_kafka_consumer,
+        bootstrap_servers=config.kafka_bootstrap_servers,
+        topic=config.kafka_acl_recalculate_topic,
+        group_id=config.kafka_acl_recalculate_group_id,
+        handler=acl_recalculate_handler,
+    )
+    resource_destroy_consumer = providers.Singleton(
+        _build_kafka_consumer,
+        bootstrap_servers=config.kafka_bootstrap_servers,
+        topic=config.kafka_resource_destroy_topic,
+        group_id=config.kafka_resource_destroy_group_id,
+        handler=resource_destroy_handler,
+    )
+
 
 container = Container()
+
+
+def configure_container(target: Container, settings: AppSettings) -> None:
+    """把一次启动读取到的配置显式注入对象图，不保留模块级 settings。"""
+    target.config.from_dict(
+        {
+            "mongodb_url": settings.MONGODB_URL,
+            "resource_permission_database_name": (
+                settings.RESOURCE_PERMISSION_MONGODB_DB_NAME
+            ),
+            "llm_base_url": settings.LLM_BASE_URL,
+            "llm_api_key": settings.LLM_API_KEY,
+            "embedding_model": settings.EMBEDDING_MODEL,
+            "embedding_dimensions": settings.EMBEDDING_DIMENSIONS,
+            "embedding_profile": settings.EMBEDDING_MODEL,
+            "knowledge_graph_extraction_max_concurrency": (
+                settings.KNOWLEDGE_GRAPH_EXTRACTION_MAX_CONCURRENCY
+            ),
+            "neo4j_uri": settings.NEO4J_URI,
+            "neo4j_user": settings.NEO4J_USER,
+            "neo4j_password": settings.NEO4J_PASSWORD,
+            "neo4j_database": settings.NEO4J_DATABASE,
+            "qdrant_host": settings.QDRANT_HOST,
+            "qdrant_port": settings.QDRANT_PORT,
+            "qdrant_password": settings.QDRANT_PASSWORD,
+            "qdrant_collection_name": settings.QDRANT_RAG_COLLECTION_NAME,
+            "qdrant_dense_vector_name": settings.QDRANT_RAG_DENSE_VECTOR_NAME,
+            "qdrant_sparse_vector_name": settings.QDRANT_RAG_SPARSE_VECTOR_NAME,
+            "qdrant_bm25_tokenizer": settings.QDRANT_RAG_BM25_TOKENIZER,
+            "redis_url": settings.REDIS_URL,
+            "navigation_state_ttl_seconds": (
+                settings.RAG_NAVIGATION_STATE_TTL_SECONDS
+            ),
+            "zero_entropy_api_key": settings.ZERO_ENTROPY_API_KEY,
+            "reranker_model": settings.RERANKER_MODEL,
+            "rerank_relevance_low_watermark": (
+                settings.RAG_RERANK_RELEVANCE_LOW_WATERMARK
+            ),
+            "rerank_relevance_high_watermark": (
+                settings.RAG_RERANK_RELEVANCE_HIGH_WATERMARK
+            ),
+            "rerank_uncertain_limit": settings.RAG_RERANK_UNCERTAIN_LIMIT,
+            "kafka_bootstrap_servers": settings.KAFKA_BOOTSTRAP_SERVERS,
+            "kafka_document_ready_topic": settings.KAFKA_DOCUMENT_READY_TOPIC,
+            "kafka_document_ready_group_id": (
+                settings.KAFKA_RAG_DOCUMENT_READY_GROUP_ID
+            ),
+            "kafka_acl_recalculate_topic": (
+                settings.KAFKA_RESOURCE_ACL_RECALC_TOPIC
+            ),
+            "kafka_acl_recalculate_group_id": (
+                settings.KAFKA_RAG_ACL_RECALC_GROUP_ID
+            ),
+            "kafka_resource_destroy_topic": (
+                settings.KAFKA_RESOURCE_PHYSICAL_DESTROY_TOPIC
+            ),
+            "kafka_resource_destroy_group_id": (
+                settings.KAFKA_RAG_RESOURCE_DESTROY_GROUP_ID
+            ),
+        }
+    )
+    target.contextual_text_client.override(
+        QueryClient(
+            model=settings.QUERY_MODEL,
+            api_base=settings.LLM_BASE_URL,
+            api_key=settings.LLM_API_KEY,
+            thinking="disabled",
+        )
+    )
+    target.graph_query_client.override(
+        QueryClient(
+            model=settings.QUERY_MODEL,
+            api_base=settings.LLM_BASE_URL,
+            api_key=settings.LLM_API_KEY,
+        )
+    )

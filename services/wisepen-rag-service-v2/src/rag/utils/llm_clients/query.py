@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any, Literal
 
-from rag.core.config.app_settings import settings
 from openai import AsyncOpenAI, OpenAI
 
 Message = dict[str, Any]
@@ -23,7 +21,7 @@ class QueryResult:
 class QueryClient:
     """面向工具性小模型任务的 OpenAI-compatible 查询客户端。"""
 
-    __slots__ = ("model", "thinking", "_async_client", "_sync_client")
+    __slots__ = ("_async_client", "_sync_client", "model", "thinking")
 
     def __init__(
             self,
@@ -79,6 +77,10 @@ class QueryClient:
         )
         return self._parse_response(response)
 
+    async def close(self) -> None:
+        await self._async_client.close()
+        self._sync_client.close()
+
     def _build_completion_kwargs(
             self,
             *,
@@ -131,14 +133,16 @@ class QueryClient:
         return QueryResult(content=content, raw=response, usage_tokens=usage_tokens)
 
 
-@lru_cache
 def build_query_client(
-        *,
-        thinking: ThinkingMode | None = None,
+    *,
+    model: str,
+    api_base: str,
+    api_key: str,
+    thinking: ThinkingMode | None = None,
 ) -> QueryClient:
     return QueryClient(
-        model=settings.QUERY_MODEL,
-        api_base=settings.LLM_BASE_URL,
-        api_key=settings.LLM_API_KEY,
+        model=model,
+        api_base=api_base,
+        api_key=api_key,
         thinking=thinking,
     )

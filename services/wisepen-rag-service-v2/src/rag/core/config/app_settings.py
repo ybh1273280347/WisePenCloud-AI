@@ -1,12 +1,8 @@
-import asyncio
-import threading
 from typing import Literal
 
 import yaml
+from common.cloud.nacos_client import NacosClientManager
 from pydantic import BaseModel, ConfigDict
-
-from common.logger import error, info
-from rag.core.config.nacos import nacos_client_manager
 
 
 class AppSettings(BaseModel):
@@ -64,33 +60,7 @@ class AppSettings(BaseModel):
     RAG_RERANK_UNCERTAIN_LIMIT: int = 3  # 灰区最多返回的探索候选数。
 
 
-def _run_async(coro):
-    result, exc = None, None
-
-    def _target():
-        nonlocal result, exc
-        try:
-            result = asyncio.run(coro)
-        except Exception as error:
-            exc = error
-
-    thread = threading.Thread(target=_target)
-    thread.start()
-    thread.join()
-    if exc:
-        raise exc
-    return result
-
-
-def load_settings() -> AppSettings:
-    try:
-        info("nacos app config pulling.")
-        raw_yaml = _run_async(nacos_client_manager.pull_config())
-        config_dict = yaml.safe_load(raw_yaml) if raw_yaml else {}
-        return AppSettings(**(config_dict or {}))
-    except Exception as exception:
-        error("nacos app config pull failed.", exc=exception)
-        raise
-
-
-settings = load_settings()
+async def load_settings(nacos: NacosClientManager) -> AppSettings:
+    raw_yaml = await nacos.pull_config()
+    config = yaml.safe_load(raw_yaml) if raw_yaml else {}
+    return AppSettings(**(config or {}))

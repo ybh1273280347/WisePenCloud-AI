@@ -7,4 +7,5 @@ class RagBootstrapSettings(BootstrapSettings):
     SERVICE_PORT: int = 19913
 
 
-bootstrap_settings = RagBootstrapSettings()
+def load_bootstrap_settings() -> RagBootstrapSettings:
+    return RagBootstrapSettings()

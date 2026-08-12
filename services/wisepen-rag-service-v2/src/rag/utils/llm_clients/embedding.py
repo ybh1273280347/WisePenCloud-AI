@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import lru_cache
-from typing import Any, Sequence
+from typing import Any
 
-from rag.core.config.app_settings import settings
 from openai import AsyncOpenAI, OpenAI
 
 EmbeddingInput = str | Sequence[str] | Sequence[int] | Sequence[Sequence[int]]
@@ -23,10 +22,10 @@ class EmbeddingClient:
     """面向 OpenAI-compatible embedding API 的同步/异步客户端。"""
 
     __slots__ = (
-        "model",
-        "dimensions",
         "_async_client",
         "_sync_client",
+        "dimensions",
+        "model",
     )
 
     def __init__(
@@ -64,6 +63,10 @@ class EmbeddingClient:
         )
         return self._parse_response(response)
 
+    async def close(self) -> None:
+        await self._async_client.close()
+        self._sync_client.close()
+
     @staticmethod
     def _parse_response(response: Any) -> EmbeddingResult:
         embeddings = [list(item.embedding) for item in response.data or []]
@@ -74,11 +77,16 @@ class EmbeddingClient:
         )
 
 
-@lru_cache(maxsize=1)
-def build_embedding_client() -> EmbeddingClient:
+def build_embedding_client(
+    *,
+    model: str,
+    api_base: str,
+    api_key: str,
+    dimensions: int,
+) -> EmbeddingClient:
     return EmbeddingClient(
-        model=settings.EMBEDDING_MODEL,
-        api_base=settings.LLM_BASE_URL,
-        api_key=settings.LLM_API_KEY,
-        dimensions=settings.EMBEDDING_DIMENSIONS,
+        model=model,
+        api_base=api_base,
+        api_key=api_key,
+        dimensions=dimensions,
     )
