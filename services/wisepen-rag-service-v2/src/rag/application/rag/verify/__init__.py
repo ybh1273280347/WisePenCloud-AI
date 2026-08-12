@@ -1,3 +1,3 @@
-from .evidence import verify_candidates
+from .evidence import EvidenceVerifier
 
-__all__ = ["verify_candidates"]
+__all__ = ["EvidenceVerifier"]

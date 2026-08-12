@@ -14,7 +14,7 @@ from rag.application.rag.read import (
     DocumentContentReader,
     DocumentStructureReader,
 )
-from rag.application.rag.verify import verify_candidates
+from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.content_revision import ResourceIndexState
 from rag.domain.evidence import (
     EvidenceCandidate,
@@ -192,8 +192,7 @@ async def test_verify_closes_index_to_authoritative_evidence() -> None:
         section=next(section for section in structure.sections if section.section_id == refs[0].section_id),
         source_text=markdown[refs[0].source_spans[0].start_offset : refs[0].source_spans[0].end_offset],
     )
-    verified = await verify_candidates(
-        _EvidenceReader(record),
+    verified = await EvidenceVerifier(reader=_EvidenceReader(record)).verify(
         [
             EvidenceCandidate(
                 resource_id=revision.resource_id,
@@ -224,7 +223,7 @@ async def test_verify_rejects_missing_ref_and_wrong_chunk_ownership() -> None:
         chunk=chunks[0],
     )
     with pytest.raises(EvidenceNotFoundError):
-        await verify_candidates(reader, [missing])
+        await EvidenceVerifier(reader=reader).verify([missing])
 
     wrong_chunk = RetrievalChunk(
         chunk_id="wrong",
@@ -238,8 +237,7 @@ async def test_verify_rejects_missing_ref_and_wrong_chunk_ownership() -> None:
         anchor_labels=list(chunks[0].anchor_labels),
     )
     with pytest.raises(EvidenceCorruptError):
-        await verify_candidates(
-            reader,
+        await EvidenceVerifier(reader=reader).verify(
             [
                 EvidenceCandidate(
                     resource_id=revision.resource_id,

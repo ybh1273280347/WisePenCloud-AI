@@ -112,7 +112,7 @@ read_applied_evidence(
 
 文件：`src/rag/application/rag/verify/evidence.py`
 
-`verify_candidates()` 会校验：
+`EvidenceVerifier.verify()` 会校验：
 
 - 一批候选必须属于同一 resource/revision。
 - SourceRef ID、chunk ID、ReadingBlock ID、Section ID 和 section path。

@@ -12,6 +12,7 @@ from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.index import ContextualTextIndexer
 from rag.application.rag.locate import ReadingEntryLocator
 from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
+from rag.application.rag.verify import EvidenceVerifier
 from rag.core.persistence.mongo import (
     MongoAppliedContentReader,
     MongoAppliedRevisionReader,
@@ -107,6 +108,10 @@ class Container(containers.DeclarativeContainer):
         revisions=applied_revision_reader,
         source_parts=source_part_reader,
     )
+    evidence_verifier = providers.Singleton(
+        EvidenceVerifier,
+        reader=evidence_reader,
+    )
 
     document_structure_reader = providers.Singleton(
         DocumentStructureReader,
@@ -185,7 +190,7 @@ class Container(containers.DeclarativeContainer):
         candidate_search=candidate_search,
         ranking_pipeline=locate_ranking_pipeline,
         authorizer=permission_authorizer,
-        evidence_reader=evidence_reader,
+        evidence_verifier=evidence_verifier,
         revision_reader=applied_revision_reader,
         structure_reader=applied_structure_reader,
         state_store=navigation_state_store,

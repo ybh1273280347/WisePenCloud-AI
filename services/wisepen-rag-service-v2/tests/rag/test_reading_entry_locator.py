@@ -4,6 +4,7 @@ import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.locate import LocateError, LocateRequest, ReadingEntryLocator
+from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.acl import PermissionScope, ResourceAcl
 from rag.domain.content_revision import ContentRevision
 from rag.domain.document_structure import Section, StructureMode
@@ -228,7 +229,7 @@ async def test_locate_embeds_once_reranks_and_keeps_multiple_blocks_in_one_secti
         candidate_search=search,
         ranking_pipeline=ranking,
         authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
-        evidence_reader=_EvidenceReader(records),
+        evidence_verifier=EvidenceVerifier(reader=_EvidenceReader(records)),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
             DocumentStructureResult(revision=revision, sections=[root, section, sibling])
@@ -273,7 +274,7 @@ async def test_locate_filters_acl_and_old_revisions_before_reranking():
         candidate_search=_CandidateSearch([stale, denied, valid]),
         ranking_pipeline=ranking,
         authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
-        evidence_reader=_EvidenceReader(records),
+        evidence_verifier=EvidenceVerifier(reader=_EvidenceReader(records)),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
             DocumentStructureResult(revision=revision, sections=[section])
@@ -320,7 +321,7 @@ async def test_locate_keeps_same_chunk_id_from_different_resources_distinct():
         authorizer=PermissionAuthorizer(
             reader=_AclReader({"resource-1", "resource-2"})
         ),
-        evidence_reader=_EvidenceReader(records),
+        evidence_verifier=EvidenceVerifier(reader=_EvidenceReader(records)),
         revision_reader=_RevisionReader(
             {"resource-1": first_revision, "resource-2": second_revision}
         ),
@@ -364,7 +365,7 @@ async def test_locate_irrelevant_decision_creates_empty_state_without_verificati
         candidate_search=_CandidateSearch([candidate]),
         ranking_pipeline=_RankingPipeline([], decision=RankDecision.IRRELEVANT),
         authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
-        evidence_reader=evidence_reader,
+        evidence_verifier=EvidenceVerifier(reader=evidence_reader),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
             DocumentStructureResult(revision=revision, sections=[])
@@ -399,8 +400,10 @@ async def test_locate_uncertain_decision_keeps_verified_entry():
             decision=RankDecision.UNCERTAIN,
         ),
         authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
-        evidence_reader=_EvidenceReader(
-            {candidate.source_ref_id: _record(candidate, section, revision)}
+        evidence_verifier=EvidenceVerifier(
+            reader=_EvidenceReader(
+                {candidate.source_ref_id: _record(candidate, section, revision)}
+            )
         ),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
@@ -433,8 +436,10 @@ async def test_locate_rejects_revision_change_after_evidence_verification():
         candidate_search=_CandidateSearch([candidate]),
         ranking_pipeline=_RankingPipeline([_candidate_id(candidate)]),
         authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
-        evidence_reader=_EvidenceReader(
-            {candidate.source_ref_id: _record(candidate, section, revision)}
+        evidence_verifier=EvidenceVerifier(
+            reader=_EvidenceReader(
+                {candidate.source_ref_id: _record(candidate, section, revision)}
+            )
         ),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(

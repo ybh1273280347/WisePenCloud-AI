@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.verify import verify_candidates
+from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.acl import PermissionScope
 from rag.domain.document_structure import Section
 from rag.domain.evidence import EvidenceCandidate, EvidenceRecord
@@ -16,7 +16,6 @@ from rag.domain.read_content import DocumentStructureResult, SectionFrontier
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.applied_structure_reader import AppliedStructureReader
 from rag.domain.repositories.candidate_search import CandidateSearch
-from rag.domain.repositories.evidence_reader import EvidenceReader
 from rag.domain.repositories.navigation_state_store import NavigationStateStore
 from rag.domain.retrieval import (
     CandidateSearchRequest,
@@ -90,7 +89,7 @@ class ReadingEntryLocator:
         "_authorizer",
         "_candidate_search",
         "_embedding_client",
-        "_evidence_reader",
+        "_evidence_verifier",
         "_ranking_pipeline",
         "_revision_reader",
         "_state_store",
@@ -104,7 +103,7 @@ class ReadingEntryLocator:
         candidate_search: CandidateSearch,
         ranking_pipeline: RankingPipeline,
         authorizer: PermissionAuthorizer,
-        evidence_reader: EvidenceReader,
+        evidence_verifier: EvidenceVerifier,
         revision_reader: AppliedRevisionReader,
         structure_reader: AppliedStructureReader,
         state_store: NavigationStateStore,
@@ -113,7 +112,7 @@ class ReadingEntryLocator:
         self._candidate_search = candidate_search
         self._ranking_pipeline = ranking_pipeline
         self._authorizer = authorizer
-        self._evidence_reader = evidence_reader
+        self._evidence_verifier = evidence_verifier
         self._revision_reader = revision_reader
         self._structure_reader = structure_reader
         self._state_store = state_store
@@ -270,9 +269,8 @@ class ReadingEntryLocator:
 
         records_by_ref_id: dict[str, EvidenceRecord] = {}
         for grouped_candidates in candidates_by_revision.values():
-            verified = await verify_candidates(
-                self._evidence_reader,
-                [_evidence_candidate(candidate) for candidate in grouped_candidates],
+            verified = await self._evidence_verifier.verify(
+                [_evidence_candidate(candidate) for candidate in grouped_candidates]
             )
             records_by_ref_id.update(
                 {record.source_ref.ref_id: record for record in verified}
