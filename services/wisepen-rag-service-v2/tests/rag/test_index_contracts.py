@@ -143,7 +143,7 @@ async def test_read_actions_raise_directly_when_content_is_missing() -> None:
     authorizer = PermissionAuthorizer(reader=_ReadableAclReader())
     scope = PermissionScope(user_id="user-1")
     with pytest.raises(ContentNotFoundError):
-        await DocumentStructureReader(reader=reader, authorizer=authorizer).get(
+        await DocumentStructureReader(reader=reader, authorizer=authorizer).get_structure(
             resource_id="missing",
             permission_scope=scope,
         )
@@ -168,7 +168,7 @@ async def test_read_actions_do_not_distinguish_denied_resource_from_missing() ->
     scope = PermissionScope(user_id="user-1")
 
     with pytest.raises(ContentNotFoundError):
-        await DocumentStructureReader(reader=reader, authorizer=authorizer).get(
+        await DocumentStructureReader(reader=reader, authorizer=authorizer).get_structure(
             resource_id="private-resource",
             permission_scope=scope,
         )

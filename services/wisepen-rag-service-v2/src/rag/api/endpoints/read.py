@@ -45,7 +45,7 @@ async def get_document_structure(
         reader: StructureReader,
 ) -> R[DocumentStructureResponse]:
     try:
-        result = await reader.get(
+        result = await reader.get_structure(
             resource_id=request.resource_id,
             permission_scope=_permission_scope(user_id),
         )

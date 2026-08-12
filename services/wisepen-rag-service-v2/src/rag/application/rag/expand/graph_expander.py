@@ -9,9 +9,13 @@ from rag.domain.models.graph import (
     TraversedPath,
 )
 from rag.domain.models.acl import PermissionScope
+from rag.domain.models.content import SectionView
 from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import KnowledgeNode, KnowledgeRelationType
 from rag.domain.models.navigation import NavigationStateNotFoundError
+from rag.domain.models.navigation import KnownSection
+from rag.domain.repositories.mongo.readers.applied_content import AppliedContentReader
+from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.domain.repositories.neo4j.graph_traversal import GraphTraversal
 from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 from rag.utils.ranking import (
@@ -21,7 +25,11 @@ from rag.utils.ranking import (
     RankRequest,
 )
 
-from rag.application.rag.verify import EvidenceVerifier
+from rag.application.rag.verify import (
+    EvidenceCorruptError,
+    EvidenceRevisionError,
+    EvidenceVerifier,
+)
 
 
 class UnknownSeedNodeError(RuntimeError):
@@ -47,7 +55,7 @@ class GraphExpandResult:
     nodes: list[KnowledgeNode] = field(default_factory=list)
     edges: list[TraversedEdge] = field(default_factory=list)
     paths: list[TraversedPath] = field(default_factory=list)
-    evidence: list[EvidenceRecord] = field(default_factory=list)
+    sources: list[SectionView] = field(default_factory=list)
 
 
 class KnowledgeGraphExpander:
@@ -59,11 +67,15 @@ class KnowledgeGraphExpander:
         traversal: GraphTraversal,
         ranking_pipeline: RankingPipeline,
         evidence_verifier: EvidenceVerifier,
+        content_reader: AppliedContentReader,
+        revision_reader: AppliedRevisionReader,
         state_store: NavigationStateStore,
     ) -> None:
         self._traversal = traversal
         self._ranking_pipeline = ranking_pipeline
         self._evidence_verifier = evidence_verifier
+        self._content_reader = content_reader
+        self._revision_reader = revision_reader
         self._state_store = state_store
 
     async def expand(self, request: GraphExpandRequest) -> GraphExpandResult:
@@ -175,12 +187,8 @@ class KnowledgeGraphExpander:
             for edge in edges_by_id.values()
             for source_ref_id in edge.evidence_source_ref_ids
         }
-        return GraphExpandResult(
-            state_id=state.state_id,
-            nodes=[nodes_by_id[node_id] for node_id in sorted(nodes_by_id)],
-            edges=[edges_by_id[edge_id] for edge_id in sorted(edges_by_id)],
-            paths=paths,
-            evidence=[
+        sources = await self._build_source_views(
+            [
                 record
                 for record in evidence
                 if (
@@ -188,7 +196,18 @@ class KnowledgeGraphExpander:
                     record.source_ref.ref_id,
                 )
                 in retained_evidence
-            ],
+            ]
+        )
+        await self._state_store.add_known_sections(
+            state_id=state.state_id,
+            sections=_known_sections(sources),
+        )
+        return GraphExpandResult(
+            state_id=state.state_id,
+            nodes=[nodes_by_id[node_id] for node_id in sorted(nodes_by_id)],
+            edges=[edges_by_id[edge_id] for edge_id in sorted(edges_by_id)],
+            paths=paths,
+            sources=sources,
         )
 
     async def _verify_path_evidence(
@@ -208,6 +227,80 @@ class KnowledgeGraphExpander:
                 records[(record.revision.resource_id, record.source_ref.ref_id)] = record
         return list(records.values())
 
+    async def _build_source_views(
+        self,
+        evidence: list[EvidenceRecord],
+    ) -> list[SectionView]:
+        """把图谱证据还原成可继续阅读的 SectionView。
+
+        v1 的 cypher 返回的是 evidence 所在 Section 的阅读上下文和标题树
+        frontier，而不是孤立证据片段。这里在 VERIFY 之后回读 Section 内容，
+        让 graph expand 发现的证据也能进入后续标题树探索。
+        """
+        records_by_section: dict[tuple[str, str], list[EvidenceRecord]] = {}
+        expected_revisions: dict[str, str] = {}
+        section_order: list[tuple[str, str]] = []
+        for record in evidence:
+            resource_id = record.revision.resource_id
+            expected_revision = expected_revisions.setdefault(
+                resource_id,
+                record.revision.content_revision,
+            )
+            if expected_revision != record.revision.content_revision:
+                raise EvidenceRevisionError(resource_id)
+
+            key = (resource_id, record.section.section_id)
+            if key not in records_by_section:
+                section_order.append(key)
+            records_by_section.setdefault(key, []).append(record)
+
+        views_by_key: dict[tuple[str, str], SectionView] = {}
+        for resource_id in dict.fromkeys(resource_id for resource_id, _ in section_order):
+            revision = await self._revision_reader.get_applied_revision(resource_id)
+            if (
+                revision is None
+                or revision.content_revision != expected_revisions[resource_id]
+            ):
+                raise EvidenceRevisionError(resource_id)
+
+            section_ids = [
+                section_id
+                for item_resource_id, section_id in section_order
+                if item_resource_id == resource_id
+            ]
+            contents = await self._content_reader.get_applied_sections(
+                resource_id,
+                section_ids,
+            )
+            if contents is None:
+                raise EvidenceRevisionError(resource_id)
+
+            # Section 内容读取期间 revision 可能切换，返回前再次校验，避免旧证据配新正文。
+            revision = await self._revision_reader.get_applied_revision(resource_id)
+            if (
+                revision is None
+                or revision.content_revision != expected_revisions[resource_id]
+            ):
+                raise EvidenceRevisionError(resource_id)
+
+            for section_id in section_ids:
+                content = contents.get(section_id)
+                if content is None:
+                    raise EvidenceCorruptError(
+                        f"graph evidence section {section_id} is absent"
+                    )
+                key = (resource_id, section_id)
+                views_by_key[key] = SectionView(
+                    resource_id=resource_id,
+                    content_revision=expected_revisions[resource_id],
+                    section=content.section,
+                    reading_blocks=content.reading_blocks,
+                    frontier=content.frontier,
+                    evidence=records_by_section[key],
+                )
+
+        return [views_by_key[key] for key in section_order]
+
 
 def _path_text(path: TraversedPath) -> str:
     nodes = " -> ".join(node.label for node in path.nodes)
@@ -220,3 +313,21 @@ def _path_text(path: TraversedPath) -> str:
         for edge in path.edges
     )
     return f"Path: {nodes}\nRelations:\n{relations}"
+
+
+def _known_sections(sources: list[SectionView]) -> dict[str, KnownSection]:
+    known: dict[str, KnownSection] = {}
+    for source in sources:
+        for section in (
+            source.section,
+            source.frontier.parent,
+            source.frontier.previous,
+            source.frontier.next,
+            *source.frontier.children,
+        ):
+            if section is not None:
+                known[section.section_id] = KnownSection(
+                    resource_id=source.resource_id,
+                    content_revision=source.content_revision,
+                )
+    return known

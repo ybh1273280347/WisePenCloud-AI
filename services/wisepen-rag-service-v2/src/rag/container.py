@@ -399,6 +399,8 @@ class Container(containers.DeclarativeContainer):
         traversal=graph_traversal,
         ranking_pipeline=expand_ranking_pipeline,
         evidence_verifier=evidence_verifier,
+        content_reader=applied_content_reader,
+        revision_reader=applied_revision_reader,
         state_store=navigation_state_store,
     )
 

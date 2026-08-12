@@ -22,7 +22,7 @@ class DocumentStructureReader:
         self._reader = reader
         self._authorizer = authorizer
 
-    async def get(
+    async def get_structure(
         self,
         *,
         resource_id: str,

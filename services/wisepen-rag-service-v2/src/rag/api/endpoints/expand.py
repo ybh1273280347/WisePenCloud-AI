@@ -9,7 +9,6 @@ from common.core.domain import R
 from common.core.exceptions import ServiceException
 from common.security import SecurityContextHolder, require_login
 from rag.api.schemas import (
-    EvidenceSource,
     GraphExpandRequest as ExpandHttpRequest,
     GraphExpandResponse,
     SectionExpandRequest,
@@ -79,7 +78,7 @@ async def expand_graph(
             nodes=result.nodes,
             edges=result.edges,
             paths=result.paths,
-            sources=[_evidence_source(record) for record in result.evidence],
+            sources=result.sources,
         )
     )
 
@@ -119,21 +118,4 @@ def _permission_scope(user_id: str) -> PermissionScope:
     return PermissionScope.from_group_roles(
         user_id,
         SecurityContextHolder.get_group_role_map(),
-    )
-
-
-def _evidence_source(record) -> EvidenceSource:
-    source_ref = record.source_ref
-    return EvidenceSource(
-        content=record.source_text,
-        ref_id=source_ref.ref_id,
-        resource_id=source_ref.resource_id,
-        content_revision=source_ref.content_revision,
-        chunk_id=source_ref.chunk_id,
-        reading_block_id=source_ref.reading_block_id,
-        section_id=source_ref.section_id,
-        section_path=list(source_ref.section_path),
-        source_spans=list(source_ref.source_spans),
-        page_labels=list(source_ref.page_labels),
-        anchor_labels=list(source_ref.anchor_labels),
     )

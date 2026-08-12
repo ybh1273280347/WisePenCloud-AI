@@ -11,7 +11,6 @@ from rag.domain.models.graph import TraversedEdge, TraversedPath
 from rag.domain.models.graph import KnowledgeNode, KnowledgeRelationType
 from rag.domain.models.content import SectionFrontier
 from rag.domain.models.content import ReadingBlock
-from rag.utils.chunkers import SourceSpan
 
 NonEmptyText = Annotated[
     str,
@@ -59,23 +58,9 @@ class GraphExpandRequest(BaseModel):
     query: NonEmptyText | None = None
 
 
-class EvidenceSource(BaseModel):
-    content: str
-    ref_id: str
-    resource_id: str
-    content_revision: str
-    chunk_id: str
-    reading_block_id: str
-    section_id: str
-    section_path: list[str]
-    source_spans: list[SourceSpan]
-    page_labels: list[str]
-    anchor_labels: list[str]
-
-
 class GraphExpandResponse(BaseModel):
     state_id: str
     nodes: list[KnowledgeNode]
     edges: list[TraversedEdge]
     paths: list[TraversedPath]
-    sources: list[EvidenceSource]
+    sources: list[SectionView]
