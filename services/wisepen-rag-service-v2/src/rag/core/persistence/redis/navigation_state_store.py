@@ -6,13 +6,15 @@ from uuid import uuid4
 
 from redis.asyncio import Redis
 
+from rag.core.persistence.redis.mappers import (
+    deserialize_navigation_state,
+    serialize_navigation_state,
+    serialize_sections,
+)
 from rag.domain.navigation import KnownSection, NavigationState
 from rag.domain.repositories.navigation_state_store import NavigationStateStore
 
 _KEY_PREFIX = "wisepen:rag:v2:navigation-state:"
-_USER_FIELD = "user_id"
-_SESSION_FIELD = "session_id"
-_ROOT_QUERY_FIELD = "root_query"
 _SECTIONS_FIELD = "known_sections"
 _NODES_FIELD = "known_nodes"
 
@@ -85,7 +87,7 @@ class RedisNavigationStateStore(NavigationStateStore):
             known_node_ids=list(dict.fromkeys(known_node_ids)),
         )
         key = self._key(state.state_id)
-        await self._redis.hset(key, mapping=self._serialize_state(state))
+        await self._redis.hset(key, mapping=serialize_navigation_state(state))
         await self._redis.expire(key, self._ttl_seconds)
         return state
 
@@ -93,7 +95,7 @@ class RedisNavigationStateStore(NavigationStateStore):
         values = await self._redis.hgetall(self._key(state_id))
         if not values:
             return None
-        return self._deserialize_state(state_id, values)
+        return deserialize_navigation_state(state_id, values)
 
     async def add_known_sections(
         self,
@@ -106,7 +108,7 @@ class RedisNavigationStateStore(NavigationStateStore):
             1,
             self._key(state_id),
             _SECTIONS_FIELD,
-            json.dumps(self._serialize_sections(sections), ensure_ascii=False),
+            json.dumps(serialize_sections(sections), ensure_ascii=False),
             self._ttl_seconds,
         )
         if result != 1:
@@ -132,72 +134,3 @@ class RedisNavigationStateStore(NavigationStateStore):
     @staticmethod
     def _key(state_id: str) -> str:
         return f"{_KEY_PREFIX}{state_id}"
-
-    @staticmethod
-    def _serialize_sections(
-        sections: Mapping[str, KnownSection],
-    ) -> dict[str, dict[str, str]]:
-        return {
-            section_id: {
-                "resource_id": section.resource_id,
-                "content_revision": section.content_revision,
-            }
-            for section_id, section in sections.items()
-        }
-
-    @classmethod
-    def _serialize_state(cls, state: NavigationState) -> dict[str, str]:
-        return {
-            _USER_FIELD: state.user_id,
-            _SESSION_FIELD: state.session_id,
-            _ROOT_QUERY_FIELD: state.root_query,
-            _SECTIONS_FIELD: json.dumps(
-                cls._serialize_sections(state.known_sections),
-                ensure_ascii=False,
-            ),
-            _NODES_FIELD: json.dumps(state.known_node_ids, ensure_ascii=False),
-        }
-
-    @staticmethod
-    def _deserialize_state(
-        state_id: str,
-        values: Mapping[object, object],
-    ) -> NavigationState:
-        sections_value = json.loads(_read_text(values, _SECTIONS_FIELD))
-        nodes_value = json.loads(_read_text(values, _NODES_FIELD))
-        if not isinstance(sections_value, dict) or not isinstance(nodes_value, list):
-            raise TypeError(f"navigation state {state_id} has invalid collection fields")
-        known_sections: dict[str, KnownSection] = {}
-        for section_id, section in sections_value.items():
-            if not isinstance(section_id, str) or not isinstance(section, dict):
-                raise TypeError(f"navigation state {state_id} has invalid sections")
-            known_sections[section_id] = KnownSection(
-                resource_id=_required_nested_text(section, "resource_id"),
-                content_revision=_required_nested_text(section, "content_revision"),
-            )
-        if not all(isinstance(node_id, str) for node_id in nodes_value):
-            raise ValueError(f"navigation state {state_id} has invalid node IDs")
-        return NavigationState(
-            state_id=state_id,
-            user_id=_read_text(values, _USER_FIELD),
-            session_id=_read_text(values, _SESSION_FIELD),
-            root_query=_read_text(values, _ROOT_QUERY_FIELD),
-            known_sections=known_sections,
-            known_node_ids=list(dict.fromkeys(nodes_value)),
-        )
-
-
-def _read_text(values: Mapping[object, object], field_name: str) -> str:
-    value = values.get(field_name)
-    if value is None:
-        value = values.get(field_name.encode())
-    if not isinstance(value, (str, bytes)):
-        raise TypeError(f"navigation state field {field_name} is invalid")
-    return value.decode() if isinstance(value, bytes) else value
-
-
-def _required_nested_text(value: Mapping[object, object], field_name: str) -> str:
-    field_value = value.get(field_name)
-    if not isinstance(field_value, str) or not field_value:
-        raise ValueError(f"navigation section field {field_name} is invalid")
-    return field_value

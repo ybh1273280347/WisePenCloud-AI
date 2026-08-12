@@ -41,7 +41,8 @@ base:     origin/main @ e1af497f7
 | CP12 | `c5113eb44` | Contextual indexing 生成、严格响应解析、缓存复用和只增强 `index_text`。 |
 | CP13 | `21ac955f8` | Qdrant retrieval index 的 staged/active revision 写入、向量复用、旧 revision 清理和资源删除。 |
 | CP14 | `20c13cd3a` | Qdrant dense/BM25 混合候选召回、active/resource/ACL 过滤和最小候选映射。 |
-| 当前 CP15 | 待提交 | Redis 单 hash navigation state、统一 TTL 和 Lua 原子扩展。 |
+| CP15 | `86d7f888` | Redis 单 hash navigation state、统一 TTL 和 Lua 原子扩展。 |
+| CP15.1 | 当前 | Redis navigation state 的序列化/反序列化收敛到 persistence/mappers 两个文件，仓储只保留 Redis 行为。 |
 
 ## 3. 当前架构事实
 
@@ -157,7 +158,7 @@ CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器�
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`，CP13 已提交为 `21ac955f8`，CP14 已提交为 `20c13cd3a`。当前 CP15 正在完成 Redis navigation state；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
+CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`，CP13 已提交为 `21ac955f8`，CP14 已提交为 `20c13cd3a`，CP15 已提交为 `86d7f888`。当前工作树只包含 CP15.1 的 mapper 风格收敛；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
 
 CP08.1 的稳定边界：
 
@@ -252,6 +253,7 @@ CP15 的实现边界：
 - `NavigationState` 与 `KnownSection` 位于 `domain/navigation.py`；Section 映射同时保存 `resource_id` 和发现时的 `content_revision`。
 - `NavigationStateStore` 位于 `domain/repositories`，只暴露 create/get/add sections/add nodes，不暴露 Redis key、hash 或 Lua 类型。
 - `RedisNavigationStateStore` 使用一个 `wisepen:rag:v2:navigation-state:<state_id>` hash；`known_sections` 和 `known_nodes` 作为 JSON 字段，避免 v1 多 key 结构产生孤立状态。
+- Redis 状态的领域到 hash/JSON 字段映射统一放在 `core/persistence/redis/mappers/serializer.py` 和 `deserializer.py`；仓储不再内置 `_serialize_*`、`_deserialize_*` 或字段校验辅助函数。
 - create 写入完整 hash 后设置统一 TTL；两个 add 操作用 Lua 原子检查主 key、合并集合并续期主 key，状态不存在直接抛出 `NavigationStateNotFoundError`。
 - CP15 不实现 LOCATE/READ/EXPAND 用例、state 用户/session 校验或删除编排；这些由 CP16、CP22、CP21/CP25 的 application 负责。
 
