@@ -18,11 +18,11 @@ from rag.application.rag.index.graph_extraction.graph_rag import QueryClientGrap
 from rag.application.rag.index.graph_extraction.windows import (
     build_extraction_windows,
 )
-from rag.domain.document_structure import Section, StructureMode
-from rag.domain.knowledge_graph import KnowledgeRelationType
-from rag.domain.reading import ReadingBlock
+from rag.domain.models.structure import Section, StructureMode
+from rag.domain.models.graph import KnowledgeRelationType
+from rag.domain.models.content import ReadingBlock
 from rag.domain.repositories.mongo.readers.graph_build_source import GraphBuildSource
-from rag.domain.retrieval import SourceRef
+from rag.domain.models.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
 
 

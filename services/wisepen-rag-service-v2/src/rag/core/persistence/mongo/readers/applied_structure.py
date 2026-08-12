@@ -1,8 +1,8 @@
 """已发布文档结构读取 port 的 Beanie adapter。"""
 
-from rag.domain.document_structure import Section
 from rag.domain.entities import SectionEntity
-from rag.domain.read_content import DocumentStructureResult
+from rag.domain.models.content import DocumentStructureResult
+from rag.domain.models.structure import Section
 from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.domain.repositories.mongo.readers.applied_structure import AppliedStructureReader
 from rag.utils.chunkers import SourceSpan

@@ -14,7 +14,7 @@ from rag.api.schemas import (
 )
 from rag.api.schemas import ReadSectionsRequest
 from rag.application.rag.expand import GraphExpandResult, UnknownSeedNodeError
-from rag.domain.graph_traversal import TraversedEdge, TraversedPath
+from rag.domain.models.graph import TraversedEdge, TraversedPath
 from rag.application.rag.locate import (
     LocatedEvidence,
     LocatedSection,
@@ -22,20 +22,21 @@ from rag.application.rag.locate import (
     LocateResult,
 )
 from rag.application.rag.expand import SectionAccessRevokedError, SectionNotDiscoveredError
-from rag.domain.content_revision import ContentRevision
-from rag.domain.document_structure import Section, StructureMode
+from rag.application.rag.verify import EvidenceRevisionError
+from rag.domain.models.content import ContentRevision
+from rag.domain.models.structure import Section, StructureMode
 from rag.domain.error_codes import RagErrorCode
-from rag.domain.evidence import EvidenceRecord, EvidenceRevisionError
-from rag.domain.knowledge_graph import (
+from rag.domain.models.evidence import EvidenceRecord
+from rag.domain.models.graph import (
     KnowledgeEntityType,
     KnowledgeNode,
     KnowledgeNodeKind,
     KnowledgeRelationType,
 )
-from rag.domain.navigation import NavigationStateNotFoundError
-from rag.domain.read_content import SectionContent, SectionFrontier
-from rag.domain.reading import ReadingBlock
-from rag.domain.retrieval import SourceRef
+from rag.domain.models.navigation import NavigationStateNotFoundError
+from rag.domain.models.content import SectionContent, SectionFrontier
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import RankDecision
 

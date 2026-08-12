@@ -1,8 +1,8 @@
 """当前 applied revision 查询的 Beanie adapter。"""
 
-from rag.domain.content_revision import ContentRevision
-from rag.domain.document_structure import PageRange, StructureMode
 from rag.domain.entities import ContentRevisionEntity, ResourceIndexStateEntity
+from rag.domain.models.content import ContentRevision
+from rag.domain.models.structure import PageRange, StructureMode
 from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.utils.chunkers import SourceSpan
 

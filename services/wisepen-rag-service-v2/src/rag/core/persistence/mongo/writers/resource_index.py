@@ -8,8 +8,6 @@ from rag.application.rag.index.builders.revisions import (
     build_content_revision_id,
     decide_stage,
 )
-from rag.domain.content_revision import ContentRevision, ResourceIndexState, SourcePart
-from rag.domain.document_structure import Section
 from rag.domain.entities import (
     ContentRevisionEntity,
     ReadingBlockEntity,
@@ -18,12 +16,14 @@ from rag.domain.entities import (
     SourcePartEntity,
     SourceRefEntity,
 )
-from rag.domain.reading import ReadingBlock
+from rag.domain.models.content import ContentRevision, ResourceIndexState, SourcePart
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.retrieval import SourceRef
+from rag.domain.models.structure import Section
 from rag.domain.repositories.mongo.writers.resource_index import (
     ResourceIndexWriter,
     StageAction,
 )
-from rag.domain.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
 
 _SOURCE_PART_CHARACTERS = 1_000_000

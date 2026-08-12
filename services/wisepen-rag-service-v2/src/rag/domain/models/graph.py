@@ -1,9 +1,10 @@
-"""知识图谱抽取、合并和发布阶段共享的领域事实。"""
+"""知识图谱抽取、发布和遍历共享的稳定领域模型。"""
 
 from dataclasses import dataclass, field
 from enum import StrEnum
 from hashlib import sha256
 
+from rag.domain.models.acl import PermissionScope
 from rag.utils.chunkers import SourceSpan
 
 
@@ -165,3 +166,44 @@ def resource_node_id(resource_id: str) -> str:
     """返回 Resource 节点在图事实和 Neo4j 中共用的稳定 ID。"""
     digest = sha256(f"resource\0{resource_id}".encode()).hexdigest()
     return f"kn_{digest[:32]}"
+
+
+class TraversalDirection(StrEnum):
+    IN = "in"
+    OUT = "out"
+    BOTH = "both"
+
+
+@dataclass(slots=True)
+class TraversedEdge:
+    """图遍历返回的边视图，保留回源证据引用供 EXPAND 继续核验。"""
+
+    edge_id: str
+    source_node_id: str
+    target_node_id: str
+    relation_type: KnowledgeRelationType
+    evidence_resource_id: str
+    source_content_revision: str
+    evidence_quotes: list[str]
+    evidence_source_ref_ids: list[str]
+    predicate: str | None = None
+
+
+@dataclass(slots=True)
+class TraversedPath:
+    """一次有界图遍历得到的节点路径。"""
+
+    nodes: list[KnowledgeNode] = field(default_factory=list)
+    edges: list[TraversedEdge] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class GraphTraversalRequest:
+    """提交给图遍历仓储 port 的查询约束。"""
+
+    seed_node_ids: list[str]
+    permission_scope: PermissionScope
+    relation_types: list[KnowledgeRelationType] = field(default_factory=list)
+    direction: TraversalDirection = TraversalDirection.BOTH
+    max_depth: int = 1
+    limit: int = 40

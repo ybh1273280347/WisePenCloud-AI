@@ -4,10 +4,10 @@ from collections.abc import Sequence
 from enum import StrEnum
 from typing import Protocol
 
-from rag.domain.content_revision import ContentRevision
-from rag.domain.document_structure import Section
-from rag.domain.reading import ReadingBlock
-from rag.domain.retrieval import SourceRef
+from rag.domain.models.content import ContentRevision
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.retrieval import SourceRef
+from rag.domain.models.structure import Section
 
 
 class StageAction(StrEnum):

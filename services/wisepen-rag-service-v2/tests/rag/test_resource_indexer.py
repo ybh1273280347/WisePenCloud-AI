@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pytest
 
 from rag.application.rag.index import ResourceIndexer
-from rag.domain.acl import ResourceAcl
+from rag.domain.models.acl import ResourceAcl
 from rag.domain.repositories import StageAction
 
 

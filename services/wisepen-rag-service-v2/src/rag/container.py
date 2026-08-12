@@ -31,7 +31,7 @@ from rag.core.persistence.mongo import (
     MongoAppliedStructureReader,
     MongoAuthoritativeAclReader,
     MongoEvidenceReader,
-    MongoGenerationCacheStore,
+    MongoGenerationArtifactStore,
     MongoGraphBuildSourceReader,
     MongoResourceAclStore,
     MongoResourceIndexWriter,
@@ -44,7 +44,7 @@ from rag.core.persistence.neo4j import (
     Neo4jMentionLookup,
 )
 from rag.core.persistence.qdrant import (
-    QdrantCandidateSearch,
+    QdrantCandidateSearcher,
     QdrantRetrievalAclWriter,
     QdrantRetrievalIndexWriter,
 )
@@ -204,7 +204,7 @@ class Container(containers.DeclarativeContainer):
         collection=authoritative_resource_collection,
     )
     resource_acl_store = providers.Singleton(MongoResourceAclStore)
-    generation_cache_store = providers.Singleton(MongoGenerationCacheStore)
+    generation_cache_store = providers.Singleton(MongoGenerationArtifactStore)
     graph_build_source_reader = providers.Singleton(
         MongoGraphBuildSourceReader,
         revisions=applied_revision_reader,
@@ -276,7 +276,7 @@ class Container(containers.DeclarativeContainer):
         collection_name=settings.QDRANT_RAG_COLLECTION_NAME,
     )
     candidate_search = providers.Singleton(
-        QdrantCandidateSearch,
+        QdrantCandidateSearcher,
         client=qdrant_client,
         collection_name=settings.QDRANT_RAG_COLLECTION_NAME,
         dense_vector_size=settings.EMBEDDING_DIMENSIONS,

@@ -2,7 +2,7 @@
 
 from hashlib import sha256
 
-from rag.domain.document_structure import (
+from rag.domain.models.structure import (
     DocumentAnchor,
     DocumentStructure,
     PageRange,

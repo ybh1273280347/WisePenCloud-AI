@@ -2,14 +2,23 @@
 
 from collections.abc import Sequence
 
-from rag.domain.evidence import (
+from rag.domain.models.evidence import (
     EvidenceCandidate,
-    EvidenceCorruptError,
-    EvidenceNotFoundError,
     EvidenceRecord,
-    EvidenceRevisionError,
 )
 from rag.domain.repositories.mongo.readers.evidence import EvidenceReader
+
+
+class EvidenceNotFoundError(RuntimeError):
+    """请求的 applied 内容或证据身份不存在。"""
+
+
+class EvidenceRevisionError(RuntimeError):
+    """请求 revision 不是资源当前 applied revision。"""
+
+
+class EvidenceCorruptError(RuntimeError):
+    """权威原文、SourceRef 或结构记录不满足一致性约束。"""
 
 
 class EvidenceVerifier:

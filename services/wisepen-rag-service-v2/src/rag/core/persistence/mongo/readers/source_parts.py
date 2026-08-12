@@ -2,8 +2,8 @@
 
 from collections.abc import Sequence
 
-from rag.domain.content_revision import SourcePart
 from rag.domain.entities import SourcePartEntity
+from rag.domain.models.content import SourcePart
 from rag.domain.repositories.mongo.readers.source_parts import SourcePartReader
 from rag.utils.chunkers import SourceSpan
 

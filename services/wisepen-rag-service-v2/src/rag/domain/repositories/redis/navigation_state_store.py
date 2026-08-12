@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-from rag.domain.navigation import KnownSection, NavigationState
+from rag.domain.models.navigation import KnownSection, NavigationState
 
 
 class NavigationStateStore(Protocol):

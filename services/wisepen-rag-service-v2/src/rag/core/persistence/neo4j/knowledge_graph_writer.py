@@ -4,13 +4,13 @@ from collections.abc import Sequence
 
 from neo4j import AsyncDriver
 
-from rag.domain.knowledge_graph import (
+from rag.domain.models.graph import (
     GraphStatus,
     KnowledgeGraph,
     KnowledgeNodeKind,
     resource_node_id,
 )
-from rag.domain.repositories.neo4j.knowledge_graph import (
+from rag.domain.repositories.neo4j.knowledge_graph_writer import (
     KnowledgeGraphRevisionSupersededError,
     KnowledgeGraphWriter,
 )

@@ -6,7 +6,7 @@ from rag.core.persistence.redis import (
     NavigationStateNotFoundError,
     RedisNavigationStateStore,
 )
-from rag.domain.navigation import KnownSection
+from rag.domain.models.navigation import KnownSection
 
 
 class _Redis:

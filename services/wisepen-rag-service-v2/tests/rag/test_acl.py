@@ -4,7 +4,7 @@ import pytest
 from common.core.domain import GroupRoleType
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.domain.acl import (
+from rag.domain.models.acl import (
     GroupResourceAcl,
     PermissionScope,
     ResourceAcl,

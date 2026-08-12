@@ -3,9 +3,9 @@
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from rag.domain.document_structure import Section, StructureMode
-from rag.domain.reading import ReadingBlock
-from rag.domain.retrieval import SourceRef
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.retrieval import SourceRef
+from rag.domain.models.structure import Section, StructureMode
 
 
 @dataclass(slots=True)

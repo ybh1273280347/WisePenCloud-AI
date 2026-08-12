@@ -29,7 +29,7 @@ from rag.core.config.app_settings import settings
 from rag.core.config.nacos import nacos_client_manager
 from rag.domain.entities import (
     ContentRevisionEntity,
-    GenerationCacheEntity,
+    GenerationArtifactEntity,
     ReadingBlockEntity,
     ResourceAclEntity,
     ResourceIndexStateEntity,
@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
             ReadingBlockEntity,
             SourceRefEntity,
             ResourceAclEntity,
-            GenerationCacheEntity,
+            GenerationArtifactEntity,
         ],
     )
     info("beanie initialized.", db=settings.MONGODB_DB_NAME)

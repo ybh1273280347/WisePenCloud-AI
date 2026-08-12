@@ -7,7 +7,7 @@ from rag.domain.repositories import (
     ResourceIndexWriter,
     RetrievalIndexWriter,
     KnowledgeGraphWriter,
-    GenerationCacheStore,
+    GenerationArtifactStore,
     ResourceAclStore
 )
 
@@ -21,7 +21,7 @@ class ResourceDeletionService:
         resource_writer: ResourceIndexWriter,
         retrieval_writer: RetrievalIndexWriter,
         graph_writer: KnowledgeGraphWriter,
-        generation_cache: GenerationCacheStore,
+        generation_cache: GenerationArtifactStore,
         acl_store: ResourceAclStore,
     ) -> None:
         self._resource_writer = resource_writer

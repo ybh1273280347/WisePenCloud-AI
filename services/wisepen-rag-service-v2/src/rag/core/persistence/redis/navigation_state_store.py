@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from redis.asyncio import Redis
 
-from rag.domain.navigation import (
+from rag.domain.models.navigation import (
     KnownSection,
     NavigationState,
     NavigationStateNotFoundError,

@@ -6,12 +6,12 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
 from rag.core.persistence.qdrant.acl_filter import permission_filter
-from rag.domain.repositories.qdrant.candidate_search import CandidateSearch
-from rag.domain.retrieval import CandidateSearchRequest, RetrievalCandidate
+from rag.domain.models.retrieval import CandidateSearchRequest, RetrievalCandidate
+from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
 from rag.utils.chunkers import SourceSpan
 
 
-class QdrantCandidateSearch(CandidateSearch):
+class QdrantCandidateSearcher(CandidateSearcher):
     """仅执行 Qdrant 召回和候选 payload 映射，不做应用层排序或核验。"""
 
     def __init__(

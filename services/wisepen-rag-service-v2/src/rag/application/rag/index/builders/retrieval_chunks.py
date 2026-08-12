@@ -2,9 +2,9 @@
 
 from hashlib import sha256
 
-from rag.domain.document_structure import DocumentStructure, Section, StructureMode
-from rag.domain.reading import ReadingBlock
-from rag.domain.retrieval import RetrievalChunk, SourceRef
+from rag.domain.models.structure import DocumentStructure, Section, StructureMode
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.retrieval import RetrievalChunk, SourceRef
 from rag.utils.chunkers import (
     ChunkDocument,
     MarkdownChunker,

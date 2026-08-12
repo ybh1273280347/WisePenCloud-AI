@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
-from rag.domain.acl import PermissionScope
+from rag.domain.models.acl import PermissionScope
 from rag.utils.chunkers import SourceSpan
 
 

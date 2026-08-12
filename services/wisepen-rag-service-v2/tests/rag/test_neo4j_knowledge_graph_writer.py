@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pytest
 
 from rag.core.persistence.neo4j import Neo4jKnowledgeGraphWriter
-from rag.domain.knowledge_graph import (
+from rag.domain.models.graph import (
     KnowledgeGraph,
     KnowledgeNode,
     KnowledgeNodeKind,

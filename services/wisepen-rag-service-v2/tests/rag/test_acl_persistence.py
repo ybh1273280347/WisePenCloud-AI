@@ -7,7 +7,7 @@ from rag.core.persistence.mongo.readers.authoritative_acl import (
     AuthoritativeAclError,
     MongoAuthoritativeAclReader,
 )
-from rag.domain.acl import GroupResourceAcl
+from rag.domain.models.acl import GroupResourceAcl
 
 
 class _Collection:

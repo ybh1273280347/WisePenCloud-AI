@@ -5,14 +5,14 @@ from rag.application.rag.expand import (
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
 )
-from rag.domain.graph_traversal import TraversedEdge, TraversedPath
-from rag.domain.acl import PermissionScope
-from rag.domain.knowledge_graph import (
+from rag.domain.models.graph import TraversedEdge, TraversedPath
+from rag.domain.models.acl import PermissionScope
+from rag.domain.models.graph import (
     KnowledgeNode,
     KnowledgeNodeKind,
     KnowledgeRelationType,
 )
-from rag.domain.navigation import NavigationState
+from rag.domain.models.navigation import NavigationState
 from rag.utils.ranking import RankCandidate, RankedCandidate, RankResult
 
 

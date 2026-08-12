@@ -16,24 +16,26 @@ from rag.application.rag.read import (
     DocumentStructureReader,
 )
 from rag.application.rag.verify import EvidenceVerifier
-from rag.domain.acl import PermissionScope, ResourceAcl
-from rag.domain.content_revision import ResourceIndexState
-from rag.domain.read_content import (
+from rag.application.rag.verify import (
+    EvidenceCorruptError,
+    EvidenceNotFoundError,
+    EvidenceRevisionError,
+)
+from rag.domain.models.acl import PermissionScope, ResourceAcl
+from rag.domain.models.content import ResourceIndexState
+from rag.domain.models.content import (
     ContentWindow,
     DocumentStructureResult,
     SectionContent,
     SectionFrontier,
 )
-from rag.domain.evidence import (
+from rag.domain.models.evidence import (
     EvidenceCandidate,
-    EvidenceCorruptError,
-    EvidenceNotFoundError,
     EvidenceRecord,
-    EvidenceRevisionError,
 )
-from rag.domain.reading import ReadingBlock
+from rag.domain.models.content import ReadingBlock
 from rag.domain.repositories import StageAction
-from rag.domain.retrieval import RetrievalChunk, SourceRef
+from rag.domain.models.retrieval import RetrievalChunk, SourceRef
 from rag.utils.chunkers import SourceSpan
 
 

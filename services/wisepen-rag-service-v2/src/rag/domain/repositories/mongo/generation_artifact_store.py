@@ -3,10 +3,10 @@
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-from rag.domain.generation_cache import GenerationCacheKind
+from rag.domain.models.generation import GenerationCacheKind
 
 
-class GenerationCacheStore(Protocol):
+class GenerationArtifactStore(Protocol):
     """按资源和缓存类别读写模型生成结果。"""
 
     async def get_many(

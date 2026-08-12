@@ -1,6 +1,6 @@
 from .graph_acl_writer import GraphAclWriter
 from .graph_traversal import GraphTraversal
-from .knowledge_graph import (
+from .knowledge_graph_writer import (
     KnowledgeGraphRevisionSupersededError,
     KnowledgeGraphWriter,
 )

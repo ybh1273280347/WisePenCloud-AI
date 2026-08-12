@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from pymongo import ASCENDING, IndexModel
 
 
-class GroupResourceAclEntity(BaseModel):
+class GroupResourceAcl(BaseModel):
     group_id: str
     is_readable: bool
     readable_users: list[str] = Field(default_factory=list)
@@ -22,7 +22,7 @@ class ResourceAclEntity(Document):
     owner_id: str
     readable_users: list[str] = Field(default_factory=list)
     excluded_read_users: list[str] = Field(default_factory=list)
-    group_acls: list[GroupResourceAclEntity] = Field(default_factory=list)
+    group_acls: list[GroupResourceAcl] = Field(default_factory=list)
 
     class Settings:
         name = "wisepen_rag_v2_resource_acls"

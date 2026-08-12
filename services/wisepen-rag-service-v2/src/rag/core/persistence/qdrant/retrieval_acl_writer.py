@@ -3,7 +3,7 @@
 from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
-from rag.domain.acl import ResourceAcl
+from rag.domain.models.acl import ResourceAcl
 from rag.domain.repositories.qdrant.retrieval_acl_writer import RetrievalAclWriter
 
 

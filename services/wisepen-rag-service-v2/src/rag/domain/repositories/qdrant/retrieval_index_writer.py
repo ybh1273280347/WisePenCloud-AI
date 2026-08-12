@@ -3,8 +3,8 @@
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-from rag.domain.acl import ResourceAcl
-from rag.domain.retrieval import RetrievalChunk, SourceRef
+from rag.domain.models.acl import ResourceAcl
+from rag.domain.models.retrieval import RetrievalChunk, SourceRef
 
 
 class RetrievalIndexWriter(Protocol):

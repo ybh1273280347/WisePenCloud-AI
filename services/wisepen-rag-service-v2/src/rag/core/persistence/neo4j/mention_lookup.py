@@ -5,9 +5,9 @@ from collections.abc import Sequence
 from neo4j import AsyncDriver, RoutingControl
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.domain.acl import PermissionScope
-from rag.domain.evidence import EvidenceRecord
-from rag.domain.knowledge_graph import (
+from rag.domain.models.acl import PermissionScope
+from rag.domain.models.evidence import EvidenceRecord
+from rag.domain.models.graph import (
     GraphStatus,
     KnowledgeEntityType,
     KnowledgeNode,

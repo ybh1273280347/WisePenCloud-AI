@@ -4,7 +4,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from rag.application.rag.locate import LocatedSection
-from rag.domain.knowledge_graph import KnowledgeNode
+from rag.domain.models.graph import KnowledgeNode
 from rag.utils.ranking import RankDecision
 
 NonEmptyText = Annotated[

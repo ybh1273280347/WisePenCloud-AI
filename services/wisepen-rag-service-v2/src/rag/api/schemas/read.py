@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from rag.domain.document_structure import PageRange, Section
+from rag.domain.models.structure import PageRange, Section
 
 NonEmptyText = Annotated[
     str,

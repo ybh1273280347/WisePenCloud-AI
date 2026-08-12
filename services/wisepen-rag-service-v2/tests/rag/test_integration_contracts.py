@@ -2,7 +2,7 @@ from common.core.domain import GroupRoleType
 
 from rag.core.persistence.neo4j.acl_predicate import acl_predicate
 from rag.core.persistence.qdrant.acl_filter import permission_filter
-from rag.domain.acl import GroupResourceAcl, PermissionScope, ResourceAcl
+from rag.domain.models.acl import GroupResourceAcl, PermissionScope, ResourceAcl
 
 
 def test_acl_identity_contract_is_shared_by_domain_qdrant_and_neo4j() -> None:

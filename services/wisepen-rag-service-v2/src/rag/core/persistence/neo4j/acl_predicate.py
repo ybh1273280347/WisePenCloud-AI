@@ -1,6 +1,6 @@
 """将 PermissionScope 翻译为 Neo4j ResourceNode ACL predicate。"""
 
-from rag.domain.acl import PermissionScope
+from rag.domain.models.acl import PermissionScope
 
 
 def acl_predicate(

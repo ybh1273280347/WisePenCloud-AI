@@ -5,8 +5,8 @@ from collections.abc import Mapping, Sequence
 from beanie.operators import In
 from pymongo.errors import DuplicateKeyError
 
-from rag.domain.acl import GroupResourceAcl, ResourceAcl
 from rag.domain.entities import ResourceAclEntity
+from rag.domain.models.acl import GroupResourceAcl, ResourceAcl
 from rag.domain.repositories.mongo.resource_acl_store import ResourceAclStore
 
 

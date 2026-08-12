@@ -16,10 +16,10 @@ from rag.api.schemas import (
     SectionContentRequest,
 )
 from rag.application.rag.read import ContentNotFoundError
-from rag.domain.content_revision import ContentRevision
-from rag.domain.document_structure import PageRange, Section, StructureMode
+from rag.domain.models.content import ContentRevision
+from rag.domain.models.structure import PageRange, Section, StructureMode
 from rag.domain.error_codes import RagErrorCode
-from rag.domain.read_content import (
+from rag.domain.models.content import (
     ContentWindow,
     DocumentStructureResult,
     SectionContent,

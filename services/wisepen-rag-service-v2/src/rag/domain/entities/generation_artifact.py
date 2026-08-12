@@ -5,10 +5,10 @@ from typing import ClassVar
 from beanie import Document
 from pymongo import ASCENDING, IndexModel
 
-from rag.domain.generation_cache import GenerationCacheKind
+from rag.domain.models.generation import GenerationCacheKind
 
 
-class GenerationCacheEntity(Document):
+class GenerationArtifactEntity(Document):
     """按资源和生成类别保存可复用的模型输出。"""
 
     resource_id: str
@@ -17,7 +17,7 @@ class GenerationCacheEntity(Document):
     payload: str
 
     class Settings:
-        name = "wisepen_rag_v2_generation_cache"
+        name = "wisepen_rag_v2_generation_artifact_store"
         indexes: ClassVar[list[IndexModel]] = [
             IndexModel(
                 [

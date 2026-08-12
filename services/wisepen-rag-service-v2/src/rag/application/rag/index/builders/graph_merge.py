@@ -5,7 +5,7 @@ import re
 import unicodedata
 from hashlib import sha256
 
-from rag.domain.knowledge_graph import (
+from rag.domain.models.graph import (
     ExtractedKnowledgeNode,
     ExtractedKnowledgeRelation,
     KnowledgeEvidence,

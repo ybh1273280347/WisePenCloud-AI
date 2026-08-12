@@ -5,15 +5,15 @@ import pytest
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.locate import LocateError, LocateRequest, ReadingEntryLocator
 from rag.application.rag.verify import EvidenceVerifier
-from rag.domain.acl import PermissionScope, ResourceAcl
-from rag.domain.content_revision import ContentRevision
-from rag.domain.document_structure import Section, StructureMode
-from rag.domain.evidence import EvidenceRecord
-from rag.domain.knowledge_graph import KnowledgeNode, KnowledgeNodeKind
-from rag.domain.navigation import NavigationState
-from rag.domain.read_content import DocumentStructureResult
-from rag.domain.reading import ReadingBlock
-from rag.domain.retrieval import RetrievalCandidate, SourceRef
+from rag.domain.models.acl import PermissionScope, ResourceAcl
+from rag.domain.models.content import ContentRevision
+from rag.domain.models.structure import Section, StructureMode
+from rag.domain.models.evidence import EvidenceRecord
+from rag.domain.models.graph import KnowledgeNode, KnowledgeNodeKind
+from rag.domain.models.navigation import NavigationState
+from rag.domain.models.content import DocumentStructureResult
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.retrieval import RetrievalCandidate, SourceRef
 from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import (
     RankDecision,

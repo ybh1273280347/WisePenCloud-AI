@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from rag.domain.repositories.mongo.readers.graph_build_source import GraphBuildSource
-from rag.domain.retrieval import SourceRef
+from rag.domain.models.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
 from rag.utils.xml_markup import xml_attr, xml_cdata
 

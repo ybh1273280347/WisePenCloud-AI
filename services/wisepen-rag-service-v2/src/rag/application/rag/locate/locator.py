@@ -8,18 +8,18 @@ from typing import TYPE_CHECKING
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.verify import EvidenceVerifier
-from rag.domain.acl import PermissionScope
-from rag.domain.document_structure import Section
-from rag.domain.evidence import EvidenceCandidate, EvidenceRecord
-from rag.domain.knowledge_graph import KnowledgeNode
-from rag.domain.navigation import KnownSection
-from rag.domain.read_content import DocumentStructureResult, SectionFrontier
+from rag.domain.models.acl import PermissionScope
+from rag.domain.models.structure import Section
+from rag.domain.models.evidence import EvidenceCandidate, EvidenceRecord
+from rag.domain.models.graph import KnowledgeNode
+from rag.domain.models.navigation import KnownSection
+from rag.domain.models.content import DocumentStructureResult, SectionFrontier
 from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.domain.repositories.mongo.readers.applied_structure import AppliedStructureReader
-from rag.domain.repositories.qdrant.candidate_search import CandidateSearch
+from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
 from rag.domain.repositories.neo4j.mention_lookup import MentionLookup
 from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
-from rag.domain.retrieval import (
+from rag.domain.models.retrieval import (
     CandidateSearchRequest,
     RetrievalCandidate,
     RetrievalChunk,
@@ -104,7 +104,7 @@ class ReadingEntryLocator:
         self,
         *,
         embedding_client: EmbeddingClient,
-        candidate_search: CandidateSearch,
+        candidate_search: CandidateSearcher,
         ranking_pipeline: RankingPipeline,
         authorizer: PermissionAuthorizer,
         evidence_verifier: EvidenceVerifier,

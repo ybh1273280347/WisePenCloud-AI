@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from rag.domain.acl import ResourceAcl
+from rag.domain.models.acl import ResourceAcl
 
 
 class AuthoritativeAclReader(Protocol):

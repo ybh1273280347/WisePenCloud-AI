@@ -3,13 +3,13 @@ from dataclasses import dataclass
 import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.domain.graph_traversal import (
+from rag.domain.models.graph import (
     GraphTraversalRequest,
     TraversalDirection,
 )
 from rag.core.persistence.neo4j import Neo4jGraphTraversal
-from rag.domain.acl import PermissionScope, ResourceAcl
-from rag.domain.knowledge_graph import KnowledgeRelationType
+from rag.domain.models.acl import PermissionScope, ResourceAcl
+from rag.domain.models.graph import KnowledgeRelationType
 
 
 @dataclass

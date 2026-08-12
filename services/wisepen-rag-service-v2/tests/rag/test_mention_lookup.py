@@ -4,13 +4,13 @@ import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.core.persistence.neo4j import Neo4jMentionLookup
-from rag.domain.acl import PermissionScope, ResourceAcl
-from rag.domain.content_revision import ContentRevision
-from rag.domain.document_structure import Section, StructureMode
-from rag.domain.evidence import EvidenceRecord
-from rag.domain.knowledge_graph import KnowledgeEntityType, KnowledgeNodeKind
-from rag.domain.reading import ReadingBlock
-from rag.domain.retrieval import SourceRef
+from rag.domain.models.acl import PermissionScope, ResourceAcl
+from rag.domain.models.content import ContentRevision
+from rag.domain.models.structure import Section, StructureMode
+from rag.domain.models.evidence import EvidenceRecord
+from rag.domain.models.graph import KnowledgeEntityType, KnowledgeNodeKind
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
 
 

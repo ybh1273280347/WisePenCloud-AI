@@ -7,7 +7,7 @@ from rag.application.rag.index.builders import (
     build_reading_blocks,
     parse_document_structure,
 )
-from rag.domain.document_structure import StructureMode
+from rag.domain.models.structure import StructureMode
 
 
 def test_long_section_builds_multiple_ordered_reading_blocks() -> None:

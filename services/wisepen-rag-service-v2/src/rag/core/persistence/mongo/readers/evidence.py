@@ -3,20 +3,17 @@
 from collections.abc import Sequence
 from hashlib import sha256
 
-from rag.domain.document_structure import Section
+from rag.application.rag.verify import EvidenceCorruptError, EvidenceRevisionError
 from rag.domain.entities import ReadingBlockEntity, SectionEntity, SourceRefEntity
-from rag.domain.evidence import (
-    EvidenceCorruptError,
-    EvidenceRecord,
-    EvidenceRevisionError,
-)
-from rag.domain.reading import ReadingBlock
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.evidence import EvidenceRecord
+from rag.domain.models.retrieval import SourceRef
+from rag.domain.models.structure import Section
 from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.domain.repositories.mongo.readers.evidence import EvidenceReader
 from rag.domain.repositories.mongo.readers.source_parts import SourcePartReader
-from rag.domain.retrieval import SourceRef
-from rag.domain.services.text_assembler import assemble_source_text
 from rag.utils.chunkers import SourceSpan
+from ..text_assembler import assemble_source_text
 
 
 class MongoEvidenceReader(EvidenceReader):

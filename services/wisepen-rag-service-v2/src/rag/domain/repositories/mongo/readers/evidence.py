@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from rag.domain.evidence import EvidenceRecord
+from rag.domain.models.evidence import EvidenceRecord
 
 
 class EvidenceReader(Protocol):

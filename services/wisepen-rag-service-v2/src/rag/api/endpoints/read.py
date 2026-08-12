@@ -20,9 +20,9 @@ from rag.application.rag.read import (
     DocumentStructureReader,
 )
 from rag.container import Container
-from rag.domain.acl import PermissionScope
+from rag.domain.models.acl import PermissionScope
 from rag.domain.error_codes import RagErrorCode
-from rag.domain.read_content import ContentWindow, SectionContent
+from rag.domain.models.content import ContentWindow, SectionContent
 
 router = APIRouter()
 

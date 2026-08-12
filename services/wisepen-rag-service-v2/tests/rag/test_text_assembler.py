@@ -1,7 +1,7 @@
 import pytest
 
-from rag.domain.content_revision import SourcePart
-from rag.domain.services.text_assembler import assemble_source_text
+from rag.domain.models.content import SourcePart
+from rag.core.persistence.mongo.text_assembler import assemble_source_text
 from rag.utils.chunkers import SourceSpan
 
 

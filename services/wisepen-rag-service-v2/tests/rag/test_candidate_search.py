@@ -3,9 +3,9 @@ from common.core.domain import GroupRoleType
 from qdrant_client import models as qdrant_models
 from qdrant_client.http import models as qdrant_http_models
 
-from rag.core.persistence.qdrant import QdrantCandidateSearch
-from rag.domain.acl import PermissionScope
-from rag.domain.retrieval import CandidateSearchRequest
+from rag.core.persistence.qdrant import QdrantCandidateSearcher
+from rag.domain.models.acl import PermissionScope
+from rag.domain.models.retrieval import CandidateSearchRequest
 
 
 class _QdrantClient:
@@ -24,8 +24,8 @@ class _QdrantClient:
         )
 
 
-def _search(client: _QdrantClient) -> QdrantCandidateSearch:
-    return QdrantCandidateSearch(
+def _search(client: _QdrantClient) -> QdrantCandidateSearcher:
+    return QdrantCandidateSearcher(
         client=client,
         collection_name="retrieval-chunks",
         dense_vector_name="dense",
@@ -130,7 +130,7 @@ async def test_search_rejects_missing_candidate_payload() -> None:
 
 def test_permission_filter_contains_nested_group_acl_conditions() -> None:
     from rag.core.persistence.qdrant.acl_filter import permission_filter
-    from rag.domain.acl import PermissionScope
+    from rag.domain.models.acl import PermissionScope
 
     condition = permission_filter(
         PermissionScope.from_group_roles(

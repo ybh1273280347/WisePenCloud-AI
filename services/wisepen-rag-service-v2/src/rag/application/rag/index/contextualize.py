@@ -7,11 +7,11 @@ import json
 from hashlib import sha256
 from typing import TYPE_CHECKING
 
-from rag.domain.document_structure import DocumentStructure, StructureMode
-from rag.domain.generation_cache import GenerationCacheKind
-from rag.domain.reading import ReadingBlock
-from rag.domain.repositories.mongo.generation_store import GenerationCacheStore
-from rag.domain.retrieval import RetrievalChunk
+from rag.domain.models.structure import DocumentStructure, StructureMode
+from rag.domain.models.generation import GenerationCacheKind
+from rag.domain.models.content import ReadingBlock
+from rag.domain.repositories.mongo.generation_artifact_store import GenerationArtifactStore
+from rag.domain.models.retrieval import RetrievalChunk
 from rag.utils.xml_markup import xml_cdata
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ class ContextualTextIndexer:
         self,
         *,
         client: QueryClient,
-        cache: GenerationCacheStore,
+        cache: GenerationArtifactStore,
     ) -> None:
         self._client = client
         self._cache = cache

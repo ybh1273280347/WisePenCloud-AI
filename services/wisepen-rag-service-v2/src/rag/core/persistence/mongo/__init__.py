@@ -1,4 +1,4 @@
-from .generation_store import MongoGenerationCacheStore
+from .generation_artifact_store import MongoGenerationArtifactStore
 from .readers.applied_content import MongoAppliedContentReader
 from .readers.applied_revision import MongoAppliedRevisionReader
 from .readers.applied_structure import MongoAppliedStructureReader
@@ -15,7 +15,7 @@ __all__ = [
     "MongoAppliedStructureReader",
     "MongoAuthoritativeAclReader",
     "MongoEvidenceReader",
-    "MongoGenerationCacheStore",
+    "MongoGenerationArtifactStore",
     "MongoGraphBuildSourceReader",
     "MongoResourceAclStore",
     "MongoResourceIndexWriter",

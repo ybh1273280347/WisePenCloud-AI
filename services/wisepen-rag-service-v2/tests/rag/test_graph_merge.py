@@ -1,5 +1,5 @@
 from rag.application.rag.index.builders import merge_candidate_graph
-from rag.domain.knowledge_graph import (
+from rag.domain.models.graph import (
     ExtractedKnowledgeNode,
     ExtractedKnowledgeRelation,
     KnowledgeEntityType,

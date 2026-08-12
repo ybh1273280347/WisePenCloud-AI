@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from rag.application.rag.acl import ResourceAclRefresher
-from rag.domain.document_structure import StructureMode
+from rag.domain.models.structure import StructureMode
 from rag.domain.repositories import (
     KnowledgeGraphWriter,
     ResourceAclStore,

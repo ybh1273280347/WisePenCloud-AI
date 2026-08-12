@@ -5,12 +5,12 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from rag.application.rag.expand import TraversalDirection
-from rag.domain.document_structure import Section
-from rag.domain.evidence import EvidenceRecord
-from rag.domain.graph_traversal import TraversedEdge, TraversedPath
-from rag.domain.knowledge_graph import KnowledgeNode, KnowledgeRelationType
-from rag.domain.read_content import SectionFrontier
-from rag.domain.reading import ReadingBlock
+from rag.domain.models.structure import Section
+from rag.domain.models.evidence import EvidenceRecord
+from rag.domain.models.graph import TraversedEdge, TraversedPath
+from rag.domain.models.graph import KnowledgeNode, KnowledgeRelationType
+from rag.domain.models.content import SectionFrontier
+from rag.domain.models.content import ReadingBlock
 from rag.utils.chunkers import SourceSpan
 
 NonEmptyText = Annotated[

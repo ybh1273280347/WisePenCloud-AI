@@ -13,16 +13,16 @@ from neo4j_graphrag.experimental.components.schema import (
     RelationshipType,
 )
 
-from rag.domain.document_structure import StructureMode
-from rag.domain.generation_cache import GenerationCacheKind
-from rag.domain.knowledge_graph import (
+from rag.domain.models.structure import StructureMode
+from rag.domain.models.generation import GenerationCacheKind
+from rag.domain.models.graph import (
     KnowledgeEntityType,
     KnowledgeNodeKind,
     KnowledgeRelationProfile,
     KnowledgeRelationType,
     KnowledgeWindowExtraction,
 )
-from rag.domain.repositories.mongo.generation_store import GenerationCacheStore
+from rag.domain.repositories.mongo.generation_artifact_store import GenerationArtifactStore
 from rag.domain.repositories.mongo.readers.graph_build_source import GraphBuildSourceReader
 
 from .cache_codec import (
@@ -58,7 +58,7 @@ class KnowledgeGraphExtractor:
         self,
         *,
         llm: QueryClientGraphRagLLM,
-        cache: GenerationCacheStore,
+        cache: GenerationArtifactStore,
         source_reader: GraphBuildSourceReader,
         max_concurrency: int = 5,
         profiles: frozenset[KnowledgeRelationProfile] | None = None,

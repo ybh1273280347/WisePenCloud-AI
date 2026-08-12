@@ -1,4 +1,4 @@
-from rag.domain.navigation import NavigationStateNotFoundError
+from rag.domain.models.navigation import NavigationStateNotFoundError
 
 from .navigation_state_store import RedisNavigationStateStore
 

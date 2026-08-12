@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from rag.domain.graph_traversal import GraphTraversalRequest, TraversedPath
+from rag.domain.models.graph import GraphTraversalRequest, TraversedPath
 
 
 class GraphTraversal(Protocol):

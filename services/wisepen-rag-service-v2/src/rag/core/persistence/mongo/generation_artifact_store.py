@@ -5,12 +5,12 @@ from collections.abc import Mapping, Sequence
 from beanie.operators import In
 from pymongo import UpdateOne
 
-from rag.domain.entities import GenerationCacheEntity
-from rag.domain.generation_cache import GenerationCacheKind
-from rag.domain.repositories.mongo.generation_store import GenerationCacheStore
+from rag.domain.entities import GenerationArtifactEntity
+from rag.domain.models.generation import GenerationCacheKind
+from rag.domain.repositories.mongo.generation_artifact_store import GenerationArtifactStore
 
 
-class MongoGenerationCacheStore(GenerationCacheStore):
+class MongoGenerationArtifactStore(GenerationArtifactStore):
     """隔离资源和 cache kind，提供批量命中、覆盖及资源删除。"""
 
     async def get_many(
@@ -24,10 +24,10 @@ class MongoGenerationCacheStore(GenerationCacheStore):
         if not unique_keys:
             return {}
 
-        records = await GenerationCacheEntity.find(
-            GenerationCacheEntity.resource_id == resource_id,
-            GenerationCacheEntity.cache_kind == cache_kind,
-            In(GenerationCacheEntity.cache_key, unique_keys),
+        records = await GenerationArtifactEntity.find(
+            GenerationArtifactEntity.resource_id == resource_id,
+            GenerationArtifactEntity.cache_kind == cache_kind,
+            In(GenerationArtifactEntity.cache_key, unique_keys),
         ).to_list()
         return {record.cache_key: record.payload for record in records}
 
@@ -41,7 +41,7 @@ class MongoGenerationCacheStore(GenerationCacheStore):
         if not values:
             return
 
-        await GenerationCacheEntity.get_pymongo_collection().bulk_write(
+        await GenerationArtifactEntity.get_pymongo_collection().bulk_write(
             [
                 UpdateOne(
                     {
@@ -68,8 +68,8 @@ class MongoGenerationCacheStore(GenerationCacheStore):
         if not unique_resource_ids:
             return
 
-        await GenerationCacheEntity.find(
-            In(GenerationCacheEntity.resource_id, unique_resource_ids)
+        await GenerationArtifactEntity.find(
+            In(GenerationArtifactEntity.resource_id, unique_resource_ids)
         ).delete()
 
 

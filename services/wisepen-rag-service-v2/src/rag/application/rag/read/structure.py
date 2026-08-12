@@ -1,8 +1,8 @@
 """获取已发布文档结构，不读取 page 或 Section 正文。"""
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.domain.acl import PermissionScope
-from rag.domain.read_content import DocumentStructureResult
+from rag.domain.models.acl import PermissionScope
+from rag.domain.models.content import DocumentStructureResult
 from rag.domain.repositories.mongo.readers.applied_structure import AppliedStructureReader
 
 from .content import ContentNotFoundError

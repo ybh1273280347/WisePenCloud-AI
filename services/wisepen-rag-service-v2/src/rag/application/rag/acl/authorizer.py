@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 
-from rag.domain.acl import PermissionScope
+from rag.domain.models.acl import PermissionScope
 from rag.domain.repositories.mongo.resource_acl_store import ResourceAclStore
 
 

@@ -2,7 +2,7 @@
 
 from qdrant_client import models as qdrant_models
 
-from rag.domain.acl import PermissionScope
+from rag.domain.models.acl import PermissionScope
 
 
 def permission_filter(scope: PermissionScope) -> qdrant_models.Filter:

@@ -4,8 +4,8 @@ import pytest
 from qdrant_client import models as qdrant_models
 
 from rag.core.persistence.qdrant import QdrantRetrievalIndexWriter
-from rag.domain.acl import ResourceAcl
-from rag.domain.retrieval import RetrievalChunk, SourceRef
+from rag.domain.models.acl import ResourceAcl
+from rag.domain.models.retrieval import RetrievalChunk, SourceRef
 from rag.utils.chunkers import SourceSpan
 
 

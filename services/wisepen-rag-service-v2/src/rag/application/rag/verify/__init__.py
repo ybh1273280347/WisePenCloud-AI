@@ -1,3 +1,13 @@
-from .evidence import EvidenceVerifier
+from .evidence import (
+    EvidenceCorruptError,
+    EvidenceNotFoundError,
+    EvidenceRevisionError,
+    EvidenceVerifier,
+)
 
-__all__ = ["EvidenceVerifier"]
+__all__ = [
+    "EvidenceCorruptError",
+    "EvidenceNotFoundError",
+    "EvidenceRevisionError",
+    "EvidenceVerifier",
+]

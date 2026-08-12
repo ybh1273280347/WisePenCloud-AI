@@ -4,14 +4,14 @@ from dataclasses import dataclass
 import pytest
 
 from rag.application.rag.index import ContextualTextIndexer
-from rag.domain.document_structure import (
+from rag.domain.models.structure import (
     DocumentStructure,
     Section,
     StructureMode,
 )
-from rag.domain.generation_cache import GenerationCacheKind
-from rag.domain.reading import ReadingBlock
-from rag.domain.retrieval import RetrievalChunk
+from rag.domain.models.generation import GenerationCacheKind
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.retrieval import RetrievalChunk
 from rag.utils.chunkers import SourceSpan
 
 

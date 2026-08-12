@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from rag.domain.content_revision import SourcePart
+from rag.domain.models.content import SourcePart
 from rag.utils.chunkers import SourceSpan
 
 

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from rag.domain.knowledge_graph import KnowledgeGraph
+from rag.domain.models.graph import KnowledgeGraph
 
 
 class KnowledgeGraphRevisionSupersededError(RuntimeError):

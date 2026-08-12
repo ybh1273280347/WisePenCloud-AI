@@ -1,4 +1,4 @@
-from rag.domain.graph_traversal import (
+from rag.domain.models.graph import (
     GraphTraversalRequest,
     TraversalDirection,
     TraversedEdge,

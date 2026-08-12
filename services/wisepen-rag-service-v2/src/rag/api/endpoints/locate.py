@@ -12,7 +12,7 @@ from rag.api.schemas import CandidateLocateRequest as LocateHttpRequest
 from rag.api.schemas import CandidateLocateResponse
 from rag.application.rag.locate import LocateError, LocateRequest, ReadingEntryLocator
 from rag.container import Container
-from rag.domain.acl import PermissionScope
+from rag.domain.models.acl import PermissionScope
 from rag.domain.error_codes import RagErrorCode
 
 router = APIRouter()

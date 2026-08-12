@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from rag.domain.read_content import ContentWindow, SectionContent
+from rag.domain.models.content import ContentWindow, SectionContent
 
 
 class AppliedContentReader(Protocol):

@@ -6,7 +6,7 @@ from typing import Any
 from bson import ObjectId
 from pymongo.asynchronous.collection import AsyncCollection
 
-from rag.domain.acl import GroupResourceAcl, ResourceAcl
+from rag.domain.models.acl import GroupResourceAcl, ResourceAcl
 from rag.domain.repositories.mongo.readers.authoritative_acl import AuthoritativeAclReader
 
 

@@ -1,6 +1,6 @@
 """知识关系 profile 和合法端点组合。"""
 
-from rag.domain.knowledge_graph import (
+from rag.domain.models.graph import (
     KnowledgeNodeKind,
     KnowledgeRelationProfile,
     KnowledgeRelationType,

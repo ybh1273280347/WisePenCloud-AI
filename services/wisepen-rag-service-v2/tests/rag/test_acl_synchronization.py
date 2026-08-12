@@ -6,7 +6,7 @@ from rag.application.rag.acl import ResourceAclRefresher
 from rag.core.persistence.neo4j import Neo4jGraphAclWriter
 from rag.core.persistence.neo4j.acl_predicate import acl_predicate
 from rag.core.persistence.qdrant import QdrantRetrievalAclWriter
-from rag.domain.acl import GroupResourceAcl, PermissionScope, ResourceAcl
+from rag.domain.models.acl import GroupResourceAcl, PermissionScope, ResourceAcl
 
 
 def _acl() -> ResourceAcl:

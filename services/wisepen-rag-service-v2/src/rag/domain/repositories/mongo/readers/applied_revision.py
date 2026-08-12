@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from rag.domain.content_revision import ContentRevision
+from rag.domain.models.content import ContentRevision
 
 
 class AppliedRevisionReader(Protocol):

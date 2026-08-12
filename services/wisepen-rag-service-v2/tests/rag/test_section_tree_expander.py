@@ -7,15 +7,15 @@ from rag.application.rag.expand import (
     SectionRevisionChangedError,
     SectionTreeExpander,
 )
-from rag.domain.acl import PermissionScope, ResourceAcl
-from rag.domain.content_revision import ContentRevision
-from rag.domain.document_structure import Section, StructureMode
-from rag.domain.navigation import (
+from rag.domain.models.acl import PermissionScope, ResourceAcl
+from rag.domain.models.content import ContentRevision
+from rag.domain.models.structure import Section, StructureMode
+from rag.domain.models.navigation import (
     KnownSection,
     NavigationState,
     NavigationStateNotFoundError,
 )
-from rag.domain.read_content import SectionContent, SectionFrontier
+from rag.domain.models.content import SectionContent, SectionFrontier
 from rag.utils.chunkers import SourceSpan
 
 

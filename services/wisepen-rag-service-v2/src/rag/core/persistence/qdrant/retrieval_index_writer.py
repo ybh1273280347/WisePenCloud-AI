@@ -9,9 +9,9 @@ from uuid import NAMESPACE_URL, uuid5
 from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
-from rag.domain.acl import ResourceAcl
+from rag.domain.models.acl import ResourceAcl
+from rag.domain.models.retrieval import RetrievalChunk, SourceRef
 from rag.domain.repositories.qdrant.retrieval_index_writer import RetrievalIndexWriter
-from rag.domain.retrieval import RetrievalChunk, SourceRef
 
 
 class QdrantRetrievalIndexWriter(RetrievalIndexWriter):

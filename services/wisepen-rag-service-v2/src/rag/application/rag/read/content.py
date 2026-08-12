@@ -3,8 +3,8 @@
 from collections.abc import Sequence
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.domain.acl import PermissionScope
-from rag.domain.read_content import ContentWindow, SectionContent
+from rag.domain.models.acl import PermissionScope
+from rag.domain.models.content import ContentWindow, SectionContent
 from rag.domain.repositories.mongo.readers.applied_content import AppliedContentReader
 
 

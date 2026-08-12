@@ -1,12 +1,64 @@
-"""跨仓储、应用和 API 使用的已发布正文读取契约。"""
+"""资源内容、发布 revision、正文块和读取视图的稳定领域模型。"""
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from rag.domain.content_revision import ContentRevision
-from rag.domain.document_structure import Section
-from rag.domain.evidence import EvidenceRecord
-from rag.domain.reading import ReadingBlock
+from rag.domain.models.structure import PageRange, Section, StructureMode
 from rag.utils.chunkers import SourceSpan
+
+if TYPE_CHECKING:
+    from rag.domain.models.evidence import EvidenceRecord
+
+
+@dataclass(slots=True)
+class ResourceIndexState:
+    """一个资源当前 staged/applied revision 指针。"""
+
+    resource_id: str
+    staged_content_revision: str | None = None
+    staged_document_version: int | None = None
+    applied_content_revision: str | None = None
+    applied_document_version: int | None = None
+
+
+@dataclass(slots=True)
+class ContentRevision:
+    """一次可独立发布的权威 Markdown 版本。"""
+
+    resource_id: str
+    content_revision: str
+    document_version: int
+    content_hash: str
+    index_schema_version: str
+    structure_mode: StructureMode
+    total_length: int
+    pages: list[PageRange] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class SourcePart:
+    """超大 Markdown 的连续存储分片。"""
+
+    resource_id: str
+    content_revision: str
+    part_index: int
+    source_span: SourceSpan
+    text: str
+
+
+@dataclass(slots=True)
+class ReadingBlock:
+    """一个 Section 内可独立读取且能精确回源的有序正文块。"""
+
+    block_id: str
+    section_id: str
+    ordinal: int
+    raw_text: str
+    source_spans: list[SourceSpan] = field(default_factory=list)
+    page_labels: list[str] = field(default_factory=list)
+    anchor_labels: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

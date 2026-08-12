@@ -25,11 +25,11 @@ from rag.application.rag.expand import (
     SectionTreeExpander,
     UnknownSeedNodeError,
 )
+from rag.application.rag.verify import EvidenceRevisionError
 from rag.container import Container
-from rag.domain.acl import PermissionScope
+from rag.domain.models.acl import PermissionScope
 from rag.domain.error_codes import RagErrorCode
-from rag.domain.evidence import EvidenceRevisionError
-from rag.domain.navigation import NavigationStateNotFoundError
+from rag.domain.models.navigation import NavigationStateNotFoundError
 
 router = APIRouter()
 

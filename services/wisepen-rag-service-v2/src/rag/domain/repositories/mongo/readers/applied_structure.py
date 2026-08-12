@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from rag.domain.read_content import DocumentStructureResult
+from rag.domain.models.content import DocumentStructureResult
 
 
 class AppliedStructureReader(Protocol):

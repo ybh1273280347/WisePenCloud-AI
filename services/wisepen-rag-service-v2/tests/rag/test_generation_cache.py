@@ -2,9 +2,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from rag.core.persistence.mongo import MongoGenerationCacheStore
-from rag.domain.entities import GenerationCacheEntity
-from rag.domain.generation_cache import GenerationCacheKind
+from rag.core.persistence.mongo import MongoGenerationArtifactStore
+from rag.domain.entities import GenerationArtifactEntity
+from rag.domain.models.generation import GenerationCacheKind
 
 
 class _Field:
@@ -60,26 +60,26 @@ async def test_generation_cache_reads_only_matching_resource_kind_and_keys(
         return _Query([records[0]])
 
     monkeypatch.setattr(
-        GenerationCacheEntity,
+        GenerationArtifactEntity,
         "resource_id",
         _Field("resource_id"),
         raising=False,
     )
     monkeypatch.setattr(
-        GenerationCacheEntity,
+        GenerationArtifactEntity,
         "cache_kind",
         _Field("cache_kind"),
         raising=False,
     )
     monkeypatch.setattr(
-        GenerationCacheEntity,
+        GenerationArtifactEntity,
         "cache_key",
         _Field("cache_key"),
         raising=False,
     )
-    monkeypatch.setattr(GenerationCacheEntity, "find", find)
+    monkeypatch.setattr(GenerationArtifactEntity, "find", find)
 
-    result = await MongoGenerationCacheStore().get_many(
+    result = await MongoGenerationArtifactStore().get_many(
         resource_id="resource-1",
         cache_kind=GenerationCacheKind.CONTEXTUAL_TEXT,
         keys=["key-1", "key-1", "missing"],
@@ -94,12 +94,12 @@ async def test_generation_cache_set_serializes_kind_and_overwrites_by_composite_
 ) -> None:
     collection = _Collection()
     monkeypatch.setattr(
-        GenerationCacheEntity,
+        GenerationArtifactEntity,
         "get_pymongo_collection",
         classmethod(lambda cls: collection),
     )
 
-    await MongoGenerationCacheStore().set_many(
+    await MongoGenerationArtifactStore().set_many(
         resource_id="resource-1",
         cache_kind=GenerationCacheKind.GRAPH_CANDIDATES,
         values={"key-1": "new-value"},
@@ -126,14 +126,14 @@ async def test_generation_cache_delete_deduplicates_resource_ids(
 ) -> None:
     query = _Query([])
     monkeypatch.setattr(
-        GenerationCacheEntity,
+        GenerationArtifactEntity,
         "resource_id",
         _Field("resource_id"),
         raising=False,
     )
-    monkeypatch.setattr(GenerationCacheEntity, "find", lambda *conditions: query)
+    monkeypatch.setattr(GenerationArtifactEntity, "find", lambda *conditions: query)
 
-    await MongoGenerationCacheStore().delete_resources(
+    await MongoGenerationArtifactStore().delete_resources(
         ["resource-1", "resource-1", "resource-2"]
     )
 
@@ -151,9 +151,9 @@ async def test_generation_cache_ignores_empty_batches(
         called = True
         return _Query([])
 
-    monkeypatch.setattr(GenerationCacheEntity, "find", find)
+    monkeypatch.setattr(GenerationArtifactEntity, "find", find)
 
-    store = MongoGenerationCacheStore()
+    store = MongoGenerationArtifactStore()
     assert await store.get_many(
         resource_id="resource-1",
         cache_kind=GenerationCacheKind.CONTEXTUAL_TEXT,

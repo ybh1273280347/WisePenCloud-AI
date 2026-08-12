@@ -4,7 +4,7 @@ from hashlib import sha256
 
 from neo4j_graphrag.experimental.components.types import Neo4jGraph, Neo4jNode
 
-from rag.domain.knowledge_graph import (
+from rag.domain.models.graph import (
     ExtractedKnowledgeNode,
     ExtractedKnowledgeRelation,
     KnowledgeAssertion,
