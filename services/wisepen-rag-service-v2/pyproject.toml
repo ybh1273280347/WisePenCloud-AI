@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "beanie>=2,<3",
     "bm25s>=0.3.9",
+    "dependency-injector>=4.49,<5",
     "jieba>=0.42.1",
     "langchain-text-splitters>=1.0,<2",
     "markdown-it-py>=4,<5",

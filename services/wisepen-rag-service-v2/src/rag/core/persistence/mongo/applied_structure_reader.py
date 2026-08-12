@@ -6,14 +6,12 @@ from rag.domain.read_content import DocumentStructureResult
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.applied_structure_reader import AppliedStructureReader
 
-from .applied_revision_reader import MongoAppliedRevisionReader
-
 
 class MongoAppliedStructureReader(AppliedStructureReader):
     """只返回 applied revision 的结构事实，不读取正文。"""
 
-    def __init__(self, revisions: AppliedRevisionReader | None = None) -> None:
-        self._revisions = revisions or MongoAppliedRevisionReader()
+    def __init__(self, *, revisions: AppliedRevisionReader) -> None:
+        self._revisions = revisions
 
     async def get_applied_document_structure(
         self,

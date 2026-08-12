@@ -5,7 +5,6 @@ from collections.abc import Sequence
 from pymongo import ASCENDING
 
 from rag.core.persistence.mongo.mappers.deserializer import to_reading_block, to_section
-from rag.core.persistence.mongo.source_part_reader import MongoSourcePartReader
 from rag.domain.document_structure import Section
 from rag.domain.entities import ReadingBlockEntity, SectionEntity
 from rag.domain.read_content import (
@@ -16,9 +15,8 @@ from rag.domain.read_content import (
 from rag.domain.reading import ReadingBlock
 from rag.domain.repositories.applied_content_reader import AppliedContentReader
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
+from rag.domain.repositories.source_part_reader import SourcePartReader
 from rag.domain.services.text_assembler import assemble_source_text
-
-from .applied_revision_reader import MongoAppliedRevisionReader
 
 
 class MongoAppliedContentReader(AppliedContentReader):
@@ -26,10 +24,11 @@ class MongoAppliedContentReader(AppliedContentReader):
 
     def __init__(
         self,
-        revisions: AppliedRevisionReader | None = None,
+        revisions: AppliedRevisionReader,
+        source_parts: SourcePartReader,
     ) -> None:
-        self._revisions = revisions or MongoAppliedRevisionReader()
-        self._source_parts = MongoSourcePartReader()
+        self._revisions = revisions
+        self._source_parts = source_parts
 
     async def get_applied_pages(
         self,

@@ -6,12 +6,16 @@ from rag.domain.repositories.applied_structure_reader import AppliedStructureRea
 from .content import ContentNotFoundError
 
 
-async def get_document_structure(
-    reader: AppliedStructureReader,
-    *,
-    resource_id: str,
-) -> DocumentStructureResult:
-    structure = await reader.get_applied_document_structure(resource_id)
-    if structure is None:
-        raise ContentNotFoundError(resource_id)
-    return structure
+class DocumentStructureReader:
+    """读取 applied revision 的结构事实，不读取正文。"""
+
+    __slots__ = ("_reader",)
+
+    def __init__(self, *, reader: AppliedStructureReader) -> None:
+        self._reader = reader
+
+    async def get(self, *, resource_id: str) -> DocumentStructureResult:
+        structure = await self._reader.get_applied_document_structure(resource_id)
+        if structure is None:
+            raise ContentNotFoundError(resource_id)
+        return structure

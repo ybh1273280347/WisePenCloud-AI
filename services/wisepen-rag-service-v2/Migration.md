@@ -204,14 +204,16 @@ Commit：`rag-v2 cp08: verify evidence against applied source`
 
 范围：
 
-- PermissionScope 和 ResourceAcl 的最小事实。
+- `PermissionScope`、`ResourceAcl` 和 `GroupResourceAcl` 的最小事实。
 - owner、直接用户、资源排除、managed group、joined group 规则。
 - 单资源 authorize 与批量 readable resource 计算。
 - Qdrant/Neo4j 使用的统一权限表达输入。
+- `PermissionAuthorizer` 面向对象用例，以及 `read` 的结构/正文读取对象。
+- 使用 dependency-injector 装配 READ 的 Mongo port 和 ACL reader dependency。
 
 验收：完整 ACL 真值表，资源排除优先级和本地 ACL 缺失 fail-closed 测试。
 
-排除：Mongo、Qdrant、Neo4j 和安全上下文 adapter。
+排除：ACL Mongo、Qdrant、Neo4j 和安全上下文 adapter；READ 不新增业务能力，只完成对象化装配。
 
 Commit：`rag-v2 cp09: define resource authorization rules`
 

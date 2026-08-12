@@ -11,9 +11,8 @@ from rag.application.rag.index import (
 from rag.application.rag.index.revisions import decide_stage
 from rag.application.rag.read import (
     ContentNotFoundError,
-    get_document_structure,
-    get_pages,
-    get_sections,
+    DocumentContentReader,
+    DocumentStructureReader,
 )
 from rag.application.rag.verify import verify_candidates
 from rag.domain.content_revision import ResourceIndexState
@@ -115,11 +114,17 @@ class _MissingReader:
 async def test_read_actions_raise_directly_when_content_is_missing() -> None:
     reader = _MissingReader()
     with pytest.raises(ContentNotFoundError):
-        await get_document_structure(reader, resource_id="missing")
+        await DocumentStructureReader(reader=reader).get(resource_id="missing")
     with pytest.raises(ContentNotFoundError):
-        await get_pages(reader, resource_id="missing", page_labels=["1"])
+        await DocumentContentReader(reader=reader).get_pages(
+            resource_id="missing",
+            page_labels=["1"],
+        )
     with pytest.raises(ContentNotFoundError):
-        await get_sections(reader, resource_id="missing", section_ids=["section"])
+        await DocumentContentReader(reader=reader).get_sections(
+            resource_id="missing",
+            section_ids=["section"],
+        )
 
 
 def _evidence_facts() -> tuple[str, object, list[ReadingBlock], list[RetrievalChunk], list[SourceRef], object]:

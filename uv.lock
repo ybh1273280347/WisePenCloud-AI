@@ -3991,6 +3991,7 @@ source = { editable = "services/wisepen-rag-service-v2" }
 dependencies = [
     { name = "beanie" },
     { name = "bm25s" },
+    { name = "dependency-injector" },
     { name = "jieba" },
     { name = "langchain-text-splitters" },
     { name = "markdown-it-py" },
@@ -4017,6 +4018,7 @@ dev = [
 requires-dist = [
     { name = "beanie", specifier = ">=2,<3" },
     { name = "bm25s", specifier = ">=0.3.9" },
+    { name = "dependency-injector", specifier = ">=4.49,<5" },
     { name = "jieba", specifier = ">=0.42.1" },
     { name = "langchain-text-splitters", specifier = ">=1.0,<2" },
     { name = "markdown-it-py", specifier = ">=4,<5" },

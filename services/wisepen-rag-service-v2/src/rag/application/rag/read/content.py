@@ -13,25 +13,32 @@ class ContentNotFoundError(RuntimeError):
     """资源没有可读取的 applied revision。"""
 
 
-async def get_pages(
-    reader: AppliedContentReader,
-    *,
-    resource_id: str,
-    page_labels: Sequence[str],
-) -> dict[str, ContentWindow]:
-    pages = await reader.get_applied_pages(resource_id, page_labels)
-    if pages is None:
-        raise ContentNotFoundError(resource_id)
-    return pages
+class DocumentContentReader:
+    """读取 applied revision 的 page 和 Section 正文。"""
 
+    __slots__ = ("_reader",)
 
-async def get_sections(
-    reader: AppliedContentReader,
-    *,
-    resource_id: str,
-    section_ids: Sequence[str],
-) -> dict[str, SectionContent]:
-    sections = await reader.get_applied_sections(resource_id, section_ids)
-    if sections is None:
-        raise ContentNotFoundError(resource_id)
-    return sections
+    def __init__(self, *, reader: AppliedContentReader) -> None:
+        self._reader = reader
+
+    async def get_pages(
+        self,
+        *,
+        resource_id: str,
+        page_labels: Sequence[str],
+    ) -> dict[str, ContentWindow]:
+        pages = await self._reader.get_applied_pages(resource_id, page_labels)
+        if pages is None:
+            raise ContentNotFoundError(resource_id)
+        return pages
+
+    async def get_sections(
+        self,
+        *,
+        resource_id: str,
+        section_ids: Sequence[str],
+    ) -> dict[str, SectionContent]:
+        sections = await self._reader.get_applied_sections(resource_id, section_ids)
+        if sections is None:
+            raise ContentNotFoundError(resource_id)
+        return sections
