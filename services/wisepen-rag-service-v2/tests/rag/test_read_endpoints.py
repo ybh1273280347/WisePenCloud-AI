@@ -107,8 +107,12 @@ def test_read_request_schemas_forbid_extra_and_limit_batch_size() -> None:
         SectionContentRequest(resource_id="resource-1", section_ids=[])
 
 
-def test_router_exposes_only_deterministic_read_endpoints() -> None:
-    paths = {route.path for route in api_router.routes}
+def test_router_exposes_deterministic_read_endpoints() -> None:
+    paths = {
+        route.path
+        for route in api_router.routes
+        if route.path.startswith("/resources/")
+    }
     assert paths == {
         "/resources/document-structure",
         "/resources/page-content",

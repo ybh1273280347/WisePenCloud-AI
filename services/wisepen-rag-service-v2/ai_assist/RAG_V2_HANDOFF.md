@@ -56,7 +56,8 @@ base:     origin/main @ e1af497f7
 | CP23 | `7e3a1a224` | 权威 ACL 刷新、本地单调写入、Qdrant/Neo4j 显式同步和统一图查询 predicate。 |
 | CP24 | `cb73b1a57` | ResourceIndexer 编排结构、contextual、embedding、Mongo/Qdrant 发布、图 publish/skip 和重试补偿。 |
 | CP25 | `ae9b0c44d` | 先清 Mongo 发布指针 fail closed，再并行删除内容、缓存、Qdrant、Neo4j 和本地 ACL。 |
-| CP26 | 当前工作树 | 确定性 document structure/page/section READ HTTP schema、统一 ACL 和资源读取错误码。 |
+| CP26 | `e285530b0` | 确定性 document structure/page/section READ HTTP schema、统一 ACL 和资源读取错误码。 |
+| CP27 | 当前工作树 | LOCATE、发现后 Section READ、EXPAND HTTP schema、可信身份与导航错误映射。 |
 
 ## 3. 当前架构事实
 
@@ -303,6 +304,14 @@ CP26 HTTP READ adapter 边界：
 - 批量 page/section 响应使用请求 key 到领域事实的字典，只返回实际存在 key；合法空 Section 返回 `reading_blocks=[]`，不生成 `kind/reason/windows`。
 - schema 使用 list 而非 tuple，最多接收 20 个 page label 或 section ID，所有请求 `extra=forbid`；响应只序列化稳定结构、正文、offset、frontier 和锚点事实。
 - 非预期 application/依赖异常映射为 `RESOURCE_READ_FAILED`，不把底层异常文本、存储结构或资源存在性泄漏给调用方。
+
+CP27 HTTP Navigation adapter 边界：
+
+- `/knowledge-navigation/locate`、`/sections`、`/expand` 直接调用 `ReadingEntryLocator`、`DiscoveredSectionReader` 和 `KnowledgeGraphExpander`，不恢复 v1 的聚合 service 或 cypher 命名。
+- 请求 body 只包含 session、查询、state 和导航边界；`PermissionScope.user_id` 与群组角色始终来自 `require_login` 和 `SecurityContextHolder`，客户端不能伪造身份。
+- locate 返回 state、相关性 decision、Section frontier 和已核验证据；expand 返回领域 node、edge、path 和 SourceRef 回源事实；不组装 Agent reason 或探索提示。
+- 请求 schema 使用 list，Section 最多 12 个、seed/relation type 最多 16 个、depth 只允许 1/2、结果最多 20 个，所有请求 `extra=forbid`。
+- state 不存在/过期/身份不匹配映射为 `NAVIGATION_STATE_NOT_FOUND`；撤权或 revision/evidence 失效映射为 `NAVIGATION_STATE_INVALIDATED`；未知 Section/seed 与输入错误映射为 `NAVIGATION_INVALID`；依赖失败映射为 `NAVIGATION_FAILED` 且不透传内部文本。
 
 CP13 的实现边界：
 

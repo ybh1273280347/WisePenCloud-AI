@@ -1,3 +1,11 @@
+from .navigation import (
+    ExpandRequest,
+    ExpandResponse,
+    LocateRequest,
+    LocateResponse,
+    ReadSectionsRequest,
+    ReadSectionsResponse,
+)
 from .resources import (
     ContentWindowResponse,
     DocumentStructureResponse,
@@ -10,7 +18,13 @@ from .resources import (
 __all__ = [
     "ContentWindowResponse",
     "DocumentStructureResponse",
+    "ExpandRequest",
+    "ExpandResponse",
+    "LocateRequest",
+    "LocateResponse",
     "PageContentRequest",
+    "ReadSectionsRequest",
+    "ReadSectionsResponse",
     "ResourceRequest",
     "SectionContentRequest",
     "SectionContentResponse",
