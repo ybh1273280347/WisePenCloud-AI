@@ -4,12 +4,14 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+from common.core.exceptions import ServiceException
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
 import rag.main as service
 from rag.core.config import AppSettings
+from rag.domain.error_codes import RagErrorCode
 
 
 class _Closable:
@@ -172,6 +174,26 @@ async def test_health_contract_without_starting_external_dependencies() -> None:
     assert response.json() == {
         "status": "ok",
         "service": "wisepen-rag-service-v2",
+    }
+
+
+@pytest.mark.asyncio
+async def test_http_preserves_rag_business_error_code() -> None:
+    app = service.create_app()
+
+    @app.get("/test-error")
+    async def test_error() -> None:
+        raise ServiceException(RagErrorCode.RESOURCE_CONTENT_NOT_FOUND)
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/test-error")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "code": RagErrorCode.RESOURCE_CONTENT_NOT_FOUND.code,
+        "msg": RagErrorCode.RESOURCE_CONTENT_NOT_FOUND.msg,
+        "data": None,
     }
 
 

@@ -1,4 +1,7 @@
+from itertools import pairwise
+
 import pytest
+
 from rag.application.rag.index import (
     build_flat_text_sections,
     build_reading_blocks,
@@ -88,11 +91,7 @@ def test_flat_text_retrieval_chunks_keep_100_character_overlap() -> None:
     assert all(len(chunk.raw_text) <= 800 for chunk in first_block_chunks)
     overlaps = [
         left.source_spans[-1].end_offset - right.source_spans[0].start_offset
-        for left, right in zip(
-            first_block_chunks,
-            first_block_chunks[1:],
-            strict=False,
-        )
+        for left, right in pairwise(first_block_chunks)
     ]
     assert all(0 < overlap <= 100 for overlap in overlaps)
 

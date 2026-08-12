@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .locator import build_markdown_locators
-from .parser import MarkdownParser
 from .._utils.chunk_ids import assign_chunk_ids
 from .._utils.recursive_splitter import split_markdown_text
 from ..models import (
@@ -15,12 +13,14 @@ from ..models import (
     SourceSpan,
     TextBlock,
 )
+from .locator import build_markdown_locators
+from .parser import MarkdownParser
 
 
 class MarkdownChunker:
     """按标题语义把 Markdown 结构块投影为检索块。"""
 
-    __slots__ = ("max_characters", "_parser")
+    __slots__ = ("_parser", "max_characters")
 
     def __init__(self, *, max_characters: int = 6000) -> None:
         if max_characters <= 0:

@@ -13,11 +13,11 @@ from .pipeline import RankingPipeline
 __all__ = [
     "RankCandidate",
     "RankDecision",
-    "RankedCandidate",
-    "RankingPipeline",
     "RankQuery",
     "RankRequest",
     "RankResult",
+    "RankedCandidate",
+    "RankingPipeline",
     "ScoreSignal",
     "ScoreSignalKind",
 ]

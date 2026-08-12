@@ -1,4 +1,7 @@
+from itertools import pairwise
+
 import pytest
+
 from rag.application.rag.index import (
     build_flat_text_sections,
     build_reading_blocks,
@@ -70,19 +73,15 @@ def test_flat_text_builds_non_overlapping_sections_and_parent_blocks() -> None:
     assert all("<!-- page" not in block.raw_text for block in blocks)
     assert all(
         left.source_spans[-1].end_offset <= right.source_spans[0].start_offset
-        for left, right in zip(blocks, blocks[1:], strict=False)
+        for left, right in pairwise(blocks)
     )
 
 
 def test_reading_block_keeps_cross_page_and_anchor_attribution() -> None:
-    markdown = "\n\n".join(
-        [
-            "<!-- page 1 -->",
-            "# 数据",
-            "Table 1: 样例\n\n| 名称 |\n|---|\n| 甲🙂 |",
-            "<!-- page 2 -->",
-            "补充正文。",
-        ]
+    markdown = (
+        "<!-- page 1 -->\n\n# 数据\n\n"
+        "Table 1: 样例\n\n| 名称 |\n|---|\n| 甲🙂 |\n\n"
+        "<!-- page 2 -->\n\n补充正文。"
     )
     structure = parse_document_structure(
         resource_id="resource-1",

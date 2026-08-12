@@ -1,5 +1,7 @@
 """知识导航 HTTP adapter 的严格请求与领域事实响应 schema。"""
 
+from __future__ import annotations
+
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -76,6 +78,7 @@ class LocateResponse(BaseModel):
 
     state_id: str
     decision: RankDecision
+    nodes: list[KnowledgeNodeResponse]
     sections: list[LocatedSectionResponse]
 
 

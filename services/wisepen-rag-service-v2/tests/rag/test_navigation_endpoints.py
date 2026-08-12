@@ -174,6 +174,13 @@ async def test_locate_uses_authenticated_identity_and_serializes_sections() -> N
         LocateResult(
             state_id="state-1",
             decision=RankDecision.RELEVANT,
+            nodes=[
+                KnowledgeNode(
+                    node_id="node-1",
+                    kind=KnowledgeNodeKind.ENTITY,
+                    label="主题",
+                )
+            ],
             sections=[
                 LocatedSection(
                     resource_id="resource-1",
@@ -204,6 +211,7 @@ async def test_locate_uses_authenticated_identity_and_serializes_sections() -> N
         "group-1": GroupRoleType.ADMIN
     }
     assert response.data.decision is RankDecision.RELEVANT
+    assert response.data.nodes[0].node_id == "node-1"
     assert response.data.sections[0].evidence[0].source_ref_id == "ref-1"
 
 

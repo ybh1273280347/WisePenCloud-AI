@@ -228,14 +228,9 @@ def build_source_ref_id(
     content_revision: str,
     chunk: RetrievalChunk,
 ) -> str:
-    identity = "\0".join(
-        (
-            resource_id,
-            content_revision,
-            chunk.chunk_id,
-            chunk.reading_block_id,
-            chunk.section_id,
-        )
+    identity = (
+        f"{resource_id}\0{content_revision}\0{chunk.chunk_id}"
+        f"\0{chunk.reading_block_id}\0{chunk.section_id}"
     )
     return f"rsrc_{sha256(identity.encode('utf-8')).hexdigest()[:32]}"
 

@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from rag.api.endpoints import navigation as navigation_endpoints
 from rag.api.endpoints import resources as resources_endpoints
+from rag.api.exception_handlers import setup_rag_exception_handler
 from rag.api.router import api_router
 from rag.container import configure_container, container
 from rag.core.config import load_bootstrap_settings, load_settings
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     instrument_fastapi_app(app)
     app.add_middleware(RuntimeSecurityHeaderMiddleware)
     setup_global_exception_handlers(app)
+    setup_rag_exception_handler(app)
     app.include_router(api_router, prefix="/internal/rag")
     container.wire(modules=[navigation_endpoints, resources_endpoints])
 

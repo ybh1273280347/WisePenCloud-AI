@@ -12,6 +12,7 @@ from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.acl import PermissionScope
 from rag.domain.document_structure import Section
 from rag.domain.evidence import EvidenceCandidate, EvidenceRecord
+from rag.domain.knowledge_graph import KnowledgeNode
 from rag.domain.navigation import KnownSection
 from rag.domain.read_content import DocumentStructureResult, SectionFrontier
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
@@ -76,6 +77,7 @@ class LocateResult:
 
     state_id: str
     decision: RankDecision
+    nodes: list[KnowledgeNode] = field(default_factory=list)
     sections: list[LocatedSection] = field(default_factory=list)
 
 
@@ -226,6 +228,7 @@ class ReadingEntryLocator:
         return LocateResult(
             state_id=state.state_id,
             decision=ranking.decision,
+            nodes=nodes,
             sections=sections,
         )
 

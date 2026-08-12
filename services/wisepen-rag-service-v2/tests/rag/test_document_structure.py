@@ -1,4 +1,5 @@
 import pytest
+
 from rag.application.rag.index import parse_document_structure
 from rag.domain.document_structure import StructureMode
 from rag.utils.chunkers import SourceSpan

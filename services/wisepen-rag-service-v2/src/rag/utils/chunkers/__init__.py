@@ -7,8 +7,8 @@ from .models import (
     ChunkingResult,
     LocatorKind,
     SourceSpan,
-    TextLocator,
     TextBlock,
+    TextLocator,
 )
 from .plain_text import PlainTextChunker, PlainTextChunkerConfig
 
@@ -23,6 +23,6 @@ __all__ = [
     "PlainTextChunker",
     "PlainTextChunkerConfig",
     "SourceSpan",
-    "TextLocator",
     "TextBlock",
+    "TextLocator",
 ]

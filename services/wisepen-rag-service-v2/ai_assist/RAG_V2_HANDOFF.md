@@ -58,7 +58,8 @@ base:     origin/main @ e1af497f7
 | CP25 | `ae9b0c44d` | 先清 Mongo 发布指针 fail closed，再并行删除内容、缓存、Qdrant、Neo4j 和本地 ACL。 |
 | CP26 | `e285530b0` | 确定性 document structure/page/section READ HTTP schema、统一 ACL 和资源读取错误码。 |
 | CP27 | `98b0e3555` | LOCATE、发现后 Section READ、EXPAND HTTP schema、可信身份与导航错误映射。 |
-| CP28 | 当前工作树 | 三类 Kafka adapter、保序 offset 重试、显式运行时配置与服务生命周期装配。 |
+| CP28 | `c6888c42e` | 三类 Kafka adapter、保序 offset 重试、显式运行时配置与服务生命周期装配。 |
+| CP29 | 当前工作树 | 集成门、稳定事实 golden、shadow 差异审批工具、回放/切流/回滚 runbook，并修复 HTTP 错误码与 LOCATE seed 返回闭环。 |
 
 ## 3. 当前架构事实
 
@@ -145,12 +146,17 @@ read_applied_evidence(
 
 ## 5. 当前验证
 
-最近一次已提交 checkpoint 的验证结果：
+CP29 完整源码门禁：
 
 ```text
-uv run pytest -q                                  -> 50 passed
-uv run ruff check <CP08 新增/修改文件>              -> All checks passed
-uv run python -m compileall -q src tests           -> passed
+uv run --project services/wisepen-rag-service-v2 pytest -q
+  -> 170 passed, 1 个 Nacos 依赖弃用 warning
+uv run --project services/wisepen-rag-service-v2 ruff check src tests scripts
+  -> All checks passed
+uv run --project services/wisepen-rag-service-v2 python -m compileall -q src scripts
+  -> passed
+git diff --check -- services/wisepen-rag-service-v2
+  -> passed
 ```
 
 测试覆盖：
@@ -162,19 +168,11 @@ uv run python -m compileall -q src tests           -> passed
 - chunk 与 SourceRef 身份不一致。
 - revision 不一致。
 
-CP15 最近一次工作树验证：
-
-```text
-uv run pytest                                      -> 75 passed
-uv run python -m compileall -q src/rag             -> passed
-uv run ruff check <CP13 target paths>              -> passed
-```
-
-CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器装配测试；CP11 新增 generation cache 的批量命中、类别/资源隔离、覆盖和删除测试；CP12 新增 contextual text 的 cache hit/miss、严格响应、跳过和原文不变测试；CP13 新增 Qdrant collection、payload、向量复用、revision 激活/清理和错误归属测试；CP14 新增 dense/BM25 融合、active/resource/ACL filter、候选 payload 校验和空集合测试；CP15 新增单 hash、统一 TTL、Lua 原子追加、状态缺失和 Section revision 测试；当前仍没有真实 Mongo/Beanie/Qdrant/Redis 集成测试。
+CP29 新增六类稳定事实 golden、未批准差异阻断、跨领域/Qdrant/Neo4j ACL 契约和 HTTP 业务错误码测试。真实 Mongo/Qdrant/Neo4j/Redis 环境回放与 v1/v2 shadow 尚未执行，不能把源码门禁解释为生产对照通过。
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`，CP13 已提交为 `21ac955f8`，CP14 已提交为 `20c13cd3a`，CP15 已提交为 `86d7f888`，CP15.1 已提交为 `537c52265`，CP15.2 已提交为 `a571def8`。当前工作树只包含 CP16 LOCATE 主链。
+CP00-CP28 均已作为独立 checkpoint 提交并推送。当前工作树只包含 CP29 集成门，提交后应停止在真实环境回放与调用方迁移审批点。
 
 CP08.1 的稳定边界：
 
@@ -210,7 +208,7 @@ tests/rag/test_index_contracts.py
 
 ## 7. 下一步任务
 
-当前 checkpoint 是 CP13：Qdrant retrieval index 写入。
+源码迁移顺序已到 CP29 末尾。下一步不是继续增加 application 实体或仓储，而是按 `Runbook.md` 准备独立 v2 后端、脱敏文档/query/身份集和调用方适配，然后执行 `Shadow.md` 的真实对照审批。未经审批不得实际切流、停止 v1 consumer 或删除 v1 数据。
 
 CP11 的稳定边界：
 

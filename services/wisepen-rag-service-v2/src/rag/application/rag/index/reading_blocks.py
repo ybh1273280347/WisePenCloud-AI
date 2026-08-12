@@ -291,14 +291,7 @@ def build_reading_block_id(
     span_identity = ";".join(
         f"{span.start_offset}:{span.end_offset}" for span in source_spans
     )
-    identity = "\0".join(
-        (
-            resource_id,
-            content_revision,
-            section_id,
-            span_identity,
-        )
-    )
+    identity = f"{resource_id}\0{content_revision}\0{section_id}\0{span_identity}"
     return f"rsb_{sha256(identity.encode('utf-8')).hexdigest()[:32]}"
 
 

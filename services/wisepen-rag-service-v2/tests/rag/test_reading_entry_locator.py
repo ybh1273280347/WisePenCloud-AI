@@ -268,6 +268,7 @@ async def test_locate_embeds_once_reranks_and_keeps_multiple_blocks_in_one_secti
     assert search.request.lexical_query == "完整问题"
     assert [signal.rank for signal in ranking.request.signals] == [1, 2, 3]
     assert result.decision is RankDecision.RELEVANT
+    assert [node.node_id for node in result.nodes] == ["node-1"]
     assert len(result.sections) == 1
     assert [item.reading_block_id for item in result.sections[0].evidence] == [
         "block-1",

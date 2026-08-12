@@ -10,7 +10,6 @@ from mdit_py_plugins.dollarmath import dollarmath_plugin
 from ..models import BlockKind, TextBlock
 from .plugins import page_marker_plugin, standalone_figure_plugin
 
-
 # 匹配 "Table N: 标题" / "图 1.2 标题" 这类编号型题注。
 # 兼容：列表前缀 (`- ` / `· `)、强调符号、中英文标点
 NUMBERED_LABEL_RE = re.compile(

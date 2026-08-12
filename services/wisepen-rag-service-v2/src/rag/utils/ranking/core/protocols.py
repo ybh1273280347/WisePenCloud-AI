@@ -4,8 +4,8 @@ from typing import Protocol
 
 from .models import (
     RankCandidate,
-    RankGateResult,
     RankedCandidate,
+    RankGateResult,
     RankQuery,
     ScoreSignal,
 )
