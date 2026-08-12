@@ -38,7 +38,8 @@ base:     origin/main @ e1af497f7
 | CP10 | `06d46fb3d` | 上游权威 ACL reader、本地 Beanie ACL store、revision 幂等 upsert 和资源删除。 |
 | CP10.1 | `fb931795e` | 将 ACL 的 Mongo 序列化/反序列化统一收敛到现有 `mappers/serializer.py` 与 `mappers/deserializer.py`。 |
 | CP11 | `df411431c` | 合并为单一 generation cache collection，按资源和 cache kind 批量读写及删除。 |
-| 当前 CP12 | 待提交 | Contextual indexing 生成、严格响应解析、缓存复用和只增强 `index_text`。 |
+| CP12 | `c5113eb44` | Contextual indexing 生成、严格响应解析、缓存复用和只增强 `index_text`。 |
+| 当前 CP13 | 待提交 | Qdrant retrieval index 的 staged/active revision 写入、向量复用、旧 revision 清理和资源删除。 |
 
 ## 3. 当前架构事实
 
@@ -142,18 +143,19 @@ uv run python -m compileall -q src tests           -> passed
 - chunk 与 SourceRef 身份不一致。
 - revision 不一致。
 
-最近一次工作树验证：
+CP13 最近一次工作树验证：
 
 ```text
-uv run pytest -q                                  -> 63 passed
-uv run python -m compileall -q src tests           -> passed
+uv run pytest                                      -> 67 passed
+uv run python -m compileall -q src/rag             -> passed
+uv run ruff check <CP13 target paths>              -> passed
 ```
 
-CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器装配测试；CP11 新增 generation cache 的批量命中、类别/资源隔离、覆盖和删除测试；CP12 新增 contextual text 的 cache hit/miss、严格响应、跳过和原文不变测试；当前仍没有真实 Mongo/Beanie 集成测试。
+CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器装配测试；CP11 新增 generation cache 的批量命中、类别/资源隔离、覆盖和删除测试；CP12 新增 contextual text 的 cache hit/miss、严格响应、跳过和原文不变测试；CP13 新增 Qdrant collection、payload、向量复用、revision 激活/清理和错误归属测试；当前仍没有真实 Mongo/Beanie/Qdrant 集成测试。
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`。当前 CP12 正在完成 contextual indexing；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
+CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`。当前 CP13 正在完成 Qdrant retrieval index 写入；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
 
 CP08.1 的稳定边界：
 
@@ -189,7 +191,7 @@ tests/rag/test_index_contracts.py
 
 ## 7. 下一步任务
 
-当前 checkpoint 是 CP12：Contextual indexing。
+当前 checkpoint 是 CP13：Qdrant retrieval index 写入。
 
 CP11 的稳定边界：
 
@@ -224,6 +226,16 @@ CP09 已明确排除：
 - 修改 VERIFY 的证据校验。
 
 后续顺序仍以 `Migration.md` 为准：CP12 contextual indexing，CP13-14 Qdrant，CP15 Redis state，CP16 LOCATE，CP17-19 图谱，CP20-25 导航/编排/删除，CP26-28 adapters，CP29 集成门。
+
+CP13 的实现边界：
+
+- `RetrievalIndexWriter` 位于 `domain/repositories`，只接收 `RetrievalChunk`、`SourceRef`、`ResourceAcl` 和 dense vector，不暴露 Qdrant 原生类型。
+- `QdrantRetrievalIndexWriter` 位于 `core/persistence/qdrant`，负责 collection 创建、payload index、dense vector 复用、staged point 写入、revision 激活、旧 revision 清理和资源删除。
+- Qdrant payload 的领域到存储字段映射集中在 `core/persistence/qdrant/mappers/serializer.py`；CP13 没有候选读取，因此不新增反序列化器。
+- staged point 的 `active` 固定为 `false`；Mongo applied CAS 成功后由 `activate_revision()` 设置当前 revision 为 active，并关闭旧 revision 的召回可见性，随后由 `delete_other_revisions()` 清理旧 point。
+- payload 保留 `resource_id`、`content_revision`、`active`、chunk/SourceRef 身份、原文检索字段、embedding key 和 ACL 字段；明确不写入 v1 的 `chunk_index`。
+- native BM25 使用 Qdrant `Document(text=chunk.index_text, model="qdrant/bm25")`，dense vector 必须符合配置维度；缺失向量、SourceRef 或 revision 归属错误直接抛出。
+- CP13 不实现 CandidateSearch、query embedding、rerank 或独立 ACL 同步；这些分别留给 CP14、CP16 和 CP23。
 
 ## 8. 接手禁区
 

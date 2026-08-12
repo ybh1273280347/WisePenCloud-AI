@@ -8,6 +8,7 @@ from .graph_build_source_reader import GraphBuildSource, GraphBuildSourceReader
 from .resource_acl_reader import ResourceAclReader
 from .resource_acl_store import ResourceAclStore
 from .resource_index_writer import ResourceIndexWriter, StageAction
+from .retrieval_index_writer import RetrievalIndexWriter
 from .source_part_reader import SourcePartReader
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "ResourceAclReader",
     "ResourceAclStore",
     "ResourceIndexWriter",
+    "RetrievalIndexWriter",
     "SourcePartReader",
     "StageAction",
 ]

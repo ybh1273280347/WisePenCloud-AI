@@ -5,13 +5,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 from rag.domain.acl import GroupResourceAcl, ResourceAcl
-from rag.domain.content_revision import ContentRevision, SourcePart
+from rag.domain.content_revision import ContentRevision, ResourceIndexState, SourcePart
 from rag.domain.document_structure import PageRange, Section, StructureMode
 from rag.domain.entities import (
     ContentRevisionEntity,
     GenerationCacheEntity,
     ReadingBlockEntity,
     ResourceAclEntity,
+    ResourceIndexStateEntity,
     SectionEntity,
     SourcePartEntity,
     SourceRefEntity,
@@ -29,6 +30,17 @@ def to_generation_cache_values(
     records: Sequence[GenerationCacheEntity],
 ) -> dict[str, str]:
     return {record.cache_key: record.payload for record in records}
+
+
+def to_resource_index_state(record: ResourceIndexStateEntity) -> ResourceIndexState:
+    """将 Mongo 的 staged/applied 指针还原为领域状态。"""
+    return ResourceIndexState(
+        resource_id=record.resource_id,
+        staged_content_revision=record.staged_content_revision,
+        staged_document_version=record.staged_document_version,
+        applied_content_revision=record.applied_content_revision,
+        applied_document_version=record.applied_document_version,
+    )
 
 
 def to_content_revision(record: ContentRevisionEntity) -> ContentRevision:

@@ -17,6 +17,7 @@ dependencies = [
     "pydantic-settings",
     "pymongo>=4.17.0",
     "pyyaml",
+    "qdrant-client==1.18.0",
     "thulac>=0.2.2",
     "wisepen-common",
     "zeroentropy",

@@ -19,6 +19,7 @@ from rag.core.persistence.mongo import (
     MongoResourceAclStore,
     MongoSourcePartReader,
 )
+from rag.core.persistence.qdrant import QdrantRetrievalIndexWriter
 
 
 def _build_authoritative_resource_collection(
@@ -28,8 +29,12 @@ def _build_authoritative_resource_collection(
     return mongo_client[database_name]["wisepen_resource_items"]
 
 
+def _build_qdrant_bm25_options(tokenizer: str) -> dict[str, str]:
+    return {"tokenizer": tokenizer}
+
+
 class Container(containers.DeclarativeContainer):
-    """管理 RAG READ/ACL 对象的单例依赖。"""
+    """管理 RAG application 对象及其持久化 port 的单例依赖。"""
 
     config = providers.Configuration()
 
@@ -71,6 +76,21 @@ class Container(containers.DeclarativeContainer):
         ContextualTextIndexer,
         client=contextual_text_client,
         cache=generation_cache_store,
+    )
+    qdrant_client = providers.Dependency()
+    qdrant_bm25_options = providers.Factory(
+        _build_qdrant_bm25_options,
+        tokenizer=config.qdrant_bm25_tokenizer,
+    )
+    retrieval_index_writer = providers.Singleton(
+        QdrantRetrievalIndexWriter,
+        client=qdrant_client,
+        collection_name=config.qdrant_collection_name,
+        dense_vector_size=config.embedding_dimensions,
+        embedding_profile=config.embedding_profile,
+        dense_vector_name=config.qdrant_dense_vector_name,
+        sparse_vector_name=config.qdrant_sparse_vector_name,
+        bm25_options=qdrant_bm25_options,
     )
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,

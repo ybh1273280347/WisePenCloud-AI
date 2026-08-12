@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pymongo.errors import DuplicateKeyError
 
 from rag.application.rag.index.revisions import build_content_revision_id, decide_stage
+from rag.core.persistence.mongo.mappers.deserializer import to_resource_index_state
 from rag.core.persistence.mongo.mappers.serializer import (
     reading_block_document,
     revision_document,
@@ -167,13 +168,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         entity = await ResourceIndexStateEntity.find_one({"resource_id": resource_id})
         if entity is None:
             return None
-        return ResourceIndexState(
-            resource_id=entity.resource_id,
-            staged_content_revision=entity.staged_content_revision,
-            staged_document_version=entity.staged_document_version,
-            applied_content_revision=entity.applied_content_revision,
-            applied_document_version=entity.applied_document_version,
-        )
+        return to_resource_index_state(entity)
 
     async def delete_resources(self, resource_ids: Sequence[str]) -> None:
         ids = list(dict.fromkeys(resource_ids))
