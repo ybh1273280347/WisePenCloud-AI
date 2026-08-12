@@ -69,7 +69,7 @@ _UPSERT_RELATIONS = f"""
 UNWIND $relations AS item
 MATCH (source:{_NODE_LABEL} {{node_id: item.source_node_id}})
 MATCH (target:{_NODE_LABEL} {{node_id: item.target_node_id}})
-MERGE (source)-[relation:{_RELATION_TYPE} {{relation_id: item.relation_id}}]->(target)
+MERGE (source)-[relation:{_RELATION_TYPE} {{edge_id: item.edge_id}}]->(target)
 SET relation.relation_type = item.relation_type,
     relation.predicate = item.predicate,
     relation.evidence_resource_id = $resource_id,
@@ -214,7 +214,7 @@ class Neo4jKnowledgeGraphWriter(KnowledgeGraphWriter):
             _UPSERT_RELATIONS,
             relations=[
                 {
-                    "relation_id": relation.relation_id,
+                    "edge_id": relation.edge_id,
                     "source_node_id": relation.source_node_id,
                     "target_node_id": relation.target_node_id,
                     "relation_type": relation.relation_type.value,

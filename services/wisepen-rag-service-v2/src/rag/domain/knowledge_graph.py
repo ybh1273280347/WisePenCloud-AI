@@ -139,7 +139,7 @@ class KnowledgeMention:
 class KnowledgeRelation:
     """多个窗口中的等价关系及其去重后的证据。"""
 
-    relation_id: str
+    edge_id: str
     source_node_id: str
     target_node_id: str
     relation_type: KnowledgeRelationType

@@ -16,6 +16,7 @@ from rag.domain.knowledge_graph import (
     KnowledgeRelation,
     KnowledgeRelationType,
     KnowledgeWindowExtraction,
+    resource_node_id,
 )
 
 _GRAPH_MERGE_VERSION = "knowledge-graph-merge:v1"
@@ -169,10 +170,6 @@ def merge_candidate_graph(
     )
 
 
-def resource_node_id(resource_id: str) -> str:
-    return _stable_id("kn", "resource", resource_id)
-
-
 def _canonical_node(
     candidate: ExtractedKnowledgeNode,
     resource_id: str,
@@ -243,8 +240,8 @@ def _merged_relation(
     }
     predicate = _relation_predicate(predicate_key, relations)
     return KnowledgeRelation(
-        relation_id=_stable_id(
-            "knr",
+        edge_id=_stable_id(
+            "kne",
             graph_revision,
             source_node_id,
             target_node_id,

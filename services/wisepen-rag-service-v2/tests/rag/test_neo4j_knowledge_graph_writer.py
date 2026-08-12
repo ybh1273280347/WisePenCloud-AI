@@ -62,6 +62,12 @@ async def test_writer_uses_v2_namespace_and_publishes_last() -> None:
     queries = [query for query, _ in driver.calls]
     assert "RagV2ResourceNode" in queries[0]
     assert any("RAG_V2_KNOWLEDGE_RELATION" in query for query in queries)
+    relation_call = next(
+        parameters
+        for query, parameters in driver.calls
+        if "UNWIND $relations" in query
+    )
+    assert all("relation_id" not in item for item in relation_call["relations"])
     assert any("RAG_V2_MENTION" in query for query in queries)
     publish_index = next(
         index for index, query in enumerate(queries) if "graph_status = 'published'" in query
