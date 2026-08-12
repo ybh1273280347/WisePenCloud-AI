@@ -102,3 +102,50 @@ class KnowledgeWindowExtraction:
     reading_block_id: str
     nodes: list[ExtractedKnowledgeNode] = field(default_factory=list)
     relations: list[ExtractedKnowledgeRelation] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class KnowledgeNode:
+    """经过规范化和等价合并的稳定知识节点。"""
+
+    node_id: str
+    kind: KnowledgeNodeKind
+    label: str
+    entity_type: KnowledgeEntityType | None = None
+    resource_id: str | None = None
+
+
+@dataclass(slots=True)
+class KnowledgeMention:
+    """一个知识节点在当前资源权威原文中的有证据出现。"""
+
+    mention_id: str
+    node_id: str
+    reading_block_id: str
+    source_ref_ids: list[str]
+    evidence_quote: str
+
+
+@dataclass(slots=True)
+class KnowledgeRelation:
+    """多个窗口中的等价关系及其去重后的证据。"""
+
+    relation_id: str
+    source_node_id: str
+    target_node_id: str
+    relation_type: KnowledgeRelationType
+    evidence_quotes: list[str]
+    evidence_source_ref_ids: list[str]
+    predicate: str | None = None
+
+
+@dataclass(slots=True)
+class KnowledgeGraph:
+    """一个内容 revision 合并完成、等待发布的资源知识图谱。"""
+
+    resource_id: str
+    content_revision: str
+    graph_revision: str
+    nodes: list[KnowledgeNode] = field(default_factory=list)
+    mentions: list[KnowledgeMention] = field(default_factory=list)
+    relations: list[KnowledgeRelation] = field(default_factory=list)
