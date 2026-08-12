@@ -5,7 +5,7 @@ from neo4j_graphrag.experimental.components.types import (
     Neo4jRelationship,
 )
 
-from rag.application.rag.index.graph_extraction.cache_codec import (
+from rag.application.rag.index.graph_extraction.candidate_codec import (
     encode_candidate_graph,
 )
 from rag.application.rag.index.graph_extraction.candidate_validator import (
@@ -14,7 +14,7 @@ from rag.application.rag.index.graph_extraction.candidate_validator import (
 from rag.application.rag.index.graph_extraction.extractor import (
     KnowledgeGraphExtractor,
 )
-from rag.application.rag.index.graph_extraction.graph_rag import QueryClientGraphRagLLM
+from rag.application.rag.index.graph_extraction.llm import QueryClientGraphRagLLM
 from rag.application.rag.index.graph_extraction.windows import (
     build_extraction_windows,
 )
@@ -160,13 +160,13 @@ class _QueryClient:
     thinking = None
 
 
-class _Cache:
+class _ArtifactStore:
     def __init__(self, payload: str) -> None:
         self.payload = payload
         self.set_calls = []
 
     async def get_many(self, **kwargs):
-        return {kwargs["keys"][0]: self.payload}
+        return {kwargs["artifact_keys"][0]: self.payload}
 
     async def set_many(self, **kwargs):
         self.set_calls.append(kwargs)
@@ -181,19 +181,16 @@ class _SourceReader:
 
 
 @pytest.mark.asyncio
-async def test_cached_candidates_are_revalidated() -> None:
+async def test_stored_candidate_artifacts_are_revalidated() -> None:
     window = build_extraction_windows(_source("方法甲"))[0]
-    cache = _Cache(
+    artifact_store = _ArtifactStore(
         encode_candidate_graph(
             _candidate_graph(window.window_id, assertion="negated"),
             window.window_id,
         )
     )
-    extractor = KnowledgeGraphExtractor(
-        llm=QueryClientGraphRagLLM(client=_QueryClient()),
-        cache=cache,
-        source_reader=_SourceReader(_source("方法甲")),
-    )
+    extractor = KnowledgeGraphExtractor(llm=QueryClientGraphRagLLM(client=_QueryClient()),
+                                        generation_artifact_store=artifact_store, source_reader=_SourceReader(_source("方法甲")))
 
     result = await extractor.extract(
         resource_id="resource-1",
@@ -201,4 +198,4 @@ async def test_cached_candidates_are_revalidated() -> None:
     )
 
     assert result[0].relations == []
-    assert cache.set_calls == []
+    assert artifact_store.set_calls == []

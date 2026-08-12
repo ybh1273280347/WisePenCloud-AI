@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.locate import LocateError, LocateRequest, ReadingEntryLocator
+from rag.application.rag.locate import LocateError, LocateRequest, ReadingCandidateLocator
 from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.models.acl import PermissionScope, ResourceAcl
 from rag.domain.models.content import ContentRevision
@@ -233,7 +233,7 @@ async def test_locate_embeds_once_reranks_and_keeps_multiple_blocks_in_one_secti
     search = _CandidateSearch(candidates)
     ranking = _RankingPipeline([_candidate_id(candidate) for candidate in candidates])
     state_store = _StateStore()
-    locator = ReadingEntryLocator(
+    locator = ReadingCandidateLocator(
         embedding_client=embedding,
         candidate_search=search,
         ranking_pipeline=ranking,
@@ -289,7 +289,7 @@ async def test_locate_filters_acl_and_old_revisions_before_reranking():
     valid = _candidate("valid", block_id="valid")
     records = {valid.source_ref_id: _record(valid, section, revision)}
     ranking = _RankingPipeline([_candidate_id(valid)])
-    locator = ReadingEntryLocator(
+    locator = ReadingCandidateLocator(
         embedding_client=_EmbeddingClient(calls=[]),
         candidate_search=_CandidateSearch([stale, denied, valid]),
         ranking_pipeline=ranking,
@@ -335,7 +335,7 @@ async def test_locate_keeps_same_chunk_id_from_different_resources_distinct():
         second.source_ref_id: _record(second, second_section, second_revision),
     }
     candidate_ids = [_candidate_id(candidate) for candidate in (first, second)]
-    locator = ReadingEntryLocator(
+    locator = ReadingCandidateLocator(
         embedding_client=_EmbeddingClient(calls=[]),
         candidate_search=_CandidateSearch([first, second]),
         ranking_pipeline=_RankingPipeline(candidate_ids),
@@ -382,7 +382,7 @@ async def test_locate_irrelevant_decision_creates_empty_state_without_verificati
     candidate = _candidate("chunk-1", block_id="block-1")
     evidence_reader = _EvidenceReader({})
     state_store = _StateStore()
-    locator = ReadingEntryLocator(
+    locator = ReadingCandidateLocator(
         embedding_client=_EmbeddingClient(calls=[]),
         candidate_search=_CandidateSearch([candidate]),
         ranking_pipeline=_RankingPipeline([], decision=RankDecision.IRRELEVANT),
@@ -415,7 +415,7 @@ async def test_locate_uncertain_decision_keeps_verified_entry():
     revision = _revision()
     section = _section("section-1")
     candidate = _candidate("chunk-1", block_id="block-1")
-    locator = ReadingEntryLocator(
+    locator = ReadingCandidateLocator(
         embedding_client=_EmbeddingClient(calls=[]),
         candidate_search=_CandidateSearch([candidate]),
         ranking_pipeline=_RankingPipeline(
@@ -455,7 +455,7 @@ async def test_locate_rejects_revision_change_after_evidence_verification():
     changed_revision.content_revision = "revision-2"
     section = _section("section-1")
     candidate = _candidate("chunk-1", block_id="block-1")
-    locator = ReadingEntryLocator(
+    locator = ReadingCandidateLocator(
         embedding_client=_EmbeddingClient(calls=[]),
         candidate_search=_CandidateSearch([candidate]),
         ranking_pipeline=_RankingPipeline([_candidate_id(candidate)]),

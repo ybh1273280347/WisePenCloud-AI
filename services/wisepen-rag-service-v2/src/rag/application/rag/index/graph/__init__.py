@@ -1,5 +1,5 @@
 from .extractor import KnowledgeGraphExtractor
-from .graph_rag import QueryClientGraphRagLLM
+from .llm import QueryClientGraphRagLLM
 from .windows import build_extraction_windows
 
 __all__ = [

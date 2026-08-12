@@ -4,7 +4,7 @@ import pytest
 
 from rag.core.persistence.mongo import MongoGenerationArtifactStore
 from rag.domain.entities import GenerationArtifactEntity
-from rag.domain.models.generation import GenerationCacheKind
+from rag.domain.models.generation import GenerationArtifactKind
 
 
 class _Field:
@@ -18,8 +18,8 @@ class _Field:
 @dataclass
 class _Record:
     resource_id: str
-    cache_kind: GenerationCacheKind
-    cache_key: str
+    artifact_kind: GenerationArtifactKind
+    artifact_key: str
     payload: str
 
 
@@ -44,19 +44,19 @@ class _Collection:
 
 
 @pytest.mark.asyncio
-async def test_generation_cache_reads_only_matching_resource_kind_and_keys(
+async def test_generation_artifacts_reads_only_matching_resource_kind_and_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     records = [
-        _Record("resource-1", GenerationCacheKind.CONTEXTUAL_TEXT, "key-1", "one"),
-        _Record("resource-2", GenerationCacheKind.CONTEXTUAL_TEXT, "key-1", "other-resource"),
-        _Record("resource-1", GenerationCacheKind.GRAPH_CANDIDATES, "key-1", "other-kind"),
+        _Record("resource-1", GenerationArtifactKind.CONTEXTUAL_TEXT, "key-1", "one"),
+        _Record("resource-2", GenerationArtifactKind.CONTEXTUAL_TEXT, "key-1", "other-resource"),
+        _Record("resource-1", GenerationArtifactKind.GRAPH_CANDIDATES, "key-1", "other-kind"),
     ]
 
     def find(*conditions):
         assert len(conditions) == 3
         assert conditions[0] == ("resource_id", "resource-1")
-        assert conditions[1] == ("cache_kind", GenerationCacheKind.CONTEXTUAL_TEXT)
+        assert conditions[1] == ("artifact_kind", GenerationArtifactKind.CONTEXTUAL_TEXT)
         return _Query([records[0]])
 
     monkeypatch.setattr(
@@ -67,29 +67,29 @@ async def test_generation_cache_reads_only_matching_resource_kind_and_keys(
     )
     monkeypatch.setattr(
         GenerationArtifactEntity,
-        "cache_kind",
-        _Field("cache_kind"),
+        "artifact_kind",
+        _Field("artifact_kind"),
         raising=False,
     )
     monkeypatch.setattr(
         GenerationArtifactEntity,
-        "cache_key",
-        _Field("cache_key"),
+        "artifact_key",
+        _Field("artifact_key"),
         raising=False,
     )
     monkeypatch.setattr(GenerationArtifactEntity, "find", find)
 
     result = await MongoGenerationArtifactStore().get_many(
         resource_id="resource-1",
-        cache_kind=GenerationCacheKind.CONTEXTUAL_TEXT,
-        keys=["key-1", "key-1", "missing"],
+        artifact_kind=GenerationArtifactKind.CONTEXTUAL_TEXT,
+        artifact_keys=["key-1", "key-1", "missing"],
     )
 
     assert result == {"key-1": "one"}
 
 
 @pytest.mark.asyncio
-async def test_generation_cache_set_serializes_kind_and_overwrites_by_composite_key(
+async def test_generation_artifacts_set_serializes_kind_and_overwrites_by_composite_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     collection = _Collection()
@@ -101,27 +101,27 @@ async def test_generation_cache_set_serializes_kind_and_overwrites_by_composite_
 
     await MongoGenerationArtifactStore().set_many(
         resource_id="resource-1",
-        cache_kind=GenerationCacheKind.GRAPH_CANDIDATES,
-        values={"key-1": "new-value"},
+        artifact_kind=GenerationArtifactKind.GRAPH_CANDIDATES,
+        artifacts={"key-1": "new-value"},
     )
 
     operation = collection.operations[0]
     assert operation._filter == {
         "resource_id": "resource-1",
-        "cache_kind": "graph_candidates",
-        "cache_key": "key-1",
+        "artifact_kind": "graph_candidates",
+        "artifact_key": "key-1",
     }
     assert operation._doc["$set"] == {
         "resource_id": "resource-1",
-        "cache_kind": "graph_candidates",
-        "cache_key": "key-1",
+        "artifact_kind": "graph_candidates",
+        "artifact_key": "key-1",
         "payload": "new-value",
     }
     assert operation._upsert is True
 
 
 @pytest.mark.asyncio
-async def test_generation_cache_delete_deduplicates_resource_ids(
+async def test_generation_artifacts_delete_deduplicates_resource_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     query = _Query([])
@@ -141,7 +141,7 @@ async def test_generation_cache_delete_deduplicates_resource_ids(
 
 
 @pytest.mark.asyncio
-async def test_generation_cache_ignores_empty_batches(
+async def test_generation_artifacts_ignores_empty_batches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     called = False
@@ -156,8 +156,8 @@ async def test_generation_cache_ignores_empty_batches(
     store = MongoGenerationArtifactStore()
     assert await store.get_many(
         resource_id="resource-1",
-        cache_kind=GenerationCacheKind.CONTEXTUAL_TEXT,
-        keys=[],
+        artifact_kind=GenerationArtifactKind.CONTEXTUAL_TEXT,
+        artifact_keys=[],
     ) == {}
     await store.delete_resources([])
 

@@ -14,18 +14,18 @@ from rag.domain.repositories import (
     StageAction,
 )
 
-from .builders import (
+from .constructor import (
     build_content_revision_id,
     build_flat_text_sections,
     build_reading_blocks,
     build_retrieval_chunks,
     build_source_refs,
     create_content_revision,
-    merge_candidate_graph,
     parse_document_structure,
+    merge_candidate_graph
 )
 from .contextualize import ContextualTextIndexer
-from .graph_extraction import KnowledgeGraphExtractor
+from .graph import KnowledgeGraphExtractor
 
 if TYPE_CHECKING:
     from rag.utils.llm_clients import EmbeddingClient

@@ -8,7 +8,7 @@ from hashlib import sha256
 from typing import TYPE_CHECKING
 
 from rag.domain.models.structure import DocumentStructure, StructureMode
-from rag.domain.models.generation import GenerationCacheKind
+from rag.domain.models.generation import GenerationArtifactKind
 from rag.domain.models.content import ReadingBlock
 from rag.domain.repositories.mongo.generation_artifact_store import GenerationArtifactStore
 from rag.domain.models.retrieval import RetrievalChunk
@@ -41,16 +41,16 @@ Return only a JSON object with this shape:
 class ContextualTextIndexer:
     """为结构化文档的检索块生成上下文并增强 `index_text`。"""
 
-    __slots__ = ("_cache", "_client")
+    __slots__ = ("_artifact_store", "_client")
 
     def __init__(
         self,
         *,
         client: QueryClient,
-        cache: GenerationArtifactStore,
+        artifact_store: GenerationArtifactStore,
     ) -> None:
         self._client = client
-        self._cache = cache
+        self._artifact_store = artifact_store
 
     async def contextualize(
         self,
@@ -80,25 +80,25 @@ class ContextualTextIndexer:
                 )
             section_previews[chunk.section_id] = section.preview
             chunk_contexts[
-                self._cache_key(
+                self._artifact_key(
                     chunk,
                     section.preview,
                     blocks_by_id[chunk.reading_block_id],
                 )
             ] = chunk
 
-        cached = {
+        stored_contexts = {
             key: value.strip()
             for key, value in (
-                await self._cache.get_many(
+                await self._artifact_store.get_many(
                     resource_id=resource_id,
-                    cache_kind=GenerationCacheKind.CONTEXTUAL_TEXT,
-                    keys=list(chunk_contexts),
+                    artifact_kind=GenerationArtifactKind.CONTEXTUAL_TEXT,
+                    artifact_keys=list(chunk_contexts),
                 )
             ).items()
             if value.strip()
         }
-        missing = [key for key in chunk_contexts if key not in cached]
+        missing = [key for key in chunk_contexts if key not in stored_contexts]
         if missing:
             semaphore = asyncio.Semaphore(_MAX_CONCURRENCY)
             generated = await asyncio.gather(
@@ -113,22 +113,22 @@ class ContextualTextIndexer:
                 )
             )
             generated_by_key = dict(zip(missing, generated, strict=True))
-            cached.update(generated_by_key)
-            await self._cache.set_many(
+            stored_contexts.update(generated_by_key)
+            await self._artifact_store.set_many(
                 resource_id=resource_id,
-                cache_kind=GenerationCacheKind.CONTEXTUAL_TEXT,
-                values=generated_by_key,
+                artifact_kind=GenerationArtifactKind.CONTEXTUAL_TEXT,
+                artifacts=generated_by_key,
             )
 
         contextualized_chunks: list[RetrievalChunk] = []
         for chunk in chunks:
-            key = self._cache_key(
+            key = self._artifact_key(
                 chunk,
                 section_previews[chunk.section_id],
                 blocks_by_id[chunk.reading_block_id],
             )
             contextualized_chunks.append(
-                chunk.with_contextual_text(cached[key])
+                chunk.with_contextual_text(stored_contexts[key])
             )
         return contextualized_chunks
 
@@ -156,7 +156,7 @@ class ContextualTextIndexer:
             raise ValueError("contextual_text is missing")
         return contextual_text.strip()
 
-    def _cache_key(
+    def _artifact_key(
         self,
         chunk: RetrievalChunk,
         section_preview: str,

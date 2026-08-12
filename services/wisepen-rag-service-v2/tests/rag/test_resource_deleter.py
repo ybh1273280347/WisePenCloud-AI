@@ -41,7 +41,7 @@ def _deleter(failure):
         resource_writer=_ResourceWriter(failure),
         retrieval_writer=_DeleteTarget(failure, "qdrant"),
         graph_writer=_DeleteTarget(failure, "neo4j"),
-        generation_cache=_DeleteTarget(failure, "cache"),
+        generation_artifacts=_DeleteTarget(failure, "artifacts"),
         acl_store=_DeleteTarget(failure, "acl"),
     )
 
@@ -49,7 +49,7 @@ def _deleter(failure):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "failed_step",
-    ["state", "qdrant", "neo4j", "content", "cache", "acl"],
+    ["state", "qdrant", "neo4j", "content", "artifacts", "acl"],
 )
 async def test_delete_failure_is_retried_without_restoring_resource_state(
     failed_step,
@@ -64,7 +64,7 @@ async def test_delete_failure_is_retried_without_restoring_resource_state(
     await deleter.delete_resources(["resource-1"])
 
     assert failure.calls.count("state") == 2
-    for step in ("qdrant", "neo4j", "content", "cache", "acl"):
+    for step in ("qdrant", "neo4j", "content", "artifacts", "acl"):
         assert step in failure.calls
     assert failure.calls[0] == "state"
 

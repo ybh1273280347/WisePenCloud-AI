@@ -35,7 +35,7 @@ class QueryClientGraphRagLLM(LLMInterfaceV2):
         self._client = client
 
     @property
-    def cache_profile(self) -> str:
+    def artifact_profile(self) -> str:
         return f"{self._client.model}:{self._client.thinking or 'default'}"
 
     def invoke(

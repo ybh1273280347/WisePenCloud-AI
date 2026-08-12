@@ -16,7 +16,8 @@ from rag.utils.chunkers import (
 )
 from rag.utils.chunkers.markdown import MarkdownParser
 
-from .structure import build_section_id
+from ._source_spans import _map_rendered_spans_to_source, _overlaps, _render_source_text
+from .structure import _build_section_id
 
 _READING_BLOCK_MAX_CHARACTERS = 4000
 
@@ -39,7 +40,7 @@ def build_flat_text_sections(
         title = f"全文片段 {index + 1}"
         sections.append(
             Section(
-                section_id=build_section_id(
+                section_id=_build_section_id(
                     resource_id=resource_id,
                     content_revision=content_revision,
                     kind="flat_text",
@@ -172,7 +173,7 @@ def _build_flat_text_reading_blocks(
 
     blocks: list[ReadingBlock] = []
     for section, source_spans in zip(sections, span_groups, strict=True):
-        expected_section_id = build_section_id(
+        expected_section_id = _build_section_id(
             resource_id=resource_id,
             content_revision=content_revision,
             kind="flat_text",
@@ -210,7 +211,7 @@ def _split_flat_text_source_spans(markdown: str) -> list[list[SourceSpan]]:
     if not effective_spans:
         return []
 
-    rendered_text = render_source_text(markdown, effective_spans)
+    rendered_text = _render_source_text(markdown, effective_spans)
     chunks = (
         PlainTextChunker(
             PlainTextChunkerConfig(
@@ -223,7 +224,7 @@ def _split_flat_text_source_spans(markdown: str) -> list[list[SourceSpan]]:
     )
 
     return [
-        map_rendered_spans_to_source(
+        _map_rendered_spans_to_source(
             local_spans=list(chunk.source_spans),
             source_spans=effective_spans,
         )
@@ -258,7 +259,7 @@ def _reading_block(
     structure: DocumentStructure,
 ) -> ReadingBlock:
     return ReadingBlock(
-        block_id=build_reading_block_id(
+        block_id=_build_reading_block_id(
             resource_id=resource_id,
             content_revision=content_revision,
             section_id=section.section_id,
@@ -266,7 +267,7 @@ def _reading_block(
         ),
         section_id=section.section_id,
         ordinal=ordinal,
-        raw_text=render_source_text(markdown, source_spans),
+        raw_text=_render_source_text(markdown, source_spans),
         source_spans=source_spans,
         page_labels=[
             page.page_label
@@ -281,7 +282,7 @@ def _reading_block(
     )
 
 
-def build_reading_block_id(
+def _build_reading_block_id(
     *,
     resource_id: str,
     content_revision: str,
@@ -293,48 +294,3 @@ def build_reading_block_id(
     )
     identity = f"{resource_id}\0{content_revision}\0{section_id}\0{span_identity}"
     return f"rsb_{sha256(identity.encode('utf-8')).hexdigest()[:32]}"
-
-
-def render_source_text(markdown: str, source_spans: list[SourceSpan]) -> str:
-    return "\n\n".join(
-        markdown[span.start_offset : span.end_offset] for span in source_spans
-    )
-
-
-def map_rendered_spans_to_source(
-    *,
-    local_spans: list[SourceSpan],
-    source_spans: list[SourceSpan],
-) -> list[SourceSpan]:
-    mapped: list[SourceSpan] = []
-    rendered_cursor = 0
-
-    for source_span in source_spans:
-        source_length = source_span.end_offset - source_span.start_offset
-        rendered_end = rendered_cursor + source_length
-        for local_span in local_spans:
-            if (
-                local_span.start_offset >= rendered_end
-                or local_span.end_offset <= rendered_cursor
-            ):
-                continue
-            mapped_span = SourceSpan(
-                source_span.start_offset
-                + max(local_span.start_offset, rendered_cursor)
-                - rendered_cursor,
-                source_span.start_offset
-                + min(local_span.end_offset, rendered_end)
-                - rendered_cursor,
-            )
-            if mapped_span not in mapped:
-                mapped.append(mapped_span)
-        rendered_cursor = rendered_end + 2  # 与 source fragment 的双换行连接保持一致。
-
-    return mapped
-
-
-def _overlaps(target: SourceSpan, source_spans: list[SourceSpan]) -> bool:
-    return any(
-        span.start_offset < target.end_offset and span.end_offset > target.start_offset
-        for span in source_spans
-    )

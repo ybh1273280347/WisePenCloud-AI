@@ -2,9 +2,8 @@
 
 from hashlib import sha256
 
-from rag.domain.models.content import ContentRevision, ResourceIndexState
+from rag.domain.models.content import ContentRevision
 from rag.domain.models.structure import DocumentStructure
-from rag.domain.repositories.mongo.writers.resource_index import StageAction
 
 INDEX_SCHEMA_VERSION = "rag-v2-content:v1"
 
@@ -68,24 +67,3 @@ def build_content_revision_id(
     return f"rrev_{sha256(identity.encode('utf-8')).hexdigest()[:32]}"
 
 
-def decide_stage(
-    revision: ContentRevision,
-    state: ResourceIndexState | None,
-) -> StageAction:
-    if state is None:
-        return StageAction.STAGED
-    if state.resource_id != revision.resource_id:
-        raise ValueError("resource index state belongs to another resource")
-    if state.applied_content_revision == revision.content_revision:
-        return StageAction.ALREADY_APPLIED
-    if (
-        state.applied_document_version is not None
-        and state.applied_document_version > revision.document_version
-    ):
-        return StageAction.STALE
-    if (
-        state.staged_document_version is not None
-        and state.staged_document_version > revision.document_version
-    ):
-        return StageAction.STALE
-    return StageAction.STAGED

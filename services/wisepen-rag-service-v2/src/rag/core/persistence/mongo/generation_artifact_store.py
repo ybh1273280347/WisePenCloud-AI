@@ -1,4 +1,4 @@
-"""Beanie adapter：按资源维护模型生成缓存。"""
+"""Beanie adapter：按资源维护模型生成派生产物。"""
 
 from collections.abc import Mapping, Sequence
 
@@ -6,39 +6,39 @@ from beanie.operators import In
 from pymongo import UpdateOne
 
 from rag.domain.entities import GenerationArtifactEntity
-from rag.domain.models.generation import GenerationCacheKind
+from rag.domain.models.generation import GenerationArtifactKind
 from rag.domain.repositories.mongo.generation_artifact_store import GenerationArtifactStore
 
 
 class MongoGenerationArtifactStore(GenerationArtifactStore):
-    """隔离资源和 cache kind，提供批量命中、覆盖及资源删除。"""
+    """隔离资源和派生产物类别，提供批量命中、覆盖及资源删除。"""
 
     async def get_many(
         self,
         *,
         resource_id: str,
-        cache_kind: GenerationCacheKind,
-        keys: Sequence[str],
+        artifact_kind: GenerationArtifactKind,
+        artifact_keys: Sequence[str],
     ) -> Mapping[str, str]:
-        unique_keys = list(dict.fromkeys(keys))
-        if not unique_keys:
+        unique_artifact_keys = list(dict.fromkeys(artifact_keys))
+        if not unique_artifact_keys:
             return {}
 
         records = await GenerationArtifactEntity.find(
             GenerationArtifactEntity.resource_id == resource_id,
-            GenerationArtifactEntity.cache_kind == cache_kind,
-            In(GenerationArtifactEntity.cache_key, unique_keys),
+            GenerationArtifactEntity.artifact_kind == artifact_kind,
+            In(GenerationArtifactEntity.artifact_key, unique_artifact_keys),
         ).to_list()
-        return {record.cache_key: record.payload for record in records}
+        return {record.artifact_key: record.payload for record in records}
 
     async def set_many(
         self,
         *,
         resource_id: str,
-        cache_kind: GenerationCacheKind,
-        values: Mapping[str, str],
+        artifact_kind: GenerationArtifactKind,
+        artifacts: Mapping[str, str],
     ) -> None:
-        if not values:
+        if not artifacts:
             return
 
         await GenerationArtifactEntity.get_pymongo_collection().bulk_write(
@@ -46,20 +46,20 @@ class MongoGenerationArtifactStore(GenerationArtifactStore):
                 UpdateOne(
                     {
                         "resource_id": resource_id,
-                        "cache_kind": cache_kind.value,
-                        "cache_key": cache_key,
+                        "artifact_kind": artifact_kind.value,
+                        "artifact_key": artifact_key,
                     },
                     {
                         "$set": _to_document(
                             resource_id=resource_id,
-                            cache_kind=cache_kind,
-                            cache_key=cache_key,
+                            artifact_kind=artifact_kind,
+                            artifact_key=artifact_key,
                             payload=payload,
                         )
                     },
                     upsert=True,
                 )
-                for cache_key, payload in values.items()
+                for artifact_key, payload in artifacts.items()
             ]
         )
 
@@ -76,13 +76,13 @@ class MongoGenerationArtifactStore(GenerationArtifactStore):
 def _to_document(
     *,
     resource_id: str,
-    cache_kind: GenerationCacheKind,
-    cache_key: str,
+    artifact_kind: GenerationArtifactKind,
+    artifact_key: str,
     payload: str,
 ) -> dict[str, object]:
     return {
         "resource_id": resource_id,
-        "cache_kind": cache_kind.value,
-        "cache_key": cache_key,
+        "artifact_kind": artifact_kind.value,
+        "artifact_key": artifact_key,
         "payload": payload,
     }

@@ -1,8 +1,8 @@
-"""GraphRAG 原始候选图的缓存序列化。"""
+"""GraphRAG 原始候选图的派生产物序列化。"""
 
 from neo4j_graphrag.experimental.components.types import Neo4jGraph
 
-_CACHE_NODE_PREFIX = "cached:"
+_STORED_NODE_PREFIX = "stored:"
 
 
 def encode_candidate_graph(graph: Neo4jGraph, window_id: str) -> str:
@@ -10,7 +10,7 @@ def encode_candidate_graph(graph: Neo4jGraph, window_id: str) -> str:
     normalized = Neo4jGraph(
         nodes=[
             node.model_copy(
-                update={"id": _replace_prefix(node.id, prefix, _CACHE_NODE_PREFIX)}
+                update={"id": _replace_prefix(node.id, prefix, _STORED_NODE_PREFIX)}
             )
             for node in graph.nodes
         ],
@@ -20,12 +20,12 @@ def encode_candidate_graph(graph: Neo4jGraph, window_id: str) -> str:
                     "start_node_id": _replace_prefix(
                         relation.start_node_id,
                         prefix,
-                        _CACHE_NODE_PREFIX,
+                        _STORED_NODE_PREFIX,
                     ),
                     "end_node_id": _replace_prefix(
                         relation.end_node_id,
                         prefix,
-                        _CACHE_NODE_PREFIX,
+                        _STORED_NODE_PREFIX,
                     ),
                 }
             )
@@ -45,7 +45,7 @@ def decode_candidate_graph(payload: str, window_id: str) -> Neo4jGraph | None:
                     update={
                         "id": _replace_prefix(
                             node.id,
-                            _CACHE_NODE_PREFIX,
+                            _STORED_NODE_PREFIX,
                             prefix,
                         )
                     }
@@ -57,12 +57,12 @@ def decode_candidate_graph(payload: str, window_id: str) -> Neo4jGraph | None:
                     update={
                         "start_node_id": _replace_prefix(
                             relation.start_node_id,
-                            _CACHE_NODE_PREFIX,
+                            _STORED_NODE_PREFIX,
                             prefix,
                         ),
                         "end_node_id": _replace_prefix(
                             relation.end_node_id,
-                            _CACHE_NODE_PREFIX,
+                            _STORED_NODE_PREFIX,
                             prefix,
                         ),
                     }

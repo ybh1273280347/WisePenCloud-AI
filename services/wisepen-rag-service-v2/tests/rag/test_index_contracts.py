@@ -1,7 +1,7 @@
 import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.index.builders import (
+from rag.application.rag.index.constructor import (
     build_content_revision_id,
     build_reading_blocks,
     build_retrieval_chunks,
@@ -9,7 +9,7 @@ from rag.application.rag.index.builders import (
     create_content_revision,
     parse_document_structure,
 )
-from rag.application.rag.index.builders.revisions import decide_stage
+from rag.core.persistence.mongo.writers.resource_index import _decide_stage
 from rag.application.rag.read import (
     ContentNotFoundError,
     DocumentContentReader,
@@ -91,7 +91,7 @@ def test_stage_decision(state, expected) -> None:
     revision = _revision()
     if state is not None and state.applied_content_revision == "same":
         state.applied_content_revision = revision.content_revision
-    assert decide_stage(revision, state) is expected
+    assert _decide_stage(revision, state) is expected
 
 
 def test_same_document_version_with_corrected_content_is_staged() -> None:
@@ -102,7 +102,7 @@ def test_same_document_version_with_corrected_content_is_staged() -> None:
         applied_content_revision=original.content_revision,
         applied_document_version=1,
     )
-    assert decide_stage(corrected, state) is StageAction.STAGED
+    assert _decide_stage(corrected, state) is StageAction.STAGED
 
 
 def test_source_span_contract_uses_half_open_offsets() -> None:

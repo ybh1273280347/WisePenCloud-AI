@@ -1,4 +1,4 @@
-from .evidence import (
+from .evidence_verifier import (
     EvidenceCorruptError,
     EvidenceNotFoundError,
     EvidenceRevisionError,

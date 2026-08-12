@@ -21,13 +21,13 @@ class ResourceDeletionService:
         resource_writer: ResourceIndexWriter,
         retrieval_writer: RetrievalIndexWriter,
         graph_writer: KnowledgeGraphWriter,
-        generation_cache: GenerationArtifactStore,
+        generation_artifacts: GenerationArtifactStore,
         acl_store: ResourceAclStore,
     ) -> None:
         self._resource_writer = resource_writer
         self._retrieval_writer = retrieval_writer
         self._graph_writer = graph_writer
-        self._generation_cache = generation_cache
+        self._generation_artifacts = generation_artifacts
         self._acl_store = acl_store
 
     async def delete_resources(self, resource_ids: Sequence[str]) -> None:
@@ -41,5 +41,5 @@ class ResourceDeletionService:
             tasks.create_task(self._retrieval_writer.delete_resources(ids))
             tasks.create_task(self._graph_writer.delete_resources(ids))
             tasks.create_task(self._resource_writer.delete_resources(ids))
-            tasks.create_task(self._generation_cache.delete_resources(ids))
+            tasks.create_task(self._generation_artifacts.delete_resources(ids))
             tasks.create_task(self._acl_store.delete_resources(ids))

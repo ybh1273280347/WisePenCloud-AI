@@ -1,10 +1,10 @@
-from .locator import (
+from .candidate_locator import (
     LocatedEvidence,
     LocatedSection,
     LocateError,
     LocateRequest,
     LocateResult,
-    ReadingEntryLocator,
+    ReadingCandidateLocator,
 )
 
 __all__ = [
@@ -13,5 +13,5 @@ __all__ = [
     "LocateResult",
     "LocatedEvidence",
     "LocatedSection",
-    "ReadingEntryLocator",
+    "ReadingCandidateLocator",
 ]

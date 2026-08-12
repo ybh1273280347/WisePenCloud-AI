@@ -1,4 +1,4 @@
-"""编排 GraphRAG 候选抽取、缓存复用和确定性校验。"""
+"""编排 GraphRAG 候选抽取、派生产物复用和确定性校验。"""
 
 from hashlib import sha256
 
@@ -14,7 +14,7 @@ from neo4j_graphrag.experimental.components.schema import (
 )
 
 from rag.domain.models.structure import StructureMode
-from rag.domain.models.generation import GenerationCacheKind
+from rag.domain.models.generation import GenerationArtifactKind
 from rag.domain.models.graph import (
     KnowledgeEntityType,
     KnowledgeNodeKind,
@@ -25,13 +25,13 @@ from rag.domain.models.graph import (
 from rag.domain.repositories.mongo.generation_artifact_store import GenerationArtifactStore
 from rag.domain.repositories.mongo.readers.graph_build_source import GraphBuildSourceReader
 
-from .cache_codec import (
+from .candidate_codec import (
     decode_candidate_graph,
     encode_candidate_graph,
     slice_candidate_graph,
 )
 from .candidate_validator import KnowledgeCandidateValidator
-from .graph_rag import GraphRagCandidateExtractor, QueryClientGraphRagLLM
+from .llm import GraphRagCandidateExtractor, QueryClientGraphRagLLM
 from .relations import relation_descriptions, relation_pattern_allowed
 from .windows import (
     KnowledgeExtractionWindow,
@@ -39,30 +39,19 @@ from .windows import (
     render_extraction_window,
 )
 
-_CACHE_VERSION = "graph-candidates:v1"
+_ARTIFACT_VERSION = "graph-candidates:v1"
 
 
 class KnowledgeGraphExtractor:
     """抽取并校验窗口级知识候选，不负责合并或发布图谱。"""
 
-    __slots__ = (
-        "_cache",
-        "_cache_contract",
-        "_extractor",
-        "_schema",
-        "_source_reader",
-        "_validator",
-    )
-
     def __init__(
-        self,
-        *,
-        llm: QueryClientGraphRagLLM,
-        cache: GenerationArtifactStore,
-        source_reader: GraphBuildSourceReader,
-        max_concurrency: int = 5,
-        profiles: frozenset[KnowledgeRelationProfile] | None = None,
-    ) -> None:
+            self, *,
+            llm: QueryClientGraphRagLLM,
+            generation_artifact_store: GenerationArtifactStore,
+            source_reader: GraphBuildSourceReader,
+            max_concurrency: int = 5,
+            profiles: frozenset[KnowledgeRelationProfile] | None = None) -> None:
         if max_concurrency <= 0:
             raise ValueError("max_concurrency must be positive")
         profiles = profiles or frozenset(KnowledgeRelationProfile)
@@ -72,15 +61,15 @@ class KnowledgeGraphExtractor:
             for item in self._schema.relationship_types
         )
         self._validator = KnowledgeCandidateValidator(active_relations)
-        self._extractor = GraphRagCandidateExtractor(
+        self._candidate_extractor = GraphRagCandidateExtractor(
             llm=llm,
             max_concurrency=max_concurrency,
         )
-        self._cache = cache
+        self._generation_artifact_store = generation_artifact_store
         self._source_reader = source_reader
-        self._cache_contract = sha256(
+        self._store_contract = sha256(
             (
-                f"{_CACHE_VERSION}\0{graph_rag_version}\0{llm.cache_profile}\0"
+                f"{_ARTIFACT_VERSION}\0{graph_rag_version}\0{llm.artifact_profile}\0"
                 f"{self._schema.model_dump_json(exclude_none=True)}"
             ).encode()
         ).hexdigest()
@@ -111,46 +100,46 @@ class KnowledgeGraphExtractor:
             raise ValueError("extraction windows must share one resource revision")
 
         resource_id = next(iter(resource_ids))
-        keys = [self._cache_key(window) for window in windows]
-        cached = await self._cache.get_many(
+        artifact_keys = [self._artifact_key(window) for window in windows]
+        stored_artifacts = await self._generation_artifact_store.get_many(
             resource_id=resource_id,
-            cache_kind=GenerationCacheKind.GRAPH_CANDIDATES,
-            keys=keys,
+            artifact_kind=GenerationArtifactKind.GRAPH_CANDIDATES,
+            artifact_keys=artifact_keys,
         )
         results: dict[int, KnowledgeWindowExtraction] = {}
         missing: list[tuple[int, str, KnowledgeExtractionWindow]] = []
-        for index, (key, window) in enumerate(zip(keys, windows, strict=True)):
+        for index, (key, window) in enumerate(zip(artifact_keys, windows, strict=True)):
             graph = (
-                decode_candidate_graph(cached[key], window.window_id)
-                if key in cached
+                decode_candidate_graph(stored_artifacts[key], window.window_id)
+                if key in stored_artifacts
                 else None
             )
             if graph is None:
                 missing.append((index, key, window))
                 continue
-            # 缓存只保存 SDK 原始候选；命中后仍执行当前版本的确定性校验。
+            # 派生产物只保存 SDK 原始候选；命中后仍执行当前版本的确定性校验。
             results[index] = self._validator.validate(graph, window)
 
         if missing:
             missing_windows = [item[2] for item in missing]
-            graph = await self._extractor.extract(missing_windows, self._schema)
-            cache_values: dict[str, str] = {}
+            graph = await self._candidate_extractor.extract(missing_windows, self._schema)
+            generated_artifacts: dict[str, str] = {}
             for index, key, window in missing:
                 window_graph = slice_candidate_graph(graph, window.window_id)
                 results[index] = self._validator.validate(window_graph, window)
-                cache_values[key] = encode_candidate_graph(
+                generated_artifacts[key] = encode_candidate_graph(
                     window_graph,
                     window.window_id,
                 )
-            await self._cache.set_many(
+            await self._generation_artifact_store.set_many(
                 resource_id=resource_id,
-                cache_kind=GenerationCacheKind.GRAPH_CANDIDATES,
-                values=cache_values,
+                artifact_kind=GenerationArtifactKind.GRAPH_CANDIDATES,
+                artifacts=generated_artifacts,
             )
         return [results[index] for index in range(len(windows))]
 
-    def _cache_key(self, window: KnowledgeExtractionWindow) -> str:
-        value = f"{self._cache_contract}\0{render_extraction_window(window)}"
+    def _artifact_key(self, window: KnowledgeExtractionWindow) -> str:
+        value = f"{self._store_contract}\0{render_extraction_window(window)}"
         return sha256(value.encode("utf-8")).hexdigest()
 
 

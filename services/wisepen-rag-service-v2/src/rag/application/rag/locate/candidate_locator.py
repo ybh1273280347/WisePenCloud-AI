@@ -85,7 +85,7 @@ class LocateError(RuntimeError):
     """LOCATE 输入或模型返回不满足能力契约。"""
 
 
-class ReadingEntryLocator:
+class ReadingCandidateLocator:
     """编排召回、精排、回源核验与 Section 阅读入口的创建。"""
 
     __slots__ = (

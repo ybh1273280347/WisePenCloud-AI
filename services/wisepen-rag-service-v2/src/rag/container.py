@@ -18,7 +18,7 @@ from rag.application.rag.expand import KnowledgeGraphExpander, SectionTreeExpand
 from rag.application.rag.index import KnowledgeGraphExtractor, ResourceIndexer
 from rag.application.rag.index.contextualize import ContextualTextIndexer
 from rag.application.rag.index.graph_extraction import QueryClientGraphRagLLM
-from rag.application.rag.locate import ReadingEntryLocator
+from rag.application.rag.locate import ReadingCandidateLocator
 from rag.application.rag.read import (
     DocumentContentReader,
     DocumentStructureReader,
@@ -204,7 +204,7 @@ class Container(containers.DeclarativeContainer):
         collection=authoritative_resource_collection,
     )
     resource_acl_store = providers.Singleton(MongoResourceAclStore)
-    generation_cache_store = providers.Singleton(MongoGenerationArtifactStore)
+    generation_artifact_store = providers.Singleton(MongoGenerationArtifactStore)
     graph_build_source_reader = providers.Singleton(
         MongoGraphBuildSourceReader,
         revisions=applied_revision_reader,
@@ -220,7 +220,7 @@ class Container(containers.DeclarativeContainer):
     contextual_text_indexer = providers.Singleton(
         ContextualTextIndexer,
         client=contextual_text_client,
-        cache=generation_cache_store,
+        artifact_store=generation_artifact_store,
     )
     graph_query_client = providers.Singleton(
         QueryClient,
@@ -235,7 +235,7 @@ class Container(containers.DeclarativeContainer):
     knowledge_graph_extractor = providers.Singleton(
         KnowledgeGraphExtractor,
         llm=graph_llm,
-        cache=generation_cache_store,
+        generation_artifact_store=generation_artifact_store,
         source_reader=graph_build_source_reader,
         max_concurrency=settings.KNOWLEDGE_GRAPH_EXTRACTION_MAX_CONCURRENCY,
     )
@@ -343,7 +343,7 @@ class Container(containers.DeclarativeContainer):
         resource_writer=resource_index_writer,
         retrieval_writer=retrieval_index_writer,
         graph_writer=knowledge_graph_writer,
-        generation_cache=generation_cache_store,
+        generation_artifacts=generation_artifact_store,
         acl_store=resource_acl_store,
     )
     section_tree_expander = providers.Singleton(
@@ -383,7 +383,7 @@ class Container(containers.DeclarativeContainer):
         reranker_model=settings.RERANKER_MODEL,
     )
     reading_entry_locator = providers.Singleton(
-        ReadingEntryLocator,
+        ReadingCandidateLocator,
         embedding_client=embedding_client,
         candidate_search=candidate_search,
         ranking_pipeline=locate_ranking_pipeline,

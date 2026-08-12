@@ -10,7 +10,7 @@ from common.core.exceptions import ServiceException
 from common.security import SecurityContextHolder, require_login
 from rag.api.schemas import CandidateLocateRequest as LocateHttpRequest
 from rag.api.schemas import CandidateLocateResponse
-from rag.application.rag.locate import LocateError, LocateRequest, ReadingEntryLocator
+from rag.application.rag.locate import LocateError, LocateRequest, ReadingCandidateLocator
 from rag.container import Container
 from rag.domain.models.acl import PermissionScope
 from rag.domain.error_codes import RagErrorCode
@@ -19,7 +19,7 @@ router = APIRouter()
 
 AuthenticatedUser = Annotated[str, Depends(require_login)]
 Locator = Annotated[
-    ReadingEntryLocator,
+    ReadingCandidateLocator,
     Depends(Provide[Container.reading_entry_locator]),
 ]
 

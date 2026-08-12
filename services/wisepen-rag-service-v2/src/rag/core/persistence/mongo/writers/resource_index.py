@@ -4,9 +4,8 @@ from collections.abc import Sequence
 
 from pymongo.errors import DuplicateKeyError
 
-from rag.application.rag.index.builders.revisions import (
+from rag.application.rag.index.constructor.revisions import (
     build_content_revision_id,
-    decide_stage,
 )
 from rag.domain.entities import (
     ContentRevisionEntity,
@@ -56,7 +55,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             reading_blocks=reading_blocks,
             source_refs=source_refs,
         )
-        action = decide_stage(revision, await self._get_state(revision.resource_id))
+        action = _decide_stage(revision, await self._get_state(revision.resource_id))
         if action is not StageAction.STAGED:
             return action
 
@@ -119,7 +118,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             )
         except DuplicateKeyError:
             latest = await self._get_state(revision.resource_id)
-            action = decide_stage(revision, latest)
+            action = _decide_stage(revision, latest)
             if action is not StageAction.STAGED:
                 return action
             result = await state_collection.update_one(
@@ -133,7 +132,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             )
         if result.matched_count == 0 and result.upserted_id is None:
             latest = await self._get_state(revision.resource_id)
-            action = decide_stage(revision, latest)
+            action = _decide_stage(revision, latest)
             if action is not StageAction.STAGED:
                 return action
             raise RuntimeError(f"resource {revision.resource_id} stage changed concurrently")
@@ -375,3 +374,26 @@ def _validate_structure_records(*, revision: ContentRevision, sections: Sequence
         section = sections_by_id.get(ref.section_id)
         if ref.resource_id != revision.resource_id or ref.content_revision != revision.content_revision or block is None or section is None or block.section_id != section.section_id or ref.section_path != section.section_path or not ref.source_spans:
             raise ValueError(f"source ref {ref.ref_id} has invalid ownership")
+
+
+def _decide_stage(
+    revision: ContentRevision,
+    state: ResourceIndexState | None,
+) -> StageAction:
+    if state is None:
+        return StageAction.STAGED
+    if state.resource_id != revision.resource_id:
+        raise ValueError("resource index state belongs to another resource")
+    if state.applied_content_revision == revision.content_revision:
+        return StageAction.ALREADY_APPLIED
+    if (
+        state.applied_document_version is not None
+        and state.applied_document_version > revision.document_version
+    ):
+        return StageAction.STALE
+    if (
+        state.staged_document_version is not None
+        and state.staged_document_version > revision.document_version
+    ):
+        return StageAction.STALE
+    return StageAction.STAGED
