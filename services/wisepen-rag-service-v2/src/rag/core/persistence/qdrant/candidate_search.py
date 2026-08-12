@@ -6,7 +6,7 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
 from rag.core.persistence.qdrant.acl_filter import permission_filter
-from rag.domain.repositories.candidate_search import CandidateSearch
+from rag.domain.repositories.qdrant.candidate_search import CandidateSearch
 from rag.domain.retrieval import CandidateSearchRequest, RetrievalCandidate
 from rag.utils.chunkers import SourceSpan
 

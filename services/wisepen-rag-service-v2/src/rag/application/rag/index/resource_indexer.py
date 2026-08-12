@@ -8,7 +8,7 @@ from rag.application.rag.acl import ResourceAclRefresher
 from rag.domain.document_structure import StructureMode
 from rag.domain.repositories import (
     KnowledgeGraphWriter,
-    ResourceAclReader,
+    ResourceAclStore,
     ResourceIndexWriter,
     RetrievalIndexWriter,
     StageAction,
@@ -40,7 +40,7 @@ class ResourceIndexer:
         contextual_text: ContextualTextIndexer,
         embedding_client: EmbeddingClient,
         acl_refresher: ResourceAclRefresher,
-        acl_reader: ResourceAclReader,
+        acl_reader: ResourceAclStore,
         resource_writer: ResourceIndexWriter,
         retrieval_writer: RetrievalIndexWriter,
         graph_extractor: KnowledgeGraphExtractor,

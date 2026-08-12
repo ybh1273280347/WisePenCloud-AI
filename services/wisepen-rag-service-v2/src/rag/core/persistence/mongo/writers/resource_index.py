@@ -19,7 +19,10 @@ from rag.domain.entities import (
     SourceRefEntity,
 )
 from rag.domain.reading import ReadingBlock
-from rag.domain.repositories import ResourceIndexWriter, StageAction
+from rag.domain.repositories.mongo.writers.resource_index import (
+    ResourceIndexWriter,
+    StageAction,
+)
 from rag.domain.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
 

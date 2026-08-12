@@ -1,4 +1,4 @@
-"""LOCATE 发现图节点入口所需的读取 port。"""
+"""知识图谱 Mention 反查仓储契约。"""
 
 from collections.abc import Sequence
 from typing import Protocol

@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.locate.ports import MentionLookup
 from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.acl import PermissionScope
 from rag.domain.document_structure import Section
@@ -15,10 +14,11 @@ from rag.domain.evidence import EvidenceCandidate, EvidenceRecord
 from rag.domain.knowledge_graph import KnowledgeNode
 from rag.domain.navigation import KnownSection
 from rag.domain.read_content import DocumentStructureResult, SectionFrontier
-from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
-from rag.domain.repositories.applied_structure_reader import AppliedStructureReader
-from rag.domain.repositories.candidate_search import CandidateSearch
-from rag.domain.repositories.navigation_state_store import NavigationStateStore
+from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
+from rag.domain.repositories.mongo.readers.applied_structure import AppliedStructureReader
+from rag.domain.repositories.qdrant.candidate_search import CandidateSearch
+from rag.domain.repositories.neo4j.mention_lookup import MentionLookup
+from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 from rag.domain.retrieval import (
     CandidateSearchRequest,
     RetrievalCandidate,

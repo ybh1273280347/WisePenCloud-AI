@@ -16,8 +16,7 @@ from rag.domain.knowledge_graph import (
     KnowledgeNodeKind,
     KnowledgeRelationType,
 )
-from rag.domain.repositories.graph_traversal import GraphTraversal
-
+from rag.domain.repositories.neo4j.graph_traversal import GraphTraversal
 from .acl_predicate import acl_predicate
 
 _PATH_PATTERNS = {

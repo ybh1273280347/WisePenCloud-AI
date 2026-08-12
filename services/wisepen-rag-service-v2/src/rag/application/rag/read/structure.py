@@ -3,7 +3,7 @@
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.acl import PermissionScope
 from rag.domain.read_content import DocumentStructureResult
-from rag.domain.repositories.applied_structure_reader import AppliedStructureReader
+from rag.domain.repositories.mongo.readers.applied_structure import AppliedStructureReader
 
 from .content import ContentNotFoundError
 

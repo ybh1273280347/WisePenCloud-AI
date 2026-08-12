@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from rag.domain.document_structure import DocumentStructure, StructureMode
 from rag.domain.generation_cache import GenerationCacheKind
 from rag.domain.reading import ReadingBlock
-from rag.domain.repositories.generation_cache import GenerationCacheStore
+from rag.domain.repositories.mongo.generation_store import GenerationCacheStore
 from rag.domain.retrieval import RetrievalChunk
 from rag.utils.xml_markup import xml_cdata
 

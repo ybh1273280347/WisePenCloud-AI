@@ -1,12 +1,8 @@
-"""ACL application 向检索和图后端同步权限事实所需的写入 port。"""
+"""Neo4j 图谱 ACL 同步仓储契约。"""
 
 from typing import Protocol
 
 from rag.domain.acl import ResourceAcl
-
-
-class RetrievalAclWriter(Protocol):
-    async def synchronize(self, resource_acl: ResourceAcl) -> None: ...
 
 
 class GraphAclWriter(Protocol):

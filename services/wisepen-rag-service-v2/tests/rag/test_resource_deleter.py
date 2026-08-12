@@ -1,6 +1,6 @@
 import pytest
 
-from rag.api.resource_deletion import ResourceDeletionService
+from rag.core.persistence import ResourceDeletionService
 
 
 class _Failure:

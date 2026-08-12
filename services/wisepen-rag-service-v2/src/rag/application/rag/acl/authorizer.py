@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 
 from rag.domain.acl import PermissionScope
-from rag.domain.repositories.resource_acl_reader import ResourceAclReader
+from rag.domain.repositories.mongo.resource_acl_store import ResourceAclStore
 
 
 class PermissionAuthorizer:
@@ -11,7 +11,7 @@ class PermissionAuthorizer:
 
     __slots__ = ("_reader",)
 
-    def __init__(self, *, reader: ResourceAclReader) -> None:
+    def __init__(self, *, reader: ResourceAclStore) -> None:
         self._reader = reader
 
     async def authorize_resource(

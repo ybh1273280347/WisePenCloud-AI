@@ -11,9 +11,8 @@ from rag.api.kafka import (
     AclRecalculateHandler,
     DocumentReadyHandler,
     KafkaEventConsumer,
-    ResourceDestroyHandler,
-)
-from rag.api.resource_deletion import ResourceDeletionService
+    ResourceDestroyHandler, )
+from rag.core.persistence import ResourceDeletionService
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
 from rag.application.rag.expand import KnowledgeGraphExpander, SectionTreeExpander
 from rag.application.rag.index import KnowledgeGraphExtractor, ResourceIndexer

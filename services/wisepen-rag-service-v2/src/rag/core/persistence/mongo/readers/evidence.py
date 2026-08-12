@@ -11,9 +11,9 @@ from rag.domain.evidence import (
     EvidenceRevisionError,
 )
 from rag.domain.reading import ReadingBlock
-from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
-from rag.domain.repositories.evidence_reader import EvidenceReader
-from rag.domain.repositories.source_part_reader import SourcePartReader
+from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
+from rag.domain.repositories.mongo.readers.evidence import EvidenceReader
+from rag.domain.repositories.mongo.readers.source_parts import SourcePartReader
 from rag.domain.retrieval import SourceRef
 from rag.domain.services.text_assembler import assemble_source_text
 from rag.utils.chunkers import SourceSpan

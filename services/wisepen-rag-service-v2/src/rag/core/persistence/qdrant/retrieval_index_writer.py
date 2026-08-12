@@ -10,7 +10,7 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
 from rag.domain.acl import ResourceAcl
-from rag.domain.repositories.retrieval_index_writer import RetrievalIndexWriter
+from rag.domain.repositories.qdrant.retrieval_index_writer import RetrievalIndexWriter
 from rag.domain.retrieval import RetrievalChunk, SourceRef
 
 

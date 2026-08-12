@@ -2,9 +2,10 @@
 
 import asyncio
 
-from rag.application.rag.acl.ports import GraphAclWriter, RetrievalAclWriter
-from rag.domain.repositories.authoritative_acl_reader import AuthoritativeAclReader
-from rag.domain.repositories.resource_acl_store import ResourceAclStore
+from rag.domain.repositories.mongo.readers.authoritative_acl import AuthoritativeAclReader
+from rag.domain.repositories.neo4j.graph_acl_writer import GraphAclWriter
+from rag.domain.repositories.mongo.resource_acl_store import ResourceAclStore
+from rag.domain.repositories.qdrant.retrieval_acl_writer import RetrievalAclWriter
 
 
 class AuthoritativeAclNotFoundError(RuntimeError):

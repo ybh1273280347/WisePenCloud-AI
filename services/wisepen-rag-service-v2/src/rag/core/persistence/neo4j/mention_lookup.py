@@ -5,7 +5,6 @@ from collections.abc import Sequence
 from neo4j import AsyncDriver, RoutingControl
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.locate.ports import MentionLookup
 from rag.domain.acl import PermissionScope
 from rag.domain.evidence import EvidenceRecord
 from rag.domain.knowledge_graph import (
@@ -14,7 +13,7 @@ from rag.domain.knowledge_graph import (
     KnowledgeNode,
     KnowledgeNodeKind,
 )
-
+from rag.domain.repositories.neo4j.mention_lookup import MentionLookup
 from .acl_predicate import acl_predicate
 
 _FIND_NODES = """

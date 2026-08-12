@@ -1,14 +1,14 @@
-"""Kafka 资源销毁事件触发的 RAG 派生状态清理。"""
+from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from typing import Sequence
 
 from rag.domain.repositories import (
-    GenerationCacheStore,
-    KnowledgeGraphWriter,
-    ResourceAclStore,
     ResourceIndexWriter,
     RetrievalIndexWriter,
+    KnowledgeGraphWriter,
+    GenerationCacheStore,
+    ResourceAclStore
 )
 
 

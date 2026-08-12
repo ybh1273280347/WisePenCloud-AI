@@ -15,8 +15,8 @@ from rag.application.rag.acl import (
     AuthoritativeAclNotFoundError,
     ResourceAclRefresher,
 )
-from rag.api.resource_deletion import ResourceDeletionService
 from rag.application.rag.index import ResourceIndexer
+from rag.core.persistence import ResourceDeletionService
 
 NonEmptyText = Annotated[
     str,
@@ -210,3 +210,5 @@ def _decode_message(value: object) -> dict[str, Any]:
     if not isinstance(decoded, dict):
         raise KafkaPayloadError("Kafka payload is not a JSON object")
     return decoded
+
+

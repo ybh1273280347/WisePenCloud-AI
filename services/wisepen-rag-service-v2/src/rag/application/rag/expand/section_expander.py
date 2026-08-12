@@ -10,9 +10,9 @@ from rag.domain.navigation import (
     NavigationStateNotFoundError,
 )
 from rag.domain.read_content import SectionView
-from rag.domain.repositories.applied_content_reader import AppliedContentReader
-from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
-from rag.domain.repositories.navigation_state_store import NavigationStateStore
+from rag.domain.repositories.mongo.readers.applied_content import AppliedContentReader
+from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
+from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 
 
 class SectionNotDiscoveredError(RuntimeError):

@@ -12,8 +12,8 @@ from rag.domain.acl import PermissionScope
 from rag.domain.evidence import EvidenceRecord
 from rag.domain.knowledge_graph import KnowledgeNode, KnowledgeRelationType
 from rag.domain.navigation import NavigationStateNotFoundError
-from rag.domain.repositories.graph_traversal import GraphTraversal
-from rag.domain.repositories.navigation_state_store import NavigationStateStore
+from rag.domain.repositories.neo4j.graph_traversal import GraphTraversal
+from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 from rag.utils.ranking import (
     RankCandidate,
     RankingPipeline,

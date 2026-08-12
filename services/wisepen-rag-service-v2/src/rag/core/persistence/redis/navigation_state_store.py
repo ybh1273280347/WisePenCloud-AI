@@ -11,7 +11,7 @@ from rag.domain.navigation import (
     NavigationState,
     NavigationStateNotFoundError,
 )
-from rag.domain.repositories.navigation_state_store import NavigationStateStore
+from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 
 _KEY_PREFIX = "wisepen:rag:v2:navigation-state:"
 _SECTIONS_FIELD = "known_sections"

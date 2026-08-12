@@ -3,7 +3,7 @@
 from rag.domain.content_revision import ContentRevision
 from rag.domain.document_structure import PageRange, StructureMode
 from rag.domain.entities import ContentRevisionEntity, ResourceIndexStateEntity
-from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
+from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.utils.chunkers import SourceSpan
 
 

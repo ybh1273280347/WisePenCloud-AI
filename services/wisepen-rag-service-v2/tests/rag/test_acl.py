@@ -3,15 +3,13 @@ from collections.abc import Mapping, Sequence
 import pytest
 from common.core.domain import GroupRoleType
 
-from rag.application.rag.acl import (
-    PermissionAuthorizer,
-    ResourceAclReader,
-)
+from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.acl import (
     GroupResourceAcl,
     PermissionScope,
     ResourceAcl,
 )
+from rag.domain.repositories.mongo.resource_acl_store import ResourceAclStore
 
 
 def _resource_acl(
@@ -175,7 +173,7 @@ def test_permission_scope_separates_managed_joined_and_missing_groups() -> None:
     }
 
 
-class _AclReader(ResourceAclReader):
+class _AclReader(ResourceAclStore):
     def __init__(self, resource_acls: Mapping[str, ResourceAcl]) -> None:
         self.resource_acls = resource_acls
         self.requested_ids: list[str] = []
@@ -190,6 +188,12 @@ class _AclReader(ResourceAclReader):
             for resource_id in resource_ids
             if resource_id in self.resource_acls
         }
+
+    async def save_if_newer(self, resource_acl: ResourceAcl) -> bool:
+        raise NotImplementedError
+
+    async def delete_resources(self, resource_ids: Sequence[str]) -> None:
+        raise NotImplementedError
 
 
 @pytest.mark.asyncio

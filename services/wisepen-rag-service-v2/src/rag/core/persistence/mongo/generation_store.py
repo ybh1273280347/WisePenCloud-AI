@@ -7,7 +7,7 @@ from pymongo import UpdateOne
 
 from rag.domain.entities import GenerationCacheEntity
 from rag.domain.generation_cache import GenerationCacheKind
-from rag.domain.repositories.generation_cache import GenerationCacheStore
+from rag.domain.repositories.mongo.generation_store import GenerationCacheStore
 
 
 class MongoGenerationCacheStore(GenerationCacheStore):

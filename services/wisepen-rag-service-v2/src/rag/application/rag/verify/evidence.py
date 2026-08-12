@@ -9,7 +9,7 @@ from rag.domain.evidence import (
     EvidenceRecord,
     EvidenceRevisionError,
 )
-from rag.domain.repositories.evidence_reader import EvidenceReader
+from rag.domain.repositories.mongo.readers.evidence import EvidenceReader
 
 
 class EvidenceVerifier:

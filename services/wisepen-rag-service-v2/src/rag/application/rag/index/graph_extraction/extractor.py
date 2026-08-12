@@ -22,8 +22,8 @@ from rag.domain.knowledge_graph import (
     KnowledgeRelationType,
     KnowledgeWindowExtraction,
 )
-from rag.domain.repositories.generation_cache import GenerationCacheStore
-from rag.domain.repositories.graph_build_source_reader import GraphBuildSourceReader
+from rag.domain.repositories.mongo.generation_store import GenerationCacheStore
+from rag.domain.repositories.mongo.readers.graph_build_source import GraphBuildSourceReader
 
 from .cache_codec import (
     decode_candidate_graph,

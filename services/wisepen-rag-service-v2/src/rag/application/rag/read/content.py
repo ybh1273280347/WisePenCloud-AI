@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.acl import PermissionScope
 from rag.domain.read_content import ContentWindow, SectionContent
-from rag.domain.repositories.applied_content_reader import AppliedContentReader
+from rag.domain.repositories.mongo.readers.applied_content import AppliedContentReader
 
 
 class ContentNotFoundError(RuntimeError):

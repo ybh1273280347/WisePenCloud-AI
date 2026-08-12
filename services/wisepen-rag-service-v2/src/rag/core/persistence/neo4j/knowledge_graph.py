@@ -10,7 +10,7 @@ from rag.domain.knowledge_graph import (
     KnowledgeNodeKind,
     resource_node_id,
 )
-from rag.domain.repositories.knowledge_graph_writer import (
+from rag.domain.repositories.neo4j.knowledge_graph import (
     KnowledgeGraphRevisionSupersededError,
     KnowledgeGraphWriter,
 )

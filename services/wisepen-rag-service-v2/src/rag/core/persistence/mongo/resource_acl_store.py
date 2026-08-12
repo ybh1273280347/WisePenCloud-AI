@@ -7,7 +7,7 @@ from pymongo.errors import DuplicateKeyError
 
 from rag.domain.acl import GroupResourceAcl, ResourceAcl
 from rag.domain.entities import ResourceAclEntity
-from rag.domain.repositories.resource_acl_store import ResourceAclStore
+from rag.domain.repositories.mongo.resource_acl_store import ResourceAclStore
 
 
 class MongoResourceAclStore(ResourceAclStore):

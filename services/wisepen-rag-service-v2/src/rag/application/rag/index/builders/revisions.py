@@ -4,7 +4,7 @@ from hashlib import sha256
 
 from rag.domain.content_revision import ContentRevision, ResourceIndexState
 from rag.domain.document_structure import DocumentStructure
-from rag.domain.repositories.resource_index_writer import StageAction
+from rag.domain.repositories.mongo.writers.resource_index import StageAction
 
 INDEX_SCHEMA_VERSION = "rag-v2-content:v1"
 
