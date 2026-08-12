@@ -29,7 +29,8 @@ base:     origin/main @ e1af497f7
 | CP06.1 | `3e8241c71` | 引入 Beanie entities、domain repositories，revision 规则改名为 `index/revisions.py`。 |
 | CP07 | `57befb093` | 完成无状态 READ：structure、pages、sections、frontier、ReadingBlock 顺序。 |
 | CP06.2 | `0ce994168` | 删除错误的双轨 persistence 构造；Mongo adapter 不再接受 `database` 参数或 `_BeanieCollection`。 |
-| 当前 CP08 | 未提交 | VERIFY 回源闭环和本交接文档，待本会话提交为 `rag-v2 cp08: verify evidence against applied source`。 |
+| CP08 | `81a47997e` | VERIFY 回源闭环。 |
+| 当前 CP08.1 | 待提交 | 拆分 index 写入、结构获取、正文获取和图构建输入读取边界。 |
 
 ## 3. 当前架构事实
 
@@ -135,9 +136,18 @@ uv run python -m compileall -q src tests           -> passed
 
 当前没有真实 Mongo/Beanie 集成测试；下一阶段接手时应先决定是否补一个使用测试 Mongo 的 adapter 集成测试，再接入 orchestration。
 
-## 6. 当前待提交文件
+## 6. 当前工作树状态
 
-本次 CP08 尚未提交，工作树中预期包含：
+CP08 已提交为 `81a47997e`。当前 CP08.1 正在完成 `index`/`read` 仓储边界重整；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
+
+CP08.1 的稳定边界：
+
+- `ResourceIndexWriter` 只负责 stage、apply、delete；CAS 所需状态读取留在 adapter 内部。
+- `AppliedStructureReader` 只获取 applied document structure。
+- `AppliedContentReader` 只获取 page/Section 正文和 frontier。
+- `GraphBuildSourceReader` 只为 index 图构建阶段读取指定 revision 的输入。
+- `index/structure.py` 构建结构事实，`read/structure.py` 获取已发布结构。
+- READ application 动作统一为 `get_document_structure`、`get_pages`、`get_sections`。
 
 ```text
 ai_assist/RAG_V2_HANDOFF.md

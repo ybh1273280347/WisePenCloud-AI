@@ -285,13 +285,17 @@ Mongo / Qdrant / Neo4j / Redis / model clients
 
 ## 10. 命名规则
 
-- 名称必须同时说明动作和对象，例如 `read_document_structure`、`read_pages`、`merge_candidate_graph`、`publish_resource_graph`。
+- 名称必须同时说明动作和对象，例如 `get_document_structure`、`get_pages`、`merge_candidate_graph`、`publish_resource_graph`。
 - `projection` 只表示从明确上游结构到明确目标结构的字段/结构映射。
 - 图抽取、规范化、合并和发布就是 extraction、normalization、merge、publish，不能合并命名为 graph projection。
 - `snapshot` 只在确实表达某时刻不可变整体视图时使用；结构获取和正文读取不得使用该词。
 - `manager`、`processor`、`materializer`、`service`、`utils`、`common` 不能替代真实职责名。
 - 类只在需要维护依赖或状态时存在；单一无状态动作优先使用直接函数。
 - 抽象名称如果必须靠长 docstring 才能解释，先拆职责，再重新命名。
+
+`index` 的 Mongo 写入 port 只暴露 `stage_revision`、`apply_revision` 和 `delete_resources`。CAS、幂等和 staged 状态查询可以作为 adapter 内部实现，但不能通过写入 port 暴露通用读取方法。
+
+已发布内容读取拆为三个独立职责：`AppliedStructureReader` 只获取结构事实，`AppliedContentReader` 按页或 Section 获取正文，`GraphBuildSourceReader` 只为 index 内的图构建阶段提供指定 revision 的输入。结构构建函数位于 `index/structure.py`，已发布结构获取位于 `read/structure.py`。
 
 ## 11. 架构变更规则
 

@@ -5,22 +5,20 @@ from rag.domain.read_content import (
     SectionFrontier,
 )
 
-from .content_reader import (
+from .content import (
     ContentNotFoundError,
-    ContentReader,
-    read_document_structure,
-    read_pages,
-    read_sections,
+    get_pages,
+    get_sections,
 )
+from .structure import get_document_structure
 
 __all__ = [
     "ContentNotFoundError",
-    "ContentReader",
     "ContentWindow",
     "DocumentStructureResult",
     "SectionContent",
     "SectionFrontier",
-    "read_document_structure",
-    "read_pages",
-    "read_sections",
+    "get_document_structure",
+    "get_pages",
+    "get_sections",
 ]

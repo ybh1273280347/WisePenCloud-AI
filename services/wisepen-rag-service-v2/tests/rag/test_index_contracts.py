@@ -11,9 +11,9 @@ from rag.application.rag.index import (
 from rag.application.rag.index.revisions import decide_stage
 from rag.application.rag.read import (
     ContentNotFoundError,
-    read_document_structure,
-    read_pages,
-    read_sections,
+    get_document_structure,
+    get_pages,
+    get_sections,
 )
 from rag.application.rag.verify import verify_candidates
 from rag.domain.content_revision import ResourceIndexState
@@ -101,13 +101,13 @@ def test_source_span_contract_uses_half_open_offsets() -> None:
 
 
 class _MissingReader:
-    async def read_applied_document_structure(self, resource_id):
+    async def get_applied_document_structure(self, resource_id):
         return None
 
-    async def read_applied_pages(self, resource_id, page_labels):
+    async def get_applied_pages(self, resource_id, page_labels):
         return None
 
-    async def read_applied_sections(self, resource_id, section_ids):
+    async def get_applied_sections(self, resource_id, section_ids):
         return None
 
 
@@ -115,11 +115,11 @@ class _MissingReader:
 async def test_read_actions_raise_directly_when_content_is_missing() -> None:
     reader = _MissingReader()
     with pytest.raises(ContentNotFoundError):
-        await read_document_structure(reader, resource_id="missing")
+        await get_document_structure(reader, resource_id="missing")
     with pytest.raises(ContentNotFoundError):
-        await read_pages(reader, resource_id="missing", page_labels=["1"])
+        await get_pages(reader, resource_id="missing", page_labels=["1"])
     with pytest.raises(ContentNotFoundError):
-        await read_sections(reader, resource_id="missing", section_ids=["section"])
+        await get_sections(reader, resource_id="missing", section_ids=["section"])
 
 
 def _evidence_facts() -> tuple[str, object, list[ReadingBlock], list[RetrievalChunk], list[SourceRef], object]:

@@ -250,7 +250,7 @@
 - [ ] 函数返回多个同属一个概念且会继续共同传递的数据时才定义对象；局部解包即可结束的数据不创建 result model。
 - [ ] 多值结果优先返回具名 `dict` 或语义明确的列表，不返回需要靠位置猜含义的 tuple。
 - [ ] 不把所有 list 改成 tuple 来制造“领域模型感”；只有作为 hash key 或必须防止修改的值才使用 tuple/frozen。
-- [ ] 公共名称必须能从名字判断动作和对象，例如 `read_document_structure`、`read_pages`、`merge_candidate_graph`、`publish_resource_graph`。
+- [ ] 公共名称必须能从名字判断动作和对象，例如 `get_document_structure`、`get_pages`、`merge_candidate_graph`、`publish_resource_graph`。
 - [ ] 抽象名称一旦需要靠长 docstring 才能解释职责，先拆模块和流程，再命名。
 - [ ] package `__init__` 只导出真实稳定边界，不导出测试便利函数或内部 helper。
 

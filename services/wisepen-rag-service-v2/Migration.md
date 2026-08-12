@@ -134,7 +134,7 @@ Commit：`rag-v2 cp04: build retrieval chunks and source references`
 - `resource_index_states`、`content_revisions`、`source_parts` 三个 collection。
 - stage decision、staged pointer、applied CAS。
 - content hash、schema version、structure mode、total length、嵌入 page ranges。
-- ResourceIndexStore 的 revision/source 部分。
+- ResourceIndexWriter 的 revision/source 写入部分。
 
 验收：首次 stage、重复 applied、stale event、同版本内容修正、CAS 冲突、超大原文分片测试。
 
@@ -147,7 +147,7 @@ Commit：`rag-v2 cp05: persist content revisions and source parts`
 范围：
 
 - `sections`、`reading_blocks`、`source_refs` collection。
-- ResourceIndexStore 完整 revision 写入与资源清理。
+- ResourceIndexWriter 完整 revision 写入与资源清理。
 - staged pointer 最后发布、不完整 revision 不可见。
 - 按指定 applied revision 读取图构建输入。
 
@@ -162,7 +162,7 @@ Commit：`rag-v2 cp06: persist resource structure and evidence identities`
 范围：
 
 - 将 Mongo collection schema 固化到 `domain/entities` 的 Beanie Document。
-- 将 `ResourceIndexStore`、`ContentReader` port 收归 `domain/repositories`。
+- 将 `ResourceIndexWriter`、`AppliedStructureReader`、`AppliedContentReader` port 收归 `domain/repositories`。
 - 将 revision 身份与 staged 决策改名为 `application/rag/index/revisions.py`。
 
 验收：Beanie 依赖可解析，repository 不反向依赖 application model，既有 revision/store 测试保持通过。
@@ -173,10 +173,10 @@ Commit：`rag-v2 cp06.1: align persistence with beanie entities and domain repos
 
 范围：
 
-- ContentReader。
-- `read_document_structure`。
-- `read_pages`。
-- `read_sections`。
+- `AppliedStructureReader`、`AppliedContentReader`。
+- `get_document_structure`。
+- `get_pages`。
+- `get_sections`。
 - Section frontier 和 ReadingBlock 顺序。
 
 验收：存在、部分缺失、合法空 Section、重复 page label、page overlap 和 applied-only 测试。
@@ -404,7 +404,7 @@ Commit：`rag-v2 cp21: expand verified graph paths`
 
 - state user/session 校验。
 - 只读取 known sections。
-- ContentReader 读取完整正文与 frontier。
+- AppliedContentReader 读取完整正文与 frontier。
 - ACL/revision 最终检查。
 - 新 Section 原子加入 state。
 

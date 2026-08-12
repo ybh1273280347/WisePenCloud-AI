@@ -16,7 +16,7 @@ from rag.utils.chunkers import (
 )
 from rag.utils.chunkers.markdown import MarkdownParser
 
-from .document_structure import build_section_id
+from .structure import build_section_id
 
 _READING_BLOCK_MAX_CHARACTERS = 4000
 

@@ -1,62 +1,35 @@
-"""ContentReader 的 Beanie adapter。"""
+"""已发布正文读取 port 的 Beanie adapter。"""
 
 from collections.abc import Sequence
 
 from pymongo import ASCENDING
 
-from rag.core.persistence.mongo.content_records import (
-    read_source_spans,
-    to_content_revision,
-    to_reading_block,
-    to_section,
-)
-from rag.domain.content_revision import ContentRevision
+from rag.core.persistence.mongo.applied_revision import get_applied_revision
+from rag.core.persistence.mongo.content_records import to_reading_block, to_section
+from rag.core.persistence.mongo.source_text import get_source_text
 from rag.domain.document_structure import Section
 from rag.domain.entities import (
-    ContentRevisionEntity,
     ReadingBlockEntity,
-    ResourceIndexStateEntity,
     SectionEntity,
-    SourcePartEntity,
 )
 from rag.domain.read_content import (
     ContentWindow,
-    DocumentStructureResult,
     SectionContent,
     SectionFrontier,
 )
 from rag.domain.reading import ReadingBlock
-from rag.domain.repositories.content_reader import ContentReader
-from rag.utils.chunkers import SourceSpan
+from rag.domain.repositories.applied_content_reader import AppliedContentReader
 
 
-class MongoContentReader(ContentReader):
-    """只从 Beanie entities 读取 applied revision。"""
+class MongoAppliedContentReader(AppliedContentReader):
+    """只从 Beanie entities 读取 applied revision 正文。"""
 
-    async def read_applied_document_structure(
-        self,
-        resource_id: str,
-    ) -> DocumentStructureResult | None:
-        revision = await self._read_applied_revision(resource_id)
-        if revision is None:
-            return None
-        entities = await SectionEntity.find(
-            {
-                "resource_id": resource_id,
-                "content_revision": revision.content_revision,
-            }
-        ).sort("+own_start").to_list()
-        return DocumentStructureResult(
-            revision=revision,
-            sections=[to_section(entity.model_dump()) for entity in entities],
-        )
-
-    async def read_applied_pages(
+    async def get_applied_pages(
         self,
         resource_id: str,
         page_labels: Sequence[str],
     ) -> dict[str, ContentWindow] | None:
-        revision = await self._read_applied_revision(resource_id)
+        revision = await get_applied_revision(resource_id)
         if revision is None:
             return None
         requested_labels = list(dict.fromkeys(page_labels))
@@ -66,7 +39,7 @@ class MongoContentReader(ContentReader):
         ]
         windows: dict[str, ContentWindow] = {}
         for page in selected_pages:
-            text = await self._read_source_text(revision.content_revision, [page.source_span])
+            text = await get_source_text(revision.content_revision, [page.source_span])
             sections = await SectionEntity.find(
                 {
                     "resource_id": resource_id,
@@ -106,12 +79,12 @@ class MongoContentReader(ContentReader):
             )
         return windows
 
-    async def read_applied_sections(
+    async def get_applied_sections(
         self,
         resource_id: str,
         section_ids: Sequence[str],
     ) -> dict[str, SectionContent] | None:
-        revision = await self._read_applied_revision(resource_id)
+        revision = await get_applied_revision(resource_id)
         if revision is None:
             return None
         requested_ids = list(dict.fromkeys(section_ids))
@@ -159,35 +132,3 @@ class MongoContentReader(ContentReader):
                 ),
             )
         return result
-
-    async def _read_applied_revision(self, resource_id: str) -> ContentRevision | None:
-        state = await ResourceIndexStateEntity.find_one({"resource_id": resource_id})
-        if state is None or state.applied_content_revision is None:
-            return None
-        entity = await ContentRevisionEntity.find_one(
-            {
-                "resource_id": resource_id,
-                "content_revision": state.applied_content_revision,
-            }
-        )
-        if entity is None:
-            raise RuntimeError(f"resource {resource_id} applied revision is missing")
-        return to_content_revision(entity.model_dump())
-
-    async def _read_source_text(
-        self,
-        content_revision: str,
-        source_spans: Sequence[SourceSpan],
-    ) -> str:
-        entities = await SourcePartEntity.find(
-            {
-                "content_revision": content_revision,
-                "start_offset": {"$lt": max(span.end_offset for span in source_spans)},
-                "end_offset": {"$gt": min(span.start_offset for span in source_spans)},
-            }
-        ).sort("+part_index").to_list()
-        return read_source_spans(
-            content_revision=content_revision,
-            documents=[entity.model_dump() for entity in entities],
-            source_spans=source_spans,
-        )

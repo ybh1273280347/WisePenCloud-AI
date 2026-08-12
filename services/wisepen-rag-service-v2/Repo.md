@@ -31,7 +31,7 @@
 
 ### 2.1 index
 
-#### `ResourceIndexStore`
+#### `ResourceIndexWriter`
 
 负责 Mongo 中一个资源索引 revision 的完整生命周期：
 
@@ -39,8 +39,9 @@
 - 写入 revision 元数据、原始 Markdown parts、Section、ReadingBlock 和 SourceRef。
 - 最后写入 staged revision 指针，使未完整写完的数据永远不可见。
 - 通过 resource-level CAS 发布 applied revision。
-- 读取指定 applied revision 的图构建输入。
 - 删除资源的全部内容 revision 和索引状态。
+
+它不对外提供状态、revision、原文或图构建输入读取。写入过程内部可以查询状态以完成 CAS、幂等和并发判断。
 
 它合并 v1 的 `RagContentProjectionRepository`、`RagContentCheckpointRepository` 和 `RagKnowledgeExtractionSourceRepository` 的写入侧职责。图构建输入属于同一个 `index` 能力，不再为它单独建立 source repository。
 
@@ -107,15 +108,19 @@
 
 ### 2.3 read
 
-#### `ContentReader`
+#### `AppliedStructureReader`
 
-统一 v1 被 snapshot 与 section navigation 人为拆开的读取职责：
+只读取 applied revision 的 document structure、页目录和 Section 树，不读取正文。
 
-- 读取 applied document structure。
+#### `AppliedContentReader`
+
 - 按 page label 读取原文窗口。
 - 按 Section ID 读取正文块。
 - 读取 Section frontier。
-- 读取 navigation state 已发现 Section 的完整 ReadingBlock。
+
+#### `GraphBuildSourceReader`
+
+只为 index 内图构建阶段读取指定 applied revision 的 Markdown、Section、ReadingBlock 和 SourceRef。它不是通用内容读取仓储，也不属于写入 port。
 
 structure、page、section 是不同方法和返回契约，但共用同一个内容事实源。仓储只返回存在的数据，不生成 `page_not_found`、`section_not_found` 或 `section_empty`。
 
@@ -173,11 +178,11 @@ structure、page、section 是不同方法和返回契约，但共用同一个�
 
 | v1 职责 | v2 处理 | 理由 |
 | --- | --- | --- |
-| `RagContentProjectionRepository` | 与 checkpoint、图构建 source 合并为 `ResourceIndexStore` | 三者共同维护同一 content revision 的写入与发布，不是独立业务能力。 |
+| `RagContentProjectionRepository` | 与 checkpoint、图构建 source 合并为 `ResourceIndexWriter` | 三者共同维护同一 content revision 的写入与发布，不是独立业务能力。 |
 | `RagContentCheckpointRepository` | 删除独立 port | applied/staged 指针是资源索引状态的一部分；locate 不应直接依赖写入 checkpoint。 |
-| `RagKnowledgeExtractionSourceRepository` | 删除独立 port | 只被 index 的图构建阶段消费，应由 `ResourceIndexStore` 提供指定 revision 的构建输入。 |
-| `RagResourceSnapshotRepository` | 删除并并入 `ContentReader` | `snapshot` 同时混入结构与正文读取，名称和职责都错误。 |
-| `RagSectionNavigationRepository` | 删除并并入 `ContentReader` | Section frontier 与 Section 正文都属于 READ，只是不同查询。 |
+| `RagKnowledgeExtractionSourceRepository` | 改为 `GraphBuildSourceReader` | 只被 index 的图构建阶段消费，不属于索引写入 port 或通用正文读取。 |
+| `RagResourceSnapshotRepository` | 删除并拆为 `AppliedStructureReader` 与 `AppliedContentReader` | `snapshot` 同时混入结构与正文读取，名称和职责都错误。 |
+| `RagSectionNavigationRepository` | 合并到 `AppliedContentReader` 的正文读取侧 | Section frontier 与 Section 正文都属于已发布内容读取，但不再和结构获取混在同一 port。 |
 | `RagSourceRepository` | 修改为 `EvidenceReader` | 精确保留 SourceRef/ReadingBlock 回源能力，去除宽泛 source 命名。 |
 | `RagVectorIndexRepository` | 修改为 `RetrievalIndexWriter` | 保留 Qdrant 写侧边界，名称明确它不做 locate。 |
 | `RagCandidateRepository` | 修改为 `CandidateSearch` | 这是外部检索 port，不是持久化聚合根 repository。 |
@@ -572,9 +577,9 @@ Java Resource Mongo 的 `wisepen_resource_items` 是外部权威表：
 ### 9.1 内容发布顺序
 
 ```text
-1. ResourceIndexStore 写完整 staged revision 数据
+1. ResourceIndexWriter 写完整 staged revision 数据
 2. RetrievalIndexWriter 写 active=false 的 Qdrant points
-3. ResourceIndexStore CAS 发布 applied revision
+3. ResourceIndexWriter CAS 发布 applied revision
 4. RetrievalIndexWriter 激活当前 revision并清理旧 points
 5. KnowledgeGraphWriter 构建并发布或跳过当前图
 6. 清理旧 Mongo revisions
@@ -613,8 +618,10 @@ Redis state 不主动扫描删除。由于每次 READ/EXPAND/VERIFY 都重新校
 建议 port 归属：
 
 ```text
-domain/repositories/resource_index_repository.py
-domain/repositories/content_reader.py
+domain/repositories/resource_index_writer.py
+domain/repositories/applied_structure_reader.py
+domain/repositories/applied_content_reader.py
+domain/repositories/graph_build_source_reader.py
 application/rag/locate/ports.py
 application/rag/expand/ports.py
 application/rag/verify/ports.py
@@ -626,8 +633,10 @@ application/rag/acl/ports.py
 建议 adapter 布局按后端和事实命名：
 
 ```text
-persistence/mongo/resource_index_store.py
-persistence/mongo/content_reader.py
+persistence/mongo/resource_index_writer.py
+persistence/mongo/applied_structure_reader.py
+persistence/mongo/applied_content_reader.py
+persistence/mongo/graph_build_source_reader.py
 persistence/mongo/evidence_reader.py
 persistence/mongo/generation_cache.py
 persistence/mongo/resource_acl_store.py

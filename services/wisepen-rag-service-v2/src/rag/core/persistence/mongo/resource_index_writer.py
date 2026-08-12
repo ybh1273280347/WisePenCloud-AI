@@ -1,4 +1,4 @@
-"""Resource index repository backed by Beanie entities."""
+"""Resource index writer backed by Beanie entities."""
 
 from collections.abc import Sequence
 
@@ -6,16 +6,11 @@ from pymongo.errors import DuplicateKeyError
 
 from rag.application.rag.index.revisions import build_content_revision_id, decide_stage
 from rag.core.persistence.mongo.content_records import (
-    read_source_spans,
     reading_block_document,
     revision_document,
     section_document,
     source_part_document,
     source_ref_document,
-    to_content_revision,
-    to_reading_block,
-    to_section,
-    to_source_ref,
 )
 from rag.domain.content_revision import ContentRevision, ResourceIndexState, SourcePart
 from rag.domain.document_structure import Section
@@ -28,14 +23,14 @@ from rag.domain.entities import (
     SourceRefEntity,
 )
 from rag.domain.reading import ReadingBlock
-from rag.domain.repositories import GraphBuildSource, ResourceIndexStore, StageAction
+from rag.domain.repositories import ResourceIndexWriter, StageAction
 from rag.domain.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan
 
 _SOURCE_PART_CHARACTERS = 1_000_000
 
 
-class MongoResourceIndexStore(ResourceIndexStore):
+class MongoResourceIndexWriter(ResourceIndexWriter):
     """通过 Beanie entities 管理 staged/applied 内容 revision。"""
 
     async def stage_revision(
@@ -62,7 +57,7 @@ class MongoResourceIndexStore(ResourceIndexStore):
             reading_blocks=reading_blocks,
             source_refs=source_refs,
         )
-        action = decide_stage(revision, await self.read_state(revision.resource_id))
+        action = decide_stage(revision, await self._get_state(revision.resource_id))
         if action is not StageAction.STAGED:
             return action
 
@@ -124,7 +119,7 @@ class MongoResourceIndexStore(ResourceIndexStore):
                 upsert=True,
             )
         except DuplicateKeyError:
-            latest = await self.read_state(revision.resource_id)
+            latest = await self._get_state(revision.resource_id)
             action = decide_stage(revision, latest)
             if action is not StageAction.STAGED:
                 return action
@@ -138,7 +133,7 @@ class MongoResourceIndexStore(ResourceIndexStore):
                 },
             )
         if result.matched_count == 0 and result.upserted_id is None:
-            latest = await self.read_state(revision.resource_id)
+            latest = await self._get_state(revision.resource_id)
             action = decide_stage(revision, latest)
             if action is not StageAction.STAGED:
                 return action
@@ -163,12 +158,12 @@ class MongoResourceIndexStore(ResourceIndexStore):
         )
         if result.modified_count == 1:
             return
-        state = await self.read_state(revision.resource_id)
+        state = await self._get_state(revision.resource_id)
         if state is not None and state.applied_content_revision == revision.content_revision:
             return
         raise RuntimeError(f"content revision {revision.content_revision} is no longer staged")
 
-    async def read_state(self, resource_id: str) -> ResourceIndexState | None:
+    async def _get_state(self, resource_id: str) -> ResourceIndexState | None:
         entity = await ResourceIndexStateEntity.find_one({"resource_id": resource_id})
         if entity is None:
             return None
@@ -178,57 +173,6 @@ class MongoResourceIndexStore(ResourceIndexStore):
             staged_document_version=entity.staged_document_version,
             applied_content_revision=entity.applied_content_revision,
             applied_document_version=entity.applied_document_version,
-        )
-
-    async def read_revision(self, content_revision: str) -> ContentRevision | None:
-        entity = await ContentRevisionEntity.find_one(
-            {"content_revision": content_revision}
-        )
-        return to_content_revision(entity.model_dump()) if entity else None
-
-    async def read_source_text(
-        self,
-        content_revision: str,
-        source_spans: Sequence[SourceSpan],
-    ) -> str:
-        if not source_spans:
-            return ""
-        revision = await self.read_revision(content_revision)
-        if revision is None:
-            raise RuntimeError(f"content revision {content_revision} does not exist")
-        if any(span.start_offset < 0 or span.end_offset > revision.total_length for span in source_spans):
-            raise RuntimeError(f"content revision {content_revision} span is out of bounds")
-        entities = await SourcePartEntity.find(
-            {
-                "content_revision": content_revision,
-                "start_offset": {"$lt": max(span.end_offset for span in source_spans)},
-                "end_offset": {"$gt": min(span.start_offset for span in source_spans)},
-            }
-        ).sort("+part_index").to_list()
-        return read_source_spans(
-            content_revision=content_revision,
-            documents=[entity.model_dump() for entity in entities],
-            source_spans=source_spans,
-        )
-
-    async def read_graph_build_source(self, resource_id: str, content_revision: str) -> GraphBuildSource:
-        state = await self.read_state(resource_id)
-        if state is None or state.applied_content_revision != content_revision:
-            raise RuntimeError(f"content revision {content_revision} is not applied for {resource_id}")
-        revision = await self.read_revision(content_revision)
-        if revision is None or revision.resource_id != resource_id:
-            raise RuntimeError(f"content revision {content_revision} does not belong to {resource_id}")
-        markdown = await self.read_source_text(content_revision, [SourceSpan(0, revision.total_length)])
-        sections = await SectionEntity.find({"resource_id": resource_id, "content_revision": content_revision}).to_list()
-        blocks = await ReadingBlockEntity.find({"resource_id": resource_id, "content_revision": content_revision}).sort([("section_id", 1), ("ordinal", 1)]).to_list()
-        refs = await SourceRefEntity.find({"resource_id": resource_id, "content_revision": content_revision}).to_list()
-        return GraphBuildSource(
-            resource_id=resource_id,
-            content_revision=content_revision,
-            markdown=markdown,
-            sections=[to_section(entity.model_dump()) for entity in sections],
-            reading_blocks=[to_reading_block(entity.model_dump()) for entity in blocks],
-            source_refs=[to_source_ref(entity.model_dump()) for entity in refs],
         )
 
     async def delete_resources(self, resource_ids: Sequence[str]) -> None:
