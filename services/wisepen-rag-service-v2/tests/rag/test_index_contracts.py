@@ -1,5 +1,6 @@
 import pytest
 
+from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.index import (
     build_content_revision_id,
     build_reading_blocks,
@@ -15,6 +16,7 @@ from rag.application.rag.read import (
     DocumentStructureReader,
 )
 from rag.application.rag.verify import EvidenceVerifier
+from rag.domain.acl import PermissionScope, ResourceAcl
 from rag.domain.content_revision import ResourceIndexState
 from rag.domain.evidence import (
     EvidenceCandidate,
@@ -110,20 +112,57 @@ class _MissingReader:
         return None
 
 
+class _ReadableAclReader:
+    async def get_resource_acls(self, resource_ids):
+        return {
+            resource_id: ResourceAcl(
+                resource_id=resource_id,
+                acl_revision=1,
+                owner_id="user-1",
+            )
+            for resource_id in resource_ids
+        }
+
+
+class _DeniedAclReader:
+    async def get_resource_acls(self, resource_ids):
+        return {}
+
+
 @pytest.mark.asyncio
 async def test_read_actions_raise_directly_when_content_is_missing() -> None:
     reader = _MissingReader()
+    authorizer = PermissionAuthorizer(reader=_ReadableAclReader())
+    scope = PermissionScope(user_id="user-1")
     with pytest.raises(ContentNotFoundError):
-        await DocumentStructureReader(reader=reader).get(resource_id="missing")
-    with pytest.raises(ContentNotFoundError):
-        await DocumentContentReader(reader=reader).get_pages(
+        await DocumentStructureReader(reader=reader, authorizer=authorizer).get(
             resource_id="missing",
-            page_labels=["1"],
+            permission_scope=scope,
         )
     with pytest.raises(ContentNotFoundError):
-        await DocumentContentReader(reader=reader).get_sections(
+        await DocumentContentReader(reader=reader, authorizer=authorizer).get_pages(
+            resource_id="missing",
+            page_labels=["1"],
+            permission_scope=scope,
+        )
+    with pytest.raises(ContentNotFoundError):
+        await DocumentContentReader(reader=reader, authorizer=authorizer).get_sections(
             resource_id="missing",
             section_ids=["section"],
+            permission_scope=scope,
+        )
+
+
+@pytest.mark.asyncio
+async def test_read_actions_do_not_distinguish_denied_resource_from_missing() -> None:
+    reader = _MissingReader()
+    authorizer = PermissionAuthorizer(reader=_DeniedAclReader())
+    scope = PermissionScope(user_id="user-1")
+
+    with pytest.raises(ContentNotFoundError):
+        await DocumentStructureReader(reader=reader, authorizer=authorizer).get(
+            resource_id="private-resource",
+            permission_scope=scope,
         )
 
 

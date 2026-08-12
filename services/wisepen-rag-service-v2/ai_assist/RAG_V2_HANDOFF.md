@@ -55,7 +55,8 @@ base:     origin/main @ e1af497f7
 | CP22 | `8e05be98` | 有状态 Section READ：state/ACL/revision 校验、完整正文读取与 frontier 原子扩展。 |
 | CP23 | `7e3a1a224` | 权威 ACL 刷新、本地单调写入、Qdrant/Neo4j 显式同步和统一图查询 predicate。 |
 | CP24 | `cb73b1a57` | ResourceIndexer 编排结构、contextual、embedding、Mongo/Qdrant 发布、图 publish/skip 和重试补偿。 |
-| CP25 | 当前工作树 | 先清 Mongo 发布指针 fail closed，再并行删除内容、缓存、Qdrant、Neo4j 和本地 ACL。 |
+| CP25 | `ae9b0c44d` | 先清 Mongo 发布指针 fail closed，再并行删除内容、缓存、Qdrant、Neo4j 和本地 ACL。 |
+| CP26 | 当前工作树 | 确定性 document structure/page/section READ HTTP schema、统一 ACL 和资源读取错误码。 |
 
 ## 3. 当前架构事实
 
@@ -294,6 +295,14 @@ CP25 资源删除编排边界：
 - 随后用 `TaskGroup` 并行删除 Qdrant points、Neo4j 图与 group ACL、Mongo 内容 revision、generation cache 和本地 ACL；任一失败直接抛出 `ExceptionGroup`。
 - Mongo 内容删除按 `resource_id` 查询 revision，不依赖仍然存在的 index state，因此第一步已成功或 state 原本缺失时重试仍能收敛。
 - Redis navigation state 不扫描删除；旧 state 在 applied revision 缺失后由 READ/EXPAND/VERIFY 拒绝，随后由 TTL 回收。
+
+CP26 HTTP READ adapter 边界：
+
+- `/resources/document-structure`、`/page-content`、`/section-content` 沿用内部服务路由惯例，使用 `R[...]`、`require_login` 和 dependency-injector 注入 application reader。
+- `DocumentStructureReader` 与 `DocumentContentReader` 在 application 层统一执行 ACL；未授权与 applied 内容不存在都抛 `ContentNotFoundError`，HTTP 映射为同一 `RESOURCE_CONTENT_NOT_FOUND`。
+- 批量 page/section 响应使用请求 key 到领域事实的字典，只返回实际存在 key；合法空 Section 返回 `reading_blocks=[]`，不生成 `kind/reason/windows`。
+- schema 使用 list 而非 tuple，最多接收 20 个 page label 或 section ID，所有请求 `extra=forbid`；响应只序列化稳定结构、正文、offset、frontier 和锚点事实。
+- 非预期 application/依赖异常映射为 `RESOURCE_READ_FAILED`，不把底层异常文本、存储结构或资源存在性泄漏给调用方。
 
 CP13 的实现边界：
 

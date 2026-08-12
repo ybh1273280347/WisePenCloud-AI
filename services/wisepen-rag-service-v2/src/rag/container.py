@@ -163,15 +163,6 @@ class Container(containers.DeclarativeContainer):
         reader=evidence_reader,
     )
 
-    document_structure_reader = providers.Singleton(
-        DocumentStructureReader,
-        reader=applied_structure_reader,
-    )
-    document_content_reader = providers.Singleton(
-        DocumentContentReader,
-        reader=applied_content_reader,
-    )
-
     mongo_client = providers.Singleton(AsyncMongoClient, config.mongodb_url)
     authoritative_resource_collection = providers.Singleton(
         _build_authoritative_resource_collection,
@@ -256,6 +247,16 @@ class Container(containers.DeclarativeContainer):
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,
         reader=resource_acl_store,
+    )
+    document_structure_reader = providers.Singleton(
+        DocumentStructureReader,
+        reader=applied_structure_reader,
+        authorizer=permission_authorizer,
+    )
+    document_content_reader = providers.Singleton(
+        DocumentContentReader,
+        reader=applied_content_reader,
+        authorizer=permission_authorizer,
     )
     graph_acl_writer = providers.Singleton(
         Neo4jGraphAclWriter,
