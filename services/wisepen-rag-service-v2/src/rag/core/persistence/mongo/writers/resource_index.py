@@ -162,6 +162,32 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             return None
         return _to_domain(entity)
 
+    async def delete_other_revisions(
+        self,
+        *,
+        resource_id: str,
+        keep_content_revision: str,
+    ) -> None:
+        revisions = await ContentRevisionEntity.find(
+            {
+                "resource_id": resource_id,
+                "content_revision": {"$ne": keep_content_revision},
+            }
+        ).to_list()
+        revision_ids = [revision.content_revision for revision in revisions]
+        if not revision_ids:
+            return
+        for entity_type in (
+            SourcePartEntity,
+            SectionEntity,
+            ReadingBlockEntity,
+            SourceRefEntity,
+            ContentRevisionEntity,
+        ):
+            await entity_type.find(
+                {"content_revision": {"$in": revision_ids}}
+            ).delete_many()
+
     async def delete_resources(self, resource_ids: Sequence[str]) -> None:
         ids = list(dict.fromkeys(resource_ids))
         if not ids:

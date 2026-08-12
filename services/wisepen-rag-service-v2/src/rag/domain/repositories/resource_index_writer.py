@@ -30,4 +30,11 @@ class ResourceIndexWriter(Protocol):
 
     async def apply_revision(self, revision: ContentRevision) -> None: ...
 
+    async def delete_other_revisions(
+        self,
+        *,
+        resource_id: str,
+        keep_content_revision: str,
+    ) -> None: ...
+
     async def delete_resources(self, resource_ids: Sequence[str]) -> None: ...

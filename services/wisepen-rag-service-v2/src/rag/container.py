@@ -11,7 +11,11 @@ from zeroentropy import AsyncZeroEntropy
 
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
 from rag.application.rag.expand import KnowledgeGraphExpander
-from rag.application.rag.index import ContextualTextIndexer, KnowledgeGraphExtractor
+from rag.application.rag.index import (
+    ContextualTextIndexer,
+    KnowledgeGraphExtractor,
+    ResourceIndexer,
+)
 from rag.application.rag.index.graph_extraction import QueryClientGraphRagLLM
 from rag.application.rag.locate import ReadingEntryLocator
 from rag.application.rag.read import (
@@ -29,6 +33,7 @@ from rag.core.persistence.mongo import (
     MongoGenerationCacheStore,
     MongoGraphBuildSourceReader,
     MongoResourceAclStore,
+    MongoResourceIndexWriter,
     MongoSourcePartReader,
 )
 from rag.core.persistence.neo4j import (
@@ -226,6 +231,7 @@ class Container(containers.DeclarativeContainer):
         sparse_vector_name=config.qdrant_sparse_vector_name,
         bm25_options=qdrant_bm25_options,
     )
+    resource_index_writer = providers.Singleton(MongoResourceIndexWriter)
     retrieval_acl_writer = providers.Singleton(
         QdrantRetrievalAclWriter,
         client=qdrant_client,
@@ -262,6 +268,18 @@ class Container(containers.DeclarativeContainer):
         retrieval_writer=retrieval_acl_writer,
         graph_writer=graph_acl_writer,
     )
+    embedding_client = providers.Dependency()
+    resource_indexer = providers.Singleton(
+        ResourceIndexer,
+        contextual_text=contextual_text_indexer,
+        embedding_client=embedding_client,
+        acl_refresher=resource_acl_refresher,
+        acl_reader=resource_acl_store,
+        resource_writer=resource_index_writer,
+        retrieval_writer=retrieval_index_writer,
+        graph_extractor=knowledge_graph_extractor,
+        graph_writer=knowledge_graph_writer,
+    )
     discovered_section_reader = providers.Singleton(
         DiscoveredSectionReader,
         content_reader=applied_content_reader,
@@ -281,7 +299,6 @@ class Container(containers.DeclarativeContainer):
         database=config.neo4j_database,
         authorizer=permission_authorizer,
     )
-    embedding_client = providers.Dependency()
     zero_entropy_client = providers.Dependency()
     locate_ranking_pipeline = providers.Singleton(
         _build_locate_ranking_pipeline,

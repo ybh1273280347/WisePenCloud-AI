@@ -53,7 +53,8 @@ base:     origin/main @ e1af497f7
 | CP20 | `a9c2e06d` | MentionLookup 按已核验 SourceRef、published graph、revision 和 ACL 发现初始节点并写入 navigation state。 |
 | CP21 | `4a3e5961` | EXPAND 有界图遍历、路径排序、逐边 VERIFY 和并发安全的 known node 原子扩展。 |
 | CP22 | `8e05be98` | 有状态 Section READ：state/ACL/revision 校验、完整正文读取与 frontier 原子扩展。 |
-| CP23 | 当前工作树 | 权威 ACL 刷新、本地单调写入、Qdrant/Neo4j 显式同步和统一图查询 predicate。 |
+| CP23 | `7e3a1a224` | 权威 ACL 刷新、本地单调写入、Qdrant/Neo4j 显式同步和统一图查询 predicate。 |
+| CP24 | 当前工作树 | ResourceIndexer 编排结构、contextual、embedding、Mongo/Qdrant 发布、图 publish/skip 和重试补偿。 |
 
 ## 3. 当前架构事实
 
@@ -277,6 +278,14 @@ CP23 ACL 同步边界：
 - `QdrantRetrievalAclWriter` 与 `Neo4jGraphAclWriter` 只序列化统一 `ResourceAcl`，不自行解释权限规则。
 - Neo4j `acl_predicate()` 与 `ResourceAcl.can_read()` 保持 owner、直接用户、资源排除、managed/joined group 语义一致；MentionLookup/GraphTraversal 下推 predicate 后仍保留最终 `PermissionAuthorizer` 复查。
 - ACL 可以先创建 ResourceNode；KnowledgeGraphWriter 的首次 begin build 允许 `document_version IS NULL`，不会被 ACL 同步反向阻断。
+
+CP24 文档索引编排边界：
+
+- `ResourceIndexer.index_resource()` 是一次文档完成事件的唯一应用层编排对象，不增加流程 DTO、task 表、saga 或错误原因字段。
+- Mongo stage 先完成 stale 判断；只有非 stale 事件继续 contextual text、ACL 刷新、向量复用/生成和跨后端发布。
+- 发布顺序固定为 Mongo stage、Qdrant staged、Mongo applied CAS、Qdrant activate/cleanup、Neo4j publish/skip、Mongo 旧 revision 清理。
+- `ALREADY_APPLIED` 重试不会提前返回，仍补偿 Qdrant 和 Neo4j；任一步真实失败直接抛出，由相同事件重试收敛。
+- sectioned 文档抽取并发布知识图，flat_text/empty 明确 skip；三种结构均不创建伪图谱或额外状态实体。
 
 CP13 的实现边界：
 
