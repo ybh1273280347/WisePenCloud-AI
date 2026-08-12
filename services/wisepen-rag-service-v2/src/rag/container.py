@@ -23,6 +23,7 @@ from rag.core.persistence.qdrant import (
     QdrantCandidateSearch,
     QdrantRetrievalIndexWriter,
 )
+from rag.core.persistence.redis import RedisNavigationStateStore
 
 
 def _build_authoritative_resource_collection(
@@ -103,6 +104,12 @@ class Container(containers.DeclarativeContainer):
         dense_vector_name=config.qdrant_dense_vector_name,
         sparse_vector_name=config.qdrant_sparse_vector_name,
         bm25_options=qdrant_bm25_options,
+    )
+    redis_client = providers.Dependency()
+    navigation_state_store = providers.Singleton(
+        RedisNavigationStateStore,
+        redis_client=redis_client,
+        ttl_seconds=config.navigation_state_ttl_seconds,
     )
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,

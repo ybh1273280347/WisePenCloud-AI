@@ -18,6 +18,7 @@ dependencies = [
     "pymongo>=4.17.0",
     "pyyaml",
     "qdrant-client==1.18.0",
+    "redis>=5,<9",
     "thulac>=0.2.2",
     "wisepen-common",
     "zeroentropy",

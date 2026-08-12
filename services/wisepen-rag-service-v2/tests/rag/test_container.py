@@ -7,6 +7,7 @@ from rag.core.persistence.qdrant import (
     QdrantCandidateSearch,
     QdrantRetrievalIndexWriter,
 )
+from rag.core.persistence.redis import RedisNavigationStateStore
 
 
 def test_container_builds_read_objects_with_explicit_persistence_dependencies() -> None:
@@ -31,3 +32,7 @@ def test_container_builds_read_objects_with_explicit_persistence_dependencies() 
     container.config.qdrant_bm25_tokenizer.from_value("multilingual")
     assert isinstance(container.retrieval_index_writer(), QdrantRetrievalIndexWriter)
     assert isinstance(container.candidate_search(), QdrantCandidateSearch)
+
+    container.redis_client.override(object())
+    container.config.navigation_state_ttl_seconds.from_value(3600)
+    assert isinstance(container.navigation_state_store(), RedisNavigationStateStore)

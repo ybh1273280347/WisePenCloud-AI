@@ -40,7 +40,8 @@ base:     origin/main @ e1af497f7
 | CP11 | `df411431c` | 合并为单一 generation cache collection，按资源和 cache kind 批量读写及删除。 |
 | CP12 | `c5113eb44` | Contextual indexing 生成、严格响应解析、缓存复用和只增强 `index_text`。 |
 | CP13 | `21ac955f8` | Qdrant retrieval index 的 staged/active revision 写入、向量复用、旧 revision 清理和资源删除。 |
-| 当前 CP14 | 待提交 | Qdrant dense/BM25 混合候选召回、active/resource/ACL 过滤和最小候选映射。 |
+| CP14 | `20c13cd3a` | Qdrant dense/BM25 混合候选召回、active/resource/ACL 过滤和最小候选映射。 |
+| 当前 CP15 | 待提交 | Redis 单 hash navigation state、统一 TTL 和 Lua 原子扩展。 |
 
 ## 3. 当前架构事实
 
@@ -144,19 +145,19 @@ uv run python -m compileall -q src tests           -> passed
 - chunk 与 SourceRef 身份不一致。
 - revision 不一致。
 
-CP14 最近一次工作树验证：
+CP15 最近一次工作树验证：
 
 ```text
-uv run pytest                                      -> 待全量验证
+uv run pytest                                      -> 75 passed
 uv run python -m compileall -q src/rag             -> passed
 uv run ruff check <CP13 target paths>              -> passed
 ```
 
-CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器装配测试；CP11 新增 generation cache 的批量命中、类别/资源隔离、覆盖和删除测试；CP12 新增 contextual text 的 cache hit/miss、严格响应、跳过和原文不变测试；CP13 新增 Qdrant collection、payload、向量复用、revision 激活/清理和错误归属测试；CP14 新增 dense/BM25 融合、active/resource/ACL filter、候选 payload 校验和空集合测试；当前仍没有真实 Mongo/Beanie/Qdrant 集成测试。
+CP10 新增了上游 ACL 字段映射、无效资源 ID、缺失资源和容器装配测试；CP11 新增 generation cache 的批量命中、类别/资源隔离、覆盖和删除测试；CP12 新增 contextual text 的 cache hit/miss、严格响应、跳过和原文不变测试；CP13 新增 Qdrant collection、payload、向量复用、revision 激活/清理和错误归属测试；CP14 新增 dense/BM25 融合、active/resource/ACL filter、候选 payload 校验和空集合测试；CP15 新增单 hash、统一 TTL、Lua 原子追加、状态缺失和 Section revision 测试；当前仍没有真实 Mongo/Beanie/Qdrant/Redis 集成测试。
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`，CP13 已提交为 `21ac955f8`。当前 CP14 正在完成 Qdrant CandidateSearch；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
+CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`，CP08.4 已提交为 `a8eeaaef6`，CP09 已提交为 `b16b7d630`，CP10 已提交为 `06d46fb3d`，CP10.1 已提交为 `fb931795e`，CP11 已提交为 `df411431c`，CP12 已提交为 `c5113eb44`，CP13 已提交为 `21ac955f8`，CP14 已提交为 `20c13cd3a`。当前 CP15 正在完成 Redis navigation state；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
 
 CP08.1 的稳定边界：
 
@@ -245,6 +246,14 @@ CP14 的实现边界：
 - `core/persistence/qdrant/acl_filter.py` 只把 `PermissionScope` 翻译成 Qdrant nested `group_acls` filter；授权规则仍以 `ResourceAcl.can_read()` 为领域语义来源。
 - 缺少 collection 或 limit 非正时返回空 list；空 lexical query、空/错误维度 semantic vector、缺失或类型错误 payload 直接抛出。
 - CP14 不负责 query embedding、应用层 rerank、ReadingBlock 去重、applied revision 核对、最终 ACL 复查、navigation state 或 Agent 结果装配。
+
+CP15 的实现边界：
+
+- `NavigationState` 与 `KnownSection` 位于 `domain/navigation.py`；Section 映射同时保存 `resource_id` 和发现时的 `content_revision`。
+- `NavigationStateStore` 位于 `domain/repositories`，只暴露 create/get/add sections/add nodes，不暴露 Redis key、hash 或 Lua 类型。
+- `RedisNavigationStateStore` 使用一个 `wisepen:rag:v2:navigation-state:<state_id>` hash；`known_sections` 和 `known_nodes` 作为 JSON 字段，避免 v1 多 key 结构产生孤立状态。
+- create 写入完整 hash 后设置统一 TTL；两个 add 操作用 Lua 原子检查主 key、合并集合并续期主 key，状态不存在直接抛出 `NavigationStateNotFoundError`。
+- CP15 不实现 LOCATE/READ/EXPAND 用例、state 用户/session 校验或删除编排；这些由 CP16、CP22、CP21/CP25 的 application 负责。
 
 ## 8. 接手禁区
 
