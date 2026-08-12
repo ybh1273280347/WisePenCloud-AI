@@ -32,7 +32,8 @@ base:     origin/main @ e1af497f7
 | CP08 | `81a47997e` | VERIFY 回源闭环。 |
 | CP08.1 | `79c350634` | 拆分 index 写入、结构获取、正文获取和图构建输入读取边界。 |
 | CP08.2 | `634c4d24f` | 拆分 Mongo 内容映射、SourcePart 文本组装和分片查询职责。 |
-| 当前 CP08.3 | 待提交 | 将持久化映射器从 domain 移回 Mongo persistence，并收敛为 serializer/deserializer 两个文件。 |
+| CP08.3 | `9d0a1bc46` | 将持久化映射器从 domain 移回 Mongo persistence，并收敛为 serializer/deserializer 两个文件。 |
+| 当前 CP08.4 | 待提交 | 将 Beanie 内容实体模块从 `content_index.py` 重命名为 `rag_content.py`。 |
 
 ## 3. 当前架构事实
 
@@ -58,7 +59,7 @@ RAG 不生成 Agent 的 `page_not_found`、`section_not_found`、`section_empty`
 
 ### Domain 与 persistence 约定
 
-- Mongo Document 必须放在 `domain/entities`，当前为 `content_index.py` 中的 Beanie entities。
+- Mongo Document 必须放在 `domain/entities`，当前为 `rag_content.py` 中的 RAG 内容 Beanie entities。文件名不使用 `index`，避免与 `application/rag/index` 的写入能力混淆。
 - repository port 必须放在 `domain/repositories`。
 - `application` 只依赖语义 port，不依赖 Mongo Document 或 driver 对象。
 - Mongo adapter 只有一条构造路径：依赖已完成 `init_beanie` 的 Document 类。
@@ -140,7 +141,7 @@ uv run python -m compileall -q src tests           -> passed
 
 ## 6. 当前工作树状态
 
-CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`。当前 CP08.3 正在修正持久化映射器的依赖方向；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
+CP08 已提交为 `81a47997e`，CP08.1 已提交为 `79c350634`，CP08.2 已提交为 `634c4d24f`，CP08.3 已提交为 `9d0a1bc46`。当前 CP08.4 正在修正 Beanie 内容实体模块命名；提交后后续会话应从该新 checkpoint 的干净工作树开始，不要改写已有提交。
 
 CP08.1 的稳定边界：
 

@@ -1,4 +1,4 @@
-from .content_index import (
+from .rag_content import (
     ContentRevisionEntity,
     ReadingBlockEntity,
     ResourceIndexStateEntity,
