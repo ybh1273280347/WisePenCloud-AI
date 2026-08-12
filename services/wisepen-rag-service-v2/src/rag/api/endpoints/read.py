@@ -16,14 +16,13 @@ from rag.api.schemas import (
 )
 from rag.application.rag.read import (
     ContentNotFoundError,
-    ContentWindow,
     DocumentContentReader,
     DocumentStructureReader,
-    SectionContent,
 )
 from rag.container import Container
 from rag.domain.acl import PermissionScope
 from rag.domain.error_codes import RagErrorCode
+from rag.domain.read_content import ContentWindow, SectionContent
 
 router = APIRouter()
 

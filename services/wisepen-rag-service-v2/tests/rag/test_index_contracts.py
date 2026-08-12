@@ -1,7 +1,7 @@
 import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.index import (
+from rag.application.rag.index.builders import (
     build_content_revision_id,
     build_reading_blocks,
     build_retrieval_chunks,
@@ -9,7 +9,7 @@ from rag.application.rag.index import (
     create_content_revision,
     parse_document_structure,
 )
-from rag.application.rag.index.revisions import decide_stage
+from rag.application.rag.index.builders.revisions import decide_stage
 from rag.application.rag.read import (
     ContentNotFoundError,
     DocumentContentReader,
@@ -18,6 +18,12 @@ from rag.application.rag.read import (
 from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.acl import PermissionScope, ResourceAcl
 from rag.domain.content_revision import ResourceIndexState
+from rag.domain.read_content import (
+    ContentWindow,
+    DocumentStructureResult,
+    SectionContent,
+    SectionFrontier,
+)
 from rag.domain.evidence import (
     EvidenceCandidate,
     EvidenceCorruptError,

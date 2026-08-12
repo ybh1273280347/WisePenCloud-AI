@@ -4,12 +4,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.read import AppliedContentReader, SectionView
 from rag.domain.acl import PermissionScope
 from rag.domain.navigation import (
     KnownSection,
     NavigationStateNotFoundError,
 )
+from rag.domain.read_content import SectionView
+from rag.domain.repositories.applied_content_reader import AppliedContentReader
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
 from rag.domain.repositories.navigation_state_store import NavigationStateStore
 

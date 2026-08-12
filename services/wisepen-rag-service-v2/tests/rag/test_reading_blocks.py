@@ -2,7 +2,7 @@ from itertools import pairwise
 
 import pytest
 
-from rag.application.rag.index import (
+from rag.application.rag.index.builders import (
     build_flat_text_sections,
     build_reading_blocks,
     parse_document_structure,

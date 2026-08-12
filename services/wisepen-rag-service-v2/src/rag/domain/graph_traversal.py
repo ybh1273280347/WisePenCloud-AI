@@ -1,4 +1,4 @@
-"""EXPAND 图遍历的跨边界数据契约。"""
+"""跨仓储、应用和 API 使用的知识图谱遍历契约。"""
 
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -38,7 +38,7 @@ class TraversedPath:
 
 @dataclass(slots=True)
 class GraphTraversalRequest:
-    """提交给图遍历 port 的查询约束。"""
+    """提交给图遍历仓储 port 的查询约束。"""
 
     seed_node_ids: list[str]
     permission_scope: PermissionScope

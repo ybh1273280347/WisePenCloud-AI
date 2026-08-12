@@ -15,7 +15,8 @@ from rag.application.rag.acl import (
     AuthoritativeAclNotFoundError,
     ResourceAclRefresher,
 )
-from rag.application.rag.index import ResourceDeleter, ResourceIndexer
+from rag.api.resource_deletion import ResourceDeletionService
+from rag.application.rag.index import ResourceIndexer
 
 NonEmptyText = Annotated[
     str,
@@ -89,7 +90,7 @@ class AclRecalculateHandler:
 
 
 class ResourceDestroyHandler:
-    def __init__(self, *, deleter: ResourceDeleter) -> None:
+    def __init__(self, *, deleter: ResourceDeletionService) -> None:
         self._deleter = deleter
 
     async def handle(self, payload: Mapping[str, Any]) -> None:

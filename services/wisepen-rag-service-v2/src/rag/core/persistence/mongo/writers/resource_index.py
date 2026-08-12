@@ -4,7 +4,10 @@ from collections.abc import Sequence
 
 from pymongo.errors import DuplicateKeyError
 
-from rag.application.rag.index.revisions import build_content_revision_id, decide_stage
+from rag.application.rag.index.builders.revisions import (
+    build_content_revision_id,
+    decide_stage,
+)
 from rag.domain.content_revision import ContentRevision, ResourceIndexState, SourcePart
 from rag.domain.document_structure import Section
 from rag.domain.entities import (

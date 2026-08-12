@@ -1,4 +1,4 @@
-"""显式失效并物理删除资源的全部 RAG 派生状态。"""
+"""Kafka 资源销毁事件触发的 RAG 派生状态清理。"""
 
 import asyncio
 from collections.abc import Sequence
@@ -12,7 +12,7 @@ from rag.domain.repositories import (
 )
 
 
-class ResourceDeleter:
+class ResourceDeletionService:
     """先清内容发布指针，再并行清理所有持久化派生数据。"""
 
     def __init__(

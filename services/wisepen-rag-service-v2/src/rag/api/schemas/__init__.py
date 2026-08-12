@@ -3,7 +3,7 @@ from .expand import (
     GraphExpandResponse,
     SectionExpandRequest,
     SectionExpandResponse,
-    SectionViewResponse,
+    SectionView,
 )
 from .locate import CandidateLocateRequest, CandidateLocateResponse
 from .read import (
@@ -23,6 +23,6 @@ __all__ = [
     "ResourceRequest",
     "SectionExpandRequest",
     "SectionExpandResponse",
-    "SectionViewResponse",
+    "SectionView",
     "SectionContentRequest",
 ]

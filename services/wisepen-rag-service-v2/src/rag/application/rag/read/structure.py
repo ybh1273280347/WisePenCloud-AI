@@ -1,22 +1,11 @@
 """获取已发布文档结构，不读取 page 或 Section 正文。"""
 
-from dataclasses import dataclass, field
-
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.acl import PermissionScope
-from rag.domain.content_revision import ContentRevision
-from rag.domain.document_structure import Section
+from rag.domain.read_content import DocumentStructureResult
+from rag.domain.repositories.applied_structure_reader import AppliedStructureReader
 
 from .content import ContentNotFoundError
-from .ports import AppliedStructureReader
-
-
-@dataclass(slots=True)
-class DocumentStructureResult:
-    """READ structure 的用例结果，不包含正文窗口。"""
-
-    revision: ContentRevision
-    sections: list[Section] = field(default_factory=list)
 
 
 class DocumentStructureReader:

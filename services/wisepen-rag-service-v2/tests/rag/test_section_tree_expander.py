@@ -15,7 +15,7 @@ from rag.domain.navigation import (
     NavigationState,
     NavigationStateNotFoundError,
 )
-from rag.application.rag.read import SectionContent, SectionFrontier
+from rag.domain.read_content import SectionContent, SectionFrontier
 from rag.utils.chunkers import SourceSpan
 
 

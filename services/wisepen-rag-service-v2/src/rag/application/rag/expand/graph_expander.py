@@ -2,18 +2,17 @@
 
 from dataclasses import dataclass, field
 
-from rag.application.rag.expand.graph_traversal import (
+from rag.domain.graph_traversal import (
     GraphTraversalRequest,
     TraversalDirection,
     TraversedEdge,
     TraversedPath,
 )
-from rag.application.rag.expand.ports import GraphTraversal
-from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.acl import PermissionScope
 from rag.domain.evidence import EvidenceRecord
 from rag.domain.knowledge_graph import KnowledgeNode, KnowledgeRelationType
 from rag.domain.navigation import NavigationStateNotFoundError
+from rag.domain.repositories.graph_traversal import GraphTraversal
 from rag.domain.repositories.navigation_state_store import NavigationStateStore
 from rag.utils.ranking import (
     RankCandidate,
@@ -21,6 +20,8 @@ from rag.utils.ranking import (
     RankQuery,
     RankRequest,
 )
+
+from rag.application.rag.verify import EvidenceVerifier
 
 
 class UnknownSeedNodeError(RuntimeError):

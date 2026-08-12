@@ -1,4 +1,4 @@
-from rag.application.rag.index import merge_candidate_graph
+from rag.application.rag.index.builders import merge_candidate_graph
 from rag.domain.knowledge_graph import (
     ExtractedKnowledgeNode,
     ExtractedKnowledgeRelation,

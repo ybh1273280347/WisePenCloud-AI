@@ -8,18 +8,15 @@ from typing import TYPE_CHECKING
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.locate.ports import MentionLookup
-from rag.application.rag.read import (
-    AppliedStructureReader,
-    DocumentStructureResult,
-    SectionFrontier,
-)
 from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.acl import PermissionScope
 from rag.domain.document_structure import Section
 from rag.domain.evidence import EvidenceCandidate, EvidenceRecord
 from rag.domain.knowledge_graph import KnowledgeNode
 from rag.domain.navigation import KnownSection
+from rag.domain.read_content import DocumentStructureResult, SectionFrontier
 from rag.domain.repositories.applied_revision_reader import AppliedRevisionReader
+from rag.domain.repositories.applied_structure_reader import AppliedStructureReader
 from rag.domain.repositories.candidate_search import CandidateSearch
 from rag.domain.repositories.navigation_state_store import NavigationStateStore
 from rag.domain.retrieval import (

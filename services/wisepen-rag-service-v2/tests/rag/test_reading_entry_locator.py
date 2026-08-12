@@ -11,7 +11,7 @@ from rag.domain.document_structure import Section, StructureMode
 from rag.domain.evidence import EvidenceRecord
 from rag.domain.knowledge_graph import KnowledgeNode, KnowledgeNodeKind
 from rag.domain.navigation import NavigationState
-from rag.application.rag.read import DocumentStructureResult
+from rag.domain.read_content import DocumentStructureResult
 from rag.domain.reading import ReadingBlock
 from rag.domain.retrieval import RetrievalCandidate, SourceRef
 from rag.utils.chunkers import SourceSpan

@@ -1,14 +1,15 @@
+from rag.domain.graph_traversal import (
+    GraphTraversalRequest,
+    TraversalDirection,
+    TraversedEdge,
+    TraversedPath,
+)
+
 from .graph_expander import (
     GraphExpandRequest,
     GraphExpandResult,
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
-)
-from .graph_traversal import (
-    GraphTraversalRequest,
-    TraversalDirection,
-    TraversedEdge,
-    TraversedPath,
 )
 from .section_expander import (
     SectionExpandResult,

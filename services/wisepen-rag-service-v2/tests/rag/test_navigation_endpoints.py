@@ -14,17 +14,14 @@ from rag.api.schemas import (
 )
 from rag.api.schemas import ReadSectionsRequest
 from rag.application.rag.expand import GraphExpandResult, UnknownSeedNodeError
-from rag.application.rag.expand.graph_traversal import TraversedEdge, TraversedPath
+from rag.domain.graph_traversal import TraversedEdge, TraversedPath
 from rag.application.rag.locate import (
     LocatedEvidence,
     LocatedSection,
     LocateError,
     LocateResult,
 )
-from rag.application.rag.read import (
-    SectionAccessRevokedError,
-    SectionNotDiscoveredError,
-)
+from rag.application.rag.expand import SectionAccessRevokedError, SectionNotDiscoveredError
 from rag.domain.content_revision import ContentRevision
 from rag.domain.document_structure import Section, StructureMode
 from rag.domain.error_codes import RagErrorCode
@@ -36,7 +33,7 @@ from rag.domain.knowledge_graph import (
     KnowledgeRelationType,
 )
 from rag.domain.navigation import NavigationStateNotFoundError
-from rag.application.rag.read import SectionContent, SectionFrontier
+from rag.domain.read_content import SectionContent, SectionFrontier
 from rag.domain.reading import ReadingBlock
 from rag.domain.retrieval import SourceRef
 from rag.utils.chunkers import SourceSpan

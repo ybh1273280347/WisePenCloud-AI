@@ -1,8 +1,8 @@
-"""EXPAND 能力依赖的外部查询 port。"""
+"""知识图谱遍历仓储契约。"""
 
 from typing import Protocol
 
-from .graph_traversal import GraphTraversalRequest, TraversedPath
+from rag.domain.graph_traversal import GraphTraversalRequest, TraversedPath
 
 
 class GraphTraversal(Protocol):

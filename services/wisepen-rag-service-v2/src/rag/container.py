@@ -13,14 +13,11 @@ from rag.api.kafka import (
     KafkaEventConsumer,
     ResourceDestroyHandler,
 )
+from rag.api.resource_deletion import ResourceDeletionService
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
 from rag.application.rag.expand import KnowledgeGraphExpander, SectionTreeExpander
-from rag.application.rag.index import (
-    ContextualTextIndexer,
-    KnowledgeGraphExtractor,
-    ResourceDeleter,
-    ResourceIndexer,
-)
+from rag.application.rag.index import KnowledgeGraphExtractor, ResourceIndexer
+from rag.application.rag.index.contextualize import ContextualTextIndexer
 from rag.application.rag.index.graph_extraction import QueryClientGraphRagLLM
 from rag.application.rag.locate import ReadingEntryLocator
 from rag.application.rag.read import (
@@ -342,8 +339,8 @@ class Container(containers.DeclarativeContainer):
         graph_extractor=knowledge_graph_extractor,
         graph_writer=knowledge_graph_writer,
     )
-    resource_deleter = providers.Singleton(
-        ResourceDeleter,
+    resource_deletion_service = providers.Singleton(
+        ResourceDeletionService,
         resource_writer=resource_index_writer,
         retrieval_writer=retrieval_index_writer,
         graph_writer=knowledge_graph_writer,
@@ -416,7 +413,7 @@ class Container(containers.DeclarativeContainer):
     )
     resource_destroy_handler = providers.Singleton(
         ResourceDestroyHandler,
-        deleter=resource_deleter,
+        deleter=resource_deletion_service,
     )
     document_ready_consumer = providers.Singleton(
         _build_kafka_consumer,
