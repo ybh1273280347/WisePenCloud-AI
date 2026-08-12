@@ -2,7 +2,11 @@ from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import ContextualTextIndexer
 from rag.application.rag.locate import ReadingEntryLocator
-from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
+from rag.application.rag.read import (
+    DiscoveredSectionReader,
+    DocumentContentReader,
+    DocumentStructureReader,
+)
 from rag.container import Container
 from rag.core.persistence.mongo import MongoGenerationCacheStore
 from rag.core.persistence.qdrant import (
@@ -38,6 +42,7 @@ def test_container_builds_read_objects_with_explicit_persistence_dependencies() 
     container.redis_client.override(object())
     container.config.navigation_state_ttl_seconds.from_value(3600)
     assert isinstance(container.navigation_state_store(), RedisNavigationStateStore)
+    assert isinstance(container.discovered_section_reader(), DiscoveredSectionReader)
 
     container.embedding_client.override(object())
     container.mention_lookup.override(object())

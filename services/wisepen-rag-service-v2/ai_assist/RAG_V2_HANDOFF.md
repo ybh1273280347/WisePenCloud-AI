@@ -51,7 +51,8 @@ base:     origin/main @ e1af497f7
 | CP19 | `4d39d2dc` | Neo4j v2 namespace、KnowledgeGraphWriter 和 building/published/skipped CAS 发布状态机。 |
 | CP19.1 | `693296c9` | 将知识关系稳定身份统一为 Repo.md 冻结的 `edge_id`。 |
 | CP20 | `a9c2e06d` | MentionLookup 按已核验 SourceRef、published graph、revision 和 ACL 发现初始节点并写入 navigation state。 |
-| CP21 | 当前工作树 | EXPAND 有界图遍历、路径排序、逐边 VERIFY 和并发安全的 known node 原子扩展。 |
+| CP21 | `4a3e5961` | EXPAND 有界图遍历、路径排序、逐边 VERIFY 和并发安全的 known node 原子扩展。 |
+| CP22 | 当前工作树 | 有状态 Section READ：state/ACL/revision 校验、完整正文读取与 frontier 原子扩展。 |
 
 ## 3. 当前架构事实
 
@@ -260,6 +261,13 @@ CP21 EXPAND 边界：
 - `KnowledgeGraphExpander` 校验 state 用户/session 与 seed 白名单，按请求 query 或 root query 排序，逐 edge 调用 `EvidenceVerifier.verify_refs()`，最后原子扩展 known nodes。
 - `NavigationStateStore.add_known_nodes()` 返回本次原子操作实际新增的 node IDs；并发调用只允许一个结果返回对应新路径，不使用 `get -> compare -> add`。
 - EXPAND 返回领域 node、edge、path 和权威 `EvidenceRecord`，不组装 HTTP/MCP/Agent 文案。
+
+CP22 有状态 READ 边界：
+
+- `DiscoveredSectionReader` 只读取 navigation state 中已经发现的 Section；无状态 `DocumentContentReader` 的 page/Section 行为不变。
+- state 必须匹配当前 user/session；未知 Section 直接抛 `SectionNotDiscoveredError`，不静默扩大读取范围。
+- 正文查询前后各执行一次统一 ACL 与 applied revision 校验，读取期间发生撤权或 revision 切换时 fail closed。
+- `AppliedContentReader` 返回完整 `SectionContent` 后，parent/previous/next/children 使用现有 `add_known_sections()` 原子加入同一 state。
 
 CP13 的实现边界：
 

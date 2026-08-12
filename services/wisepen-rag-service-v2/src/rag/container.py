@@ -14,7 +14,11 @@ from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import ContextualTextIndexer, KnowledgeGraphExtractor
 from rag.application.rag.index.graph_extraction import QueryClientGraphRagLLM
 from rag.application.rag.locate import ReadingEntryLocator
-from rag.application.rag.read import DocumentContentReader, DocumentStructureReader
+from rag.application.rag.read import (
+    DiscoveredSectionReader,
+    DocumentContentReader,
+    DocumentStructureReader,
+)
 from rag.application.rag.verify import EvidenceVerifier
 from rag.core.persistence.mongo import (
     MongoAppliedContentReader,
@@ -238,6 +242,13 @@ class Container(containers.DeclarativeContainer):
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,
         reader=resource_acl_store,
+    )
+    discovered_section_reader = providers.Singleton(
+        DiscoveredSectionReader,
+        content_reader=applied_content_reader,
+        revision_reader=applied_revision_reader,
+        authorizer=permission_authorizer,
+        state_store=navigation_state_store,
     )
     mention_lookup = providers.Singleton(
         Neo4jMentionLookup,
