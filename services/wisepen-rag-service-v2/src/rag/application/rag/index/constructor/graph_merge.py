@@ -1,4 +1,11 @@
-"""把窗口级知识候选规范化并合并为稳定的资源知识图谱。"""
+"""把窗口级知识候选规范化并合并为稳定的资源知识图谱。
+
+合并流程的核心目标：
+1. 把不同窗口抽取出的 ``ExtractedKnowledgeNode`` / ``ExtractedKnowledgeRelation``
+   规范化为统一的 ``KnowledgeNode`` / ``KnowledgeRelation``，按 canonical key 去重。
+2. 保留每条知识对应的 evidence（引用、ReadingBlock、source_ref），用于回源。
+3. 通过序列化后的稳定哈希生成 ``graph_revision``，使图谱内容可比对、可缓存。
+"""
 
 import json
 import re
@@ -19,6 +26,8 @@ from rag.domain.models.graph import (
     resource_node_id,
 )
 
+# 用于在 graph_facts 中标记当前合并产物的版本，参与 graph_revision 计算，
+# 便于在 schema 变更时让旧 revision 失效。
 _GRAPH_MERGE_VERSION = "knowledge-graph-merge:v1"
 
 
@@ -28,7 +37,19 @@ def merge_candidate_graph(
     content_revision: str,
     extractions: list[KnowledgeWindowExtraction],
 ) -> KnowledgeGraph:
-    """合并同一资源 revision 的已校验窗口候选。"""
+    """合并同一资源 revision 的已校验窗口候选。
+
+    参数:
+        resource_id: 资源 ID；所有 extraction 必须属于同一资源。
+        content_revision: 内容 revision；所有 extraction 必须属于同一 revision。
+        extractions: 各窗口的抽取结果，按窗口顺序传入即可，顺序不影响最终图谱内容
+            （最终通过 canonical key 排序保证确定性）。
+
+    返回:
+        合并后的 ``KnowledgeGraph``，其中节点、关系、mention 均已去重并排序，
+        ``graph_revision`` 由序列化后的稳定哈希得出。
+    """
+    # 节点表：node_id -> KnowledgeNode。先把资源自身作为根节点放入。
     nodes = {
         resource_node_id(resource_id): KnowledgeNode(
             node_id=resource_node_id(resource_id),
@@ -37,28 +58,36 @@ def merge_candidate_graph(
             resource_id=resource_id,
         )
     }
+    # mention 索引：(node_id, evidence_id) -> evidence。
+    # 同一个节点可能在多个窗口被提及，evidence_id 用于区分不同的引用来源。
     mentions: dict[tuple[str, str], KnowledgeEvidence] = {}
+    # 关系分组：按 (source, target, type, predicate_key) 聚合同一对节点间的同型关系，
+    # 用于后续合并 evidence、生成稳定 edge_id。
     grouped_relations: dict[
         tuple[str, str, KnowledgeRelationType, str | None],
         list[ExtractedKnowledgeRelation],
     ] = {}
 
     for extraction in extractions:
+        # 防御：保证 extraction 归属正确，避免跨资源/跨 revision 污染图谱。
         if extraction.resource_id != resource_id:
             raise ValueError("knowledge extraction belongs to another resource")
         if extraction.content_revision != content_revision:
             raise ValueError("knowledge extraction belongs to another revision")
 
+        # local_id -> 全局 node_id 的映射表，供该窗口内的 relation 引用解析。
         local_node_ids: dict[str, str] = {}
         for candidate in extraction.nodes:
             node = _canonical_node(candidate, resource_id)
             local_node_ids[candidate.local_id] = node.node_id
             existing = nodes.get(node.node_id)
+            # 同一 canonical 节点可能被多次抽取，保留 label 字典序最小者以保证确定性。
             if existing is None or _label_sort_key(node.label) < _label_sort_key(
                 existing.label
             ):
                 nodes[node.node_id] = node
 
+            # 资源节点本身不收集 evidence（避免把资源根节点当作可被引用的实体）。
             if candidate.evidence is not None and node.kind is not KnowledgeNodeKind.RESOURCE:
                 mentions[(node.node_id, candidate.evidence.evidence_id)] = (
                     candidate.evidence
@@ -67,8 +96,11 @@ def merge_candidate_graph(
         for relation in extraction.relations:
             source_node_id = local_node_ids.get(relation.source_local_id)
             target_node_id = local_node_ids.get(relation.target_local_id)
+            # 引用的端点未在该窗口出现则丢弃该关系（无法稳定解析端点）。
             if source_node_id is None or target_node_id is None:
                 continue
+            # RELATED_TO 关系使用规范化 predicate 作为分组键，使同义谓词合并；
+            # 其它关系类型不使用 predicate_key（保持类型本身的区分）。
             predicate_key = (
                 _canonical_key(relation.predicate)
                 if relation.relation_type is KnowledgeRelationType.RELATED_TO
@@ -85,7 +117,10 @@ def merge_candidate_graph(
                 [],
             ).append(relation)
 
+    # 节点按 node_id 字典序输出，确保图谱内容稳定。
     ordered_nodes = [nodes[node_id] for node_id in sorted(nodes)]
+    # graph_facts 是参与 graph_revision 计算的“事实摘要”，包含全部节点/mention/关系。
+    # 任何字段变化都会让 revision 改变，从而触发下游重建。
     graph_facts = {
         "version": _GRAPH_MERGE_VERSION,
         "resource_id": resource_id,
@@ -141,6 +176,8 @@ def merge_candidate_graph(
         graph_revision=graph_revision,
         nodes=ordered_nodes,
         mentions=[
+            # mention_id 由 graph_revision + node + evidence 共同决定，
+            # 因此图谱内容变化时所有 mention_id 也会同步刷新。
             KnowledgeMention(
                 mention_id=_stable_id(
                     "knm",
@@ -174,6 +211,15 @@ def _canonical_node(
     candidate: ExtractedKnowledgeNode,
     resource_id: str,
 ) -> KnowledgeNode:
+    """把窗口候选节点规范化为全局稳定的 ``KnowledgeNode``。
+
+    规则：
+    - RESOURCE 类型：直接使用资源自身节点 ID（避免重复创建资源根节点）。
+    - EXTERNAL_SOURCE 类型：以 normalized label 的 casefold 作为 canonical key，
+      生成跨窗口共享的节点 ID。
+    - 其它实体类型：要求 ``entity_type`` 非空，并将 entity_type + canonical key
+      一起纳入节点 ID 命名空间，避免不同类型同名实体被错误合并。
+    """
     if candidate.kind is KnowledgeNodeKind.RESOURCE:
         return KnowledgeNode(
             node_id=resource_node_id(resource_id),
@@ -209,6 +255,11 @@ def _relation_fact(
     key: tuple[str, str, KnowledgeRelationType, str | None],
     relations: list[ExtractedKnowledgeRelation],
 ) -> dict[str, object]:
+    """把同一分组的关系序列化为参与 graph_revision 计算的事实字典。
+
+    与 ``_merged_relation`` 不同，本函数只输出可哈希、可比较的纯数据结构，
+    供 ``graph_facts`` JSON 序列化使用。
+    """
     source_node_id, target_node_id, relation_type, predicate_key = key
     evidence = {
         relation.evidence.evidence_id: relation.evidence for relation in relations
@@ -234,6 +285,14 @@ def _merged_relation(
     key: tuple[str, str, KnowledgeRelationType, str | None],
     relations: list[ExtractedKnowledgeRelation],
 ) -> KnowledgeRelation:
+    """把同一分组的关系合并为一条 ``KnowledgeRelation``。
+
+    合并策略：
+    - edge_id 由 graph_revision + 端点 + 类型 + predicate_key 共同哈希得到，
+      保证只要图谱内容相同，关系 ID 就稳定。
+    - evidence_quotes / evidence_source_ref_ids 取所有原始关系的并集并排序，
+      用于回源展示。
+    """
     source_node_id, target_node_id, relation_type, predicate_key = key
     evidence = {
         relation.evidence.evidence_id: relation.evidence for relation in relations
@@ -267,6 +326,11 @@ def _relation_predicate(
     predicate_key: str | None,
     relations: list[ExtractedKnowledgeRelation],
 ) -> str | None:
+    """从分组关系中选出代表 predicate 文本。
+
+    当 ``predicate_key`` 为 None（非 RELATED_TO 类型）时直接返回 None；
+    否则在所有非空 predicate 中取规范化后的字典序最小者，保证确定性。
+    """
     if predicate_key is None:
         return None
     return min(
@@ -277,17 +341,36 @@ def _relation_predicate(
 
 
 def _normalize_label(label: str) -> str:
+    """统一 label 的字符表示：NFKC 规范化 + 折叠空白 + 去首尾空白。
+
+    NFKC 会把全角/半角变体、组合字符等统一为标准形式，
+    避免视觉相同但编码不同的 label 被当作两个不同节点。
+    """
     return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", label)).strip()
 
 
 def _canonical_key(label: str) -> str:
+    """生成用于分组的 canonical key：规范化 + casefold。
+
+    用于把大小写/空白差异但语义相同的 label 视为同一对象。
+    """
     return _normalize_label(label).casefold()
 
 
 def _label_sort_key(label: str) -> tuple[str, str]:
+    """节点 label 的排序键：先按 casefold 排序，再按原始 label 二次排序。
+
+    双层排序保证大小写不同但语义相同的 label 相邻，同时保留原始大小写差异
+    作为 tiebreaker 以确保完全确定性。
+    """
     return label.casefold(), label
 
 
 def _stable_id(prefix: str, *parts: str) -> str:
+    """基于多个字符串部件生成稳定短哈希 ID。
+
+    使用 ``\\0`` 作为分隔符避免不同部件之间的歧义拼接，
+    截取 sha256 前 32 个字符（128 位）作为最终 ID，前缀区分用途。
+    """
     digest = sha256("\0".join(parts).encode("utf-8")).hexdigest()
     return f"{prefix}_{digest[:32]}"
