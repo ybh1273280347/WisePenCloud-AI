@@ -1,0 +1,414 @@
+=== 原始长文本 ===
+# Demo 文档
+
+这是前言。它不属于任何标题节点的正文，但会落入 root section 的 subtree_span。
+
+<!-- page 1 -->
+
+## 一、背景
+
+这里是背景说明的第一段。
+
+这里是背景说明的第二段，继续给后面的章节提供上下文。
+
+### 一.1 现状
+
+现状部分会跨页，并且保留自己的 own_span。
+
+<!-- page 2 -->
+
+### 一.2 问题
+
+问题部分说明为什么需要标题树和正文分离。
+
+## 二、方案
+
+这里开始进入方案主线。
+
+### 二.1 读取
+
+读取能力只负责把 section_id 映射成正文。
+
+### 二.2 展开
+
+展开能力只处理已发现节点，不接受任意 section_id。
+
+<!-- page 3 -->
+
+#### 二.2.1 继续展开
+
+这一层只是为了演示更深的 section_path。
+
+## 三、结论
+
+最后一章总结一下。
+
+
+=== parse_document_structure 结果 ===
+{
+  "mode": "sectioned",
+  "total_length": 410,
+  "pages": [
+    {
+      "page_label": "1",
+      "source_span": {
+        "start_offset": 65,
+        "end_offset": 172
+      }
+    },
+    {
+      "page_label": "2",
+      "source_span": {
+        "start_offset": 172,
+        "end_offset": 329
+      }
+    },
+    {
+      "page_label": "3",
+      "source_span": {
+        "start_offset": 329,
+        "end_offset": 410
+      }
+    }
+  ],
+  "sections": [
+    {
+      "section_id": "rsec_3354e5dbed9474829d0b9813a2e2a294",
+      "title": "",
+      "level": 0,
+      "parent_section_id": null,
+      "ordinal": 0,
+      "section_path": [],
+      "own_span": {
+        "start_offset": 0,
+        "end_offset": 0
+      },
+      "subtree_span": {
+        "start_offset": 0,
+        "end_offset": 410
+      },
+      "preview": ""
+    },
+    {
+      "section_id": "rsec_df5931bd1f9eb465763039617e391626",
+      "title": "Demo 文档",
+      "level": 1,
+      "parent_section_id": "rsec_3354e5dbed9474829d0b9813a2e2a294",
+      "ordinal": 0,
+      "section_path": [
+        "Demo 文档"
+      ],
+      "own_span": {
+        "start_offset": 0,
+        "end_offset": 82
+      },
+      "subtree_span": {
+        "start_offset": 0,
+        "end_offset": 410
+      },
+      "preview": ""
+    },
+    {
+      "section_id": "rsec_6d8e780a7febcdb342f867df6e82cdcd",
+      "title": "一、背景",
+      "level": 2,
+      "parent_section_id": "rsec_df5931bd1f9eb465763039617e391626",
+      "ordinal": 0,
+      "section_path": [
+        "Demo 文档",
+        "一、背景"
+      ],
+      "own_span": {
+        "start_offset": 82,
+        "end_offset": 133
+      },
+      "subtree_span": {
+        "start_offset": 82,
+        "end_offset": 223
+      },
+      "preview": ""
+    },
+    {
+      "section_id": "rsec_5f46a40aeb4b2b83922d3156d1669523",
+      "title": "一.1 现状",
+      "level": 3,
+      "parent_section_id": "rsec_6d8e780a7febcdb342f867df6e82cdcd",
+      "ordinal": 0,
+      "section_path": [
+        "Demo 文档",
+        "一、背景",
+        "一.1 现状"
+      ],
+      "own_span": {
+        "start_offset": 133,
+        "end_offset": 189
+      },
+      "subtree_span": {
+        "start_offset": 133,
+        "end_offset": 189
+      },
+      "preview": ""
+    },
+    {
+      "section_id": "rsec_8f1809b8d128a35219396401e6e73907",
+      "title": "一.2 问题",
+      "level": 3,
+      "parent_section_id": "rsec_6d8e780a7febcdb342f867df6e82cdcd",
+      "ordinal": 1,
+      "section_path": [
+        "Demo 文档",
+        "一、背景",
+        "一.2 问题"
+      ],
+      "own_span": {
+        "start_offset": 189,
+        "end_offset": 223
+      },
+      "subtree_span": {
+        "start_offset": 189,
+        "end_offset": 223
+      },
+      "preview": ""
+    },
+    {
+      "section_id": "rsec_156aa6b0af4be4a5a5bfa3e00e6b1235",
+      "title": "二、方案",
+      "level": 2,
+      "parent_section_id": "rsec_df5931bd1f9eb465763039617e391626",
+      "ordinal": 1,
+      "section_path": [
+        "Demo 文档",
+        "二、方案"
+      ],
+      "own_span": {
+        "start_offset": 223,
+        "end_offset": 245
+      },
+      "subtree_span": {
+        "start_offset": 223,
+        "end_offset": 391
+      },
+      "preview": ""
+    },
+    {
+      "section_id": "rsec_f9ecca1bb4036766cfb5e61dcdd37238",
+      "title": "二.1 读取",
+      "level": 3,
+      "parent_section_id": "rsec_156aa6b0af4be4a5a5bfa3e00e6b1235",
+      "ordinal": 0,
+      "section_path": [
+        "Demo 文档",
+        "二、方案",
+        "二.1 读取"
+      ],
+      "own_span": {
+        "start_offset": 245,
+        "end_offset": 285
+      },
+      "subtree_span": {
+        "start_offset": 245,
+        "end_offset": 285
+      },
+      "preview": ""
+    },
+    {
+      "section_id": "rsec_69bb7471518bf947c59d9f50d0a9ecd5",
+      "title": "二.2 展开",
+      "level": 3,
+      "parent_section_id": "rsec_156aa6b0af4be4a5a5bfa3e00e6b1235",
+      "ordinal": 1,
+      "section_path": [
+        "Demo 文档",
+        "二、方案",
+        "二.2 展开"
+      ],
+      "own_span": {
+        "start_offset": 285,
+        "end_offset": 346
+      },
+      "subtree_span": {
+        "start_offset": 285,
+        "end_offset": 391
+      },
+      "preview": ""
+    },
+    {
+      "section_id": "rsec_2cc2a44db26f8d8931021a08492976e6",
+      "title": "二.2.1 继续展开",
+      "level": 4,
+      "parent_section_id": "rsec_69bb7471518bf947c59d9f50d0a9ecd5",
+      "ordinal": 0,
+      "section_path": [
+        "Demo 文档",
+        "二、方案",
+        "二.2 展开",
+        "二.2.1 继续展开"
+      ],
+      "own_span": {
+        "start_offset": 346,
+        "end_offset": 391
+      },
+      "subtree_span": {
+        "start_offset": 346,
+        "end_offset": 391
+      },
+      "preview": ""
+    },
+    {
+      "section_id": "rsec_36cfb95d7afa58b366c0a4de67aaa1a2",
+      "title": "三、结论",
+      "level": 2,
+      "parent_section_id": "rsec_df5931bd1f9eb465763039617e391626",
+      "ordinal": 2,
+      "section_path": [
+        "Demo 文档",
+        "三、结论"
+      ],
+      "own_span": {
+        "start_offset": 391,
+        "end_offset": 410
+      },
+      "subtree_span": {
+        "start_offset": 391,
+        "end_offset": 410
+      },
+      "preview": ""
+    }
+  ]
+}
+
+=== getDocumentStructure 可直接返回的 outline ===
+{
+  "resource_id": "demo-resource",
+  "document_version": 1,
+  "content_revision": "rrev_0806256d78336c218135832f3cda0c88",
+  "structure_mode": "sectioned",
+  "total_length": 410,
+  "outline": [
+    {
+      "section_id": "rsec_df5931bd1f9eb465763039617e391626",
+      "title": "Demo 文档",
+      "level": 1,
+      "breadcrumbs": [
+        "Demo 文档"
+      ],
+      "start_page_label": "1",
+      "end_page_label": "3",
+      "children": [
+        {
+          "section_id": "rsec_6d8e780a7febcdb342f867df6e82cdcd",
+          "title": "一、背景",
+          "level": 2,
+          "breadcrumbs": [
+            "Demo 文档",
+            "一、背景"
+          ],
+          "start_page_label": "1",
+          "end_page_label": "2",
+          "children": [
+            {
+              "section_id": "rsec_5f46a40aeb4b2b83922d3156d1669523",
+              "title": "一.1 现状",
+              "level": 3,
+              "breadcrumbs": [
+                "Demo 文档",
+                "一、背景",
+                "一.1 现状"
+              ],
+              "start_page_label": "1",
+              "end_page_label": "2",
+              "children": []
+            },
+            {
+              "section_id": "rsec_8f1809b8d128a35219396401e6e73907",
+              "title": "一.2 问题",
+              "level": 3,
+              "breadcrumbs": [
+                "Demo 文档",
+                "一、背景",
+                "一.2 问题"
+              ],
+              "start_page_label": "2",
+              "end_page_label": "2",
+              "children": []
+            }
+          ]
+        },
+        {
+          "section_id": "rsec_156aa6b0af4be4a5a5bfa3e00e6b1235",
+          "title": "二、方案",
+          "level": 2,
+          "breadcrumbs": [
+            "Demo 文档",
+            "二、方案"
+          ],
+          "start_page_label": "2",
+          "end_page_label": "3",
+          "children": [
+            {
+              "section_id": "rsec_f9ecca1bb4036766cfb5e61dcdd37238",
+              "title": "二.1 读取",
+              "level": 3,
+              "breadcrumbs": [
+                "Demo 文档",
+                "二、方案",
+                "二.1 读取"
+              ],
+              "start_page_label": "2",
+              "end_page_label": "2",
+              "children": []
+            },
+            {
+              "section_id": "rsec_69bb7471518bf947c59d9f50d0a9ecd5",
+              "title": "二.2 展开",
+              "level": 3,
+              "breadcrumbs": [
+                "Demo 文档",
+                "二、方案",
+                "二.2 展开"
+              ],
+              "start_page_label": "2",
+              "end_page_label": "3",
+              "children": [
+                {
+                  "section_id": "rsec_2cc2a44db26f8d8931021a08492976e6",
+                  "title": "二.2.1 继续展开",
+                  "level": 4,
+                  "breadcrumbs": [
+                    "Demo 文档",
+                    "二、方案",
+                    "二.2 展开",
+                    "二.2.1 继续展开"
+                  ],
+                  "start_page_label": "3",
+                  "end_page_label": "3",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "section_id": "rsec_36cfb95d7afa58b366c0a4de67aaa1a2",
+          "title": "三、结论",
+          "level": 2,
+          "breadcrumbs": [
+            "Demo 文档",
+            "三、结论"
+          ],
+          "start_page_label": "3",
+          "end_page_label": "3",
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+
+=== 你该怎么看这份输出 ===
+1. structure.sections 是扁平事实：每个 Section 都有 own_span / subtree_span。
+2. outline 是给 AI 的目录：section 只出现一次，页码作为边界信息附着在节点上。
+3. 这里保留 breadcrumbs，但不再暴露 page-first 的地图结构。
+4. READ 的 getDocumentStructure 先给目录；
+   GET getSectionContent 再按 section_id 读正文；
+   EXPAND 只处理 navigation state 已发现的 Section。

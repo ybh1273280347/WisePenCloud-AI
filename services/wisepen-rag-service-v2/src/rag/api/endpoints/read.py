@@ -2,14 +2,14 @@
 
 from typing import Annotated
 
-from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, Depends
-
 from common.core.domain import R
 from common.core.exceptions import ServiceException
 from common.security import SecurityContextHolder, require_login
+from dependency_injector.wiring import Provide, inject
+from fastapi import APIRouter, Depends
+
 from rag.api.schemas import (
-    DocumentStructureResponse,
+    DocumentOutlineResponse,
     PageContentRequest,
     ResourceRequest,
     SectionContentRequest,
@@ -18,18 +18,18 @@ from rag.application.rag.read import (
     ContentAccessRevokedError,
     ContentNotFoundError,
     DocumentContentReader,
-    DocumentStructureReader,
+    DocumentOutlineReader,
 )
-from rag.domain.models.acl import PermissionScope
 from rag.domain.error_codes import RagErrorCode
+from rag.domain.models.acl import PermissionScope
 from rag.domain.models.content import ContentWindow, SectionContent
 
 router = APIRouter()
 
 AuthenticatedUser = Annotated[str, Depends(require_login)]
-StructureReader = Annotated[
-    DocumentStructureReader,
-    Depends(Provide["document_structure_reader"]),
+OutlineReader = Annotated[
+    DocumentOutlineReader,
+    Depends(Provide["document_outline_reader"]),
 ]
 ContentReader = Annotated[
     DocumentContentReader,
@@ -37,15 +37,15 @@ ContentReader = Annotated[
 ]
 
 
-@router.post("/getDocumentStructure", response_model=R[DocumentStructureResponse])
+@router.post("/getDocumentOutline", response_model=R[DocumentOutlineResponse])
 @inject
-async def get_document_structure(
+async def get_document_outline(
         request: ResourceRequest,
         user_id: AuthenticatedUser,
-        reader: StructureReader,
-) -> R[DocumentStructureResponse]:
+        reader: OutlineReader,
+) -> R[DocumentOutlineResponse]:
     try:
-        result = await reader.get_structure(
+        result = await reader.get_document_outline(
             resource_id=request.resource_id,
             permission_scope=_permission_scope(user_id),
         )
@@ -55,17 +55,13 @@ async def get_document_structure(
         raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
     except Exception as error:
         raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
-    revision = result.revision
     return R.success(
-        DocumentStructureResponse(
-            resource_id=revision.resource_id,
-            document_version=revision.document_version,
-            content_revision=revision.content_revision,
-            structure_mode=revision.structure_mode.value,
-            total_length=revision.total_length,
-            pages=revision.pages,
-            sections=result.sections,
-            section_tree=result.section_tree,
+        DocumentOutlineResponse(
+            resource_id=result.revision.resource_id,
+            document_version=result.revision.document_version,
+            content_revision=result.revision.content_revision,
+            total_length=result.revision.total_length,
+            outline=result.outline,
         )
     )
 

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 from rag.domain.models.structure import (
     PageRange,
     Section,
-    SectionTreeNode,
     StructureMode,
 )
 from rag.utils.chunkers import SourceSpan
@@ -64,17 +63,6 @@ class ReadingBlock:
     source_spans: list[SourceSpan] = field(default_factory=list)
     page_labels: list[str] = field(default_factory=list)
     anchor_labels: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class DocumentStructureResult:
-    """READ structure 的读取结果，不包含正文窗口。"""
-
-    revision: ContentRevision
-    # sections 是按 section_id 精确读取的索引表；section_tree 是给 Agent 先看目录再选页/标题的阅读地图。
-    sections: list[Section] = field(default_factory=list)
-    section_tree: list[SectionTreeNode] = field(default_factory=list)
-    pages: list[PageRange] = field(default_factory=list)
 
 
 @dataclass(slots=True)

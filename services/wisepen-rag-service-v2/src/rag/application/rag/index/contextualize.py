@@ -125,7 +125,6 @@ class ContextualTextIndexer:
         }
         missing = [key for key in chunk_contexts if key not in stored_contexts]
         if missing:
-            # 用信号量限制并发，避免大批量调用压垮 LLM 后端。
             semaphore = asyncio.Semaphore(_MAX_CONCURRENCY)
             generated = await asyncio.gather(
                 *(

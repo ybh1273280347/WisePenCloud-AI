@@ -7,22 +7,22 @@ from .expand import (
 )
 from .locate import CandidateLocateRequest, CandidateLocateResponse
 from .read import (
-    DocumentStructureResponse,
+    DocumentOutlineResponse,
     PageContentRequest,
     ResourceRequest,
     SectionContentRequest,
 )
 
 __all__ = [
-    "DiscoveredSectionExpandRequest",
-    "DiscoveredSectionExpandResponse",
-    "DocumentStructureResponse",
-    "GraphExpandRequest",
-    "GraphExpandResponse",
     "CandidateLocateRequest",
     "CandidateLocateResponse",
+    "DiscoveredSectionExpandRequest",
+    "DiscoveredSectionExpandResponse",
+    "DocumentOutlineResponse",
+    "GraphExpandRequest",
+    "GraphExpandResponse",
     "PageContentRequest",
     "ResourceRequest",
-    "SectionView",
     "SectionContentRequest",
+    "SectionView",
 ]

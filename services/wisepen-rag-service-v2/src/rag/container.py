@@ -11,8 +11,8 @@ from rag.api.kafka import (
     AclRecalculateHandler,
     DocumentReadyHandler,
     KafkaEventConsumer,
-    ResourceDestroyHandler, )
-from rag.core.persistence import ResourceDeleter
+    ResourceDestroyHandler,
+)
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
 from rag.application.rag.expand import DiscoveredSectionExpander, KnowledgeGraphExpander
 from rag.application.rag.index import KnowledgeGraphExtractor, ResourceIndexer
@@ -21,10 +21,11 @@ from rag.application.rag.index.graph import QueryClientGraphRagLLM
 from rag.application.rag.locate import ReadingCandidateLocator
 from rag.application.rag.read import (
     DocumentContentReader,
-    DocumentStructureReader,
+    DocumentOutlineReader,
 )
 from rag.application.rag.verify import EvidenceVerifier
 from rag.core.config import settings
+from rag.core.persistence import ResourceDeleter
 from rag.core.persistence.mongo import (
     MongoAppliedContentReader,
     MongoAppliedRevisionReader,
@@ -298,9 +299,9 @@ class Container(containers.DeclarativeContainer):
         PermissionAuthorizer,
         reader=resource_acl_store,
     )
-    document_structure_reader = providers.Singleton(
-        DocumentStructureReader,
-        reader=applied_structure_reader,
+    document_outline_reader = providers.Singleton(
+        DocumentOutlineReader,
+        structure_reader=applied_structure_reader,
         authorizer=permission_authorizer,
     )
     document_content_reader = providers.Singleton(

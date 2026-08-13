@@ -3,17 +3,22 @@ from dataclasses import dataclass
 import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.locate import LocateError, LocateRequest, ReadingCandidateLocator
+from rag.application.rag.locate import (
+    LocateError,
+    LocateRequest,
+    ReadingCandidateLocator,
+)
 from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.models.acl import PermissionScope, ResourceAcl
-from rag.domain.models.content import ContentRevision
-from rag.domain.models.structure import Section, StructureMode
+from rag.domain.models.content import ContentRevision, ReadingBlock
 from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import KnowledgeNode, KnowledgeNodeKind
 from rag.domain.models.navigation import NavigationState
-from rag.domain.models.content import DocumentStructureResult
-from rag.domain.models.content import ReadingBlock
 from rag.domain.models.retrieval import RetrievalCandidate, SourceRef
+from rag.domain.models.structure import Section, StructureMode
+from rag.domain.repositories.mongo.readers.applied_structure import (
+    AppliedStructureSnapshot,
+)
 from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import (
     RankDecision,
@@ -260,7 +265,7 @@ async def test_locate_embeds_once_reranks_and_keeps_multiple_blocks_in_one_secti
         ),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
-            DocumentStructureResult(revision=revision, sections=[root, section, sibling])
+            AppliedStructureSnapshot(revision=revision, sections=[root, section, sibling])
         ),
         state_store=state_store,
     )
@@ -308,7 +313,7 @@ async def test_locate_filters_acl_and_old_revisions_before_reranking():
         mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
-            DocumentStructureResult(revision=revision, sections=[section])
+            AppliedStructureSnapshot(revision=revision, sections=[section])
         ),
         state_store=_StateStore(),
     )
@@ -357,11 +362,11 @@ async def test_locate_keeps_same_chunk_id_from_different_resources_distinct():
         ),
         structure_reader=_StructureReader(
             {
-                "resource-1": DocumentStructureResult(
+                "resource-1": AppliedStructureSnapshot(
                     revision=first_revision,
                     sections=[first_section],
                 ),
-                "resource-2": DocumentStructureResult(
+                "resource-2": AppliedStructureSnapshot(
                     revision=second_revision,
                     sections=[second_section],
                 ),
@@ -399,7 +404,7 @@ async def test_locate_irrelevant_decision_creates_empty_state_without_verificati
         mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
-            DocumentStructureResult(revision=revision, sections=[])
+            AppliedStructureSnapshot(revision=revision, sections=[])
         ),
         state_store=state_store,
     )
@@ -439,7 +444,7 @@ async def test_locate_uncertain_decision_keeps_verified_entry():
         mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
-            DocumentStructureResult(revision=revision, sections=[section])
+            AppliedStructureSnapshot(revision=revision, sections=[section])
         ),
         state_store=_StateStore(),
     )
@@ -476,7 +481,7 @@ async def test_locate_rejects_revision_change_after_evidence_verification():
         mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
         structure_reader=_StructureReader(
-            DocumentStructureResult(revision=changed_revision, sections=[section])
+            AppliedStructureSnapshot(revision=changed_revision, sections=[section])
         ),
         state_store=_StateStore(),
     )

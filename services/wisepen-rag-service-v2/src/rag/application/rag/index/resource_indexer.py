@@ -161,14 +161,7 @@ class ResourceIndexer:
             chunks=chunks,
         )
 
-        # 4. ACL 同步
-        # 检索结果必须按 ACL 过滤；若资源尚无 ACL 则视为配置错误，直接报错。
-        await self._acl_refresher.refresh(resource_id)
-        resource_acl = await self._acl_reader.get_resource_acl(resource_id)
-        if resource_acl is None:
-            raise RuntimeError(f"resource {resource_id} has no synchronized ACL")
-
-        # 5. 向量计算
+        # 4. 向量计算
         # 先尝试复用已存储的向量（chunk_id 一致即可复用），缺失部分才调用 embedding 模型。
         dense_vectors = dict(
             await self._retrieval_writer.load_reusable_vectors(
@@ -194,6 +187,14 @@ class ResourceIndexer:
                     )
                 }
             )
+
+        # 5. ACL 同步
+        # 检索结果必须按 ACL 过滤；若资源尚无 ACL 则视为配置错误，直接报错。
+        # 显式刷新 ACL，避免在索引期间资源 ACL 发生变更导致检索结果不一致。
+        await self._acl_refresher.refresh(resource_id)
+        resource_acl = await self._acl_reader.get_resource_acl(resource_id)
+        if resource_acl is None:
+            raise RuntimeError(f"resource {resource_id} has no synchronized ACL")
 
         # 6. 检索索引发布
         # write_staged_revision 写入暂存；apply_revision + activate_revision 才让线上可见。

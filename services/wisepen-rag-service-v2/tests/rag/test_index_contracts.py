@@ -9,33 +9,29 @@ from rag.application.rag.index.constructor import (
     create_content_revision,
     parse_document_structure,
 )
-from rag.core.persistence.mongo.writers.resource_index import _decide_stage
 from rag.application.rag.read import (
     ContentNotFoundError,
     DocumentContentReader,
-    DocumentStructureReader,
+    DocumentOutlineReader,
 )
-from rag.application.rag.verify import EvidenceVerifier
 from rag.application.rag.verify import (
     EvidenceCorruptError,
     EvidenceNotFoundError,
     EvidenceRevisionError,
+    EvidenceVerifier,
 )
+from rag.core.persistence.mongo.writers.resource_index import _decide_stage
 from rag.domain.models.acl import PermissionScope, ResourceAcl
-from rag.domain.models.content import ResourceIndexState
 from rag.domain.models.content import (
-    ContentWindow,
-    DocumentStructureResult,
-    SectionContent,
-    SectionFrontier,
+    ReadingBlock,
+    ResourceIndexState,
 )
 from rag.domain.models.evidence import (
     EvidenceCandidate,
     EvidenceRecord,
 )
-from rag.domain.models.content import ReadingBlock
-from rag.domain.repositories import StageAction
 from rag.domain.models.retrieval import RetrievalChunk, SourceRef
+from rag.domain.repositories import StageAction
 from rag.utils.chunkers import SourceSpan
 
 
@@ -153,7 +149,7 @@ async def test_read_actions_raise_directly_when_content_is_missing() -> None:
     authorizer = PermissionAuthorizer(local_store=_ReadableAclReader())
     scope = PermissionScope(user_id="user-1")
     with pytest.raises(ContentNotFoundError):
-        await DocumentStructureReader(reader=reader, authorizer=authorizer).get_structure(
+        await DocumentOutlineReader(structure_reader=reader, authorizer=authorizer).get_document_outline(
             resource_id="missing",
             permission_scope=scope,
         )
@@ -178,7 +174,7 @@ async def test_read_actions_do_not_distinguish_denied_resource_from_missing() ->
     scope = PermissionScope(user_id="user-1")
 
     with pytest.raises(ContentNotFoundError):
-        await DocumentStructureReader(reader=reader, authorizer=authorizer).get_structure(
+        await DocumentOutlineReader(structure_reader=reader, authorizer=authorizer).get_document_outline(
             resource_id="private-resource",
             permission_scope=scope,
         )

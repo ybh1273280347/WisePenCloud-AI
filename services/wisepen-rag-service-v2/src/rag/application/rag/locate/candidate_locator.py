@@ -9,21 +9,24 @@ from typing import TYPE_CHECKING
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.structure import Section
+from rag.domain.models.content import SectionFrontier
 from rag.domain.models.evidence import EvidenceCandidate, EvidenceRecord
 from rag.domain.models.graph import KnowledgeNode
 from rag.domain.models.navigation import KnownSection
-from rag.domain.models.content import DocumentStructureResult, SectionFrontier
-from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
-from rag.domain.repositories.mongo.readers.applied_structure import AppliedStructureReader
-from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
-from rag.domain.repositories.neo4j.mention_lookup import MentionLookup
-from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 from rag.domain.models.retrieval import (
     CandidateSearchRequest,
     RetrievalCandidate,
     RetrievalChunk,
 )
+from rag.domain.models.structure import Section
+from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
+from rag.domain.repositories.mongo.readers.applied_structure import (
+    AppliedStructureReader,
+    AppliedStructureSnapshot,
+)
+from rag.domain.repositories.neo4j.mention_lookup import MentionLookup
+from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
+from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 from rag.utils.ranking import (
     RankCandidate,
     RankDecision,
@@ -40,7 +43,7 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class LocateRequest:
-    """LOCATE 的可信请求事实，调用方已完成身份和数量边界校验。"""
+    """LOCATE 的可信请求事实，调用方已完成公开入口和字符串边界校验。"""
 
     session_id: str
     semantic_query: str
@@ -125,20 +128,9 @@ class ReadingCandidateLocator:
 
     async def locate(self, request: LocateRequest) -> LocateResult:
         """只将 applied 且仍可读的候选提升为后续 READ 可用的入口。"""
-        semantic_query = request.semantic_query.strip()
-        if not semantic_query:
-            raise LocateError("semantic_query must not be empty")
-        lexical_query = (
-            semantic_query
-            if request.lexical_query is None
-            else request.lexical_query.strip()
-        )
-        if not lexical_query:
-            raise LocateError("lexical_query must not be empty when provided")
-        if not request.permission_scope.user_id.strip():
-            raise LocateError("permission scope user_id must not be empty")
-        if request.max_results <= 0 or request.candidate_limit <= 0:
-            return await self._create_empty_result(request, semantic_query)
+        # 上游 schema 与鉴权层已经收口了公开入口边界，这里只做外部模型返回形状校验。
+        semantic_query = request.semantic_query
+        lexical_query = semantic_query if request.lexical_query is None else request.lexical_query
 
         embedding = await self._embedding_client.aembed([semantic_query])
         if len(embedding.embeddings) != 1:
@@ -293,7 +285,7 @@ class ReadingCandidateLocator:
         self,
         records: Sequence[EvidenceRecord],
     ) -> list[LocatedSection]:
-        resource_structures: dict[str, DocumentStructureResult] = {}
+        resource_structures: dict[str, AppliedStructureSnapshot] = {}
         revisions_by_resource = {
             record.revision.resource_id: record.revision.content_revision
             for record in records

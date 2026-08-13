@@ -86,6 +86,7 @@ class KnowledgeGraphExpander:
         self._state_store = state_store
 
     async def expand(self, request: GraphExpandRequest) -> GraphExpandResult:
+        # 上游 schema 已经保证了 seed、relation 和深度/结果数量边界，这里只处理 state 和可读性边界。
         state = await self._state_store.get(request.state_id)
         if (
             state is None
@@ -94,16 +95,8 @@ class KnowledgeGraphExpander:
         ):
             raise NavigationStateNotFoundError(request.state_id)
 
-        seed_node_ids = list(dict.fromkeys(request.seed_node_ids))
-        relation_types = list(dict.fromkeys(request.relation_types))
-        if not 1 <= len(seed_node_ids) <= 16:
-            raise ValueError("expand requires 1 to 16 seed nodes")
-        if len(relation_types) > 16:
-            raise ValueError("expand accepts at most 16 relation types")
-        if request.max_depth not in (1, 2):
-            raise ValueError("expand max_depth must be 1 or 2")
-        if not 1 <= request.max_results <= 20:
-            raise ValueError("expand max_results must be between 1 and 20")
+        seed_node_ids = request.seed_node_ids
+        relation_types = request.relation_types
 
         known_node_ids = set(state.known_node_ids)
         unknown_seed_ids = [

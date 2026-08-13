@@ -3,11 +3,13 @@ from .content import (
     ContentNotFoundError,
     DocumentContentReader,
 )
-from .structure import DocumentStructureReader
+from .outline import DocumentOutlineNode, DocumentOutlineReader, DocumentOutlineResult
 
 __all__ = [
     "ContentAccessRevokedError",
     "ContentNotFoundError",
     "DocumentContentReader",
-    "DocumentStructureReader",
+    "DocumentOutlineNode",
+    "DocumentOutlineReader",
+    "DocumentOutlineResult",
 ]

@@ -129,10 +129,10 @@ async def test_search_rejects_missing_candidate_payload() -> None:
 
 
 def test_permission_filter_contains_nested_group_acl_conditions() -> None:
-    from rag.core.persistence.qdrant.acl_filter import permission_filter
+    from rag.core.persistence.qdrant.candidate_searcher import _permission_filter
     from rag.domain.models.acl import PermissionScope
 
-    condition = permission_filter(
+    condition = _permission_filter(
         PermissionScope.from_group_roles(
             "user-1",
             {

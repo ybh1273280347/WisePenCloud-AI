@@ -92,7 +92,7 @@ class RedisNavigationStateStore(NavigationStateStore):
         values = await self._redis.hgetall(self._key(state_id))
         if not values:
             return None
-        return _to_domain(state_id, values)
+        return _to_navigation_state(state_id, values)
 
     async def add_known_sections(
         self,
@@ -165,7 +165,7 @@ def _sections_document(
     }
 
 
-def _to_domain(
+def _to_navigation_state(
     state_id: str,
     values: Mapping[object, object],
 ) -> NavigationState:
@@ -182,8 +182,10 @@ def _to_domain(
             resource_id=_required_text(section, "resource_id"),
             content_revision=_required_text(section, "content_revision"),
         )
+
     if not all(isinstance(node_id, str) for node_id in nodes_value):
         raise TypeError(f"navigation state {state_id} has invalid node IDs")
+
     return NavigationState(
         state_id=state_id,
         user_id=_read_text(values, "user_id"),

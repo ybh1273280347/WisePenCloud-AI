@@ -5,7 +5,7 @@ from common.security import SecurityContextHolder
 from pydantic import ValidationError
 
 from rag.api.endpoints.read import (
-    get_document_structure,
+    get_document_outline,
     get_page_content,
     get_section_content,
 )
@@ -16,28 +16,33 @@ from rag.api.schemas import (
     SectionContentRequest,
 )
 from rag.application.rag.read import ContentNotFoundError
-from rag.domain.models.content import ContentRevision
-from rag.domain.models.structure import PageRange, Section, SectionTreeNode, StructureMode
+from rag.application.rag.read.outline import (
+    DocumentOutlineNode,
+    DocumentOutlineResult,
+)
 from rag.domain.error_codes import RagErrorCode
 from rag.domain.models.content import (
+    ContentRevision,
     ContentWindow,
-    DocumentStructureResult,
     SectionContent,
     SectionFrontier,
+)
+from rag.domain.models.structure import PageRange, Section, StructureMode
+from rag.domain.repositories.mongo.readers.applied_structure import (
+    AppliedStructureSnapshot,
 )
 from rag.utils.chunkers import SourceSpan
 
 
 class _StructureReader:
-    def __init__(self, *, missing=False) -> None:
+    def __init__(self, *, missing: bool = False) -> None:
         self.missing = missing
         self.scope = None
 
-    async def get_structure(self, *, resource_id, permission_scope):
-        self.scope = permission_scope
+    async def get_applied_document_structure(self, resource_id):
         if self.missing:
             raise ContentNotFoundError(resource_id)
-        return DocumentStructureResult(
+        return AppliedStructureSnapshot(
             revision=ContentRevision(
                 resource_id=resource_id,
                 content_revision="revision-1",
@@ -49,7 +54,25 @@ class _StructureReader:
                 pages=[PageRange(0, "1", SourceSpan(0, 12))],
             ),
             sections=[_section()],
-            section_tree=[_section_tree()],
+            pages=[PageRange(0, "1", SourceSpan(0, 12))],
+        )
+
+    async def get_document_outline(self, *, resource_id, permission_scope):
+        self.scope = permission_scope
+        if self.missing:
+            raise ContentNotFoundError(resource_id)
+        return DocumentOutlineResult(
+            revision=(await self.get_applied_document_structure(resource_id)).revision,
+            outline=[
+                DocumentOutlineNode(
+                    section_id="section-1",
+                    title="标题",
+                    level=1,
+                    breadcrumbs=["标题"],
+                    start_page_label="1",
+                    end_page_label="1",
+                )
+            ],
         )
 
 
@@ -96,20 +119,6 @@ def _section() -> Section:
     )
 
 
-def _section_tree() -> SectionTreeNode:
-    return SectionTreeNode(
-        section_id="section-1",
-        title="标题",
-        level=1,
-        section_path=["标题"],
-        has_content=True,
-        start_page_label="1",
-        end_page_label="1",
-        page_labels=["1"],
-        children=[],
-    )
-
-
 def test_read_request_schemas_forbid_extra_and_limit_batch_size() -> None:
     with pytest.raises(ValidationError):
         ResourceRequest(resource_id="resource-1", extra_field=True)
@@ -129,7 +138,7 @@ def test_router_exposes_deterministic_read_endpoints() -> None:
         if route.path.startswith("/get")
     }
     assert paths == {
-        "/getDocumentStructure",
+        "/getDocumentOutline",
         "/getPageContent",
         "/getSectionContent",
     }
@@ -140,16 +149,15 @@ async def test_structure_response_uses_security_context_permission_scope() -> No
     reader = _StructureReader()
     SecurityContextHolder.set_group_role_map('{"group-1": 1}')
 
-    response = await get_document_structure(
+    response = await get_document_outline(
         ResourceRequest(resource_id="resource-1"),
         user_id="user-1",
         reader=reader,
     )
 
     assert response.data.content_revision == "revision-1"
-    assert response.data.pages[0].source_span.end_offset == 12
-    assert response.data.sections[0].section_id == "section-1"
-    assert response.data.section_tree[0].section_id == "section-1"
+    assert response.data.outline[0].section_id == "section-1"
+    assert response.data.outline[0].breadcrumbs == ["标题"]
     assert reader.scope.user_id == "user-1"
     assert reader.scope.group_roles == {"group-1": GroupRoleType.ADMIN}
 
@@ -190,7 +198,7 @@ async def test_empty_section_is_a_successful_existing_section() -> None:
     ("call", "payload", "reader"),
     [
         (
-            get_document_structure,
+            get_document_outline,
             ResourceRequest(resource_id="resource-1"),
             _StructureReader(missing=True),
         ),
