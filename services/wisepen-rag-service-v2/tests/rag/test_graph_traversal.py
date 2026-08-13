@@ -31,6 +31,15 @@ class _AclReader:
     def __init__(self, readable_resource_ids) -> None:
         self.readable_resource_ids = set(readable_resource_ids)
 
+    async def get_resource_acl(self, resource_id):
+        if resource_id not in self.readable_resource_ids:
+            return None
+        return ResourceAcl(
+            resource_id=resource_id,
+            acl_revision=1,
+            owner_id="user-1",
+        )
+
     async def get_resource_acls(self, resource_ids):
         return {
             resource_id: ResourceAcl(
@@ -49,7 +58,7 @@ async def test_traversal_uses_bounded_direction_revision_and_cycle_filter() -> N
     traversal = Neo4jGraphTraversal(
         driver=driver,
         database="rag-v2",
-        authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
+        authorizer=PermissionAuthorizer(local_store=_AclReader({"resource-1"})),
     )
 
     paths = await traversal.find_paths(
@@ -77,7 +86,7 @@ async def test_traversal_drops_path_when_evidence_acl_is_denied() -> None:
     traversal = Neo4jGraphTraversal(
         driver=_Driver([_path_record()]),
         database="rag-v2",
-        authorizer=PermissionAuthorizer(reader=_AclReader(set())),
+        authorizer=PermissionAuthorizer(local_store=_AclReader(set())),
     )
 
     paths = await traversal.find_paths(

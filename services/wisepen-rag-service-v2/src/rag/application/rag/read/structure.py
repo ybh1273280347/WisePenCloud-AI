@@ -5,7 +5,7 @@ from rag.domain.models.acl import PermissionScope
 from rag.domain.models.content import DocumentStructureResult
 from rag.domain.repositories.mongo.readers.applied_structure import AppliedStructureReader
 
-from .content import ContentNotFoundError
+from .content import ContentAccessRevokedError, ContentNotFoundError
 
 
 class DocumentStructureReader:
@@ -36,4 +36,9 @@ class DocumentStructureReader:
         structure = await self._reader.get_applied_document_structure(resource_id)
         if structure is None:
             raise ContentNotFoundError(resource_id)
+        if not await self._authorizer.authorize_resource(
+            resource_id=resource_id,
+            scope=permission_scope,
+        ):
+            raise ContentAccessRevokedError(resource_id)
         return structure

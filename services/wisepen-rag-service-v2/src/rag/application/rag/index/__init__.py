@@ -1,5 +1,5 @@
 from .contextualize import ContextualTextIndexer
-from .graph_extraction import KnowledgeGraphExtractor
+from .graph import KnowledgeGraphExtractor
 from .resource_indexer import ResourceIndexer
 
 __all__ = [

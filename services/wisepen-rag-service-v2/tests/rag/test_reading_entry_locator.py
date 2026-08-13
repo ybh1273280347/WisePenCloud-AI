@@ -50,6 +50,16 @@ class _AclReader:
     def __init__(self, resource_ids):
         self.resource_ids = resource_ids
 
+    async def get_resource_acl(self, resource_id):
+        if resource_id not in self.resource_ids:
+            return None
+        return ResourceAcl(
+            resource_id=resource_id,
+            acl_revision=1,
+            owner_id="owner",
+            readable_users=["user-1"],
+        )
+
     async def get_resource_acls(self, resource_ids):
         return {
             resource_id: ResourceAcl(
@@ -237,7 +247,7 @@ async def test_locate_embeds_once_reranks_and_keeps_multiple_blocks_in_one_secti
         embedding_client=embedding,
         candidate_search=search,
         ranking_pipeline=ranking,
-        authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
+        authorizer=PermissionAuthorizer(local_store=_AclReader({"resource-1"})),
         evidence_verifier=EvidenceVerifier(reader=_EvidenceReader(records)),
         mention_lookup=_MentionLookup(
             [
@@ -293,7 +303,7 @@ async def test_locate_filters_acl_and_old_revisions_before_reranking():
         embedding_client=_EmbeddingClient(calls=[]),
         candidate_search=_CandidateSearch([stale, denied, valid]),
         ranking_pipeline=ranking,
-        authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
+        authorizer=PermissionAuthorizer(local_store=_AclReader({"resource-1"})),
         evidence_verifier=EvidenceVerifier(reader=_EvidenceReader(records)),
         mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
@@ -339,9 +349,7 @@ async def test_locate_keeps_same_chunk_id_from_different_resources_distinct():
         embedding_client=_EmbeddingClient(calls=[]),
         candidate_search=_CandidateSearch([first, second]),
         ranking_pipeline=_RankingPipeline(candidate_ids),
-        authorizer=PermissionAuthorizer(
-            reader=_AclReader({"resource-1", "resource-2"})
-        ),
+        authorizer=PermissionAuthorizer(local_store=_AclReader({"resource-1", "resource-2"})),
         evidence_verifier=EvidenceVerifier(reader=_EvidenceReader(records)),
         mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader(
@@ -386,7 +394,7 @@ async def test_locate_irrelevant_decision_creates_empty_state_without_verificati
         embedding_client=_EmbeddingClient(calls=[]),
         candidate_search=_CandidateSearch([candidate]),
         ranking_pipeline=_RankingPipeline([], decision=RankDecision.IRRELEVANT),
-        authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
+        authorizer=PermissionAuthorizer(local_store=_AclReader({"resource-1"})),
         evidence_verifier=EvidenceVerifier(reader=evidence_reader),
         mention_lookup=_MentionLookup(),
         revision_reader=_RevisionReader({"resource-1": revision}),
@@ -422,7 +430,7 @@ async def test_locate_uncertain_decision_keeps_verified_entry():
             [_candidate_id(candidate)],
             decision=RankDecision.UNCERTAIN,
         ),
-        authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
+        authorizer=PermissionAuthorizer(local_store=_AclReader({"resource-1"})),
         evidence_verifier=EvidenceVerifier(
             reader=_EvidenceReader(
                 {candidate.source_ref_id: _record(candidate, section, revision)}
@@ -459,7 +467,7 @@ async def test_locate_rejects_revision_change_after_evidence_verification():
         embedding_client=_EmbeddingClient(calls=[]),
         candidate_search=_CandidateSearch([candidate]),
         ranking_pipeline=_RankingPipeline([_candidate_id(candidate)]),
-        authorizer=PermissionAuthorizer(reader=_AclReader({"resource-1"})),
+        authorizer=PermissionAuthorizer(local_store=_AclReader({"resource-1"})),
         evidence_verifier=EvidenceVerifier(
             reader=_EvidenceReader(
                 {candidate.source_ref_id: _record(candidate, section, revision)}

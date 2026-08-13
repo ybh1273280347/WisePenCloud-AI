@@ -29,10 +29,10 @@ class MongoSourcePartReader(SourcePartReader):
                 }
             )
         entities = await SourcePartEntity.find(query).sort("+part_index").to_list()
-        return [_to_domain(entity) for entity in entities]
+        return [_to_source_part(entity) for entity in entities]
 
 
-def _to_domain(record: SourcePartEntity) -> SourcePart:
+def _to_source_part(record: SourcePartEntity) -> SourcePart:
     return SourcePart(
         resource_id=record.resource_id,
         content_revision=record.content_revision,

@@ -9,10 +9,10 @@ from rag.domain.repositories.mongo.resource_acl_store import ResourceAclStore
 class PermissionAuthorizer:
     """以本地 ACL 事实作为 RAG 读取前的最终授权门。"""
 
-    __slots__ = ("_reader",)
+    __slots__ = ("_local_store",)
 
-    def __init__(self, *, reader: ResourceAclStore) -> None:
-        self._reader = reader
+    def __init__(self, *, local_store: ResourceAclStore) -> None:
+        self._local_store = local_store
 
     async def authorize_resource(
         self,
@@ -21,8 +21,7 @@ class PermissionAuthorizer:
         scope: PermissionScope,
     ) -> bool:
         """判断单个资源是否可读；ACL 缺失时 fail closed。"""
-        resource_acls = await self._reader.get_resource_acls([resource_id])
-        resource_acl = resource_acls.get(resource_id)
+        resource_acl = await self._local_store.get_resource_acl(resource_id)
         return resource_acl is not None and resource_acl.can_read(scope)
 
     async def readable_resource_ids(
@@ -40,7 +39,7 @@ class PermissionAuthorizer:
         if not unique_resource_ids:
             return []
 
-        resource_acls = await self._reader.get_resource_acls(unique_resource_ids)
+        resource_acls = await self._local_store.get_resource_acls(unique_resource_ids)
         return [
             resource_id
             for resource_id in unique_resource_ids

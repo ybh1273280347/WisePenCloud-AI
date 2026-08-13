@@ -1,4 +1,4 @@
-"""沿 navigation state 扩展标题树，并返回本次展开的 Section 内容。"""
+"""沿 navigation state 扩展已发现 Section，并返回本次展开的正文内容。"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -32,15 +32,19 @@ class SectionRecordMissingError(RuntimeError):
 
 
 @dataclass(slots=True)
-class SectionExpandResult:
-    """标题树展开结果，sections 保留请求顺序供 Agent 连续阅读。"""
+class DiscoveredSectionExpandResult:
+    """已发现 Section 展开结果，sections 保留请求顺序供 Agent 连续阅读。"""
 
     state_id: str
     sections: list[SectionView] = field(default_factory=list)
 
 
-class SectionTreeExpander:
-    """读取已发现 Section 内容后，将相邻标题节点写回探索状态。"""
+class DiscoveredSectionExpander:
+    """只展开当前 navigation state 已发现的 Section。
+
+    这个用例不是按 resource_id 任意读正文；它从 state 中反查资源与 revision，
+    读取正文后再把 parent/previous/next/children 写回 state，供后续探索继续前进。
+    """
 
     def __init__(
         self,
@@ -62,7 +66,7 @@ class SectionTreeExpander:
         session_id: str,
         permission_scope: PermissionScope,
         section_ids: Sequence[str],
-    ) -> SectionExpandResult:
+    ) -> DiscoveredSectionExpandResult:
         state = await self._state_store.get(state_id)
         if (
             state is None
@@ -80,7 +84,7 @@ class SectionTreeExpander:
         if unknown_ids:
             raise SectionNotDiscoveredError(unknown_ids[0])
         if not requested_ids:
-            return SectionExpandResult(state_id=state.state_id)
+            return DiscoveredSectionExpandResult(state_id=state.state_id)
 
         ids_by_resource: dict[str, list[str]] = {}
         expected_revisions: dict[str, str] = {}
@@ -152,7 +156,7 @@ class SectionTreeExpander:
             state_id=state.state_id,
             sections=discovered,
         )
-        return SectionExpandResult(state_id=state.state_id, sections=section_views)
+        return DiscoveredSectionExpandResult(state_id=state.state_id, sections=section_views)
 
     async def _verify_resources(
         self,

@@ -47,6 +47,22 @@ class Section:
 
 
 @dataclass(slots=True)
+class SectionTreeNode:
+    """READ structure 返回给 Agent 的标题树节点。"""
+
+    section_id: str
+    title: str
+    level: int
+    section_path: list[str]
+    has_content: bool
+    start_page_label: str | None = None
+    end_page_label: str | None = None
+    # 覆盖当前标题子树的页码标签，用来把“看目录”直接衔接到按页读取。
+    page_labels: list[str] = field(default_factory=list)
+    children: list["SectionTreeNode"] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class DocumentStructure:
     """一次 Markdown 结构解析产生的稳定事实。"""
 

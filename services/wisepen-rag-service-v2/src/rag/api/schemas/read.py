@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from rag.domain.models.structure import PageRange, Section
+from rag.domain.models.structure import PageRange, Section, SectionTreeNode
 
 NonEmptyText = Annotated[
     str,
@@ -34,3 +34,4 @@ class DocumentStructureResponse(BaseModel):
     total_length: int
     pages: list[PageRange]
     sections: list[Section]
+    section_tree: list[SectionTreeNode]

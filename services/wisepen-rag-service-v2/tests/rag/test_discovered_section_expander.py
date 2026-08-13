@@ -2,10 +2,10 @@ import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.expand import (
+    DiscoveredSectionExpander,
     SectionAccessRevokedError,
     SectionNotDiscoveredError,
     SectionRevisionChangedError,
-    SectionTreeExpander,
 )
 from rag.domain.models.acl import PermissionScope, ResourceAcl
 from rag.domain.models.content import ContentRevision
@@ -54,6 +54,15 @@ class _RevisionReader:
 class _AclReader:
     def __init__(self, readable=True) -> None:
         self.readable = readable
+
+    async def get_resource_acl(self, resource_id):
+        if not self.readable:
+            return None
+        return ResourceAcl(
+            resource_id=resource_id,
+            acl_revision=1,
+            owner_id="user-1",
+        )
 
     async def get_resource_acls(self, resource_ids):
         if not self.readable:
@@ -174,11 +183,11 @@ def _expander(
     state_store,
     sections=None,
     readable=True,
-) -> SectionTreeExpander:
-    return SectionTreeExpander(
+) -> DiscoveredSectionExpander:
+    return DiscoveredSectionExpander(
         content_reader=_ContentReader(sections or {}),
         revision_reader=_RevisionReader(revision),
-        authorizer=PermissionAuthorizer(reader=_AclReader(readable)),
+        authorizer=PermissionAuthorizer(local_store=_AclReader(readable)),
         state_store=state_store,
     )
 

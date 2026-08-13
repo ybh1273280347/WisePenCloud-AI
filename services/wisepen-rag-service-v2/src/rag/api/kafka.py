@@ -16,7 +16,7 @@ from rag.application.rag.acl import (
     ResourceAclRefresher,
 )
 from rag.application.rag.index import ResourceIndexer
-from rag.core.persistence.resource_deletion import ResourceDeletionService
+from rag.core.persistence.resource_deleter import ResourceDeleter
 
 NonEmptyText = Annotated[
     str,
@@ -50,6 +50,7 @@ class ResourceDestroyPayload(BaseModel):
         alias="typedResourceIds"
     )
 
+    @property
     def resource_ids(self) -> list[str]:
         return list(
             dict.fromkeys(
@@ -90,11 +91,11 @@ class AclRecalculateHandler:
 
 
 class ResourceDestroyHandler:
-    def __init__(self, *, deleter: ResourceDeletionService) -> None:
+    def __init__(self, *, deleter: ResourceDeleter) -> None:
         self._deleter = deleter
 
     async def handle(self, payload: Mapping[str, Any]) -> None:
-        resource_ids = _validate(ResourceDestroyPayload, payload).resource_ids()
+        resource_ids = _validate(ResourceDestroyPayload, payload).resource_ids
         if resource_ids:
             await self._deleter.delete_resources(resource_ids)
 
@@ -162,7 +163,7 @@ class KafkaEventConsumer:
             payload = None
             while True:
                 try:
-                    payload = payload or _decode_message(message.value)
+                    payload = payload or self._decode_message(message.value)
                     await self._handler(payload)
                     await self._consumer.commit()
                     break
@@ -187,28 +188,31 @@ class KafkaEventConsumer:
                     )
                     await asyncio.sleep(self._retry_delay_seconds)
 
+    @staticmethod
+    def _decode_message(value: object) -> dict[str, Any]:
+        try:
+            if isinstance(value, Mapping):
+                return dict(value)
+            if isinstance(value, (bytes, bytearray, memoryview)):
+                decoded = json.loads(bytes(value).decode("utf-8"))
+            else:
+                decoded = json.loads(str(value))
+            if isinstance(decoded, str):
+                decoded = json.loads(decoded)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exception:
+            raise KafkaPayloadError("Kafka payload is not valid JSON") from exception
+        if not isinstance(decoded, dict):
+            raise KafkaPayloadError("Kafka payload is not a JSON object")
+        return decoded
+
 
 def _validate(model_type, payload: Mapping[str, Any]):
     try:
         return model_type.model_validate(payload)
-    except ValidationError as exception:
-        raise KafkaPayloadError(str(exception)) from exception
+    except ValidationError as e:
+        raise KafkaPayloadError(str(e)) from e
 
 
-def _decode_message(value: object) -> dict[str, Any]:
-    try:
-        if isinstance(value, Mapping):
-            return dict(value)
-        if isinstance(value, (bytes, bytearray, memoryview)):
-            decoded = json.loads(bytes(value).decode("utf-8"))
-        else:
-            decoded = json.loads(str(value))
-        if isinstance(decoded, str):
-            decoded = json.loads(decoded)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exception:
-        raise KafkaPayloadError("Kafka payload is not valid JSON") from exception
-    if not isinstance(decoded, dict):
-        raise KafkaPayloadError("Kafka payload is not a JSON object")
-    return decoded
+
 
 

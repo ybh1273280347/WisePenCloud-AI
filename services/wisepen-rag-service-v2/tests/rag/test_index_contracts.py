@@ -121,6 +121,13 @@ class _MissingReader:
 
 
 class _ReadableAclReader:
+    async def get_resource_acl(self, resource_id):
+        return ResourceAcl(
+            resource_id=resource_id,
+            acl_revision=1,
+            owner_id="user-1",
+        )
+
     async def get_resource_acls(self, resource_ids):
         return {
             resource_id: ResourceAcl(
@@ -133,6 +140,9 @@ class _ReadableAclReader:
 
 
 class _DeniedAclReader:
+    async def get_resource_acl(self, resource_id):
+        return None
+
     async def get_resource_acls(self, resource_ids):
         return {}
 
@@ -140,7 +150,7 @@ class _DeniedAclReader:
 @pytest.mark.asyncio
 async def test_read_actions_raise_directly_when_content_is_missing() -> None:
     reader = _MissingReader()
-    authorizer = PermissionAuthorizer(reader=_ReadableAclReader())
+    authorizer = PermissionAuthorizer(local_store=_ReadableAclReader())
     scope = PermissionScope(user_id="user-1")
     with pytest.raises(ContentNotFoundError):
         await DocumentStructureReader(reader=reader, authorizer=authorizer).get_structure(
@@ -164,7 +174,7 @@ async def test_read_actions_raise_directly_when_content_is_missing() -> None:
 @pytest.mark.asyncio
 async def test_read_actions_do_not_distinguish_denied_resource_from_missing() -> None:
     reader = _MissingReader()
-    authorizer = PermissionAuthorizer(reader=_DeniedAclReader())
+    authorizer = PermissionAuthorizer(local_store=_DeniedAclReader())
     scope = PermissionScope(user_id="user-1")
 
     with pytest.raises(ContentNotFoundError):

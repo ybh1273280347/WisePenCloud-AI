@@ -98,7 +98,27 @@ class Neo4jMentionLookup(MentionLookup):
             database_=self._database,
             routing_=RoutingControl.READ,
         )
-        return [_to_node(record) for record in result.records]
+        nodes = [_to_node(record) for record in result.records]
+        resource_ids = [
+            node.resource_id
+            for node in nodes
+            if node.kind is KnowledgeNodeKind.RESOURCE and node.resource_id is not None
+        ]
+        if not resource_ids:
+            return nodes
+
+        readable_resource_ids = set(
+            await self._authorizer.readable_resource_ids(
+                resource_ids,
+                scope=permission_scope,
+            )
+        )
+        return [
+            node
+            for node in nodes
+            if node.kind is not KnowledgeNodeKind.RESOURCE
+            or node.resource_id in readable_resource_ids
+        ]
 
 
 def _to_node(record) -> KnowledgeNode:

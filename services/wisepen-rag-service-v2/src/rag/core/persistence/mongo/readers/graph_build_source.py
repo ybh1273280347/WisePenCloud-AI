@@ -42,9 +42,13 @@ class MongoGraphBuildSourceReader(GraphBuildSourceReader):
         sections = await SectionEntity.find(
             {"resource_id": resource_id, "content_revision": content_revision}
         ).to_list()
-        blocks = await ReadingBlockEntity.find(
-            {"resource_id": resource_id, "content_revision": content_revision}
-        ).sort([("start_offset", 1), ("ordinal", 1)]).to_list()
+        blocks = (
+            await ReadingBlockEntity.find(
+                {"resource_id": resource_id, "content_revision": content_revision}
+            )
+            .sort([("start_offset", 1), ("ordinal", 1)])
+            .to_list()
+        )
         refs = await SourceRefEntity.find(
             {"resource_id": resource_id, "content_revision": content_revision}
         ).to_list()

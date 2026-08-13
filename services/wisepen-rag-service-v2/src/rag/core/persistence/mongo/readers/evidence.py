@@ -41,32 +41,60 @@ class MongoEvidenceReader(EvidenceReader):
             raise EvidenceRevisionError(
                 f"content revision {content_revision} is not applied for {resource_id}"
             )
+
         full_span = SourceSpan(0, revision.total_length)
         parts = await self._source_parts.get_parts(content_revision, [full_span])
         full_text = assemble_source_text(parts, [full_span])
+
         if sha256(full_text.encode("utf-8")).hexdigest() != revision.content_hash:
-            raise EvidenceCorruptError(f"content revision {content_revision} hash does not match source parts")
+            raise EvidenceCorruptError(
+                f"content revision {content_revision} hash does not match source parts"
+            )
+
         requested_ids = list(dict.fromkeys(source_ref_ids))
         if not requested_ids:
             return {}
+
         ref_entities = await SourceRefEntity.find(
-            {"resource_id": resource_id, "content_revision": content_revision, "ref_id": {"$in": requested_ids}}
+            {
+                "resource_id": resource_id,
+                "content_revision": content_revision,
+                "ref_id": {"$in": requested_ids},
+            }
         ).to_list()
         refs = [_to_source_ref(entity) for entity in ref_entities]
+
+        block_ids = {ref.reading_block_id for ref in refs}
         blocks = await ReadingBlockEntity.find(
-            {"resource_id": resource_id, "content_revision": content_revision, "block_id": {"$in": list({ref.reading_block_id for ref in refs})}}
+            {
+                "resource_id": resource_id,
+                "content_revision": content_revision,
+                "block_id": {"$in": list(block_ids)},
+            }
         ).to_list()
+
+        section_ids = {ref.section_id for ref in refs}
         sections = await SectionEntity.find(
-            {"resource_id": resource_id, "content_revision": content_revision, "section_id": {"$in": list({ref.section_id for ref in refs})}}
+            {
+                "resource_id": resource_id,
+                "content_revision": content_revision,
+                "section_id": {"$in": list(section_ids)},
+            }
         ).to_list()
+
         blocks_by_id = {block.block_id: _to_reading_block(block) for block in blocks}
-        sections_by_id = {section.section_id: _to_section(section) for section in sections}
+        sections_by_id = {
+            section.section_id: _to_section(section) for section in sections
+        }
+
         records: dict[str, EvidenceRecord] = {}
         for source_ref in refs:
             block = blocks_by_id.get(source_ref.reading_block_id)
             section = sections_by_id.get(source_ref.section_id)
             if block is None or section is None:
-                raise EvidenceCorruptError(f"source ref {source_ref.ref_id} has missing ownership records")
+                raise EvidenceCorruptError(
+                    f"source ref {source_ref.ref_id} has missing ownership records"
+                )
             records[source_ref.ref_id] = EvidenceRecord(
                 revision=revision,
                 source_ref=source_ref,
@@ -74,6 +102,7 @@ class MongoEvidenceReader(EvidenceReader):
                 section=section,
                 source_text=assemble_source_text(parts, source_ref.source_spans),
             )
+
         return records
 
 

@@ -60,6 +60,10 @@ class _AclReader:
             owner_id="owner-1",
         )
 
+    async def get_resource_acl(self, resource_id):
+        self._failure.hit("acl_read")
+        return self.acl if resource_id == self.acl.resource_id else None
+
     async def get_resource_acls(self, resource_ids):
         self._failure.hit("acl_read")
         return {self.acl.resource_id: self.acl}

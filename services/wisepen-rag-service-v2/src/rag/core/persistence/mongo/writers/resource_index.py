@@ -165,7 +165,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         entity = await ResourceIndexStateEntity.find_one({"resource_id": resource_id})
         if entity is None:
             return None
-        return _to_domain(entity)
+        return _to_resource_index_state(entity)
 
     async def delete_other_revisions(
         self,
@@ -234,7 +234,7 @@ def split_source_parts(revision: ContentRevision, markdown: str) -> list[SourceP
     ]
 
 
-def _to_domain(record: ResourceIndexStateEntity) -> ResourceIndexState:
+def _to_resource_index_state(record: ResourceIndexStateEntity) -> ResourceIndexState:
     return ResourceIndexState(
         resource_id=record.resource_id,
         staged_content_revision=record.staged_content_revision,
@@ -350,25 +350,32 @@ def _stage_state_filter(revision: ContentRevision) -> dict[str, object]:
 def _validate_structure_records(*, revision: ContentRevision, sections: Sequence[Section], reading_blocks: Sequence[ReadingBlock], source_refs: Sequence[SourceRef]) -> None:
     sections_by_id = {section.section_id: section for section in sections}
     blocks_by_id = {block.block_id: block for block in reading_blocks}
+
     if len(sections_by_id) != len(sections):
         raise ValueError("section identities are not unique")
+
     if len(blocks_by_id) != len(reading_blocks):
         raise ValueError("reading block identities are not unique")
+
     if len({ref.ref_id for ref in source_refs}) != len(source_refs):
         raise ValueError("source ref identities are not unique")
+
     if len({ref.chunk_id for ref in source_refs}) != len(source_refs):
         raise ValueError("source refs contain duplicate chunk identities")
+
     for section in sections:
         if section.own_span.end_offset > revision.total_length:
             raise ValueError(f"section {section.section_id} exceeds content revision")
         if section.parent_section_id is not None and section.parent_section_id not in sections_by_id:
             raise ValueError(f"section {section.section_id} has no parent")
+
     for block in reading_blocks:
         section = sections_by_id.get(block.section_id)
         if section is None or not block.source_spans:
             raise ValueError(f"reading block {block.block_id} has invalid ownership")
         if any(span.start_offset < section.own_span.start_offset or span.end_offset > section.own_span.end_offset for span in block.source_spans):
             raise ValueError(f"reading block {block.block_id} exceeds its section")
+
     for ref in source_refs:
         block = blocks_by_id.get(ref.reading_block_id)
         section = sections_by_id.get(ref.section_id)

@@ -2,9 +2,11 @@
 
 import asyncio
 
-from rag.domain.repositories.mongo.readers.authoritative_acl import AuthoritativeAclReader
-from rag.domain.repositories.neo4j.graph_acl_writer import GraphAclWriter
+from rag.domain.repositories.mongo.readers.authoritative_acl import (
+    AuthoritativeAclReader,
+)
 from rag.domain.repositories.mongo.resource_acl_store import ResourceAclStore
+from rag.domain.repositories.neo4j.graph_acl_writer import GraphAclWriter
 from rag.domain.repositories.qdrant.retrieval_acl_writer import RetrievalAclWriter
 
 
@@ -39,14 +41,12 @@ class ResourceAclRefresher:
 
         saved = await self._local_store.save_if_newer(resource_acl)
         if not saved:
-            current = (
-                await self._local_store.get_resource_acls([resource_acl.resource_id])
-            ).get(resource_acl.resource_id)
+            current = await self._local_store.get_resource_acl(resource_acl.resource_id)
             if current is None:
                 raise LocalAclStateError(resource_acl.resource_id)
             if current.acl_revision > resource_acl.acl_revision:
-                return
-        # 同 revision 的重试仍需补偿此前可能失败的任一后端同步。
+                resource_acl = current
+        # 同 revision 或旧事件重试仍需把本地最高 ACL 补偿同步到后端。
         async with asyncio.TaskGroup() as tasks:
             tasks.create_task(self._retrieval_writer.synchronize(resource_acl))
             tasks.create_task(self._graph_writer.synchronize(resource_acl))

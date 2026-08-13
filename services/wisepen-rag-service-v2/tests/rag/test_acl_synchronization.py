@@ -37,6 +37,9 @@ class _LocalStore:
         self.calls = []
         self.current = current or _acl()
 
+    async def get_resource_acl(self, resource_id):
+        return self.current if self.current.resource_id == resource_id else None
+
     async def save_if_newer(self, resource_acl):
         self.calls.append(resource_acl)
         return False
@@ -89,7 +92,7 @@ async def test_refresher_propagates_partial_backend_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_refresher_does_not_push_acl_older_than_local_revision() -> None:
+async def test_refresher_pushes_current_acl_when_event_is_older_than_local() -> None:
     newer = _acl()
     newer.acl_revision = 8
     retrieval = _BackendWriter()
@@ -103,8 +106,8 @@ async def test_refresher_does_not_push_acl_older_than_local_revision() -> None:
 
     await refresher.refresh("resource-1")
 
-    assert retrieval.calls == []
-    assert graph.calls == []
+    assert retrieval.calls == [newer]
+    assert graph.calls == [newer]
 
 
 class _Qdrant:

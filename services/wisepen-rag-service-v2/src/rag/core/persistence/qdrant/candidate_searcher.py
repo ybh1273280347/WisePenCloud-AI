@@ -11,6 +11,21 @@ from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
 from rag.utils.chunkers import SourceSpan
 
 
+_PAYLOAD_FIELDS = [
+    "content_revision",
+    "resource_id",
+    "chunk_id",
+    "reading_block_id",
+    "raw_text",
+    "section_id",
+    "section_path",
+    "source_spans",
+    "page_labels",
+    "anchor_labels",
+    "source_ref_id",
+]
+
+
 class QdrantCandidateSearcher(CandidateSearcher):
     """仅执行 Qdrant 召回和候选 payload 映射，不做应用层排序或核验。"""
 
@@ -79,7 +94,7 @@ class QdrantCandidateSearcher(CandidateSearcher):
             with_payload=_PAYLOAD_FIELDS,
         )
         return [
-            _to_domain(point.payload, score=point.score)
+            _to_retrieval_candidate(point.payload, score=point.score)
             for point in response.points
         ]
 
@@ -103,22 +118,8 @@ class QdrantCandidateSearcher(CandidateSearcher):
         return qdrant_models.Filter(must=must)
 
 
-_PAYLOAD_FIELDS = [
-    "content_revision",
-    "resource_id",
-    "chunk_id",
-    "reading_block_id",
-    "raw_text",
-    "section_id",
-    "section_path",
-    "source_spans",
-    "page_labels",
-    "anchor_labels",
-    "source_ref_id",
-]
 
-
-def _to_domain(
+def _to_retrieval_candidate(
     payload: Mapping[str, object] | None,
     *,
     score: float,

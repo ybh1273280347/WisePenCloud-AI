@@ -1,6 +1,6 @@
 import pytest
 
-from rag.core.persistence import ResourceDeletionService
+from rag.core.persistence import ResourceDeleter
 
 
 class _Failure:
@@ -37,7 +37,7 @@ class _DeleteTarget:
 
 
 def _deleter(failure):
-    return ResourceDeletionService(
+    return ResourceDeleter(
         resource_writer=_ResourceWriter(failure),
         retrieval_writer=_DeleteTarget(failure, "qdrant"),
         graph_writer=_DeleteTarget(failure, "neo4j"),

@@ -34,11 +34,15 @@ class MongoAppliedContentReader(AppliedContentReader):
         revision = await self._revisions.get_applied_revision(resource_id)
         if revision is None:
             return None
+
         requested_labels = list(dict.fromkeys(page_labels))
         pages_by_label = {page.page_label: page for page in revision.pages}
         selected_pages = [
-            pages_by_label[label] for label in requested_labels if label in pages_by_label
+            pages_by_label[label]
+            for label in requested_labels
+            if label in pages_by_label
         ]
+
         windows: dict[str, ContentWindow] = {}
         for page in selected_pages:
             parts = await self._source_parts.get_parts(
@@ -46,6 +50,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                 [page.source_span],
             )
             text = assemble_source_text(parts, [page.source_span])
+
             sections = await SectionEntity.find(
                 {
                     "resource_id": resource_id,
@@ -54,6 +59,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                     "own_end": {"$gt": page.source_span.start_offset},
                 }
             ).to_list()
+
             blocks = await ReadingBlockEntity.find(
                 {
                     "resource_id": resource_id,
@@ -62,6 +68,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                     "end_offset": {"$gt": page.source_span.start_offset},
                 }
             ).to_list()
+
             page_blocks = [
                 _to_reading_block(entity)
                 for entity in blocks
@@ -71,6 +78,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                     for span in entity.source_spans
                 )
             ]
+
             windows[page.page_label] = ContentWindow(
                 text=text,
                 source_span=page.source_span,
@@ -83,6 +91,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                     )
                 ),
             )
+
         return windows
 
     async def get_applied_sections(
@@ -93,40 +102,65 @@ class MongoAppliedContentReader(AppliedContentReader):
         revision = await self._revisions.get_applied_revision(resource_id)
         if revision is None:
             return None
+
         requested_ids = list(dict.fromkeys(section_ids))
         if not requested_ids:
             return {}
-        entities = await SectionEntity.find(
-            {
-                "resource_id": resource_id,
-                "content_revision": revision.content_revision,
-            }
-        ).sort("+own_start").to_list()
+
+        entities = (
+            await SectionEntity.find(
+                {
+                    "resource_id": resource_id,
+                    "content_revision": revision.content_revision,
+                }
+            )
+            .sort("+own_start")
+            .to_list()
+        )
         all_sections = [_to_section(entity) for entity in entities]
         sections_by_id = {section.section_id: section for section in all_sections}
-        selected = [sections_by_id[section_id] for section_id in requested_ids if section_id in sections_by_id]
+
+        selected = [
+            sections_by_id[section_id]
+            for section_id in requested_ids
+            if section_id in sections_by_id
+        ]
         if not selected:
             return {}
-        blocks = await ReadingBlockEntity.find(
-            {
-                "resource_id": resource_id,
-                "content_revision": revision.content_revision,
-                "section_id": {"$in": [section.section_id for section in selected]},
-            }
-        ).sort([("section_id", ASCENDING), ("ordinal", ASCENDING)]).to_list()
+
+        blocks = (
+            await ReadingBlockEntity.find(
+                {
+                    "resource_id": resource_id,
+                    "content_revision": revision.content_revision,
+                    "section_id": {"$in": [section.section_id for section in selected]},
+                }
+            )
+            .sort([("section_id", ASCENDING), ("ordinal", ASCENDING)])
+            .to_list()
+        )
+
         blocks_by_section: dict[str, list[ReadingBlock]] = {}
         for entity in blocks:
             block = _to_reading_block(entity)
             blocks_by_section.setdefault(block.section_id, []).append(block)
+
         siblings_by_parent: dict[str | None, list[Section]] = {}
         for section in all_sections:
             siblings_by_parent.setdefault(section.parent_section_id, []).append(section)
+
         for siblings in siblings_by_parent.values():
             siblings.sort(key=lambda section: section.ordinal)
+
         result: dict[str, SectionContent] = {}
         for section in selected:
             siblings = siblings_by_parent[section.parent_section_id]
-            index = next(i for i, sibling in enumerate(siblings) if sibling.section_id == section.section_id)
+            index = next(
+                i
+                for i, sibling in enumerate(siblings)
+                if sibling.section_id == section.section_id
+            )
+
             result[section.section_id] = SectionContent(
                 section=section,
                 reading_blocks=blocks_by_section.get(section.section_id, []),
@@ -137,6 +171,7 @@ class MongoAppliedContentReader(AppliedContentReader):
                     children=siblings_by_parent.get(section.section_id, []),
                 ),
             )
+
         return result
 
 

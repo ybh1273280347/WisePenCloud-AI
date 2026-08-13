@@ -50,6 +50,18 @@ def test_nested_headings_build_parent_paths_and_subtree_ranges() -> None:
     assert section_a.subtree_span.end_offset == len(markdown)
 
 
+def test_nested_headings_keep_page_tree_entry_points() -> None:
+    markdown = "前言。\n\n<!-- page 1 -->\n# A\n\nA 正文。\n\n<!-- page 2 -->\n## B\n\nB 正文。"
+    structure = parse_document_structure(
+        resource_id="resource-1",
+        content_revision="revision-1",
+        markdown=markdown,
+    )
+
+    assert [page.page_label for page in structure.pages] == ["1", "2"]
+    assert structure.sections[1].section_path == ["A"]
+
+
 def test_document_without_headings_is_flat_text() -> None:
     structure = parse_document_structure(
         resource_id="resource-1",

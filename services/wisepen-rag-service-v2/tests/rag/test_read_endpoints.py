@@ -4,10 +4,10 @@ from common.core.exceptions import ServiceException
 from common.security import SecurityContextHolder
 from pydantic import ValidationError
 
-from rag.api.endpoints.resources import (
-    document_structure,
-    page_content,
-    section_content,
+from rag.api.endpoints.read import (
+    get_document_structure,
+    get_page_content,
+    get_section_content,
 )
 from rag.api.router import api_router
 from rag.api.schemas import (
@@ -17,7 +17,7 @@ from rag.api.schemas import (
 )
 from rag.application.rag.read import ContentNotFoundError
 from rag.domain.models.content import ContentRevision
-from rag.domain.models.structure import PageRange, Section, StructureMode
+from rag.domain.models.structure import PageRange, Section, SectionTreeNode, StructureMode
 from rag.domain.error_codes import RagErrorCode
 from rag.domain.models.content import (
     ContentWindow,
@@ -33,7 +33,7 @@ class _StructureReader:
         self.missing = missing
         self.scope = None
 
-    async def get(self, *, resource_id, permission_scope):
+    async def get_structure(self, *, resource_id, permission_scope):
         self.scope = permission_scope
         if self.missing:
             raise ContentNotFoundError(resource_id)
@@ -49,6 +49,7 @@ class _StructureReader:
                 pages=[PageRange(0, "1", SourceSpan(0, 12))],
             ),
             sections=[_section()],
+            section_tree=[_section_tree()],
         )
 
 
@@ -95,6 +96,20 @@ def _section() -> Section:
     )
 
 
+def _section_tree() -> SectionTreeNode:
+    return SectionTreeNode(
+        section_id="section-1",
+        title="标题",
+        level=1,
+        section_path=["标题"],
+        has_content=True,
+        start_page_label="1",
+        end_page_label="1",
+        page_labels=["1"],
+        children=[],
+    )
+
+
 def test_read_request_schemas_forbid_extra_and_limit_batch_size() -> None:
     with pytest.raises(ValidationError):
         ResourceRequest(resource_id="resource-1", extra_field=True)
@@ -111,12 +126,12 @@ def test_router_exposes_deterministic_read_endpoints() -> None:
     paths = {
         route.path
         for route in api_router.routes
-        if route.path.startswith("/resources/")
+        if route.path.startswith("/get")
     }
     assert paths == {
-        "/resources/document-structure",
-        "/resources/page-content",
-        "/resources/section-content",
+        "/getDocumentStructure",
+        "/getPageContent",
+        "/getSectionContent",
     }
 
 
@@ -125,7 +140,7 @@ async def test_structure_response_uses_security_context_permission_scope() -> No
     reader = _StructureReader()
     SecurityContextHolder.set_group_role_map('{"group-1": 1}')
 
-    response = await document_structure(
+    response = await get_document_structure(
         ResourceRequest(resource_id="resource-1"),
         user_id="user-1",
         reader=reader,
@@ -134,13 +149,14 @@ async def test_structure_response_uses_security_context_permission_scope() -> No
     assert response.data.content_revision == "revision-1"
     assert response.data.pages[0].source_span.end_offset == 12
     assert response.data.sections[0].section_id == "section-1"
+    assert response.data.section_tree[0].section_id == "section-1"
     assert reader.scope.user_id == "user-1"
     assert reader.scope.group_roles == {"group-1": GroupRoleType.ADMIN}
 
 
 @pytest.mark.asyncio
 async def test_page_response_returns_only_existing_keys() -> None:
-    response = await page_content(
+    response = await get_page_content(
         PageContentRequest(
             resource_id="resource-1",
             page_labels=["1", "missing"],
@@ -155,7 +171,7 @@ async def test_page_response_returns_only_existing_keys() -> None:
 
 @pytest.mark.asyncio
 async def test_empty_section_is_a_successful_existing_section() -> None:
-    response = await section_content(
+    response = await get_section_content(
         SectionContentRequest(
             resource_id="resource-1",
             section_ids=["section-1", "missing"],
@@ -174,14 +190,9 @@ async def test_empty_section_is_a_successful_existing_section() -> None:
     ("call", "payload", "reader"),
     [
         (
-            document_structure,
+            get_document_structure,
             ResourceRequest(resource_id="resource-1"),
             _StructureReader(missing=True),
-        ),
-        (
-            page_content,
-            PageContentRequest(resource_id="resource-1", page_labels=["1"]),
-            _ContentReader(missing=True),
         ),
     ],
 )

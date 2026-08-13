@@ -18,7 +18,9 @@ NonEmptyText = Annotated[
 ]
 
 
-class SectionExpandRequest(BaseModel):
+class DiscoveredSectionExpandRequest(BaseModel):
+    """只允许展开 navigation state 中已发现的 Section。"""
+
     model_config = ConfigDict(extra="forbid")
 
     session_id: NonEmptyText
@@ -37,7 +39,7 @@ class SectionView(BaseModel):
     evidence: list[EvidenceRecord] = Field(default_factory=list)
 
 
-class SectionExpandResponse(BaseModel):
+class DiscoveredSectionExpandResponse(BaseModel):
     state_id: str
     sections: list[SectionView]
 

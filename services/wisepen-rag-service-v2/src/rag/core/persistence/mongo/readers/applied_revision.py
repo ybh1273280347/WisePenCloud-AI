@@ -22,10 +22,10 @@ class MongoAppliedRevisionReader(AppliedRevisionReader):
         )
         if entity is None:
             raise RuntimeError(f"resource {resource_id} applied revision is missing")
-        return _to_domain(entity)
+        return _to_content_revision(entity)
 
 
-def _to_domain(record: ContentRevisionEntity) -> ContentRevision:
+def _to_content_revision(record: ContentRevisionEntity) -> ContentRevision:
     return ContentRevision(
         resource_id=record.resource_id,
         content_revision=record.content_revision,

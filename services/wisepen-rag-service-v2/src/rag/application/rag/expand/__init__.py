@@ -6,31 +6,33 @@ from rag.domain.models.graph import (
 )
 
 from .graph_expander import (
+    GraphAccessRevokedError,
     GraphExpandRequest,
     GraphExpandResult,
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
 )
-from .section_expander import (
-    SectionExpandResult,
+from .discovered_section_expander import (
+    DiscoveredSectionExpandResult,
+    DiscoveredSectionExpander,
     SectionAccessRevokedError,
     SectionNotDiscoveredError,
     SectionRecordMissingError,
     SectionRevisionChangedError,
-    SectionTreeExpander,
 )
 
 __all__ = [
+    "DiscoveredSectionExpandResult",
+    "DiscoveredSectionExpander",
     "GraphExpandRequest",
     "GraphExpandResult",
+    "GraphAccessRevokedError",
     "GraphTraversalRequest",
     "KnowledgeGraphExpander",
     "SectionAccessRevokedError",
-    "SectionExpandResult",
     "SectionNotDiscoveredError",
     "SectionRecordMissingError",
     "SectionRevisionChangedError",
-    "SectionTreeExpander",
     "TraversalDirection",
     "TraversedEdge",
     "TraversedPath",

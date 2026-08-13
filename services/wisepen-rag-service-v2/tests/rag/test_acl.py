@@ -178,6 +178,9 @@ class _AclReader(ResourceAclStore):
         self.resource_acls = resource_acls
         self.requested_ids: list[str] = []
 
+    async def get_resource_acl(self, resource_id: str) -> ResourceAcl | None:
+        return self.resource_acls.get(resource_id)
+
     async def get_resource_acls(
         self,
         resource_ids: Sequence[str],
@@ -205,7 +208,7 @@ async def test_authorizer_preserves_order_deduplicates_and_fails_closed() -> Non
         }
     )
 
-    authorizer = PermissionAuthorizer(reader=reader)
+    authorizer = PermissionAuthorizer(local_store=reader)
     readable = await authorizer.readable_resource_ids(
         ["resource-2", "missing", "resource-1", "resource-2"],
         scope=PermissionScope(user_id="user-1"),
@@ -219,8 +222,21 @@ async def test_authorizer_preserves_order_deduplicates_and_fails_closed() -> Non
 async def test_authorizer_fails_closed_when_acl_is_missing() -> None:
     reader = _AclReader({})
 
-    authorizer = PermissionAuthorizer(reader=reader)
+    authorizer = PermissionAuthorizer(local_store=reader)
     assert not await authorizer.authorize_resource(
         resource_id="missing",
         scope=PermissionScope(user_id="user-1"),
     )
+
+
+@pytest.mark.asyncio
+async def test_authorizer_reads_single_acl_without_batch_lookup() -> None:
+    reader = _AclReader({"resource-1": _resource_acl(readable_users=["user-1"])})
+
+    authorizer = PermissionAuthorizer(local_store=reader)
+
+    assert await authorizer.authorize_resource(
+        resource_id="resource-1",
+        scope=PermissionScope(user_id="user-1"),
+    )
+    assert reader.requested_ids == []

@@ -12,7 +12,7 @@ from rag.domain.repositories import (
 )
 
 
-class ResourceDeletionService:
+class ResourceDeleter:
     """先清内容发布指针，再并行清理所有持久化派生数据。"""
 
     def __init__(

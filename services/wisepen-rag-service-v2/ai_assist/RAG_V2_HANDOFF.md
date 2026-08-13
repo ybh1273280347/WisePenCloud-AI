@@ -266,9 +266,9 @@ CP21 EXPAND 边界：
 - `NavigationStateStore.add_known_nodes()` 返回本次原子操作实际新增的 node IDs；并发调用只允许一个结果返回对应新路径，不使用 `get -> compare -> add`。
 - EXPAND 返回领域 node、edge、path 和权威 `EvidenceRecord`，不组装 HTTP/MCP/Agent 文案。
 
-CP22 有状态 READ 边界：
+CP22 已发现 Section 展开边界：
 
-- `DiscoveredSectionReader` 只读取 navigation state 中已经发现的 Section；无状态 `DocumentContentReader` 的 page/Section 行为不变。
+- `DiscoveredSectionExpander` 只展开 navigation state 中已经发现的 Section；无状态 `DocumentContentReader` 的 page/Section 行为不变。
 - state 必须匹配当前 user/session；未知 Section 直接抛 `SectionNotDiscoveredError`，不静默扩大读取范围。
 - 正文查询前后各执行一次统一 ACL 与 applied revision 校验，读取期间发生撤权或 revision 切换时 fail closed。
 - `AppliedContentReader` 返回完整 `SectionContent` 后，parent/previous/next/children 使用现有 `add_known_sections()` 原子加入同一 state。
@@ -306,7 +306,7 @@ CP26 HTTP READ adapter 边界：
 
 CP27 HTTP Navigation adapter 边界：
 
-- `/knowledge-navigation/locate`、`/sections`、`/expand` 直接调用 `ReadingEntryLocator`、`DiscoveredSectionReader` 和 `KnowledgeGraphExpander`，不恢复 v1 的聚合 service 或 cypher 命名。
+- `locate`、`expandDiscoveredSections`、`expandGraph` 分别调用 `ReadingEntryLocator`、`DiscoveredSectionExpander` 和 `KnowledgeGraphExpander`，不恢复 v1 的聚合 service 或 cypher 命名。
 - 请求 body 只包含 session、查询、state 和导航边界；`PermissionScope.user_id` 与群组角色始终来自 `require_login` 和 `SecurityContextHolder`，客户端不能伪造身份。
 - locate 返回 state、相关性 decision、Section frontier 和已核验证据；expand 返回领域 node、edge、path 和 SourceRef 回源事实；不组装 Agent reason 或探索提示。
 - 请求 schema 使用 list，Section 最多 12 个、seed/relation type 最多 16 个、depth 只允许 1/2、结果最多 20 个，所有请求 `extra=forbid`。

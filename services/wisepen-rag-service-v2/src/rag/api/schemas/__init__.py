@@ -1,8 +1,8 @@
 from .expand import (
+    DiscoveredSectionExpandRequest,
+    DiscoveredSectionExpandResponse,
     GraphExpandRequest,
     GraphExpandResponse,
-    SectionExpandRequest,
-    SectionExpandResponse,
     SectionView,
 )
 from .locate import CandidateLocateRequest, CandidateLocateResponse
@@ -14,6 +14,8 @@ from .read import (
 )
 
 __all__ = [
+    "DiscoveredSectionExpandRequest",
+    "DiscoveredSectionExpandResponse",
     "DocumentStructureResponse",
     "GraphExpandRequest",
     "GraphExpandResponse",
@@ -21,8 +23,6 @@ __all__ = [
     "CandidateLocateResponse",
     "PageContentRequest",
     "ResourceRequest",
-    "SectionExpandRequest",
-    "SectionExpandResponse",
     "SectionView",
     "SectionContentRequest",
 ]

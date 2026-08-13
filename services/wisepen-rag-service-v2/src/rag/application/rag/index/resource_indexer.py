@@ -21,8 +21,8 @@ from .constructor import (
     build_retrieval_chunks,
     build_source_refs,
     create_content_revision,
+    merge_candidate_graph,
     parse_document_structure,
-    merge_candidate_graph
 )
 from .contextualize import ContextualTextIndexer
 from .graph import KnowledgeGraphExtractor
@@ -129,9 +129,7 @@ class ResourceIndexer:
             chunks=chunks,
         )
         await self._acl_refresher.refresh(resource_id)
-        resource_acl = (await self._acl_reader.get_resource_acls([resource_id])).get(
-            resource_id
-        )
+        resource_acl = await self._acl_reader.get_resource_acl(resource_id)
         if resource_acl is None:
             raise RuntimeError(f"resource {resource_id} has no synchronized ACL")
 

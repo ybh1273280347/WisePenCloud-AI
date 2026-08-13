@@ -15,11 +15,11 @@ from rag.api.schemas import (
     SectionContentRequest,
 )
 from rag.application.rag.read import (
+    ContentAccessRevokedError,
     ContentNotFoundError,
     DocumentContentReader,
     DocumentStructureReader,
 )
-from rag.container import Container
 from rag.domain.models.acl import PermissionScope
 from rag.domain.error_codes import RagErrorCode
 from rag.domain.models.content import ContentWindow, SectionContent
@@ -29,11 +29,11 @@ router = APIRouter()
 AuthenticatedUser = Annotated[str, Depends(require_login)]
 StructureReader = Annotated[
     DocumentStructureReader,
-    Depends(Provide[Container.document_structure_reader]),
+    Depends(Provide["document_structure_reader"]),
 ]
 ContentReader = Annotated[
     DocumentContentReader,
-    Depends(Provide[Container.document_content_reader]),
+    Depends(Provide["document_content_reader"]),
 ]
 
 
@@ -51,6 +51,8 @@ async def get_document_structure(
         )
     except ContentNotFoundError as error:
         raise ServiceException(RagErrorCode.RESOURCE_CONTENT_NOT_FOUND) from error
+    except ContentAccessRevokedError as error:
+        raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
     except Exception as error:
         raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
     revision = result.revision
@@ -63,6 +65,7 @@ async def get_document_structure(
             total_length=revision.total_length,
             pages=revision.pages,
             sections=result.sections,
+            section_tree=result.section_tree,
         )
     )
 
@@ -82,6 +85,8 @@ async def get_page_content(
         )
     except ContentNotFoundError as error:
         raise ServiceException(RagErrorCode.RESOURCE_CONTENT_NOT_FOUND) from error
+    except ContentAccessRevokedError as error:
+        raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
     except Exception as error:
         raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
     return R.success(result)
@@ -102,6 +107,8 @@ async def get_section_content(
         )
     except ContentNotFoundError as error:
         raise ServiceException(RagErrorCode.RESOURCE_CONTENT_NOT_FOUND) from error
+    except ContentAccessRevokedError as error:
+        raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
     except Exception as error:
         raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
     return R.success(result)

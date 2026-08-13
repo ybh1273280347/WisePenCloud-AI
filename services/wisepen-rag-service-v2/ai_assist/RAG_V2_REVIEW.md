@@ -75,21 +75,22 @@
 - 不要把业务语义 reason 塞进 verifier 里。
 - graph 引用和 locate 候选都要能在这里闭环。
 
-## 4. expand：沿标题树或图谱继续探索
+## 4. expand：沿已发现标题或图谱节点继续探索
 
-目标：把已经发现的 section / node 继续展开成可读、可探索的新入口。
+目标：把 navigation state 中已经发现的 section / node 继续展开成可读、可探索的新入口。
 
 流程：
-1. `expandSections` 读取已发现 section 的正文和 frontier。
+1. `expandDiscoveredSections` 只读取当前 state 已发现 section 的正文和 frontier。
 2. 返回完整 `SectionView`，里面有 section、reading blocks、frontier 和 evidence。
 3. `expandGraph` 从已知 node 出发找路径、排序、核验证据。
 4. 现在 graph 的 evidence 也会回补成 `SectionView`，并写回 navigation state。
 5. 所以 graph 扩展后，调用方可以继续沿着证据所在 section 读标题树。
+6. 如果调用方只是从 `getDocumentStructure.section_tree` 里选标题读正文，应走 read 的 `getSectionContent`，不要绕进 expand 状态机。
 
 对应文件：
 - `src/rag/api/endpoints/expand.py`
 - `src/rag/api/schemas/expand.py`
-- `src/rag/application/rag/expand/section_expander.py`
+- `src/rag/application/rag/expand/discovered_section_expander.py`
 - `src/rag/application/rag/expand/graph_expander.py`
 - `src/rag/application/rag/expand/__init__.py`
 - `src/rag/domain/models/content.py`
@@ -97,7 +98,8 @@
 - `src/rag/domain/repositories/neo4j/graph_traversal.py`
 
 ### reviewer 重点
-- `expandSections` 是标题树能力主线，不是 read 的附属。
+- `expandDiscoveredSections` 是有状态探索能力，只能展开 state 中已发现的 section。
+- `getSectionContent` 是无状态正文读取能力，用于从文档结构直接进入标题正文。
 - `expandGraph` 不能只吐证据片段，必须保留可继续阅读的 section 上下文。
 - 发现的新 section / node 要写回 state，不然能力只能看不能继续走。
 

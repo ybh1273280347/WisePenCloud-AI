@@ -12,12 +12,12 @@ from rag.api.kafka import (
     DocumentReadyHandler,
     KafkaEventConsumer,
     ResourceDestroyHandler, )
-from rag.core.persistence import ResourceDeletionService
+from rag.core.persistence import ResourceDeleter
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
-from rag.application.rag.expand import KnowledgeGraphExpander, SectionTreeExpander
+from rag.application.rag.expand import DiscoveredSectionExpander, KnowledgeGraphExpander
 from rag.application.rag.index import KnowledgeGraphExtractor, ResourceIndexer
 from rag.application.rag.index.contextualize import ContextualTextIndexer
-from rag.application.rag.index.graph_extraction import QueryClientGraphRagLLM
+from rag.application.rag.index.graph import QueryClientGraphRagLLM
 from rag.application.rag.locate import ReadingCandidateLocator
 from rag.application.rag.read import (
     DocumentContentReader,
@@ -338,16 +338,16 @@ class Container(containers.DeclarativeContainer):
         graph_extractor=knowledge_graph_extractor,
         graph_writer=knowledge_graph_writer,
     )
-    resource_deletion_service = providers.Singleton(
-        ResourceDeletionService,
+    resource_deleter = providers.Singleton(
+        ResourceDeleter,
         resource_writer=resource_index_writer,
         retrieval_writer=retrieval_index_writer,
         graph_writer=knowledge_graph_writer,
         generation_artifacts=generation_artifact_store,
         acl_store=resource_acl_store,
     )
-    section_tree_expander = providers.Singleton(
-        SectionTreeExpander,
+    discovered_section_expander = providers.Singleton(
+        DiscoveredSectionExpander,
         content_reader=applied_content_reader,
         revision_reader=applied_revision_reader,
         authorizer=permission_authorizer,
@@ -399,6 +399,7 @@ class Container(containers.DeclarativeContainer):
         traversal=graph_traversal,
         ranking_pipeline=expand_ranking_pipeline,
         evidence_verifier=evidence_verifier,
+        authorizer=permission_authorizer,
         content_reader=applied_content_reader,
         revision_reader=applied_revision_reader,
         state_store=navigation_state_store,
@@ -414,7 +415,7 @@ class Container(containers.DeclarativeContainer):
     )
     resource_destroy_handler = providers.Singleton(
         ResourceDestroyHandler,
-        deleter=resource_deletion_service,
+        deleter=resource_deleter,
     )
     document_ready_consumer = providers.Singleton(
         _build_kafka_consumer,

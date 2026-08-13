@@ -12,6 +12,10 @@ class ContentNotFoundError(RuntimeError):
     """资源没有可读取的 applied revision。"""
 
 
+class ContentAccessRevokedError(RuntimeError):
+    """读取期间资源失去可读权限。"""
+
+
 class DocumentContentReader:
     """读取 applied revision 的 page 和 Section 正文。"""
 
@@ -41,6 +45,11 @@ class DocumentContentReader:
         pages = await self._reader.get_applied_pages(resource_id, page_labels)
         if pages is None:
             raise ContentNotFoundError(resource_id)
+        if not await self._authorizer.authorize_resource(
+            resource_id=resource_id,
+            scope=permission_scope,
+        ):
+            raise ContentAccessRevokedError(resource_id)
         return pages
 
     async def get_sections(
@@ -58,4 +67,9 @@ class DocumentContentReader:
         sections = await self._reader.get_applied_sections(resource_id, section_ids)
         if sections is None:
             raise ContentNotFoundError(resource_id)
+        if not await self._authorizer.authorize_resource(
+            resource_id=resource_id,
+            scope=permission_scope,
+        ):
+            raise ContentAccessRevokedError(resource_id)
         return sections

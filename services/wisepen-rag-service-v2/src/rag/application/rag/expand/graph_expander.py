@@ -14,6 +14,7 @@ from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import KnowledgeNode, KnowledgeRelationType
 from rag.domain.models.navigation import NavigationStateNotFoundError
 from rag.domain.models.navigation import KnownSection
+from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.repositories.mongo.readers.applied_content import AppliedContentReader
 from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.domain.repositories.neo4j.graph_traversal import GraphTraversal
@@ -34,6 +35,10 @@ from rag.application.rag.verify import (
 
 class UnknownSeedNodeError(RuntimeError):
     """请求的 seed 尚未被当前 navigation state 发现。"""
+
+
+class GraphAccessRevokedError(RuntimeError):
+    """图谱展开期间证据所属资源失去可读权限。"""
 
 
 @dataclass(slots=True)
@@ -67,6 +72,7 @@ class KnowledgeGraphExpander:
         traversal: GraphTraversal,
         ranking_pipeline: RankingPipeline,
         evidence_verifier: EvidenceVerifier,
+        authorizer: PermissionAuthorizer,
         content_reader: AppliedContentReader,
         revision_reader: AppliedRevisionReader,
         state_store: NavigationStateStore,
@@ -74,6 +80,7 @@ class KnowledgeGraphExpander:
         self._traversal = traversal
         self._ranking_pipeline = ranking_pipeline
         self._evidence_verifier = evidence_verifier
+        self._authorizer = authorizer
         self._content_reader = content_reader
         self._revision_reader = revision_reader
         self._state_store = state_store
@@ -198,6 +205,7 @@ class KnowledgeGraphExpander:
                 in retained_evidence
             ]
         )
+        await self._ensure_sources_readable(sources, request.permission_scope)
         await self._state_store.add_known_sections(
             state_id=state.state_id,
             sections=_known_sections(sources),
@@ -300,6 +308,29 @@ class KnowledgeGraphExpander:
                 )
 
         return [views_by_key[key] for key in section_order]
+
+    async def _ensure_sources_readable(
+        self,
+        sources: list[SectionView],
+        permission_scope: PermissionScope,
+    ) -> None:
+        """返回前再核一次证据所属资源可读，避免读中途 ACL 变化。"""
+        readable_resource_ids = set(
+            await self._authorizer.readable_resource_ids(
+                (source.resource_id for source in sources),
+                scope=permission_scope,
+            )
+        )
+        denied = next(
+            (
+                source.resource_id
+                for source in sources
+                if source.resource_id not in readable_resource_ids
+            ),
+            None,
+        )
+        if denied is not None:
+            raise GraphAccessRevokedError(denied)
 
 
 def _path_text(path: TraversedPath) -> str:
