@@ -4,7 +4,6 @@ import pytest
 
 from rag.core.persistence.mongo import MongoGenerationArtifactStore
 from rag.domain.entities import GenerationArtifactEntity
-from rag.domain.models.generation import GenerationArtifactKind
 
 
 class _Field:
@@ -18,7 +17,7 @@ class _Field:
 @dataclass
 class _Record:
     resource_id: str
-    artifact_kind: GenerationArtifactKind
+    artifact_kind: str
     artifact_key: str
     payload: str
 
@@ -48,15 +47,15 @@ async def test_generation_artifacts_reads_only_matching_resource_kind_and_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     records = [
-        _Record("resource-1", GenerationArtifactKind.CONTEXTUAL_TEXT, "key-1", "one"),
-        _Record("resource-2", GenerationArtifactKind.CONTEXTUAL_TEXT, "key-1", "other-resource"),
-        _Record("resource-1", GenerationArtifactKind.GRAPH_CANDIDATES, "key-1", "other-kind"),
+        _Record("resource-1", "context", "key-1", "one"),
+        _Record("resource-2", "context", "key-1", "other-resource"),
+        _Record("resource-1", "graph", "key-1", "other-kind"),
     ]
 
     def find(*conditions):
         assert len(conditions) == 3
         assert conditions[0] == ("resource_id", "resource-1")
-        assert conditions[1] == ("artifact_kind", GenerationArtifactKind.CONTEXTUAL_TEXT)
+        assert conditions[1] == ("artifact_kind", "context")
         return _Query([records[0]])
 
     monkeypatch.setattr(
@@ -81,7 +80,7 @@ async def test_generation_artifacts_reads_only_matching_resource_kind_and_keys(
 
     result = await MongoGenerationArtifactStore().get_many(
         resource_id="resource-1",
-        artifact_kind=GenerationArtifactKind.CONTEXTUAL_TEXT,
+        artifact_kind="context",
         artifact_keys=["key-1", "key-1", "missing"],
     )
 
@@ -101,19 +100,19 @@ async def test_generation_artifacts_set_serializes_kind_and_overwrites_by_compos
 
     await MongoGenerationArtifactStore().set_many(
         resource_id="resource-1",
-        artifact_kind=GenerationArtifactKind.GRAPH_CANDIDATES,
+        artifact_kind="graph",
         artifacts={"key-1": "new-value"},
     )
 
     operation = collection.operations[0]
     assert operation._filter == {
         "resource_id": "resource-1",
-        "artifact_kind": "graph_candidates",
+        "artifact_kind": "graph",
         "artifact_key": "key-1",
     }
     assert operation._doc["$set"] == {
         "resource_id": "resource-1",
-        "artifact_kind": "graph_candidates",
+        "artifact_kind": "graph",
         "artifact_key": "key-1",
         "payload": "new-value",
     }
@@ -156,7 +155,7 @@ async def test_generation_artifacts_ignores_empty_batches(
     store = MongoGenerationArtifactStore()
     assert await store.get_many(
         resource_id="resource-1",
-        artifact_kind=GenerationArtifactKind.CONTEXTUAL_TEXT,
+        artifact_kind="context",
         artifact_keys=[],
     ) == {}
     await store.delete_resources([])

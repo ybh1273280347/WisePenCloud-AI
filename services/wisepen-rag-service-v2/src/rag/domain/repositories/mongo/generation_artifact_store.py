@@ -1,9 +1,7 @@
 """模型生成派生产物的持久化 port。"""
 
 from collections.abc import Mapping, Sequence
-from typing import Protocol
-
-from rag.domain.models.generation import GenerationArtifactKind
+from typing import Literal, Protocol
 
 
 class GenerationArtifactStore(Protocol):
@@ -13,7 +11,7 @@ class GenerationArtifactStore(Protocol):
         self,
         *,
         resource_id: str,
-        artifact_kind: GenerationArtifactKind,
+        artifact_kind: Literal["context", "graph"],
         artifact_keys: Sequence[str],
     ) -> Mapping[str, str]:
         """返回已命中的 key/value；未命中 key 不出现在结果中。"""
@@ -22,7 +20,7 @@ class GenerationArtifactStore(Protocol):
         self,
         *,
         resource_id: str,
-        artifact_kind: GenerationArtifactKind,
+        artifact_kind: Literal["context", "graph"],
         artifacts: Mapping[str, str],
     ) -> None:
         """按资源和类别幂等覆盖派生产物。"""

@@ -19,11 +19,12 @@ import json
 from hashlib import sha256
 from typing import TYPE_CHECKING
 
-from rag.domain.models.structure import DocumentStructure, StructureMode
-from rag.domain.models.generation import GenerationArtifactKind
 from rag.domain.models.content import ReadingBlock
-from rag.domain.repositories.mongo.generation_artifact_store import GenerationArtifactStore
 from rag.domain.models.retrieval import RetrievalChunk
+from rag.domain.models.structure import DocumentStructure, StructureMode
+from rag.domain.repositories.mongo.generation_artifact_store import (
+    GenerationArtifactStore,
+)
 from rag.utils.xml_markup import xml_cdata
 
 if TYPE_CHECKING:
@@ -117,7 +118,7 @@ class ContextualTextIndexer:
             for key, value in (
                 await self._artifact_store.get_many(
                     resource_id=resource_id,
-                    artifact_kind=GenerationArtifactKind.CONTEXTUAL_TEXT,
+                    artifact_kind="context",
                     artifact_keys=list(chunk_contexts),
                 )
             ).items()
@@ -143,7 +144,7 @@ class ContextualTextIndexer:
             # 新生成的上下文写回缓存，供后续重复索引复用。
             await self._artifact_store.set_many(
                 resource_id=resource_id,
-                artifact_kind=GenerationArtifactKind.CONTEXTUAL_TEXT,
+                artifact_kind="context",
                 artifacts=generated_by_key,
             )
 

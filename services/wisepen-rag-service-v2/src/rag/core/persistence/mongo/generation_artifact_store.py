@@ -1,13 +1,15 @@
 """Beanie adapter：按资源维护模型生成派生产物。"""
 
 from collections.abc import Mapping, Sequence
+from typing import Literal
 
 from beanie.operators import In
 from pymongo import UpdateOne
 
 from rag.domain.entities import GenerationArtifactEntity
-from rag.domain.models.generation import GenerationArtifactKind
-from rag.domain.repositories.mongo.generation_artifact_store import GenerationArtifactStore
+from rag.domain.repositories.mongo.generation_artifact_store import (
+    GenerationArtifactStore,
+)
 
 
 class MongoGenerationArtifactStore(GenerationArtifactStore):
@@ -17,7 +19,7 @@ class MongoGenerationArtifactStore(GenerationArtifactStore):
         self,
         *,
         resource_id: str,
-        artifact_kind: GenerationArtifactKind,
+        artifact_kind: Literal["context", "graph"],
         artifact_keys: Sequence[str],
     ) -> Mapping[str, str]:
         unique_artifact_keys = list(dict.fromkeys(artifact_keys))
@@ -35,7 +37,7 @@ class MongoGenerationArtifactStore(GenerationArtifactStore):
         self,
         *,
         resource_id: str,
-        artifact_kind: GenerationArtifactKind,
+        artifact_kind: Literal["context", "graph"],
         artifacts: Mapping[str, str],
     ) -> None:
         if not artifacts:
@@ -46,7 +48,7 @@ class MongoGenerationArtifactStore(GenerationArtifactStore):
                 UpdateOne(
                     {
                         "resource_id": resource_id,
-                        "artifact_kind": artifact_kind.value,
+                        "artifact_kind": artifact_kind,
                         "artifact_key": artifact_key,
                     },
                     {
@@ -76,13 +78,13 @@ class MongoGenerationArtifactStore(GenerationArtifactStore):
 def _to_document(
     *,
     resource_id: str,
-    artifact_kind: GenerationArtifactKind,
+    artifact_kind: Literal["context", "graph"],
     artifact_key: str,
     payload: str,
 ) -> dict[str, object]:
     return {
         "resource_id": resource_id,
-        "artifact_kind": artifact_kind.value,
+        "artifact_kind": artifact_kind,
         "artifact_key": artifact_key,
         "payload": payload,
     }

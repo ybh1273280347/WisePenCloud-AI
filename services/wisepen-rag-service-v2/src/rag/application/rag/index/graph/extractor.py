@@ -27,8 +27,6 @@ from neo4j_graphrag.experimental.components.schema import (
     RelationshipType,
 )
 
-from rag.domain.models.structure import StructureMode
-from rag.domain.models.generation import GenerationArtifactKind
 from rag.domain.models.graph import (
     KnowledgeEntityType,
     KnowledgeNodeKind,
@@ -36,8 +34,13 @@ from rag.domain.models.graph import (
     KnowledgeRelationType,
     KnowledgeWindowExtraction,
 )
-from rag.domain.repositories.mongo.generation_artifact_store import GenerationArtifactStore
-from rag.domain.repositories.mongo.readers.graph_build_source import GraphBuildSourceReader
+from rag.domain.models.structure import StructureMode
+from rag.domain.repositories.mongo.generation_artifact_store import (
+    GenerationArtifactStore,
+)
+from rag.domain.repositories.mongo.readers.graph_build_source import (
+    GraphBuildSourceReader,
+)
 
 from .candidate_codec import (
     decode_candidate_graph,
@@ -138,7 +141,7 @@ class KnowledgeGraphExtractor:
         # 批量读取已持久化的 SDK 原始候选图。
         stored_artifacts = await self._generation_artifact_store.get_many(
             resource_id=resource_id,
-            artifact_kind=GenerationArtifactKind.GRAPH_CANDIDATES,
+            artifact_kind="graph",
             artifact_keys=artifact_keys,
         )
         results: dict[int, KnowledgeWindowExtraction] = {}
@@ -171,7 +174,7 @@ class KnowledgeGraphExtractor:
                 )
             await self._generation_artifact_store.set_many(
                 resource_id=resource_id,
-                artifact_kind=GenerationArtifactKind.GRAPH_CANDIDATES,
+                artifact_kind="graph",
                 artifacts=generated_artifacts,
             )
         # 按窗口原始顺序返回，保证下游合并结果稳定。

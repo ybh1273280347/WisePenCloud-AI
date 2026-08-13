@@ -23,7 +23,7 @@ class DocumentOutlineNode:
     section_id: str
     title: str
     level: int
-    breadcrumbs: list[str]
+    hierarchy: str
     start_page_label: str | None = None
     end_page_label: str | None = None
     children: list[DocumentOutlineNode] = field(default_factory=list)
@@ -138,7 +138,7 @@ def _to_outline_node(
         section_id=section.section_id,
         title=section.title,
         level=section.level,
-        breadcrumbs=list(section.section_path),
+        hierarchy=" > ".join(section.section_path),
         start_page_label=page_labels[0] if page_labels else None,
         end_page_label=page_labels[-1] if page_labels else None,
         children=[

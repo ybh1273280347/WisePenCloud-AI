@@ -4,14 +4,13 @@ from dataclasses import dataclass
 import pytest
 
 from rag.application.rag.index import ContextualTextIndexer
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.retrieval import RetrievalChunk
 from rag.domain.models.structure import (
     DocumentStructure,
     Section,
     StructureMode,
 )
-from rag.domain.models.generation import GenerationArtifactKind
-from rag.domain.models.content import ReadingBlock
-from rag.domain.models.retrieval import RetrievalChunk
 from rag.utils.chunkers import SourceSpan
 
 
@@ -112,7 +111,7 @@ async def test_contextual_text_generates_and_only_enhances_index_text() -> None:
     assert result[0].index_text == "Context: topic context\n\nTarget passage."
     assert artifact_store.set_calls[0][0:2] == (
         "resource-1",
-        GenerationArtifactKind.CONTEXTUAL_TEXT,
+        "context",
     )
     assert "Title" in client.prompt
     assert "A short section preview." in client.prompt

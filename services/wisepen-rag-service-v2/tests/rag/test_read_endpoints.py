@@ -68,7 +68,7 @@ class _StructureReader:
                     section_id="section-1",
                     title="标题",
                     level=1,
-                    breadcrumbs=["标题"],
+                    hierarchy="标题",
                     start_page_label="1",
                     end_page_label="1",
                 )
@@ -157,7 +157,7 @@ async def test_structure_response_uses_security_context_permission_scope() -> No
 
     assert response.data.content_revision == "revision-1"
     assert response.data.outline[0].section_id == "section-1"
-    assert response.data.outline[0].breadcrumbs == ["标题"]
+    assert response.data.outline[0].hierarchy == "标题"
     assert reader.scope.user_id == "user-1"
     assert reader.scope.group_roles == {"group-1": GroupRoleType.ADMIN}
 

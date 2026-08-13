@@ -1,18 +1,16 @@
 """模型生成派生产物的 Beanie Mongo 实体。"""
 
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from beanie import Document
 from pymongo import ASCENDING, IndexModel
-
-from rag.domain.models.generation import GenerationArtifactKind
 
 
 class GenerationArtifactEntity(Document):
     """按资源和生成类别保存可复用的模型输出。"""
 
     resource_id: str
-    artifact_kind: GenerationArtifactKind
+    artifact_kind: Literal["context", "graph"]
     artifact_key: str
     payload: str
 
