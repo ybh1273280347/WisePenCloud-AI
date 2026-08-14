@@ -15,14 +15,13 @@ from _demo_documents import (
 from rag.api.schemas import CandidateLocateResponse, GraphExpandResponse
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.navigate import (
-    EvidenceVerifier,
     GraphExpandRequest,
     KnowledgeGraphExpander,
     LocateRequest,
     ReadingCandidateLocator,
+    SourceEvidenceVerifier,
 )
 from rag.domain.models.acl import PermissionScope, ResourceAcl
-from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import (
     KnowledgeEntityType,
     KnowledgeNode,
@@ -32,6 +31,7 @@ from rag.domain.models.graph import (
     TraversedPath,
 )
 from rag.domain.models.navigation import NavigationState
+from rag.domain.models.provenance import SourceEvidence
 from rag.domain.models.retrieval import RetrievalCandidate
 from rag.domain.models.structure import StructureMode
 from rag.utils.ranking import RankingPipeline
@@ -73,11 +73,7 @@ class _CandidateSearch:
             replace(
                 candidate,
                 score=candidate.score
-                + sum(
-                    token in candidate.raw_text
-                    for token in tokens
-                    if token.strip()
-                ),
+                + sum(token in candidate.raw_text for token in tokens if token.strip()),
             )
             for candidate in ranked[: request.limit]
         ]
@@ -97,20 +93,20 @@ class _RevisionReader:
             document.resource_id: document.revision for document in documents
         }
 
-    async def get_applied_revision(self, resource_id):
+    async def get_revision(self, resource_id):
         return self._revisions.get(resource_id)
 
 
-class _EvidenceReader:
-    """代替 Mongo 查询；EvidenceVerifier 仍逐字段校验这些权威记录。"""
+class _PublishedResourceReader:
+    """代替 Mongo 查询；SourceEvidenceVerifier 仍逐字段校验权威记录。"""
 
-    def __init__(self, records: list[EvidenceRecord]) -> None:
+    def __init__(self, records: list[SourceEvidence]) -> None:
         self._records = {
             (record.revision.resource_id, record.source_ref.ref_id): record
             for record in records
         }
 
-    async def read_applied_evidence(
+    async def get_source_evidence(
         self,
         resource_id,
         content_revision,
@@ -129,7 +125,7 @@ class _EvidenceReader:
         return records
 
 
-class _MentionLookup:
+class _MentionGraph:
     """代替 Neo4j mention 查询；flat text 按生产规则没有图节点。"""
 
     async def find_nodes(self, *, evidence, permission_scope, limit):
@@ -165,14 +161,12 @@ class _StateStore:
 
     async def add_known_nodes(self, *, state_id, node_ids):
         state = self._states[state_id]
-        added = [
-            node_id for node_id in node_ids if node_id not in state.known_node_ids
-        ]
+        added = [node_id for node_id in node_ids if node_id not in state.known_node_ids]
         state.known_node_ids.extend(added)
         return added
 
 
-class _Traversal:
+class _TraversalGraph:
     """代替 Neo4j 查询，返回一次 LLM 抽取并发布后的固定图事实。"""
 
     def __init__(self, path: TraversedPath) -> None:
@@ -196,7 +190,7 @@ async def main() -> None:
     sectioned_candidate = _candidate_containing(sectioned, sectioned_phrase, 0.93)
     flat_candidate = _candidate_containing(flat_text, flat_phrase, 0.89)
     records = _evidence_records([sectioned, flat_text])
-    evidence_verifier = EvidenceVerifier(reader=_EvidenceReader(records))
+    evidence_verifier = SourceEvidenceVerifier(reader=_PublishedResourceReader(records))
     state_store = _StateStore()
     authorizer = PermissionAuthorizer(local_store=_AclStore())
     locator = ReadingCandidateLocator(
@@ -214,8 +208,8 @@ async def main() -> None:
         ),
         authorizer=authorizer,
         evidence_verifier=evidence_verifier,
-        mention_lookup=_MentionLookup(),
-        revision_reader=_RevisionReader([sectioned, flat_text]),
+        knowledge_graph=_MentionGraph(),
+        published_resources=_RevisionReader([sectioned, flat_text]),
         state_store=state_store,
     )
     scope = PermissionScope(user_id="demo-reviewer")
@@ -239,7 +233,7 @@ async def main() -> None:
     graph_quote = "土壤板结会降低入渗速度，并使表层积水消退时间延长。"
     graph_related_quote = "检查时可比较高频踩踏区与封闭区的入渗差异"
     graph_result = await KnowledgeGraphExpander(
-        traversal=_Traversal(
+        knowledge_graph=_TraversalGraph(
             _graph_path(
                 document=sectioned,
                 source_ref_id=sectioned_candidate.source_ref_id,
@@ -322,22 +316,16 @@ def _candidate_containing(
     )
 
 
-def _evidence_records(documents: list[DemoDocument]) -> list[EvidenceRecord]:
+def _evidence_records(documents: list[DemoDocument]) -> list[SourceEvidence]:
     records = []
     for document in documents:
-        chunks_by_id = {
-            chunk.chunk_id: chunk for chunk in document.retrieval_chunks
-        }
-        blocks_by_id = {
-            block.block_id: block for block in document.reading_blocks
-        }
-        sections_by_id = {
-            section.section_id: section for section in document.sections
-        }
+        chunks_by_id = {chunk.chunk_id: chunk for chunk in document.retrieval_chunks}
+        blocks_by_id = {block.block_id: block for block in document.reading_blocks}
+        sections_by_id = {section.section_id: section for section in document.sections}
         for source_ref in document.source_refs:
             chunk = chunks_by_id[source_ref.chunk_id]
             records.append(
-                EvidenceRecord(
+                SourceEvidence(
                     revision=document.revision,
                     source_ref=source_ref,
                     reading_block=blocks_by_id[source_ref.reading_block_id],
@@ -412,7 +400,10 @@ def _assert_contracts(
     graph_quote,
     graph_related_quote,
 ) -> None:
-    assert sectioned_phrase in sectioned_payload["sections"][0]["reading_blocks"][0]["text"]
+    assert (
+        sectioned_phrase
+        in sectioned_payload["sections"][0]["reading_blocks"][0]["text"]
+    )
     assert flat_phrase in flat_payload["sections"][0]["reading_blocks"][0]["text"]
     assert set(flat_payload["sections"][0]) == {
         "resource_id",
@@ -469,8 +460,7 @@ def _assert_contracts(
         },
         {
             "relation": (
-                '("土壤板结")-[:RELATED_TO {predicate: "常见于"}]'
-                '->("高频踩踏区")'
+                '("土壤板结")-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")'
             ),
             "evidence": [
                 {
@@ -524,7 +514,7 @@ def _write_outputs(
         [
             "=== Review notes ===",
             "- Neo4j traversal 和 LLM 图谱抽取结果用固定 demo ID/type 表示。",
-            "- seed 校验、BM25/WeightedRRF 路径排序、EvidenceVerifier quote 核验、状态扩展和 ReadingBlock 回补使用生产实现。",
+            "- seed 校验、BM25/WeightedRRF 路径排序、SourceEvidenceVerifier quote 核验、状态扩展和 ReadingBlock 回补使用生产实现。",
             "- flat text 在生产索引阶段跳过图谱抽取，因此没有伪造 expandGraph 结果。",
             "",
             "=== Simulated extracted graph fact ===",
@@ -532,8 +522,8 @@ def _write_outputs(
             f"quote: {graph_related_quote}",
             "entity anchors: kn_demo_surface_water, kn_demo_soil_compaction, kn_demo_high_traffic_area",
             "relations:",
-            "  (\"土壤板结\")-[:CAUSES]->(\"表层积水\")",
-            "  (\"土壤板结\")-[:RELATED_TO {predicate: \"常见于\"}]->(\"高频踩踏区\")",
+            '  ("土壤板结")-[:CAUSES]->("表层积水")',
+            '  ("土壤板结")-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")',
             "",
             "=== SECTIONED expandGraph ===",
             json.dumps(graph_payload, ensure_ascii=False, indent=2),

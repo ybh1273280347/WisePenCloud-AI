@@ -40,6 +40,14 @@ class ContentRevision:
 
 
 @dataclass(slots=True)
+class PublishedDocumentStructure:
+    """当前已发布 revision 及其标题结构事实。"""
+
+    revision: ContentRevision
+    sections: list[Section] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class SourcePart:
     """超大 Markdown 的连续存储分片。"""
 

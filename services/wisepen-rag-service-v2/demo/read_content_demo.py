@@ -26,17 +26,15 @@ class _AllowAuthorizer:
         return True
 
 
-class _DemoAppliedContentReader:
+class _DemoPublishedResourceReader:
     """模拟 Mongo SourcePart 读取，正文与结构均来自生产构造器产物。"""
 
     def __init__(self, documents: list[DemoDocument]) -> None:
         self._documents = {document.resource_id: document for document in documents}
 
-    async def get_applied_pages(self, resource_id, page_labels):
+    async def get_pages(self, resource_id, page_labels):
         document = self._documents[resource_id]
-        pages_by_label = {
-            page.page_label: page for page in document.revision.pages
-        }
+        pages_by_label = {page.page_label: page for page in document.revision.pages}
         result = {}
         for label in dict.fromkeys(page_labels):
             page = pages_by_label.get(label)
@@ -67,11 +65,9 @@ class _DemoAppliedContentReader:
             )
         return result
 
-    async def get_applied_sections(self, resource_id, section_ids):
+    async def get_sections(self, resource_id, section_ids):
         document = self._documents[resource_id]
-        sections_by_id = {
-            section.section_id: section for section in document.sections
-        }
+        sections_by_id = {section.section_id: section for section in document.sections}
         siblings_by_parent = {}
         for section in document.sections:
             siblings_by_parent.setdefault(section.parent_section_id, []).append(section)
@@ -110,9 +106,7 @@ class _DemoAppliedContentReader:
                 frontier=SectionFrontier(
                     parent=sections_by_id.get(section.parent_section_id),
                     previous=siblings[index - 1] if index else None,
-                    next=(
-                        siblings[index + 1] if index + 1 < len(siblings) else None
-                    ),
+                    next=(siblings[index + 1] if index + 1 < len(siblings) else None),
                     children=siblings_by_parent.get(section_id, []),
                 ),
             )
@@ -129,7 +123,7 @@ async def main() -> None:
         markdown=flat_text_markdown(),
     )
     reader = DocumentContentReader(
-        reader=_DemoAppliedContentReader([sectioned, flat_text]),
+        reader=_DemoPublishedResourceReader([sectioned, flat_text]),
         authorizer=_AllowAuthorizer(),
     )
     scope = PermissionScope(user_id="demo-reviewer")

@@ -1,6 +1,6 @@
 === Review notes ===
 - Neo4j traversal 和 LLM 图谱抽取结果用固定 demo ID/type 表示。
-- seed 校验、BM25/WeightedRRF 路径排序、EvidenceVerifier quote 核验、状态扩展和 ReadingBlock 回补使用生产实现。
+- seed 校验、BM25/WeightedRRF 路径排序、SourceEvidenceVerifier quote 核验、状态扩展和 ReadingBlock 回补使用生产实现。
 - flat text 在生产索引阶段跳过图谱抽取，因此没有伪造 expandGraph 结果。
 
 === Simulated extracted graph fact ===

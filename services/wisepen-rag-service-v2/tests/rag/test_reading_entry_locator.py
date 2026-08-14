@@ -4,17 +4,17 @@ import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.navigate import (
-    EvidenceVerifier,
     LocateRequest,
     ReadingCandidateLocator,
+    SourceEvidenceVerifier,
     build_retrieved_section_views,
 )
 from rag.domain.models.acl import PermissionScope, ResourceAcl
 from rag.domain.models.content import ContentRevision, ReadingBlock
-from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import KnowledgeNode, KnowledgeNodeKind
 from rag.domain.models.navigation import NavigationState
-from rag.domain.models.retrieval import RetrievalCandidate, SourceRef
+from rag.domain.models.provenance import SourceEvidence, SourceRef
+from rag.domain.models.retrieval import RetrievalCandidate
 from rag.domain.models.structure import Section, StructureMode
 from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import RankDecision, RankedCandidate, RankResult
@@ -39,6 +39,9 @@ class _CandidateSearch:
 
 
 class _AclReader:
+    def __init__(self, denied=()) -> None:
+        self.denied = set(denied)
+
     async def get_resource_acls(self, resource_ids):
         return {
             resource_id: ResourceAcl(
@@ -47,20 +50,26 @@ class _AclReader:
                 owner_id="user-1",
             )
             for resource_id in resource_ids
+            if resource_id not in self.denied
         }
 
 
 class _RevisionReader:
-    async def get_applied_revision(self, resource_id):
+    async def get_revision(self, resource_id):
         return _revision(resource_id)
 
 
-class _EvidenceReader:
+class _PublishedResourceReader:
     def __init__(self, records):
         self.records = records
         self.calls = []
 
-    async def read_applied_evidence(self, resource_id, content_revision, source_ref_ids):
+    async def get_source_evidence(
+        self,
+        resource_id,
+        content_revision,
+        source_ref_ids,
+    ):
         self.calls.append(list(source_ref_ids))
         return {ref_id: self.records[ref_id] for ref_id in source_ref_ids}
 
@@ -86,16 +95,22 @@ class _RankingPipeline:
         )
 
 
-class _MentionLookup:
+class _KnowledgeGraph:
+    def __init__(self, nodes=None) -> None:
+        self.nodes = (
+            [
+                KnowledgeNode(
+                    node_id="node-1",
+                    kind=KnowledgeNodeKind.ENTITY,
+                    label="主题",
+                )
+            ]
+            if nodes is None
+            else nodes
+        )
+
     async def find_nodes(self, **kwargs):
-        return [
-            KnowledgeNode(
-                node_id="node-1",
-                kind=KnowledgeNodeKind.ENTITY,
-                label="主题",
-                resource_id="internal-resource-field",
-            )
-        ]
+        return self.nodes
 
 
 class _StateStore:
@@ -150,8 +165,8 @@ def _candidate(chunk_id, span, *, block_id="block-1") -> RetrievalCandidate:
     )
 
 
-def _record(candidate) -> EvidenceRecord:
-    return EvidenceRecord(
+def _record(candidate) -> SourceEvidence:
+    return SourceEvidence(
         revision=_revision(),
         source_ref=SourceRef(
             ref_id=candidate.source_ref_id,
@@ -184,21 +199,28 @@ def _candidate_id(candidate) -> str:
     )
 
 
-def _locator(candidates, *, ranked_ids, decision=RankDecision.RELEVANT):
+def _locator(
+    candidates,
+    *,
+    ranked_ids,
+    decision=RankDecision.RELEVANT,
+    acl_reader=None,
+    knowledge_graph=None,
+):
     records = {candidate.source_ref_id: _record(candidate) for candidate in candidates}
     state_store = _StateStore()
-    evidence_reader = _EvidenceReader(records)
+    source_evidence_reader = _PublishedResourceReader(records)
     locator = ReadingCandidateLocator(
         embedding_client=_EmbeddingClient(),
         candidate_search=_CandidateSearch(candidates),
         ranking_pipeline=_RankingPipeline(ranked_ids, decision),
-        authorizer=PermissionAuthorizer(local_store=_AclReader()),
-        evidence_verifier=EvidenceVerifier(reader=evidence_reader),
-        mention_lookup=_MentionLookup(),
-        revision_reader=_RevisionReader(),
+        authorizer=PermissionAuthorizer(local_store=acl_reader or _AclReader()),
+        evidence_verifier=SourceEvidenceVerifier(reader=source_evidence_reader),
+        knowledge_graph=knowledge_graph or _KnowledgeGraph(),
+        published_resources=_RevisionReader(),
         state_store=state_store,
     )
-    return locator, state_store, evidence_reader
+    return locator, state_store, source_evidence_reader
 
 
 @pytest.mark.asyncio
@@ -227,9 +249,14 @@ async def test_locate_promotes_chunks_to_one_block_with_minimal_match_anchors() 
     assert block.page_range == "1"
     assert not hasattr(block, "page_labels")
     assert [match.chunk_id for match in block.matches] == ["chunk-1", "chunk-2"]
-    assert block.text[
-        block.matches[0].ranges[0].start_offset : block.matches[0].ranges[0].end_offset
-    ] == "bcd"
+    assert (
+        block.text[
+            block.matches[0].ranges[0].start_offset : block.matches[0]
+            .ranges[0]
+            .end_offset
+        ]
+        == "bcd"
+    )
     assert not hasattr(block.matches[0], "text")
     assert not hasattr(result.sections[0], "level")
     assert not hasattr(result.nodes[0], "resource_id")
@@ -256,7 +283,7 @@ async def test_locate_max_results_counts_blocks_not_chunks() -> None:
     first = _candidate("chunk-1", SourceSpan(0, 4), block_id="block-1")
     duplicate = _candidate("chunk-2", SourceSpan(4, 6), block_id="block-1")
     other = _candidate("chunk-3", SourceSpan(6, 10), block_id="block-2")
-    locator, _, evidence_reader = _locator(
+    locator, _, source_evidence_reader = _locator(
         [first, duplicate, other],
         ranked_ids=[
             _candidate_id(first),
@@ -277,13 +304,13 @@ async def test_locate_max_results_counts_blocks_not_chunks() -> None:
     assert [block.reading_block_id for block in result.sections[0].reading_blocks] == [
         "block-1"
     ]
-    assert evidence_reader.calls == [["ref-chunk-1", "ref-chunk-2"]]
+    assert source_evidence_reader.calls == [["ref-chunk-1", "ref-chunk-2"]]
 
 
 @pytest.mark.asyncio
 async def test_locate_irrelevant_result_still_creates_graph_state() -> None:
     candidate = _candidate("chunk-1", SourceSpan(0, 4))
-    locator, state_store, evidence_reader = _locator(
+    locator, state_store, source_evidence_reader = _locator(
         [candidate],
         ranked_ids=[],
         decision=RankDecision.IRRELEVANT,
@@ -299,5 +326,37 @@ async def test_locate_irrelevant_result_still_creates_graph_state() -> None:
 
     assert result.retrieval_status is RankDecision.IRRELEVANT
     assert result.sections == []
-    assert evidence_reader.calls == []
+    assert source_evidence_reader.calls == []
+    assert state_store.created["known_node_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_locate_filters_resource_node_revoked_after_neo4j_query() -> None:
+    candidate = _candidate("chunk-1", SourceSpan(0, 4))
+    graph = _KnowledgeGraph(
+        nodes=[
+            KnowledgeNode(
+                node_id="resource-node-2",
+                kind=KnowledgeNodeKind.RESOURCE,
+                label="受限资源",
+                resource_id="resource-2",
+            )
+        ]
+    )
+    locator, state_store, _ = _locator(
+        [candidate],
+        ranked_ids=[_candidate_id(candidate)],
+        acl_reader=_AclReader(denied={"resource-2"}),
+        knowledge_graph=graph,
+    )
+
+    result = await locator.locate(
+        LocateRequest(
+            session_id="session-1",
+            semantic_query="问题",
+            permission_scope=PermissionScope(user_id="user-1"),
+        )
+    )
+
+    assert result.nodes == []
     assert state_store.created["known_node_ids"] == []

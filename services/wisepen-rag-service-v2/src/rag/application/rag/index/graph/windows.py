@@ -9,8 +9,8 @@
 
 from dataclasses import dataclass, field
 
-from rag.domain.repositories.mongo.readers.graph_build_source import GraphBuildSource
-from rag.domain.models.retrieval import SourceRef
+from rag.domain.models.graph import GraphBuildSource
+from rag.domain.models.provenance import SourceRef
 from rag.utils.chunkers import SourceSpan
 from rag.utils.xml_markup import xml_attr, xml_cdata
 
@@ -245,9 +245,7 @@ def _clip_mappings(
         if start >= end:
             continue
         # 原文起点 = mapping 原文起点 + (裁剪后局部起点 - mapping 局部起点)
-        source_start = (
-            mapping.source_span.start_offset + start - mapping.window_start
-        )
+        source_start = mapping.source_span.start_offset + start - mapping.window_start
         clipped.append(
             ExtractionSourceMapping(
                 window_start=start - window_start,

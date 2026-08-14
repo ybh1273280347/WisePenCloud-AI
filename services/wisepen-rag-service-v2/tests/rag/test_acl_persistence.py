@@ -5,7 +5,7 @@ import pytest
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
-from rag.core.persistence.mongo.readers.authoritative_acl import (
+from rag.core.persistence.mongo.authoritative_acl_reader import (
     AuthoritativeAclError,
     AuthoritativeAclProjector,
     MongoAuthoritativeAclReader,
@@ -89,9 +89,9 @@ async def test_authoritative_acl_reader_returns_none_for_missing_resource() -> N
 @pytest.mark.asyncio
 async def test_authoritative_acl_reader_rejects_invalid_resource_id() -> None:
     with pytest.raises(AuthoritativeAclError):
-        await MongoAuthoritativeAclReader(collection=_Collection(None)).get_resource_acl(
-            "not-an-object-id"
-        )
+        await MongoAuthoritativeAclReader(
+            collection=_Collection(None)
+        ).get_resource_acl("not-an-object-id")
 
 
 def test_authoritative_acl_projector_projects_record_without_reader_io() -> None:

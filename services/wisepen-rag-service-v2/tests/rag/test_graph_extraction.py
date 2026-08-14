@@ -5,24 +5,23 @@ from neo4j_graphrag.experimental.components.types import (
     Neo4jRelationship,
 )
 
-from rag.application.rag.index.graph_extraction.candidate_codec import (
+from rag.application.rag.index.graph.candidate_codec import (
     encode_candidate_graph,
 )
-from rag.application.rag.index.graph_extraction.candidate_validator import (
+from rag.application.rag.index.graph.candidate_validator import (
     KnowledgeCandidateValidator,
 )
-from rag.application.rag.index.graph_extraction.extractor import (
+from rag.application.rag.index.graph.extractor import (
     KnowledgeGraphExtractor,
 )
-from rag.application.rag.index.graph_extraction.llm import QueryClientGraphRagLLM
-from rag.application.rag.index.graph_extraction.windows import (
+from rag.application.rag.index.graph.llm import QueryClientGraphRagLLM
+from rag.application.rag.index.graph.windows import (
     build_extraction_windows,
 )
-from rag.domain.models.structure import Section, StructureMode
-from rag.domain.models.graph import KnowledgeRelationType
 from rag.domain.models.content import ReadingBlock
-from rag.domain.repositories.mongo.readers.graph_build_source import GraphBuildSource
-from rag.domain.models.retrieval import SourceRef
+from rag.domain.models.graph import GraphBuildSource, KnowledgeRelationType
+from rag.domain.models.provenance import SourceRef
+from rag.domain.models.structure import Section, StructureMode
 from rag.utils.chunkers import SourceSpan
 
 
@@ -117,9 +116,7 @@ def test_windows_preserve_source_mapping_and_split_long_blocks() -> None:
 
 def test_validator_accepts_only_continuous_mapped_quote() -> None:
     window = build_extraction_windows(_source("方法甲用于任务乙"))[0]
-    validator = KnowledgeCandidateValidator(
-        frozenset({KnowledgeRelationType.ABOUT})
-    )
+    validator = KnowledgeCandidateValidator(frozenset({KnowledgeRelationType.ABOUT}))
 
     result = validator.validate(_candidate_graph(window.window_id), window)
 
@@ -127,11 +124,11 @@ def test_validator_accepts_only_continuous_mapped_quote() -> None:
     assert result.relations[0].evidence.source_span == SourceSpan(0, 3)
 
 
-def test_validator_discards_invalid_nodes_relations_and_non_affirmed_assertions() -> None:
+def test_validator_discards_invalid_nodes_relations_and_non_affirmed_assertions() -> (
+    None
+):
     window = build_extraction_windows(_source("方法甲"))[0]
-    validator = KnowledgeCandidateValidator(
-        frozenset({KnowledgeRelationType.ABOUT})
-    )
+    validator = KnowledgeCandidateValidator(frozenset({KnowledgeRelationType.ABOUT}))
     graph = _candidate_graph(window.window_id, assertion="negated")
     graph.nodes.append(
         Neo4jNode(
@@ -189,8 +186,11 @@ async def test_stored_candidate_artifacts_are_revalidated() -> None:
             window.window_id,
         )
     )
-    extractor = KnowledgeGraphExtractor(llm=QueryClientGraphRagLLM(client=_QueryClient()),
-                                        generation_artifact_store=artifact_store, source_reader=_SourceReader(_source("方法甲")))
+    extractor = KnowledgeGraphExtractor(
+        llm=QueryClientGraphRagLLM(client=_QueryClient()),
+        generation_artifact_store=artifact_store,
+        source_reader=_SourceReader(_source("方法甲")),
+    )
 
     result = await extractor.extract(
         resource_id="resource-1",

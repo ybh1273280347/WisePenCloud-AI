@@ -1,4 +1,4 @@
-"""检索块及其权威证据引用。"""
+"""检索索引、召回请求和候选命中模型。"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
@@ -27,22 +27,6 @@ class RetrievalChunk:
             self,
             index_text=f"Context: {contextual_text}\n\n{self.index_text}",
         )
-
-
-@dataclass(slots=True)
-class SourceRef:
-    """RetrievalChunk 到 applied revision 权威原文的稳定引用。"""
-
-    ref_id: str
-    resource_id: str
-    content_revision: str
-    chunk_id: str
-    reading_block_id: str
-    section_id: str
-    section_path: list[str]
-    source_spans: list[SourceSpan] = field(default_factory=list)
-    page_labels: list[str] = field(default_factory=list)
-    anchor_labels: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

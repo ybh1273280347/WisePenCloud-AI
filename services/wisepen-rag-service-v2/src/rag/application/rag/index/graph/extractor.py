@@ -1,14 +1,14 @@
 """编排 GraphRAG 候选抽取、派生产物复用和确定性校验。
 
 ``KnowledgeGraphExtractor`` 是图谱抽取的对外入口，职责是：
-1. 从 ``GraphBuildSourceReader`` 加载已发布的 ReadingBlock、Section、SourceRef 等素材。
+1. 从 ``PublishedResourceReader`` 加载已发布的 ReadingBlock、Section、SourceRef 等素材。
 2. 调用 ``build_extraction_windows`` 切分窗口。
 3. 复用 ``GenerationArtifactStore`` 中已持久化的 SDK 原始候选图（按 artifact_key 命中）；
    缺失的窗口才调用 LLM 重新抽取。
 4. 对每个窗口的候选图执行 ``KnowledgeCandidateValidator.validate``，输出收紧后的
    ``KnowledgeWindowExtraction``。
 5. 不负责合并/发布图谱——合并由 ``merge_candidate_graph`` 完成，发布由
-   ``KnowledgeGraphWriter`` 完成。
+   ``KnowledgeGraphRepository`` 完成。
 
 注意：派生产物只保存 SDK 原始候选图（``encode_candidate_graph``），不保存校验后的
 ``KnowledgeWindowExtraction``。这样在 schema/校验规则变化时仍可重新校验，无需重新调用 LLM。
@@ -35,11 +35,9 @@ from rag.domain.models.graph import (
     KnowledgeWindowExtraction,
 )
 from rag.domain.models.structure import StructureMode
+from rag.domain.repositories.mongo import PublishedResourceReader
 from rag.domain.repositories.mongo.generation_artifact_store import (
     GenerationArtifactStore,
-)
-from rag.domain.repositories.mongo.readers.graph_build_source import (
-    GraphBuildSourceReader,
 )
 
 from .candidate_codec import (
@@ -64,12 +62,14 @@ class KnowledgeGraphExtractor:
     """抽取并校验窗口级知识候选，不负责合并或发布图谱。"""
 
     def __init__(
-            self, *,
-            llm: QueryClientGraphRagLLM,
-            generation_artifact_store: GenerationArtifactStore,
-            source_reader: GraphBuildSourceReader,
-            max_concurrency: int = 5,
-            profiles: frozenset[KnowledgeRelationProfile] | None = None) -> None:
+        self,
+        *,
+        llm: QueryClientGraphRagLLM,
+        generation_artifact_store: GenerationArtifactStore,
+        source_reader: PublishedResourceReader,
+        max_concurrency: int = 5,
+        profiles: frozenset[KnowledgeRelationProfile] | None = None,
+    ) -> None:
         if max_concurrency <= 0:
             raise ValueError("max_concurrency must be positive")
         # 默认启用所有 profile；调用方可传入子集以限制抽取范围。
@@ -161,7 +161,9 @@ class KnowledgeGraphExtractor:
         if missing:
             # 缺失的窗口一次性送入 SDK 抽取（内部并发）。
             missing_windows = [item[2] for item in missing]
-            graph = await self._candidate_extractor.extract(missing_windows, self._schema)
+            graph = await self._candidate_extractor.extract(
+                missing_windows, self._schema
+            )
             generated_artifacts: dict[str, str] = {}
             for index, key, window in missing:
                 # SDK 返回的是合并图，按 window_id 切出当前窗口子图。

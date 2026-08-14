@@ -12,7 +12,8 @@ from rag.application.rag.index.constructor import (
     parse_document_structure,
 )
 from rag.domain.models.content import ContentRevision, ReadingBlock
-from rag.domain.models.retrieval import RetrievalChunk, SourceRef
+from rag.domain.models.provenance import SourceRef
+from rag.domain.models.retrieval import RetrievalChunk
 from rag.domain.models.structure import DocumentStructure, Section, StructureMode
 
 

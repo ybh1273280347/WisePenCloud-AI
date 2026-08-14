@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import (
     GraphTraversalRequest,
     KnowledgeRelationType,
@@ -14,7 +13,8 @@ from rag.domain.models.graph import (
     TraversedPath,
 )
 from rag.domain.models.navigation import NavigationStateNotFoundError
-from rag.domain.repositories.neo4j.graph_traversal import GraphTraversal
+from rag.domain.models.provenance import SourceEvidence
+from rag.domain.repositories.neo4j import KnowledgeGraphRepository
 from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 from rag.utils.ranking import (
     RankCandidate,
@@ -23,7 +23,7 @@ from rag.utils.ranking import (
     RankRequest,
 )
 
-from .evidence_verifier import EvidenceVerifier
+from .source_evidence_verifier import SourceEvidenceVerifier
 from .views import (
     KnowledgeNodeView,
     RetrievedSectionView,
@@ -92,13 +92,13 @@ class KnowledgeGraphExpander:
     def __init__(
         self,
         *,
-        traversal: GraphTraversal,
+        knowledge_graph: KnowledgeGraphRepository,
         ranking_pipeline: RankingPipeline,
-        evidence_verifier: EvidenceVerifier,
+        evidence_verifier: SourceEvidenceVerifier,
         authorizer: PermissionAuthorizer,
         state_store: NavigationStateStore,
     ) -> None:
-        self._traversal = traversal
+        self._knowledge_graph = knowledge_graph
         self._ranking_pipeline = ranking_pipeline
         self._evidence_verifier = evidence_verifier
         self._authorizer = authorizer
@@ -124,7 +124,7 @@ class KnowledgeGraphExpander:
         if unknown_seed_ids:
             raise UnknownSeedNodeError(unknown_seed_ids[0])
 
-        paths = await self._traversal.find_paths(
+        paths = await self._knowledge_graph.find_paths(
             GraphTraversalRequest(
                 seed_node_ids=seed_node_ids,
                 permission_scope=request.permission_scope,
@@ -134,6 +134,7 @@ class KnowledgeGraphExpander:
                 limit=min(request.max_results * 4, 80),
             )
         )
+        paths = await self._filter_readable_paths(paths, request.permission_scope)
         paths = [
             path
             for path in paths
@@ -200,7 +201,7 @@ class KnowledgeGraphExpander:
 
         nodes_by_id = {node.node_id: node for path in paths for node in path.nodes}
         path_views: list[GraphPathView] = []
-        retained_evidence: dict[tuple[str, str], EvidenceRecord] = {}
+        retained_evidence: dict[tuple[str, str], SourceEvidence] = {}
         for path in paths:
             path_view, path_evidence = _to_path_view(path, evidence_by_edge)
             path_views.append(path_view)
@@ -229,19 +230,41 @@ class KnowledgeGraphExpander:
     async def _verify_path_evidence(
         self,
         paths: list[TraversedPath],
-    ) -> dict[str, list[EvidenceRecord]]:
+    ) -> dict[str, list[SourceEvidence]]:
         edges = {edge.edge_id: edge for path in paths for edge in path.edges}
-        records_by_edge: dict[str, list[EvidenceRecord]] = {}
+        records_by_edge: dict[str, list[SourceEvidence]] = {}
         for edge in edges.values():
-            records_by_edge[edge.edge_id] = (
-                await self._evidence_verifier.verify_graph_evidence_refs(
-                    resource_id=edge.evidence_resource_id,
-                    content_revision=edge.source_content_revision,
-                    source_ref_ids=edge.evidence_source_ref_ids,
-                    quotes=edge.evidence_quotes,
-                )
+            records_by_edge[
+                edge.edge_id
+            ] = await self._evidence_verifier.verify_graph_evidence_refs(
+                resource_id=edge.evidence_resource_id,
+                content_revision=edge.source_content_revision,
+                source_ref_ids=edge.evidence_source_ref_ids,
+                quotes=edge.evidence_quotes,
             )
         return records_by_edge
+
+    async def _filter_readable_paths(
+        self,
+        paths: list[TraversedPath],
+        permission_scope: PermissionScope,
+    ) -> list[TraversedPath]:
+        """Neo4j 查询后以本地 ACL 事实复查路径涉及的全部资源。"""
+        readable_resource_ids = set(
+            await self._authorizer.readable_resource_ids(
+                (
+                    resource_id
+                    for path in paths
+                    for resource_id in _path_resource_ids(path)
+                ),
+                scope=permission_scope,
+            )
+        )
+        return [
+            path
+            for path in paths
+            if _path_resource_ids(path).issubset(readable_resource_ids)
+        ]
 
     async def _ensure_sources_readable(
         self,
@@ -269,11 +292,11 @@ class KnowledgeGraphExpander:
 
 def _to_path_view(
     path: TraversedPath,
-    evidence_by_edge: dict[str, list[EvidenceRecord]],
-) -> tuple[GraphPathView, list[EvidenceRecord]]:
+    evidence_by_edge: dict[str, list[SourceEvidence]],
+) -> tuple[GraphPathView, list[SourceEvidence]]:
     """把一条已核验领域路径投影为可读路径，并收紧到实际支撑引文的记录。"""
     text, relations = _render_path(path)
-    retained_records: dict[tuple[str, str], EvidenceRecord] = {}
+    retained_records: dict[tuple[str, str], SourceEvidence] = {}
     steps: list[GraphPathStepView] = []
 
     for edge, relation in zip(path.edges, relations, strict=True):
@@ -360,3 +383,10 @@ def _render_relation_type(edge: TraversedEdge) -> str:
 
 def _render_node(label: str) -> str:
     return f"({json.dumps(label, ensure_ascii=False)})"
+
+
+def _path_resource_ids(path: TraversedPath) -> set[str]:
+    return {
+        *(edge.evidence_resource_id for edge in path.edges),
+        *(node.resource_id for node in path.nodes if node.resource_id is not None),
+    }

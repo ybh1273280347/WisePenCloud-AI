@@ -8,7 +8,8 @@ SourceRef 是检索结果到原文的“回源凭据”：它把 RetrievalChunk�
 from hashlib import sha256
 
 from rag.domain.models.content import ReadingBlock
-from rag.domain.models.retrieval import RetrievalChunk, SourceRef
+from rag.domain.models.provenance import SourceRef
+from rag.domain.models.retrieval import RetrievalChunk
 from rag.domain.models.structure import DocumentStructure, Section
 
 from ._source_spans import _overlaps, _render_source_text

@@ -14,37 +14,33 @@ from rag.api.kafka import (
     ResourceDestroyHandler,
 )
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
-from rag.application.rag.index import KnowledgeGraphExtractor, ResourceIndexer
+from rag.application.rag.index import (
+    KnowledgeGraphExtractor,
+    ResourceDeleter,
+    ResourceIndexer,
+)
 from rag.application.rag.index.contextualize import ContextualTextIndexer
 from rag.application.rag.index.graph import QueryClientGraphRagLLM
 from rag.application.rag.navigate import (
-    EvidenceVerifier,
     KnowledgeGraphExpander,
     ReadingCandidateLocator,
+    SourceEvidenceVerifier,
 )
 from rag.application.rag.read import (
     DocumentContentReader,
     DocumentOutlineReader,
 )
 from rag.core.config import settings
-from rag.core.persistence import ResourceDeleter
 from rag.core.persistence.mongo import (
-    MongoAppliedContentReader,
-    MongoAppliedRevisionReader,
-    MongoAppliedStructureReader,
     MongoAuthoritativeAclReader,
-    MongoEvidenceReader,
     MongoGenerationArtifactStore,
-    MongoGraphBuildSourceReader,
+    MongoPublishedResourceReader,
     MongoResourceAclStore,
     MongoResourceIndexWriter,
-    MongoSourcePartReader,
 )
 from rag.core.persistence.neo4j import (
     Neo4jGraphAclWriter,
-    Neo4jGraphTraversal,
-    Neo4jKnowledgeGraphWriter,
-    Neo4jMentionLookup,
+    Neo4jKnowledgeGraphRepository,
 )
 from rag.core.persistence.qdrant import (
     QdrantCandidateSearcher,
@@ -175,25 +171,10 @@ def _build_expand_ranking_pipeline(
 class Container(containers.DeclarativeContainer):
     """管理 RAG application 对象及其持久化 port 的单例依赖。"""
 
-    applied_revision_reader = providers.Singleton(MongoAppliedRevisionReader)
-    source_part_reader = providers.Singleton(MongoSourcePartReader)
-    applied_structure_reader = providers.Singleton(
-        MongoAppliedStructureReader,
-        revisions=applied_revision_reader,
-    )
-    applied_content_reader = providers.Singleton(
-        MongoAppliedContentReader,
-        revisions=applied_revision_reader,
-        source_parts=source_part_reader,
-    )
-    evidence_reader = providers.Singleton(
-        MongoEvidenceReader,
-        revisions=applied_revision_reader,
-        source_parts=source_part_reader,
-    )
+    published_resource_reader = providers.Singleton(MongoPublishedResourceReader)
     evidence_verifier = providers.Singleton(
-        EvidenceVerifier,
-        reader=evidence_reader,
+        SourceEvidenceVerifier,
+        reader=published_resource_reader,
     )
 
     mongo_client = providers.Singleton(AsyncMongoClient, settings.MONGODB_URL)
@@ -208,11 +189,6 @@ class Container(containers.DeclarativeContainer):
     )
     resource_acl_store = providers.Singleton(MongoResourceAclStore)
     generation_artifact_store = providers.Singleton(MongoGenerationArtifactStore)
-    graph_build_source_reader = providers.Singleton(
-        MongoGraphBuildSourceReader,
-        revisions=applied_revision_reader,
-        source_parts=source_part_reader,
-    )
     contextual_text_client = providers.Singleton(
         QueryClient,
         model=settings.QUERY_MODEL,
@@ -239,7 +215,7 @@ class Container(containers.DeclarativeContainer):
         KnowledgeGraphExtractor,
         llm=graph_llm,
         generation_artifact_store=generation_artifact_store,
-        source_reader=graph_build_source_reader,
+        source_reader=published_resource_reader,
         max_concurrency=settings.KNOWLEDGE_GRAPH_EXTRACTION_MAX_CONCURRENCY,
     )
     neo4j_driver = providers.Singleton(
@@ -247,8 +223,8 @@ class Container(containers.DeclarativeContainer):
         uri=settings.NEO4J_URI,
         auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
     )
-    knowledge_graph_writer = providers.Singleton(
-        Neo4jKnowledgeGraphWriter,
+    knowledge_graph_repository = providers.Singleton(
+        Neo4jKnowledgeGraphRepository,
         driver=neo4j_driver,
         database=settings.NEO4J_DATABASE,
     )
@@ -303,12 +279,12 @@ class Container(containers.DeclarativeContainer):
     )
     document_outline_reader = providers.Singleton(
         DocumentOutlineReader,
-        structure_reader=applied_structure_reader,
+        structure_reader=published_resource_reader,
         authorizer=permission_authorizer,
     )
     document_content_reader = providers.Singleton(
         DocumentContentReader,
-        reader=applied_content_reader,
+        reader=published_resource_reader,
         authorizer=permission_authorizer,
     )
     graph_acl_writer = providers.Singleton(
@@ -339,27 +315,15 @@ class Container(containers.DeclarativeContainer):
         resource_writer=resource_index_writer,
         retrieval_writer=retrieval_index_writer,
         graph_extractor=knowledge_graph_extractor,
-        graph_writer=knowledge_graph_writer,
+        graph_repository=knowledge_graph_repository,
     )
     resource_deleter = providers.Singleton(
         ResourceDeleter,
         resource_writer=resource_index_writer,
         retrieval_writer=retrieval_index_writer,
-        graph_writer=knowledge_graph_writer,
+        graph_repository=knowledge_graph_repository,
         generation_artifacts=generation_artifact_store,
         acl_store=resource_acl_store,
-    )
-    mention_lookup = providers.Singleton(
-        Neo4jMentionLookup,
-        driver=neo4j_driver,
-        database=settings.NEO4J_DATABASE,
-        authorizer=permission_authorizer,
-    )
-    graph_traversal = providers.Singleton(
-        Neo4jGraphTraversal,
-        driver=neo4j_driver,
-        database=settings.NEO4J_DATABASE,
-        authorizer=permission_authorizer,
     )
     zero_entropy_client = providers.Singleton(
         AsyncZeroEntropy,
@@ -385,13 +349,13 @@ class Container(containers.DeclarativeContainer):
         ranking_pipeline=locate_ranking_pipeline,
         authorizer=permission_authorizer,
         evidence_verifier=evidence_verifier,
-        mention_lookup=mention_lookup,
-        revision_reader=applied_revision_reader,
+        knowledge_graph=knowledge_graph_repository,
+        published_resources=published_resource_reader,
         state_store=navigation_state_store,
     )
     knowledge_graph_expander = providers.Singleton(
         KnowledgeGraphExpander,
-        traversal=graph_traversal,
+        knowledge_graph=knowledge_graph_repository,
         ranking_pipeline=expand_ranking_pipeline,
         evidence_verifier=evidence_verifier,
         authorizer=permission_authorizer,

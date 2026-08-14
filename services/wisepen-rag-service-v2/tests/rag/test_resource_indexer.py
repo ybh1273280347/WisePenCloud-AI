@@ -29,7 +29,7 @@ class _ContextualText:
     def __init__(self, failure: _Failure) -> None:
         self._failure = failure
 
-    async def index_chunks(self, **kwargs):
+    async def contextualize(self, **kwargs):
         self._failure.hit("contextual")
         return list(kwargs["chunks"])
 
@@ -150,7 +150,7 @@ def _indexer(
             resource_writer=resource_writer,
             retrieval_writer=_RetrievalWriter(failure),
             graph_extractor=_GraphExtractor(failure),
-            graph_writer=graph_writer,
+            graph_repository=graph_writer,
         ),
         resource_writer,
         graph_writer,

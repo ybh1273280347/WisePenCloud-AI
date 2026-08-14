@@ -96,20 +96,47 @@ class _Container:
             _Consumer("destroy", events),
         ]
 
-    def mongo_client(self): return self._mongo
-    def redis_client(self): return self._redis
-    def qdrant_client(self): return self._qdrant
-    def neo4j_driver(self): return self._neo4j
-    def zero_entropy_client(self): return self._zero
-    def embedding_client(self): return self._embedding
-    def contextual_text_client(self): return self._context
-    def graph_query_client(self): return self._graph_query
-    def retrieval_index_writer(self): return self._retrieval
-    def knowledge_graph_writer(self): return self._graph
-    def graph_acl_writer(self): return self._graph_acl
-    def document_ready_consumer(self): return self._consumers[0]
-    def acl_recalculate_consumer(self): return self._consumers[1]
-    def resource_destroy_consumer(self): return self._consumers[2]
+    def mongo_client(self):
+        return self._mongo
+
+    def redis_client(self):
+        return self._redis
+
+    def qdrant_client(self):
+        return self._qdrant
+
+    def neo4j_driver(self):
+        return self._neo4j
+
+    def zero_entropy_client(self):
+        return self._zero
+
+    def embedding_client(self):
+        return self._embedding
+
+    def contextual_text_client(self):
+        return self._context
+
+    def graph_query_client(self):
+        return self._graph_query
+
+    def retrieval_index_writer(self):
+        return self._retrieval
+
+    def knowledge_graph_repository(self):
+        return self._graph
+
+    def graph_acl_writer(self):
+        return self._graph_acl
+
+    def document_ready_consumer(self):
+        return self._consumers[0]
+
+    def acl_recalculate_consumer(self):
+        return self._consumers[1]
+
+    def resource_destroy_consumer(self):
+        return self._consumers[2]
 
 
 def _settings():
@@ -124,15 +151,22 @@ def _patch_lifecycle(monkeypatch, events, *, schema_error=None):
     nacos = _Nacos(events)
     monkeypatch.setattr(service, "container", fake_container)
     monkeypatch.setattr(service, "configure_container", lambda *args: None)
-    monkeypatch.setattr(service, "load_bootstrap_settings", lambda: SimpleNamespace(
-        LOG_LEVEL="INFO",
-        SERVICE_NAME="wisepen-rag-service-v2",
-        PROFILE="test",
-    ))
+    monkeypatch.setattr(
+        service,
+        "load_bootstrap_settings",
+        lambda: SimpleNamespace(
+            LOG_LEVEL="INFO",
+            SERVICE_NAME="wisepen-rag-service-v2",
+            PROFILE="test",
+        ),
+    )
     monkeypatch.setattr(service, "build_nacos_client_manager", lambda value: nacos)
 
-    async def load_settings(nacos): return _settings()
-    async def init_beanie(**kwargs): events.append("initialize:mongo")
+    async def load_settings(nacos):
+        return _settings()
+
+    async def init_beanie(**kwargs):
+        events.append("initialize:mongo")
 
     monkeypatch.setattr(service, "load_settings", load_settings)
     monkeypatch.setattr(service, "init_beanie", init_beanie)
@@ -198,7 +232,9 @@ async def test_http_preserves_rag_business_error_code() -> None:
 
 
 @pytest.mark.asyncio
-async def test_lifecycle_initializes_starts_and_closes_in_reverse_order(monkeypatch) -> None:
+async def test_lifecycle_initializes_starts_and_closes_in_reverse_order(
+    monkeypatch,
+) -> None:
     events = []
     _patch_lifecycle(monkeypatch, events)
     app = FastAPI()
@@ -226,7 +262,9 @@ async def test_lifecycle_initializes_starts_and_closes_in_reverse_order(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_schema_failure_prevents_consumers_and_closes_clients(monkeypatch) -> None:
+async def test_schema_failure_prevents_consumers_and_closes_clients(
+    monkeypatch,
+) -> None:
     events = []
     _patch_lifecycle(
         monkeypatch,

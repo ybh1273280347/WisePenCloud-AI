@@ -8,14 +8,14 @@ from typing import TYPE_CHECKING
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.evidence import EvidenceCandidate, EvidenceRecord
+from rag.domain.models.graph import KnowledgeNode, KnowledgeNodeKind
+from rag.domain.models.provenance import SourceEvidence
 from rag.domain.models.retrieval import (
     CandidateSearchRequest,
     RetrievalCandidate,
-    RetrievalChunk,
 )
-from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
-from rag.domain.repositories.neo4j.mention_lookup import MentionLookup
+from rag.domain.repositories.mongo import PublishedResourceReader
+from rag.domain.repositories.neo4j import KnowledgeGraphRepository
 from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
 from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 from rag.utils.ranking import (
@@ -28,7 +28,7 @@ from rag.utils.ranking import (
     ScoreSignalKind,
 )
 
-from .evidence_verifier import EvidenceVerifier
+from .source_evidence_verifier import SourceEvidenceVerifier
 from .views import (
     KnowledgeNodeView,
     RetrievedSectionView,
@@ -74,9 +74,9 @@ class ReadingCandidateLocator:
         "_candidate_search",
         "_embedding_client",
         "_evidence_verifier",
-        "_mention_lookup",
+        "_knowledge_graph",
+        "_published_resources",
         "_ranking_pipeline",
-        "_revision_reader",
         "_state_store",
     )
 
@@ -87,9 +87,9 @@ class ReadingCandidateLocator:
         candidate_search: CandidateSearcher,
         ranking_pipeline: RankingPipeline,
         authorizer: PermissionAuthorizer,
-        evidence_verifier: EvidenceVerifier,
-        mention_lookup: MentionLookup,
-        revision_reader: AppliedRevisionReader,
+        evidence_verifier: SourceEvidenceVerifier,
+        knowledge_graph: KnowledgeGraphRepository,
+        published_resources: PublishedResourceReader,
         state_store: NavigationStateStore,
     ) -> None:
         self._embedding_client = embedding_client
@@ -97,12 +97,12 @@ class ReadingCandidateLocator:
         self._ranking_pipeline = ranking_pipeline
         self._authorizer = authorizer
         self._evidence_verifier = evidence_verifier
-        self._mention_lookup = mention_lookup
-        self._revision_reader = revision_reader
+        self._knowledge_graph = knowledge_graph
+        self._published_resources = published_resources
         self._state_store = state_store
 
     async def locate(self, request: LocateRequest) -> LocateResult:
-        """只将 applied 且仍可读的候选提升为后续 READ 可用的入口。"""
+        """只将已发布且仍可读的候选提升为后续 READ 可用的入口。"""
         # 上游 schema 与鉴权层已经收口了公开入口边界，这里只做外部模型返回形状校验。
         semantic_query = request.semantic_query
         lexical_query = (
@@ -125,7 +125,7 @@ class ReadingCandidateLocator:
             candidates,
             request.permission_scope,
         )
-        candidates = await self._filter_applied_candidates(candidates)
+        candidates = await self._filter_published_candidates(candidates)
         if not candidates:
             return await self._create_empty_result(request)
 
@@ -192,11 +192,16 @@ class ReadingCandidateLocator:
 
         records = await self._verify_selected(selected)
         sections = build_retrieved_section_views(records)
-        nodes = await self._mention_lookup.find_nodes(
-            evidence=records,
+        readable_records = await self._filter_readable_evidence(
+            records,
+            request.permission_scope,
+        )
+        nodes = await self._knowledge_graph.find_nodes(
+            evidence=readable_records,
             permission_scope=request.permission_scope,
             limit=request.max_results,
         )
+        nodes = await self._filter_readable_nodes(nodes, request.permission_scope)
         state = await self._state_store.create(
             user_id=request.permission_scope.user_id,
             session_id=request.session_id,
@@ -226,28 +231,72 @@ class ReadingCandidateLocator:
             if candidate.resource_id in readable_resource_ids
         ]
 
-    async def _filter_applied_candidates(
+    async def _filter_published_candidates(
         self,
         candidates: Sequence[RetrievalCandidate],
     ) -> list[RetrievalCandidate]:
-        applied_revisions: dict[str, str] = {}
+        published_revisions: dict[str, str] = {}
         for resource_id in dict.fromkeys(
             candidate.resource_id for candidate in candidates
         ):
-            revision = await self._revision_reader.get_applied_revision(resource_id)
+            revision = await self._published_resources.get_revision(resource_id)
             if revision is not None:
-                applied_revisions[resource_id] = revision.content_revision
+                published_revisions[resource_id] = revision.content_revision
         return [
             candidate
             for candidate in candidates
-            if applied_revisions.get(candidate.resource_id)
+            if published_revisions.get(candidate.resource_id)
             == candidate.content_revision
+        ]
+
+    async def _filter_readable_evidence(
+        self,
+        evidence: Sequence[SourceEvidence],
+        permission_scope: PermissionScope,
+    ) -> list[SourceEvidence]:
+        """图反查前复查证据资源，避免沿用召回开始时的 ACL 快照。"""
+        readable_resource_ids = set(
+            await self._authorizer.readable_resource_ids(
+                (record.revision.resource_id for record in evidence),
+                scope=permission_scope,
+            )
+        )
+        return [
+            record
+            for record in evidence
+            if record.revision.resource_id in readable_resource_ids
+        ]
+
+    async def _filter_readable_nodes(
+        self,
+        nodes: Sequence[KnowledgeNode],
+        permission_scope: PermissionScope,
+    ) -> list[KnowledgeNode]:
+        resource_ids = [
+            node.resource_id
+            for node in nodes
+            if node.kind is KnowledgeNodeKind.RESOURCE and node.resource_id is not None
+        ]
+        if not resource_ids:
+            return list(nodes)
+
+        readable_resource_ids = set(
+            await self._authorizer.readable_resource_ids(
+                resource_ids,
+                scope=permission_scope,
+            )
+        )
+        return [
+            node
+            for node in nodes
+            if node.kind is not KnowledgeNodeKind.RESOURCE
+            or node.resource_id in readable_resource_ids
         ]
 
     async def _verify_selected(
         self,
         candidates: Sequence[RetrievalCandidate],
-    ) -> list[EvidenceRecord]:
+    ) -> list[SourceEvidence]:
         # VERIFY 按资源和 revision 回源，跨资源候选必须分别核验。
         candidates_by_revision: dict[tuple[str, str], list[RetrievalCandidate]] = {}
         for candidate in candidates:
@@ -256,10 +305,10 @@ class ReadingCandidateLocator:
                 [],
             ).append(candidate)
 
-        records_by_ref_id: dict[str, EvidenceRecord] = {}
+        records_by_ref_id: dict[str, SourceEvidence] = {}
         for grouped_candidates in candidates_by_revision.values():
             verified = await self._evidence_verifier.verify_retrieval_candidates(
-                [_evidence_candidate(candidate) for candidate in grouped_candidates]
+                grouped_candidates
             )
             records_by_ref_id.update(
                 {record.source_ref.ref_id: record for record in verified}
@@ -279,25 +328,6 @@ class ReadingCandidateLocator:
             state_id=state.state_id,
             retrieval_status=RankDecision.IRRELEVANT,
         )
-
-
-def _evidence_candidate(candidate: RetrievalCandidate) -> EvidenceCandidate:
-    return EvidenceCandidate(
-        resource_id=candidate.resource_id,
-        content_revision=candidate.content_revision,
-        source_ref_id=candidate.source_ref_id,
-        chunk=RetrievalChunk(
-            chunk_id=candidate.chunk_id,
-            reading_block_id=candidate.reading_block_id,
-            section_id=candidate.section_id,
-            section_path=list(candidate.section_path),
-            raw_text=candidate.raw_text,
-            index_text=candidate.raw_text,
-            source_spans=list(candidate.source_spans),
-            page_labels=list(candidate.page_labels),
-            anchor_labels=list(candidate.anchor_labels),
-        ),
-    )
 
 
 def _candidate_key(candidate: RetrievalCandidate) -> str:

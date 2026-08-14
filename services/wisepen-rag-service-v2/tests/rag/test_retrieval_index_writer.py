@@ -5,7 +5,8 @@ from qdrant_client import models as qdrant_models
 
 from rag.core.persistence.qdrant import QdrantRetrievalIndexWriter
 from rag.domain.models.acl import ResourceAcl
-from rag.domain.models.retrieval import RetrievalChunk, SourceRef
+from rag.domain.models.provenance import SourceRef
+from rag.domain.models.retrieval import RetrievalChunk
 from rag.utils.chunkers import SourceSpan
 
 
@@ -109,7 +110,10 @@ async def test_write_initializes_collection_and_stages_contract_payload() -> Non
 
     assert client.created_collection["collection_name"] == "retrieval-chunks"
     assert client.created_collection["vectors_config"]["dense"].size == 3
-    assert client.created_collection["sparse_vectors_config"]["sparse"].modifier is qdrant_models.Modifier.IDF
+    assert (
+        client.created_collection["sparse_vectors_config"]["sparse"].modifier
+        is qdrant_models.Modifier.IDF
+    )
     assert {index["field_name"] for index in client.payload_indexes} == {
         "resource_id",
         "content_revision",
@@ -127,9 +131,7 @@ async def test_write_initializes_collection_and_stages_contract_payload() -> Non
     point = client.points[0]
     assert point.payload["active"] is False
     assert point.payload["source_ref_id"] == "ref-chunk-1"
-    assert point.payload["source_spans"] == [
-        {"start_offset": 0, "end_offset": 4}
-    ]
+    assert point.payload["source_spans"] == [{"start_offset": 0, "end_offset": 4}]
     assert point.payload["page_labels"] == []
     assert "chunk_index" not in point.payload
     assert point.vector["dense"] == [0.1, 0.2, 0.3]
@@ -141,7 +143,9 @@ async def test_reusable_vectors_are_scoped_to_resource_and_embedding_key() -> No
     client = _QdrantClient(exists=True)
     writer = _writer(client)
     key = writer._embedding_key(_chunk().index_text)
-    client.scroll_records = [_Record({"embedding_key": key}, {"dense": [0.4, 0.5, 0.6]})]
+    client.scroll_records = [
+        _Record({"embedding_key": key}, {"dense": [0.4, 0.5, 0.6]})
+    ]
 
     vectors = await writer.load_reusable_vectors(
         resource_id="resource-1",
@@ -168,7 +172,10 @@ async def test_activation_disables_old_revision_and_cleanup_deletes_it() -> None
 
     assert client.payload_updates[0]["payload"] == {"active": True}
     assert client.payload_updates[1]["payload"] == {"active": False}
-    assert client.deletes[0]["points_selector"].filter.must_not[0].key == "content_revision"
+    assert (
+        client.deletes[0]["points_selector"].filter.must_not[0].key
+        == "content_revision"
+    )
 
 
 @pytest.mark.asyncio

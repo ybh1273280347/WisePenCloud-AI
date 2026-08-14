@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Protocol
 
 from rag.domain.models.content import ContentRevision, ReadingBlock
-from rag.domain.models.retrieval import SourceRef
+from rag.domain.models.provenance import SourceRef
 from rag.domain.models.structure import Section
 
 

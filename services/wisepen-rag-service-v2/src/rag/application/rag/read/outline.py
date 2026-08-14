@@ -9,9 +9,7 @@ from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.content import ContentRevision
 from rag.domain.models.structure import PageRange, Section
-from rag.domain.repositories.mongo.readers.applied_structure import (
-    AppliedStructureReader,
-)
+from rag.domain.repositories.mongo import PublishedResourceReader
 
 from .content import (
     ContentAccessRevokedError,
@@ -47,7 +45,7 @@ class DocumentOutlineReader:
     def __init__(
         self,
         *,
-        structure_reader: AppliedStructureReader,
+        structure_reader: PublishedResourceReader,
         authorizer: PermissionAuthorizer,
     ) -> None:
         self._structure_reader = structure_reader
@@ -65,7 +63,7 @@ class DocumentOutlineReader:
         ):
             raise ContentNotFoundError(resource_id)
 
-        snapshot = await self._structure_reader.get_applied_document_structure(resource_id)
+        snapshot = await self._structure_reader.get_document_structure(resource_id)
         if snapshot is None:
             raise ContentNotFoundError(resource_id)
 
@@ -78,7 +76,7 @@ class DocumentOutlineReader:
 
         return DocumentOutlineResult(
             revision=snapshot.revision,
-            outline=_to_outline(snapshot.sections, snapshot.pages),
+            outline=_to_outline(snapshot.sections, snapshot.revision.pages),
         )
 
 
@@ -102,7 +100,9 @@ def _to_outline(
             root_section_id = section.section_id
 
     for children in children_by_parent.values():
-        children.sort(key=lambda section: (section.ordinal, section.own_span.start_offset))
+        children.sort(
+            key=lambda section: (section.ordinal, section.own_span.start_offset)
+        )
 
     if root_section_id is not None:
         root_sections = children_by_parent.get(root_section_id, [])

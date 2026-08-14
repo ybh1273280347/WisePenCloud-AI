@@ -1,3 +1,1 @@
-from .resource_deleter import ResourceDeleter
-
-__all__ = ["ResourceDeleter"]
+"""持久化 adapter 包。"""

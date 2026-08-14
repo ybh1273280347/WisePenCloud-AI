@@ -1,15 +1,11 @@
 from .graph_acl_writer import GraphAclWriter
-from .graph_traversal import GraphTraversal
-from .knowledge_graph_writer import (
+from .knowledge_graph_repository import (
+    KnowledgeGraphRepository,
     KnowledgeGraphRevisionSupersededError,
-    KnowledgeGraphWriter,
 )
-from .mention_lookup import MentionLookup
 
 __all__ = [
     "GraphAclWriter",
-    "GraphTraversal",
+    "KnowledgeGraphRepository",
     "KnowledgeGraphRevisionSupersededError",
-    "KnowledgeGraphWriter",
-    "MentionLookup",
 ]

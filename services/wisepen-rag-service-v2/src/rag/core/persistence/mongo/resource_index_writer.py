@@ -21,9 +21,9 @@ from rag.domain.models.content import (
     ResourceIndexState,
     SourcePart,
 )
-from rag.domain.models.retrieval import SourceRef
+from rag.domain.models.provenance import SourceRef
 from rag.domain.models.structure import Section
-from rag.domain.repositories.mongo.writers.resource_index import (
+from rag.domain.repositories.mongo.resource_index_writer import (
     ResourceIndexWriter,
     StageAction,
 )
@@ -139,7 +139,9 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             action = _decide_stage(revision, latest)
             if action is not StageAction.STAGED:
                 return action
-            raise RuntimeError(f"resource {revision.resource_id} stage changed concurrently")
+            raise RuntimeError(
+                f"resource {revision.resource_id} stage changed concurrently"
+            )
         return StageAction.STAGED
 
     async def apply_revision(self, revision: ContentRevision) -> None:
@@ -161,9 +163,14 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         if result.modified_count == 1:
             return
         state = await self._get_state(revision.resource_id)
-        if state is not None and state.applied_content_revision == revision.content_revision:
+        if (
+            state is not None
+            and state.applied_content_revision == revision.content_revision
+        ):
             return
-        raise RuntimeError(f"content revision {revision.content_revision} is no longer staged")
+        raise RuntimeError(
+            f"content revision {revision.content_revision} is no longer staged"
+        )
 
     async def _get_state(self, resource_id: str) -> ResourceIndexState | None:
         entity = await ResourceIndexStateEntity.find_one({"resource_id": resource_id})
@@ -220,7 +227,9 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             SourceRefEntity,
             ContentRevisionEntity,
         ):
-            await entity_type.find({"content_revision": {"$in": revision_ids}}).delete_many()
+            await entity_type.find(
+                {"content_revision": {"$in": revision_ids}}
+            ).delete_many()
 
 
 def split_source_parts(revision: ContentRevision, markdown: str) -> list[SourcePart]:
@@ -231,7 +240,9 @@ def split_source_parts(revision: ContentRevision, markdown: str) -> list[SourceP
             resource_id=revision.resource_id,
             content_revision=revision.content_revision,
             part_index=index,
-            source_span=SourceSpan(start, min(start + _SOURCE_PART_CHARACTERS, len(markdown))),
+            source_span=SourceSpan(
+                start, min(start + _SOURCE_PART_CHARACTERS, len(markdown))
+            ),
             text=markdown[start : start + _SOURCE_PART_CHARACTERS],
         )
         for index, start in enumerate(range(0, len(markdown), _SOURCE_PART_CHARACTERS))
@@ -354,13 +365,31 @@ def _stage_state_filter(revision: ContentRevision) -> dict[str, object]:
     return {
         "resource_id": revision.resource_id,
         "$and": [
-            {"$or": [{"applied_document_version": {"$exists": False}}, {"applied_document_version": None}, {"applied_document_version": {"$lte": revision.document_version}}]},
-            {"$or": [{"staged_document_version": {"$exists": False}}, {"staged_document_version": None}, {"staged_document_version": {"$lte": revision.document_version}}]},
+            {
+                "$or": [
+                    {"applied_document_version": {"$exists": False}},
+                    {"applied_document_version": None},
+                    {"applied_document_version": {"$lte": revision.document_version}},
+                ]
+            },
+            {
+                "$or": [
+                    {"staged_document_version": {"$exists": False}},
+                    {"staged_document_version": None},
+                    {"staged_document_version": {"$lte": revision.document_version}},
+                ]
+            },
         ],
     }
 
 
-def _validate_structure_records(*, revision: ContentRevision, sections: Sequence[Section], reading_blocks: Sequence[ReadingBlock], source_refs: Sequence[SourceRef]) -> None:
+def _validate_structure_records(
+    *,
+    revision: ContentRevision,
+    sections: Sequence[Section],
+    reading_blocks: Sequence[ReadingBlock],
+    source_refs: Sequence[SourceRef],
+) -> None:
     sections_by_id = {section.section_id: section for section in sections}
     blocks_by_id = {block.block_id: block for block in reading_blocks}
 
@@ -379,7 +408,10 @@ def _validate_structure_records(*, revision: ContentRevision, sections: Sequence
     for section in sections:
         if section.own_span.end_offset > revision.total_length:
             raise ValueError(f"section {section.section_id} exceeds content revision")
-        if section.parent_section_id is not None and section.parent_section_id not in sections_by_id:
+        if (
+            section.parent_section_id is not None
+            and section.parent_section_id not in sections_by_id
+        ):
             raise ValueError(f"section {section.section_id} has no parent")
         if any(
             span.start_offset < section.own_span.start_offset
@@ -392,13 +424,25 @@ def _validate_structure_records(*, revision: ContentRevision, sections: Sequence
         section = sections_by_id.get(block.section_id)
         if section is None or not block.source_spans:
             raise ValueError(f"reading block {block.block_id} has invalid ownership")
-        if any(span.start_offset < section.own_span.start_offset or span.end_offset > section.own_span.end_offset for span in block.source_spans):
+        if any(
+            span.start_offset < section.own_span.start_offset
+            or span.end_offset > section.own_span.end_offset
+            for span in block.source_spans
+        ):
             raise ValueError(f"reading block {block.block_id} exceeds its section")
 
     for ref in source_refs:
         block = blocks_by_id.get(ref.reading_block_id)
         section = sections_by_id.get(ref.section_id)
-        if ref.resource_id != revision.resource_id or ref.content_revision != revision.content_revision or block is None or section is None or block.section_id != section.section_id or ref.section_path != section.section_path or not ref.source_spans:
+        if (
+            ref.resource_id != revision.resource_id
+            or ref.content_revision != revision.content_revision
+            or block is None
+            or section is None
+            or block.section_id != section.section_id
+            or ref.section_path != section.section_path
+            or not ref.source_spans
+        ):
             raise ValueError(f"source ref {ref.ref_id} has invalid ownership")
 
 

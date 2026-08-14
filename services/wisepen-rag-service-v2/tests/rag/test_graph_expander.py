@@ -8,7 +8,6 @@ from rag.application.rag.navigate import (
 from rag.application.rag.navigate.graph_expander import _render_path, _to_path_view
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.content import ContentRevision, ReadingBlock
-from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import (
     KnowledgeNode,
     KnowledgeNodeKind,
@@ -17,7 +16,7 @@ from rag.domain.models.graph import (
     TraversedPath,
 )
 from rag.domain.models.navigation import NavigationState
-from rag.domain.models.retrieval import SourceRef
+from rag.domain.models.provenance import SourceEvidence, SourceRef
 from rag.domain.models.structure import Section, StructureMode
 from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import RankCandidate, RankedCandidate, RankResult
@@ -41,7 +40,7 @@ class _StateStore:
         return self.added
 
 
-class _Traversal:
+class _KnowledgeGraph:
     def __init__(self, paths) -> None:
         self.paths = paths
         self.request = None
@@ -72,9 +71,7 @@ class _RankingPipeline:
 
 class _EvidenceVerifier:
     def __init__(self, records=None) -> None:
-        self.records = {
-            record.source_ref.ref_id: record for record in (records or [])
-        }
+        self.records = {record.source_ref.ref_id: record for record in (records or [])}
         self.calls = []
 
     async def verify_graph_evidence_refs(self, **kwargs):
@@ -83,18 +80,25 @@ class _EvidenceVerifier:
 
 
 class _Authorizer:
+    def __init__(self, denied=()) -> None:
+        self.denied = set(denied)
+
     async def readable_resource_ids(self, resource_ids, *, scope):
-        return list(resource_ids)
+        return [
+            resource_id
+            for resource_id in resource_ids
+            if resource_id not in self.denied
+        ]
 
 
 @pytest.mark.asyncio
 async def test_expand_ranks_verifies_and_adds_only_new_nodes() -> None:
-    traversal = _Traversal([_path()])
+    knowledge_graph = _KnowledgeGraph([_path()])
     ranking = _RankingPipeline()
     verifier = _EvidenceVerifier([_record()])
     state_store = _StateStore()
     expander = KnowledgeGraphExpander(
-        traversal=traversal,
+        knowledge_graph=knowledge_graph,
         ranking_pipeline=ranking,
         evidence_verifier=verifier,
         authorizer=_Authorizer(),
@@ -104,15 +108,13 @@ async def test_expand_ranks_verifies_and_adds_only_new_nodes() -> None:
     result = await expander.expand(_request())
 
     assert ranking.request.query.text == "扩展问题"
-    assert traversal.request.seed_node_ids == ["node-a"]
+    assert knowledge_graph.request.seed_node_ids == ["node-a"]
     assert verifier.calls[0]["source_ref_ids"] == ["ref-1"]
     assert state_store.calls[0]["node_ids"] == ["node-b"]
     assert [node.node_id for node in result.discovered_nodes] == ["node-b"]
     assert result.paths[0].text == '("Alpha")-[:DEPENDS_ON]->("Beta")'
     assert result.paths[0].node_ids == ["node-a", "node-b"]
-    assert result.paths[0].steps[0].relation == (
-        '("Alpha")-[:DEPENDS_ON]->("Beta")'
-    )
+    assert result.paths[0].steps[0].relation == ('("Alpha")-[:DEPENDS_ON]->("Beta")')
     assert result.paths[0].steps[0].evidence[0].quote == "Alpha depends on Beta."
     assert result.paths[0].steps[0].evidence[0].source_ref_ids == ["ref-1"]
     assert result.evidence_sections[0].reading_blocks[0].matches[0].source_ref_id == (
@@ -123,7 +125,7 @@ async def test_expand_ranks_verifies_and_adds_only_new_nodes() -> None:
 @pytest.mark.asyncio
 async def test_expand_rejects_unknown_seed() -> None:
     expander = KnowledgeGraphExpander(
-        traversal=_Traversal([]),
+        knowledge_graph=_KnowledgeGraph([]),
         ranking_pipeline=_RankingPipeline(),
         evidence_verifier=_EvidenceVerifier([_record()]),
         authorizer=_Authorizer(),
@@ -139,7 +141,7 @@ async def test_expand_rejects_unknown_seed() -> None:
 @pytest.mark.asyncio
 async def test_expand_returns_nothing_when_concurrent_call_added_nodes_first() -> None:
     expander = KnowledgeGraphExpander(
-        traversal=_Traversal([_path()]),
+        knowledge_graph=_KnowledgeGraph([_path()]),
         ranking_pipeline=_RankingPipeline(),
         evidence_verifier=_EvidenceVerifier([_record()]),
         authorizer=_Authorizer(),
@@ -151,6 +153,23 @@ async def test_expand_returns_nothing_when_concurrent_call_added_nodes_first() -
     assert result.paths == []
     assert result.discovered_nodes == []
     assert result.evidence_sections == []
+
+
+@pytest.mark.asyncio
+async def test_expand_filters_paths_revoked_by_local_acl_after_neo4j_query() -> None:
+    verifier = _EvidenceVerifier([_record()])
+    expander = KnowledgeGraphExpander(
+        knowledge_graph=_KnowledgeGraph([_path()]),
+        ranking_pipeline=_RankingPipeline(),
+        evidence_verifier=verifier,
+        authorizer=_Authorizer(denied={"resource-1"}),
+        state_store=_StateStore(),
+    )
+
+    result = await expander.expand(_request())
+
+    assert result.paths == []
+    assert verifier.calls == []
 
 
 def test_render_path_preserves_fact_direction_for_reverse_traversal() -> None:
@@ -306,20 +325,18 @@ def _edge(
         evidence_resource_id="resource-1",
         source_content_revision="revision-1",
         evidence_quotes=(
-            ["Alpha depends on Beta."]
-            if evidence_quotes is None
-            else evidence_quotes
+            ["Alpha depends on Beta."] if evidence_quotes is None else evidence_quotes
         ),
         evidence_source_ref_ids=(
-            ["ref-1"]
-            if evidence_source_ref_ids is None
-            else evidence_source_ref_ids
+            ["ref-1"] if evidence_source_ref_ids is None else evidence_source_ref_ids
         ),
         predicate=predicate,
     )
 
 
-def _record(ref_id: str = "ref-1", text: str = "Alpha depends on Beta.") -> EvidenceRecord:
+def _record(
+    ref_id: str = "ref-1", text: str = "Alpha depends on Beta."
+) -> SourceEvidence:
     span = SourceSpan(0, len(text))
     revision = ContentRevision(
         resource_id="resource-1",
@@ -341,7 +358,7 @@ def _record(ref_id: str = "ref-1", text: str = "Alpha depends on Beta.") -> Evid
         subtree_span=span,
         content_spans=[span],
     )
-    return EvidenceRecord(
+    return SourceEvidence(
         revision=revision,
         source_ref=SourceRef(
             ref_id=ref_id,

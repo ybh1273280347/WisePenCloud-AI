@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Sequence
+from collections.abc import Sequence
 
 from rag.domain.repositories import (
+    GenerationArtifactStore,
+    KnowledgeGraphRepository,
+    ResourceAclStore,
     ResourceIndexWriter,
     RetrievalIndexWriter,
-    KnowledgeGraphWriter,
-    GenerationArtifactStore,
-    ResourceAclStore
 )
 
 
@@ -20,13 +20,13 @@ class ResourceDeleter:
         *,
         resource_writer: ResourceIndexWriter,
         retrieval_writer: RetrievalIndexWriter,
-        graph_writer: KnowledgeGraphWriter,
+        graph_repository: KnowledgeGraphRepository,
         generation_artifacts: GenerationArtifactStore,
         acl_store: ResourceAclStore,
     ) -> None:
         self._resource_writer = resource_writer
         self._retrieval_writer = retrieval_writer
-        self._graph_writer = graph_writer
+        self._graph_repository = graph_repository
         self._generation_artifacts = generation_artifacts
         self._acl_store = acl_store
 
@@ -39,7 +39,7 @@ class ResourceDeleter:
         await self._resource_writer.clear_resource_states(ids)
         async with asyncio.TaskGroup() as tasks:
             tasks.create_task(self._retrieval_writer.delete_resources(ids))
-            tasks.create_task(self._graph_writer.delete_resources(ids))
+            tasks.create_task(self._graph_repository.delete_resources(ids))
             tasks.create_task(self._resource_writer.delete_resources(ids))
             tasks.create_task(self._generation_artifacts.delete_resources(ids))
             tasks.create_task(self._acl_store.delete_resources(ids))

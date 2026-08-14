@@ -4,7 +4,8 @@ from collections.abc import Mapping, Sequence
 from typing import Protocol
 
 from rag.domain.models.acl import ResourceAcl
-from rag.domain.models.retrieval import RetrievalChunk, SourceRef
+from rag.domain.models.provenance import SourceRef
+from rag.domain.models.retrieval import RetrievalChunk
 
 
 class RetrievalIndexWriter(Protocol):

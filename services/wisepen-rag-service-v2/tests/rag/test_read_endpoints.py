@@ -36,8 +36,8 @@ class _AllowAuthorizer:
         return True
 
 
-class _AppliedContentReader:
-    async def get_applied_pages(self, resource_id, page_labels):
+class _PublishedResourceReader:
+    async def get_pages(self, resource_id, page_labels):
         return {
             "1": ContentWindow(
                 text="<!-- page 1 -->\n正文",
@@ -48,7 +48,7 @@ class _AppliedContentReader:
             )
         }
 
-    async def get_applied_sections(self, resource_id, section_ids):
+    async def get_sections(self, resource_id, section_ids):
         return {
             "section-1": SectionContent(
                 section=_section(),
@@ -204,7 +204,7 @@ async def test_page_key_is_not_repeated_and_has_no_preview() -> None:
 @pytest.mark.asyncio
 async def test_section_read_returns_authoritative_text_without_blocks() -> None:
     reader = DocumentContentReader(
-        reader=_AppliedContentReader(),
+        reader=_PublishedResourceReader(),
         authorizer=_AllowAuthorizer(),
     )
     sections = await reader.get_sections(
@@ -233,7 +233,7 @@ async def test_section_read_returns_authoritative_text_without_blocks() -> None:
 @pytest.mark.asyncio
 async def test_flat_text_read_keeps_synthetic_section_context() -> None:
     reader = DocumentContentReader(
-        reader=_FlatAppliedContentReader(),
+        reader=_FlatPublishedResourceReader(),
         authorizer=_AllowAuthorizer(),
     )
     pages = await reader.get_pages(
@@ -292,8 +292,8 @@ def test_outline_uses_human_page_range() -> None:
     assert flat_outline[0].children == []
 
 
-class _FlatAppliedContentReader:
-    async def get_applied_pages(self, resource_id, page_labels):
+class _FlatPublishedResourceReader:
+    async def get_pages(self, resource_id, page_labels):
         return {
             "1": ContentWindow(
                 text="平铺正文",
@@ -303,7 +303,7 @@ class _FlatAppliedContentReader:
             )
         }
 
-    async def get_applied_sections(self, resource_id, section_ids):
+    async def get_sections(self, resource_id, section_ids):
         return {
             "flat-section": SectionContent(
                 section=_flat_section(),

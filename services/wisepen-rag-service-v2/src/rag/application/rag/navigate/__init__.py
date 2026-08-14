@@ -11,12 +11,6 @@ from .candidate_locator import (
     LocateResult,
     ReadingCandidateLocator,
 )
-from .evidence_verifier import (
-    EvidenceCorruptError,
-    EvidenceNotFoundError,
-    EvidenceRevisionError,
-    EvidenceVerifier,
-)
 from .graph_expander import (
     GraphAccessRevokedError,
     GraphEvidenceView,
@@ -26,6 +20,12 @@ from .graph_expander import (
     GraphPathView,
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
+)
+from .source_evidence_verifier import (
+    EvidenceCorruptError,
+    EvidenceNotFoundError,
+    EvidenceRevisionError,
+    SourceEvidenceVerifier,
 )
 from .views import (
     KnowledgeNodeView,
@@ -41,7 +41,6 @@ __all__ = [
     "EvidenceCorruptError",
     "EvidenceNotFoundError",
     "EvidenceRevisionError",
-    "EvidenceVerifier",
     "GraphAccessRevokedError",
     "GraphEvidenceView",
     "GraphExpandRequest",
@@ -59,6 +58,7 @@ __all__ = [
     "RetrievalMatchView",
     "RetrievalReadingBlockView",
     "RetrievedSectionView",
+    "SourceEvidenceVerifier",
     "TraversalDirection",
     "TraversedEdge",
     "TraversedPath",

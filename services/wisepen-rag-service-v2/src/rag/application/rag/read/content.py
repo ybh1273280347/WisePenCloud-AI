@@ -1,4 +1,4 @@
-"""从 applied 权威源按页或 Section 确定性读取正文。"""
+"""从当前已发布权威源按页或 Section 确定性读取正文。"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -7,11 +7,11 @@ from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.content import ContentWindow, SectionContent
 from rag.domain.models.structure import Section
-from rag.domain.repositories.mongo.readers.applied_content import AppliedContentReader
+from rag.domain.repositories.mongo import PublishedResourceReader
 
 
 class ContentNotFoundError(RuntimeError):
-    """资源没有可读取的 applied revision。"""
+    """资源没有可读取的发布 revision。"""
 
 
 class ContentAccessRevokedError(RuntimeError):
@@ -61,14 +61,14 @@ class SectionContentView:
 
 
 class DocumentContentReader:
-    """读取 applied revision，并只向上层返回模型可读的语义视图。"""
+    """读取当前发布 revision，并只向上层返回模型可读的语义视图。"""
 
     __slots__ = ("_authorizer", "_reader")
 
     def __init__(
         self,
         *,
-        reader: AppliedContentReader,
+        reader: PublishedResourceReader,
         authorizer: PermissionAuthorizer,
     ) -> None:
         self._reader = reader
@@ -86,7 +86,7 @@ class DocumentContentReader:
             scope=permission_scope,
         ):
             raise ContentNotFoundError(resource_id)
-        pages = await self._reader.get_applied_pages(resource_id, page_labels)
+        pages = await self._reader.get_pages(resource_id, page_labels)
         if pages is None:
             raise ContentNotFoundError(resource_id)
         if not await self._authorizer.authorize_resource(
@@ -111,7 +111,7 @@ class DocumentContentReader:
             scope=permission_scope,
         ):
             raise ContentNotFoundError(resource_id)
-        sections = await self._reader.get_applied_sections(resource_id, section_ids)
+        sections = await self._reader.get_sections(resource_id, section_ids)
         if sections is None:
             raise ContentNotFoundError(resource_id)
         if not await self._authorizer.authorize_resource(

@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from rag.domain.models.acl import PermissionScope
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.provenance import SourceRef
+from rag.domain.models.structure import Section, StructureMode
 from rag.utils.chunkers import SourceSpan
 
 
@@ -76,6 +79,19 @@ class GraphStatus(StrEnum):
     BUILDING = "building"
     PUBLISHED = "published"
     SKIPPED = "skipped"
+
+
+@dataclass(slots=True)
+class GraphBuildSource:
+    """同一已发布 revision 的图构建输入。"""
+
+    resource_id: str
+    content_revision: str
+    structure_mode: StructureMode
+    markdown: str
+    sections: list[Section] = field(default_factory=list)
+    reading_blocks: list[ReadingBlock] = field(default_factory=list)
+    source_refs: list[SourceRef] = field(default_factory=list)
 
 
 @dataclass(slots=True)

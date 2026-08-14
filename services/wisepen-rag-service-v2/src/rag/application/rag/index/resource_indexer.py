@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from rag.application.rag.acl import ResourceAclRefresher
 from rag.domain.models.structure import StructureMode
 from rag.domain.repositories import (
-    KnowledgeGraphWriter,
+    KnowledgeGraphRepository,
     ResourceAclStore,
     ResourceIndexWriter,
     RetrievalIndexWriter,
@@ -56,7 +56,7 @@ class ResourceIndexer:
         resource_writer: ResourceIndexWriter,
         retrieval_writer: RetrievalIndexWriter,
         graph_extractor: KnowledgeGraphExtractor,
-        graph_writer: KnowledgeGraphWriter,
+        graph_repository: KnowledgeGraphRepository,
     ) -> None:
         self._contextual_text = contextual_text
         self._embedding_client = embedding_client
@@ -65,7 +65,7 @@ class ResourceIndexer:
         self._resource_writer = resource_writer
         self._retrieval_writer = retrieval_writer
         self._graph_extractor = graph_extractor
-        self._graph_writer = graph_writer
+        self._graph_repository = graph_repository
 
     async def index_resource(
         self,
@@ -169,14 +169,18 @@ class ResourceIndexer:
                 chunks=chunks,
             )
         )
-        missing_chunks = [chunk for chunk in chunks if chunk.chunk_id not in dense_vectors]
+        missing_chunks = [
+            chunk for chunk in chunks if chunk.chunk_id not in dense_vectors
+        ]
         if missing_chunks:
             result = await self._embedding_client.aembed(
                 [chunk.index_text for chunk in missing_chunks]
             )
             # 防御：保证 embedding 数量与输入一致，避免向量与 chunk 错位。
             if len(result.embeddings) != len(missing_chunks):
-                raise ValueError("embedding response count does not match retrieval chunks")
+                raise ValueError(
+                    "embedding response count does not match retrieval chunks"
+                )
             dense_vectors.update(
                 {
                     chunk.chunk_id: vector
@@ -220,7 +224,7 @@ class ResourceIndexer:
         # 7. 知识图谱发布
         # 仅 SECTIONED 文档具备抽取图谱所需的章节上下文；其它模式显式 skip 以释放占用。
         if structure.mode is StructureMode.SECTIONED:
-            await self._graph_writer.begin_build(
+            await self._graph_repository.begin_build(
                 resource_id=resource_id,
                 content_revision=content_revision,
                 document_version=document_version,
@@ -233,12 +237,12 @@ class ResourceIndexer:
                     content_revision=content_revision,
                 ),
             )
-            await self._graph_writer.publish(
+            await self._graph_repository.publish(
                 graph=graph,
                 document_version=document_version,
             )
         else:
-            await self._graph_writer.skip(
+            await self._graph_repository.skip(
                 resource_id=resource_id,
                 content_revision=content_revision,
                 document_version=document_version,

@@ -1,18 +1,27 @@
-"""Neo4j v2 知识图谱写入 adapter。"""
+"""Neo4j v2 知识图谱发布与查询的统一 adapter。"""
 
 from collections.abc import Sequence
 
-from neo4j import AsyncDriver
+from neo4j import AsyncDriver, RoutingControl
 
+from rag.application.rag.index.constructor.graph_merge import resource_node_id
+from rag.domain.models.acl import PermissionScope
 from rag.domain.models.graph import (
     GraphStatus,
+    GraphTraversalRequest,
+    KnowledgeEntityType,
     KnowledgeGraph,
+    KnowledgeNode,
     KnowledgeNodeKind,
+    KnowledgeRelationType,
+    TraversalDirection,
+    TraversedEdge,
+    TraversedPath,
 )
-from rag.application.rag.index.constructor.graph_merge import resource_node_id
-from rag.domain.repositories.neo4j.knowledge_graph_writer import (
+from rag.domain.models.provenance import SourceEvidence
+from rag.domain.repositories.neo4j.knowledge_graph_repository import (
+    KnowledgeGraphRepository,
     KnowledgeGraphRevisionSupersededError,
-    KnowledgeGraphWriter,
 )
 
 _NODE_LABEL = "RagV2Node"
@@ -147,9 +156,59 @@ WHERE NOT ()-[:RAG_V2_HAS_GROUP_ACL]->(acl)
 DELETE acl
 """
 
+_FIND_NODES = """
+UNWIND $evidence AS item
+MATCH (resource:RagV2ResourceNode {{resource_id: item.resource_id}})
+      -[mention:RAG_V2_MENTION]->(node:RagV2Node)
+WHERE resource.graph_status = $published_status
+  AND resource.content_revision = item.content_revision
+  AND mention.source_content_revision = item.content_revision
+  AND mention.graph_revision = resource.graph_revision
+  AND item.source_ref_id IN mention.source_ref_ids
+  AND {acl_filter}
+RETURN DISTINCT node.node_id AS node_id,
+       CASE
+           WHEN node:RagV2EntityNode THEN 'Entity'
+           WHEN node:RagV2ExternalSourceNode THEN 'ExternalSource'
+           ELSE 'Resource'
+       END AS kind,
+       coalesce(node.label, node.resource_id) AS label,
+       node.entity_type AS entity_type,
+       node.resource_id AS resource_id
+ORDER BY node_id
+LIMIT $limit
+"""
 
-class Neo4jKnowledgeGraphWriter(KnowledgeGraphWriter):
-    """将合并后的知识图谱写入 v2 专属 Neo4j namespace。"""
+_PATH_PATTERNS = {
+    (
+        TraversalDirection.OUT,
+        1,
+    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1]->(target)",
+    (
+        TraversalDirection.OUT,
+        2,
+    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1..2]->(target)",
+    (
+        TraversalDirection.IN,
+        1,
+    ): "(seed)<-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1]-(target)",
+    (
+        TraversalDirection.IN,
+        2,
+    ): "(seed)<-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1..2]-(target)",
+    (
+        TraversalDirection.BOTH,
+        1,
+    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1]-(target)",
+    (
+        TraversalDirection.BOTH,
+        2,
+    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1..2]-(target)",
+}
+
+
+class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
+    """管理 v2 Neo4j 知识图谱的发布生命周期和查询。"""
 
     def __init__(self, *, driver: AsyncDriver, database: str) -> None:
         if not database.strip():
@@ -227,9 +286,7 @@ class Neo4jKnowledgeGraphWriter(KnowledgeGraphWriter):
                     "relation_type": relation.relation_type.value,
                     "predicate": relation.predicate,
                     "evidence_quotes": list(relation.evidence_quotes),
-                    "evidence_source_ref_ids": list(
-                        relation.evidence_source_ref_ids
-                    ),
+                    "evidence_source_ref_ids": list(relation.evidence_source_ref_ids),
                 }
                 for relation in graph.relations
             ],
@@ -260,6 +317,7 @@ class Neo4jKnowledgeGraphWriter(KnowledgeGraphWriter):
             _DELETE_ORPHAN_NODES,
             database_=self._database,
         )
+
     async def skip(
         self,
         *,
@@ -315,3 +373,196 @@ class Neo4jKnowledgeGraphWriter(KnowledgeGraphWriter):
             _DELETE_ORPHAN_GROUP_ACLS,
             database_=self._database,
         )
+
+    async def find_nodes(
+        self,
+        *,
+        evidence: Sequence[SourceEvidence],
+        permission_scope: PermissionScope,
+        limit: int,
+    ) -> list[KnowledgeNode]:
+        if not evidence or limit <= 0:
+            return []
+
+        query_evidence = [
+            {
+                "resource_id": record.revision.resource_id,
+                "content_revision": record.revision.content_revision,
+                "source_ref_id": record.source_ref.ref_id,
+            }
+            for record in evidence
+        ]
+        query_evidence = list(
+            {tuple(sorted(item.items())): item for item in query_evidence}.values()
+        )
+        acl_filter, acl_parameters = _acl_predicate(
+            permission_scope,
+            resource_alias="resource",
+        )
+        result = await self._driver.execute_query(
+            _FIND_NODES.format(acl_filter=acl_filter),
+            evidence=query_evidence,
+            limit=limit,
+            published_status=GraphStatus.PUBLISHED.value,
+            **acl_parameters,
+            database_=self._database,
+            routing_=RoutingControl.READ,
+        )
+        return [_to_knowledge_node(record) for record in result.records]
+
+    async def find_paths(
+        self,
+        request: GraphTraversalRequest,
+    ) -> list[TraversedPath]:
+        if not request.seed_node_ids or request.limit <= 0:
+            return []
+        pattern = _PATH_PATTERNS.get((request.direction, request.max_depth))
+        if pattern is None:
+            raise ValueError("graph traversal depth must be 1 or 2")
+
+        evidence_acl, acl_parameters = _acl_predicate(
+            request.permission_scope,
+            resource_alias="evidence",
+        )
+        path_node_acl, _ = _acl_predicate(
+            request.permission_scope,
+            resource_alias="path_node",
+        )
+        result = await self._driver.execute_query(
+            f"""
+            MATCH (seed:RagV2Node)
+            WHERE seed.node_id IN $seed_node_ids
+            MATCH path={pattern}
+            WHERE target <> seed
+              AND all(path_node IN nodes(path)
+                WHERE single(other IN nodes(path) WHERE other = path_node))
+              AND all(path_node IN nodes(path)
+                WHERE NOT path_node:RagV2ResourceNode OR {path_node_acl})
+              AND all(relation IN relationships(path)
+                WHERE (size($relation_types) = 0
+                       OR coalesce(relation.relation_type, 'MENTIONS')
+                          IN $relation_types)
+                  AND EXISTS {{
+                    MATCH (evidence:RagV2ResourceNode {{
+                      resource_id: relation.evidence_resource_id
+                    }})
+                    WHERE evidence.graph_status = '{GraphStatus.PUBLISHED.value}'
+                      AND evidence.content_revision = relation.source_content_revision
+                      AND evidence.graph_revision = relation.graph_revision
+                      AND {evidence_acl}
+                  }})
+            RETURN [path_node IN nodes(path) | {{
+                     node_id: path_node.node_id,
+                     kind: CASE
+                       WHEN path_node:RagV2EntityNode THEN 'Entity'
+                       WHEN path_node:RagV2ExternalSourceNode THEN 'ExternalSource'
+                       ELSE 'Resource'
+                     END,
+                     label: coalesce(path_node.label, path_node.resource_id),
+                     entity_type: path_node.entity_type,
+                     resource_id: path_node.resource_id
+                   }}] AS nodes,
+                   [relation IN relationships(path) | {{
+                     edge_id: coalesce(relation.edge_id, relation.mention_id),
+                     source_node_id: startNode(relation).node_id,
+                     target_node_id: endNode(relation).node_id,
+                     relation_type: coalesce(relation.relation_type, 'MENTIONS'),
+                     predicate: relation.predicate,
+                     evidence_resource_id: relation.evidence_resource_id,
+                     source_content_revision: relation.source_content_revision,
+                     evidence_quotes: coalesce(
+                       relation.evidence_quotes,
+                       [relation.evidence_quote]
+                     ),
+                     evidence_source_ref_ids: coalesce(
+                       relation.evidence_source_ref_ids,
+                       relation.source_ref_ids
+                     )
+                   }}] AS edges
+            ORDER BY size(edges), nodes[-1].node_id
+            LIMIT $limit
+            """,
+            seed_node_ids=list(dict.fromkeys(request.seed_node_ids)),
+            relation_types=[item.value for item in request.relation_types],
+            limit=request.limit,
+            **acl_parameters,
+            database_=self._database,
+            routing_=RoutingControl.READ,
+        )
+        return [_to_path(record) for record in result.records]
+
+
+def _to_path(record) -> TraversedPath:
+    return TraversedPath(
+        nodes=[_to_knowledge_node(item) for item in record["nodes"]],
+        edges=[_to_edge(item) for item in record["edges"]],
+    )
+
+
+def _to_knowledge_node(item) -> KnowledgeNode:
+    kind = KnowledgeNodeKind(item["kind"])
+    return KnowledgeNode(
+        node_id=item["node_id"],
+        kind=kind,
+        label=item["label"],
+        entity_type=(
+            KnowledgeEntityType(item["entity_type"])
+            if kind is KnowledgeNodeKind.ENTITY
+            else None
+        ),
+        resource_id=(
+            item["resource_id"] if kind is KnowledgeNodeKind.RESOURCE else None
+        ),
+    )
+
+
+def _to_edge(item) -> TraversedEdge:
+    return TraversedEdge(
+        edge_id=item["edge_id"],
+        source_node_id=item["source_node_id"],
+        target_node_id=item["target_node_id"],
+        relation_type=KnowledgeRelationType(item["relation_type"]),
+        predicate=item.get("predicate"),
+        evidence_resource_id=item["evidence_resource_id"],
+        source_content_revision=item["source_content_revision"],
+        evidence_quotes=list(item["evidence_quotes"]),
+        evidence_source_ref_ids=list(item["evidence_source_ref_ids"]),
+    )
+
+
+def _acl_predicate(
+    scope: PermissionScope,
+    *,
+    resource_alias: str,
+) -> tuple[str, dict[str, object]]:
+    """生成与 ResourceAcl.can_read 同语义的 Neo4j 查询条件。"""
+    return (
+        f"""(
+          {resource_alias}.owner_id = $acl_user_id
+          OR $acl_user_id IN coalesce({resource_alias}.readable_users, [])
+          OR (
+            NOT $acl_user_id IN coalesce({resource_alias}.excluded_read_users, [])
+            AND (
+              EXISTS {{
+                MATCH ({resource_alias})-[:RAG_V2_HAS_GROUP_ACL]->(managed:RagV2ResourceGroupAcl)
+                WHERE managed.group_id IN $acl_managed_group_ids
+              }}
+              OR EXISTS {{
+                MATCH ({resource_alias})-[:RAG_V2_HAS_GROUP_ACL]->(joined:RagV2ResourceGroupAcl)
+                WHERE joined.group_id IN $acl_joined_group_ids
+                  AND (
+                    (joined.is_readable = true
+                     AND NOT $acl_user_id IN coalesce(joined.excluded_read_users, []))
+                    OR (joined.is_readable = false
+                        AND $acl_user_id IN coalesce(joined.readable_users, []))
+                  )
+              }}
+            )
+          )
+        )""",
+        {
+            "acl_user_id": scope.user_id,
+            "acl_managed_group_ids": list(scope.managed_group_ids),
+            "acl_joined_group_ids": list(scope.joined_group_ids),
+        },
+    )

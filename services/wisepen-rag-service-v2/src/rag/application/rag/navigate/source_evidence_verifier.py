@@ -1,39 +1,41 @@
-"""VERIFY 用例：校验候选检索块并返回 applied 原文证据。"""
+"""VERIFY 用例：校验候选检索块并返回当前已发布的原文证据。"""
 
 from collections.abc import Sequence
 
-from rag.domain.models.evidence import (
-    EvidenceCandidate,
-    EvidenceRecord,
+from rag.domain.models.provenance import SourceEvidence
+from rag.domain.models.retrieval import RetrievalCandidate
+from rag.domain.repositories.mongo.published_resource_reader import (
+    PublishedResourceCorruptError,
+    PublishedResourceReader,
+    PublishedResourceRevisionError,
 )
-from rag.domain.repositories.mongo.readers.evidence import EvidenceReader
 
 
 class EvidenceNotFoundError(RuntimeError):
-    """请求的 applied 内容或证据身份不存在。"""
+    """请求的已发布内容或证据身份不存在。"""
 
 
 class EvidenceRevisionError(RuntimeError):
-    """请求 revision 不是资源当前 applied revision。"""
+    """请求 revision 不是资源当前发布版本。"""
 
 
 class EvidenceCorruptError(RuntimeError):
     """权威原文、SourceRef 或结构记录不满足一致性约束。"""
 
 
-class EvidenceVerifier:
+class SourceEvidenceVerifier:
     """按 SourceRef 身份回源，并逐项校验候选字段归属。"""
 
     __slots__ = ("_reader",)
 
-    def __init__(self, *, reader: EvidenceReader) -> None:
+    def __init__(self, *, reader: PublishedResourceReader) -> None:
         self._reader = reader
 
     async def verify_retrieval_candidates(
         self,
-        candidates: Sequence[EvidenceCandidate],
-    ) -> list[EvidenceRecord]:
-        """回源并验证检索候选与 applied 证据的完整身份链。"""
+        candidates: Sequence[RetrievalCandidate],
+    ) -> list[SourceEvidence]:
+        """回源并验证检索候选与已发布证据的完整身份链。"""
         if not candidates:
             return []
 
@@ -46,15 +48,22 @@ class EvidenceVerifier:
 
         resource_id = next(iter(resource_ids))
         content_revision = next(iter(revisions))
-        records = await self._reader.read_applied_evidence(
-            resource_id,
-            content_revision,
-            list(dict.fromkeys(candidate.source_ref_id for candidate in candidates)),
-        )
+        try:
+            records = await self._reader.get_source_evidence(
+                resource_id,
+                content_revision,
+                list(
+                    dict.fromkeys(candidate.source_ref_id for candidate in candidates)
+                ),
+            )
+        except PublishedResourceRevisionError as error:
+            raise EvidenceRevisionError(str(error)) from error
+        except PublishedResourceCorruptError as error:
+            raise EvidenceCorruptError(str(error)) from error
         if records is None:
             raise EvidenceNotFoundError(resource_id)
 
-        verified: list[EvidenceRecord] = []
+        verified: list[SourceEvidence] = []
         for candidate in candidates:
             record = records.get(candidate.source_ref_id)
             if record is None:
@@ -70,14 +79,19 @@ class EvidenceVerifier:
         content_revision: str,
         source_ref_ids: Sequence[str],
         quotes: Sequence[str],
-    ) -> list[EvidenceRecord]:
-        """核验图关系引用仍属于当前 applied revision 的权威原文。"""
+    ) -> list[SourceEvidence]:
+        """核验图关系引用仍属于当前发布 revision 的权威原文。"""
         ids = list(dict.fromkeys(source_ref_ids))
-        records = await self._reader.read_applied_evidence(
-            resource_id,
-            content_revision,
-            ids,
-        )
+        try:
+            records = await self._reader.get_source_evidence(
+                resource_id,
+                content_revision,
+                ids,
+            )
+        except PublishedResourceRevisionError as error:
+            raise EvidenceRevisionError(str(error)) from error
+        except PublishedResourceCorruptError as error:
+            raise EvidenceCorruptError(str(error)) from error
         if records is None:
             raise EvidenceNotFoundError(resource_id)
         if set(records) != set(ids):
@@ -94,11 +108,10 @@ class EvidenceVerifier:
 
     @staticmethod
     def _verify_candidate(
-        candidate: EvidenceCandidate,
-        record: EvidenceRecord,
+        candidate: RetrievalCandidate,
+        record: SourceEvidence,
     ) -> None:
         source_ref = record.source_ref
-        chunk = candidate.chunk
         if source_ref.resource_id != candidate.resource_id:
             raise EvidenceRevisionError(
                 f"source ref {source_ref.ref_id} has invalid resource"
@@ -111,33 +124,33 @@ class EvidenceVerifier:
             raise EvidenceCorruptError(
                 "evidence reader returned a mismatched source ref"
             )
-        if chunk.chunk_id != source_ref.chunk_id:
+        if candidate.chunk_id != source_ref.chunk_id:
             raise EvidenceCorruptError(
-                f"chunk {chunk.chunk_id} does not match source ref"
+                f"chunk {candidate.chunk_id} does not match source ref"
             )
-        if chunk.reading_block_id != source_ref.reading_block_id:
+        if candidate.reading_block_id != source_ref.reading_block_id:
             raise EvidenceCorruptError(
-                f"chunk {chunk.chunk_id} has invalid reading block"
+                f"chunk {candidate.chunk_id} has invalid reading block"
             )
-        if chunk.section_id != source_ref.section_id:
+        if candidate.section_id != source_ref.section_id:
             raise EvidenceCorruptError(
-                f"chunk {chunk.chunk_id} has invalid section"
+                f"chunk {candidate.chunk_id} has invalid section"
             )
-        if chunk.section_path != source_ref.section_path:
+        if candidate.section_path != source_ref.section_path:
             raise EvidenceCorruptError(
-                f"chunk {chunk.chunk_id} has invalid section path"
+                f"chunk {candidate.chunk_id} has invalid section path"
             )
-        if chunk.source_spans != source_ref.source_spans:
+        if candidate.source_spans != source_ref.source_spans:
             raise EvidenceCorruptError(
-                f"chunk {chunk.chunk_id} has invalid source spans"
+                f"chunk {candidate.chunk_id} has invalid source spans"
             )
-        if chunk.page_labels != source_ref.page_labels:
+        if candidate.page_labels != source_ref.page_labels:
             raise EvidenceCorruptError(
-                f"chunk {chunk.chunk_id} has invalid page labels"
+                f"chunk {candidate.chunk_id} has invalid page labels"
             )
-        if chunk.anchor_labels != source_ref.anchor_labels:
+        if candidate.anchor_labels != source_ref.anchor_labels:
             raise EvidenceCorruptError(
-                f"chunk {chunk.chunk_id} has invalid anchor labels"
+                f"chunk {candidate.chunk_id} has invalid anchor labels"
             )
         if record.reading_block.block_id != source_ref.reading_block_id:
             raise EvidenceCorruptError(
@@ -151,7 +164,7 @@ class EvidenceVerifier:
             raise EvidenceCorruptError(
                 f"source ref {source_ref.ref_id} has invalid section record"
             )
-        if chunk.raw_text != record.source_text:
+        if candidate.raw_text != record.source_text:
             raise EvidenceCorruptError(
-                f"chunk {chunk.chunk_id} does not match authoritative text"
+                f"chunk {candidate.chunk_id} does not match authoritative text"
             )

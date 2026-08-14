@@ -3,12 +3,12 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import (
     KnowledgeEntityType,
     KnowledgeNode,
     KnowledgeNodeKind,
 )
+from rag.domain.models.provenance import SourceEvidence
 
 
 @dataclass(slots=True)
@@ -70,7 +70,7 @@ def to_knowledge_node_view(node: KnowledgeNode) -> KnowledgeNodeView:
 
 
 def build_retrieved_section_views(
-    records: list[EvidenceRecord],
+    records: list[SourceEvidence],
 ) -> list[RetrievedSectionView]:
     """按首次命中顺序把核验证据提升并归组为完整 ReadingBlock。"""
     sections: dict[tuple[str, str], RetrievedSectionView] = {}
@@ -119,7 +119,7 @@ def _format_page_range(page_labels: Sequence[str]) -> str | None:
     return f"{labels[0]} - {labels[-1]}"
 
 
-def _relative_match_ranges(record: EvidenceRecord) -> list[MatchRangeView]:
+def _relative_match_ranges(record: SourceEvidence) -> list[MatchRangeView]:
     """把权威 source spans 映射到 ReadingBlock 拼接文本的相对字符坐标。"""
     ranges: list[MatchRangeView] = []
     block_offset = 0

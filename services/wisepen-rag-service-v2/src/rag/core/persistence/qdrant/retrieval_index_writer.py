@@ -10,7 +10,8 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
 from rag.domain.models.acl import ResourceAcl
-from rag.domain.models.retrieval import RetrievalChunk, SourceRef
+from rag.domain.models.provenance import SourceRef
+from rag.domain.models.retrieval import RetrievalChunk
 from rag.domain.repositories.qdrant.retrieval_index_writer import RetrievalIndexWriter
 
 
@@ -53,7 +54,9 @@ class QdrantRetrievalIndexWriter(RetrievalIndexWriter):
         resource_id: str,
         chunks: Sequence[RetrievalChunk],
     ) -> dict[str, list[float]]:
-        if not chunks or not await self._client.collection_exists(self._collection_name):
+        if not chunks or not await self._client.collection_exists(
+            self._collection_name
+        ):
             return {}
 
         chunk_keys = {
@@ -140,7 +143,9 @@ class QdrantRetrievalIndexWriter(RetrievalIndexWriter):
             if vector is None:
                 raise ValueError(f"dense vector is missing for chunk {chunk.chunk_id}")
             if len(vector) != self._dense_vector_size:
-                raise ValueError(f"dense vector size does not match chunk {chunk.chunk_id}")
+                raise ValueError(
+                    f"dense vector size does not match chunk {chunk.chunk_id}"
+                )
 
             points.append(
                 qdrant_models.PointStruct(
@@ -271,9 +276,7 @@ class QdrantRetrievalIndexWriter(RetrievalIndexWriter):
             self._collection_ready = True
 
     def _embedding_key(self, index_text: str) -> str:
-        return sha256(
-            f"{self._embedding_profile}\0{index_text}".encode()
-        ).hexdigest()
+        return sha256(f"{self._embedding_profile}\0{index_text}".encode()).hexdigest()
 
 
 def _source_refs_by_chunk(
@@ -288,9 +291,13 @@ def _source_refs_by_chunk(
             source_ref.resource_id != resource_id
             or source_ref.content_revision != content_revision
         ):
-            raise ValueError(f"source ref {source_ref.ref_id} does not belong to revision")
+            raise ValueError(
+                f"source ref {source_ref.ref_id} does not belong to revision"
+            )
         if source_ref.chunk_id in refs_by_chunk:
-            raise ValueError(f"source refs contain duplicate chunk {source_ref.chunk_id}")
+            raise ValueError(
+                f"source refs contain duplicate chunk {source_ref.chunk_id}"
+            )
         refs_by_chunk[source_ref.chunk_id] = source_ref
     return refs_by_chunk
 

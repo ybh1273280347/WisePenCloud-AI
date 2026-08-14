@@ -1,5 +1,6 @@
 from common.logger import error, info, setup_logging_intercept
 from common.observability import setup_observability
+
 from rag.core.config.bootstrap_settings import bootstrap_settings
 
 # 在读取 Nacos 业务配置之前完成日志桥接与 OTel SDK 初始化。
@@ -9,15 +10,14 @@ setup_observability(
     environment=bootstrap_settings.PROFILE,
 )
 
-import uvicorn
 from contextlib import asynccontextmanager
 
+import uvicorn
 from beanie import init_beanie
-from fastapi import FastAPI
-
 from common.observability import instrument_fastapi_app
 from common.web.exception_handlers import setup_global_exception_handlers
 from common.web.middleware import SecurityHeaderMiddleware
+from fastapi import FastAPI
 
 from rag.api.endpoints import expand as expand_endpoints
 from rag.api.endpoints import locate as locate_endpoints
@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     info("beanie initialized.", db=settings.MONGODB_DB_NAME)
 
     await container.retrieval_index_writer().ensure_collection()
-    await container.knowledge_graph_writer().initialize()
+    await container.knowledge_graph_repository().initialize()
     await container.graph_acl_writer().initialize()
     await container.neo4j_driver().verify_connectivity()
 

@@ -4,7 +4,7 @@ import pytest
 
 from rag.application.rag.acl import ResourceAclRefresher
 from rag.core.persistence.neo4j import Neo4jGraphAclWriter
-from rag.core.persistence.neo4j.acl_predicate import acl_predicate
+from rag.core.persistence.neo4j.knowledge_graph_repository import _acl_predicate
 from rag.core.persistence.qdrant import QdrantRetrievalAclWriter
 from rag.domain.models.acl import GroupResourceAcl, PermissionScope, ResourceAcl
 
@@ -168,7 +168,7 @@ async def test_neo4j_writer_persists_group_acl_and_revision_guard() -> None:
 
 
 def test_neo4j_acl_predicate_uses_same_owner_user_and_group_semantics() -> None:
-    predicate, parameters = acl_predicate(
+    predicate, parameters = _acl_predicate(
         PermissionScope(user_id="user-1"),
         resource_alias="resource",
     )
