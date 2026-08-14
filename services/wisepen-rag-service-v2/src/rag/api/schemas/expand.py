@@ -4,8 +4,12 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from rag.application.rag.expand import GraphPathView, TraversalDirection
-from rag.application.rag.navigation_views import KnowledgeNodeView, RetrievedSectionView
+from rag.application.rag.navigate import (
+    GraphPathView,
+    KnowledgeNodeView,
+    RetrievedSectionView,
+    TraversalDirection,
+)
 from rag.domain.models.graph import KnowledgeRelationType
 
 NonEmptyText = Annotated[

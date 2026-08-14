@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from hashlib import sha256
 
 from rag.domain.models.acl import PermissionScope
 from rag.utils.chunkers import SourceSpan
@@ -160,12 +159,6 @@ class KnowledgeGraph:
     nodes: list[KnowledgeNode] = field(default_factory=list)
     mentions: list[KnowledgeMention] = field(default_factory=list)
     relations: list[KnowledgeRelation] = field(default_factory=list)
-
-
-def resource_node_id(resource_id: str) -> str:
-    """返回 Resource 节点在图事实和 Neo4j 中共用的稳定 ID。"""
-    digest = sha256(f"resource\0{resource_id}".encode()).hexdigest()
-    return f"kn_{digest[:32]}"
 
 
 class TraversalDirection(StrEnum):

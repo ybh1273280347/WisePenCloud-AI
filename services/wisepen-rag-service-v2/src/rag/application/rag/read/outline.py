@@ -13,8 +13,11 @@ from rag.domain.repositories.mongo.readers.applied_structure import (
     AppliedStructureReader,
 )
 
-from ..page_range import format_page_range
-from .content import ContentAccessRevokedError, ContentNotFoundError
+from .content import (
+    ContentAccessRevokedError,
+    ContentNotFoundError,
+    format_page_range,
+)
 
 
 @dataclass(slots=True)

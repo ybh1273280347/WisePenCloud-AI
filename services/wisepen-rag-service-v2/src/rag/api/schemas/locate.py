@@ -3,7 +3,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from rag.application.rag.navigation_views import KnowledgeNodeView, RetrievedSectionView
+from rag.application.rag.navigate import KnowledgeNodeView, RetrievedSectionView
 from rag.utils.ranking import RankDecision
 
 NonEmptyText = Annotated[

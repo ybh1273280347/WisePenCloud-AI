@@ -9,8 +9,6 @@ from rag.domain.models.content import ContentWindow, SectionContent
 from rag.domain.models.structure import Section
 from rag.domain.repositories.mongo.readers.applied_content import AppliedContentReader
 
-from ..page_range import format_page_range
-
 
 class ContentNotFoundError(RuntimeError):
     """资源没有可读取的 applied revision。"""
@@ -125,6 +123,16 @@ class DocumentContentReader:
             section_id: _to_section_content_view(content)
             for section_id, content in sections.items()
         }
+
+
+def format_page_range(page_labels: Sequence[str]) -> str | None:
+    """把内部有序 page labels 投影为统一的模型可见页范围。"""
+    labels = list(dict.fromkeys(page_labels))
+    if not labels:
+        return None
+    if len(labels) == 1:
+        return labels[0]
+    return f"{labels[0]} - {labels[-1]}"
 
 
 def _to_page_content_view(window: ContentWindow) -> PageContentView:

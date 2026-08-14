@@ -3,9 +3,12 @@ from dataclasses import dataclass
 import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.locate import LocateRequest, ReadingCandidateLocator
-from rag.application.rag.navigation_views import build_retrieved_section_views
-from rag.application.rag.verify import EvidenceVerifier
+from rag.application.rag.navigate import (
+    EvidenceVerifier,
+    LocateRequest,
+    ReadingCandidateLocator,
+    build_retrieved_section_views,
+)
 from rag.domain.models.acl import PermissionScope, ResourceAcl
 from rag.domain.models.content import ContentRevision, ReadingBlock
 from rag.domain.models.evidence import EvidenceRecord

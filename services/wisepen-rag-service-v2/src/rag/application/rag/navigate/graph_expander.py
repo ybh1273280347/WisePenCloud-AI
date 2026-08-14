@@ -4,13 +4,6 @@ import json
 from dataclasses import dataclass, field
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.navigation_views import (
-    KnowledgeNodeView,
-    RetrievedSectionView,
-    build_retrieved_section_views,
-    to_knowledge_node_view,
-)
-from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import (
@@ -28,6 +21,14 @@ from rag.utils.ranking import (
     RankingPipeline,
     RankQuery,
     RankRequest,
+)
+
+from .evidence_verifier import EvidenceVerifier
+from .views import (
+    KnowledgeNodeView,
+    RetrievedSectionView,
+    build_retrieved_section_views,
+    to_knowledge_node_view,
 )
 
 

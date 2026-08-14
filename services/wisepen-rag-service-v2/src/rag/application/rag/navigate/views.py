@@ -1,5 +1,6 @@
 """LOCATE 与 Graph EXPAND 共享的模型可读检索视图。"""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from rag.domain.models.evidence import EvidenceRecord
@@ -8,8 +9,6 @@ from rag.domain.models.graph import (
     KnowledgeNode,
     KnowledgeNodeKind,
 )
-
-from .page_range import format_page_range
 
 
 @dataclass(slots=True)
@@ -94,7 +93,7 @@ def build_retrieved_section_views(
             block_view = RetrievalReadingBlockView(
                 reading_block_id=record.reading_block.block_id,
                 text=record.reading_block.raw_text,
-                page_range=format_page_range(record.reading_block.page_labels),
+                page_range=_format_page_range(record.reading_block.page_labels),
                 anchor_labels=list(record.reading_block.anchor_labels),
             )
             blocks[block_key] = block_view
@@ -108,6 +107,16 @@ def build_retrieved_section_views(
         )
 
     return list(sections.values())
+
+
+def _format_page_range(page_labels: Sequence[str]) -> str | None:
+    """把内部有序 page labels 投影为统一的模型可见页范围。"""
+    labels = list(dict.fromkeys(page_labels))
+    if not labels:
+        return None
+    if len(labels) == 1:
+        return labels[0]
+    return f"{labels[0]} - {labels[-1]}"
 
 
 def _relative_match_ranges(record: EvidenceRecord) -> list[MatchRangeView]:

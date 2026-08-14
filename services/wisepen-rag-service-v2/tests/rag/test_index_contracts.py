@@ -9,16 +9,16 @@ from rag.application.rag.index.constructor import (
     create_content_revision,
     parse_document_structure,
 )
-from rag.application.rag.read import (
-    ContentNotFoundError,
-    DocumentContentReader,
-    DocumentOutlineReader,
-)
-from rag.application.rag.verify import (
+from rag.application.rag.navigate import (
     EvidenceCorruptError,
     EvidenceNotFoundError,
     EvidenceRevisionError,
     EvidenceVerifier,
+)
+from rag.application.rag.read import (
+    ContentNotFoundError,
+    DocumentContentReader,
+    DocumentOutlineReader,
 )
 from rag.core.persistence.mongo.writers.resource_index import _decide_stage
 from rag.domain.models.acl import PermissionScope, ResourceAcl

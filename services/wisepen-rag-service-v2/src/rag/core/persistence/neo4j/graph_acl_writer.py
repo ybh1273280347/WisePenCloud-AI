@@ -3,7 +3,7 @@
 from neo4j import AsyncDriver
 
 from rag.domain.models.acl import ResourceAcl
-from rag.domain.models.graph import resource_node_id
+from rag.application.rag.index.constructor.graph_merge import resource_node_id
 from rag.domain.repositories.neo4j.graph_acl_writer import GraphAclWriter
 
 _SCHEMA_QUERIES = (

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from hashlib import sha256
 
-from rag.application.rag.verify import EvidenceCorruptError, EvidenceRevisionError
+from rag.application.rag.navigate import EvidenceCorruptError, EvidenceRevisionError
 from rag.domain.entities import ReadingBlockEntity, SectionEntity, SourceRefEntity
 from rag.domain.models.content import ReadingBlock
 from rag.domain.models.evidence import EvidenceRecord

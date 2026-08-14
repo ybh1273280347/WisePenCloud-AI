@@ -14,16 +14,18 @@ from rag.api.kafka import (
     ResourceDestroyHandler,
 )
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
-from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import KnowledgeGraphExtractor, ResourceIndexer
 from rag.application.rag.index.contextualize import ContextualTextIndexer
 from rag.application.rag.index.graph import QueryClientGraphRagLLM
-from rag.application.rag.locate import ReadingCandidateLocator
+from rag.application.rag.navigate import (
+    EvidenceVerifier,
+    KnowledgeGraphExpander,
+    ReadingCandidateLocator,
+)
 from rag.application.rag.read import (
     DocumentContentReader,
     DocumentOutlineReader,
 )
-from rag.application.rag.verify import EvidenceVerifier
 from rag.core.config import settings
 from rag.core.persistence import ResourceDeleter
 from rag.core.persistence.mongo import (

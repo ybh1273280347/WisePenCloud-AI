@@ -16,11 +16,11 @@
 对应文件：
 - `src/rag/api/endpoints/locate.py`
 - `src/rag/api/schemas/locate.py`
-- `src/rag/application/rag/locate/candidate_locator.py`
-- `src/rag/application/rag/locate/__init__.py`
+- `src/rag/application/rag/navigate/candidate_locator.py`
+- `src/rag/application/rag/navigate/__init__.py`
 - `src/rag/domain/repositories/qdrant/candidate_searcher.py`
 - `src/rag/domain/repositories/neo4j/mention_lookup.py`
-- `src/rag/application/rag/verify/evidence_verifier.py`
+- `src/rag/application/rag/navigate/evidence_verifier.py`
 - `src/rag/domain/repositories/mongo/readers/applied_structure.py`
 - `src/rag/domain/repositories/redis/navigation_state_store.py`
 
@@ -70,8 +70,8 @@
 5. 图关系的引用还要检查 quote 是否真的出现在权威原文里。
 
 对应文件：
-- `src/rag/application/rag/verify/evidence_verifier.py`
-- `src/rag/application/rag/verify/__init__.py`
+- `src/rag/application/rag/navigate/evidence_verifier.py`
+- `src/rag/application/rag/navigate/__init__.py`
 - `src/rag/core/persistence/mongo/readers/evidence.py`
 - `src/rag/domain/repositories/mongo/readers/evidence.py`
 
@@ -94,8 +94,8 @@
 对应文件：
 - `src/rag/api/endpoints/expand.py`
 - `src/rag/api/schemas/expand.py`
-- `src/rag/application/rag/expand/graph_expander.py`
-- `src/rag/application/rag/expand/__init__.py`
+- `src/rag/application/rag/navigate/graph_expander.py`
+- `src/rag/application/rag/navigate/__init__.py`
 - `src/rag/domain/models/content.py`
 - `src/rag/domain/repositories/redis/navigation_state_store.py`
 - `src/rag/domain/repositories/neo4j/graph_traversal.py`

@@ -63,22 +63,18 @@ base:     origin/main @ e1af497f7
 
 ## 3. 当前架构事实
 
-### Application 六个目录
+### Application 五个目录
 
 ```text
 application/rag/index/
-application/rag/locate/
+application/rag/navigate/
 application/rag/read/
-application/rag/expand/
-application/rag/verify/
 application/rag/acl/
 ```
 
 - `index`：构建并发布所有派生数据。
-- `locate`：召回和发现阅读入口、建立导航状态。
+- `navigate`：平铺承载 locate、expand、verify 以及共享模型可读 views。
 - `read`：读取结构、page、Section 和正文。
-- `expand`：从已发现图节点做有界关系探索。
-- `verify`：把候选结果回到 applied revision 的权威证据。
 - `acl`：定义和执行权限规则。
 
 RAG 不生成 Agent 的 `page_not_found`、`section_not_found`、`section_empty`、展示文案或探索原因；这些由调用方装配。
@@ -125,7 +121,7 @@ read_applied_evidence(
 
 ### Application
 
-文件：`src/rag/application/rag/verify/evidence.py`
+文件：`src/rag/application/rag/navigate/evidence_verifier.py`
 
 `EvidenceVerifier.verify()` 会校验：
 
@@ -197,8 +193,8 @@ CP08.2 的稳定边界：
 ai_assist/RAG_V2_HANDOFF.md
 src/rag/domain/evidence.py
 src/rag/domain/repositories/evidence_reader.py
-src/rag/application/rag/verify/evidence.py
-src/rag/application/rag/verify/__init__.py
+src/rag/application/rag/navigate/evidence_verifier.py
+src/rag/application/rag/navigate/__init__.py
 src/rag/core/persistence/mongo/evidence_reader.py
 src/rag/core/persistence/mongo/__init__.py
 tests/rag/test_index_contracts.py

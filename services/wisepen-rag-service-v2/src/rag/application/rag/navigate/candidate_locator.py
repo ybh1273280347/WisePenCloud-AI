@@ -7,13 +7,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.navigation_views import (
-    KnowledgeNodeView,
-    RetrievedSectionView,
-    build_retrieved_section_views,
-    to_knowledge_node_view,
-)
-from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.evidence import EvidenceCandidate, EvidenceRecord
 from rag.domain.models.retrieval import (
@@ -33,6 +26,14 @@ from rag.utils.ranking import (
     RankRequest,
     ScoreSignal,
     ScoreSignalKind,
+)
+
+from .evidence_verifier import EvidenceVerifier
+from .views import (
+    KnowledgeNodeView,
+    RetrievedSectionView,
+    build_retrieved_section_views,
+    to_knowledge_node_view,
 )
 
 if TYPE_CHECKING:

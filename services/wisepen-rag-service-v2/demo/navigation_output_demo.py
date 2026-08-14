@@ -14,12 +14,13 @@ from _demo_documents import (
 
 from rag.api.schemas import CandidateLocateResponse, GraphExpandResponse
 from rag.application.rag.acl import PermissionAuthorizer
-from rag.application.rag.expand import (
+from rag.application.rag.navigate import (
+    EvidenceVerifier,
     GraphExpandRequest,
     KnowledgeGraphExpander,
+    LocateRequest,
+    ReadingCandidateLocator,
 )
-from rag.application.rag.locate import LocateRequest, ReadingCandidateLocator
-from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.models.acl import PermissionScope, ResourceAcl
 from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import (

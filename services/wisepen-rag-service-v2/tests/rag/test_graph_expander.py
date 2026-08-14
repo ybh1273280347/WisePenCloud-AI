@@ -1,11 +1,11 @@
 import pytest
 
-from rag.application.rag.expand import (
+from rag.application.rag.navigate import (
     GraphExpandRequest,
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
 )
-from rag.application.rag.expand.graph_expander import _render_path, _to_path_view
+from rag.application.rag.navigate.graph_expander import _render_path, _to_path_view
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.content import ContentRevision, ReadingBlock
 from rag.domain.models.evidence import EvidenceRecord

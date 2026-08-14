@@ -9,6 +9,8 @@
 
 import json
 import re
+from _hashlib import openssl_sha256
+
 import unicodedata
 from hashlib import sha256
 
@@ -23,7 +25,6 @@ from rag.domain.models.graph import (
     KnowledgeRelation,
     KnowledgeRelationType,
     KnowledgeWindowExtraction,
-    resource_node_id,
 )
 
 # 用于在 graph_facts 中标记当前合并产物的版本，参与 graph_revision 计算，
@@ -374,3 +375,9 @@ def _stable_id(prefix: str, *parts: str) -> str:
     """
     digest = sha256("\0".join(parts).encode("utf-8")).hexdigest()
     return f"{prefix}_{digest[:32]}"
+
+
+def resource_node_id(resource_id: str) -> str:
+    """返回 Resource 节点在图事实和 Neo4j 中共用的稳定 ID。"""
+    digest = sha256(f"resource\0{resource_id}".encode()).hexdigest()
+    return f"kn_{digest[:32]}"

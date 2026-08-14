@@ -6,20 +6,19 @@ from common.security import SecurityContextHolder
 from rag.api.endpoints.expand import expand_graph
 from rag.api.endpoints.locate import locate_candidate
 from rag.api.schemas import CandidateLocateRequest, GraphExpandRequest
-from rag.application.rag.expand import (
+from rag.application.rag.navigate import (
     GraphEvidenceView,
     GraphExpandResult,
     GraphPathStepView,
     GraphPathView,
-    UnknownSeedNodeError,
-)
-from rag.application.rag.locate import LocateError, LocateResult
-from rag.application.rag.navigation_views import (
     KnowledgeNodeView,
+    LocateError,
+    LocateResult,
     MatchRangeView,
     RetrievalMatchView,
     RetrievalReadingBlockView,
     RetrievedSectionView,
+    UnknownSeedNodeError,
 )
 from rag.domain.error_codes import RagErrorCode
 from rag.domain.models.graph import (

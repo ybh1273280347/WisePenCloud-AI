@@ -14,13 +14,13 @@ from rag.api.schemas import (
 from rag.api.schemas import (
     GraphExpandResponse,
 )
-from rag.application.rag.expand import (
+from rag.application.rag.navigate import (
+    EvidenceRevisionError,
     GraphAccessRevokedError,
     GraphExpandRequest,
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
 )
-from rag.application.rag.verify import EvidenceRevisionError
 from rag.domain.error_codes import RagErrorCode
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.navigation import NavigationStateNotFoundError

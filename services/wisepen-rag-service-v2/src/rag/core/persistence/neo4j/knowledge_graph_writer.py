@@ -8,8 +8,8 @@ from rag.domain.models.graph import (
     GraphStatus,
     KnowledgeGraph,
     KnowledgeNodeKind,
-    resource_node_id,
 )
+from rag.application.rag.index.constructor.graph_merge import resource_node_id
 from rag.domain.repositories.neo4j.knowledge_graph_writer import (
     KnowledgeGraphRevisionSupersededError,
     KnowledgeGraphWriter,

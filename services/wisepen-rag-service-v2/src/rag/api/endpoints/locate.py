@@ -2,17 +2,21 @@
 
 from typing import Annotated
 
-from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, Depends
-
 from common.core.domain import R
 from common.core.exceptions import ServiceException
 from common.security import SecurityContextHolder, require_login
+from dependency_injector.wiring import Provide, inject
+from fastapi import APIRouter, Depends
+
 from rag.api.schemas import CandidateLocateRequest as LocateHttpRequest
 from rag.api.schemas import CandidateLocateResponse
-from rag.application.rag.locate import LocateError, LocateRequest, ReadingCandidateLocator
-from rag.domain.models.acl import PermissionScope
+from rag.application.rag.navigate import (
+    LocateError,
+    LocateRequest,
+    ReadingCandidateLocator,
+)
 from rag.domain.error_codes import RagErrorCode
+from rag.domain.models.acl import PermissionScope
 
 router = APIRouter()
 
