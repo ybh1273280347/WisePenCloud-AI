@@ -51,14 +51,12 @@ class RedisNavigationStateStore(NavigationStateStore):
         *,
         user_id: str,
         session_id: str,
-        root_query: str,
         known_node_ids: Sequence[str],
     ) -> NavigationState:
         state = NavigationState(
             state_id=f"nav_{uuid4().hex}",
             user_id=user_id,
             session_id=session_id,
-            root_query=root_query,
             known_node_ids=list(dict.fromkeys(known_node_ids)),
         )
         key = self._key(state.state_id)
@@ -105,7 +103,6 @@ def _to_hash(state: NavigationState) -> dict[str, str]:
     return {
         "user_id": state.user_id,
         "session_id": state.session_id,
-        "root_query": state.root_query,
         "known_nodes": json.dumps(state.known_node_ids, ensure_ascii=False),
     }
 
@@ -125,7 +122,6 @@ def _to_navigation_state(
         state_id=state_id,
         user_id=_read_text(values, "user_id"),
         session_id=_read_text(values, "session_id"),
-        root_query=_read_text(values, "root_query"),
         known_node_ids=list(dict.fromkeys(nodes_value)),
     )
 

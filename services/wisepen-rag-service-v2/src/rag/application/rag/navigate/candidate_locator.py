@@ -48,7 +48,6 @@ class LocateRequest:
     semantic_query: str
     permission_scope: PermissionScope
     lexical_query: str | None = None
-    resource_ids: list[str] = field(default_factory=list)
     max_results: int = 10
     candidate_limit: int = 80
 
@@ -119,7 +118,6 @@ class ReadingCandidateLocator:
                 lexical_query=lexical_query,
                 semantic_vector=embedding.embeddings[0],
                 permission_scope=request.permission_scope,
-                resource_ids=list(dict.fromkeys(request.resource_ids)),
                 limit=request.candidate_limit,
             )
         )
@@ -129,7 +127,7 @@ class ReadingCandidateLocator:
         )
         candidates = await self._filter_applied_candidates(candidates)
         if not candidates:
-            return await self._create_empty_result(request, semantic_query)
+            return await self._create_empty_result(request)
 
         ranking = await self._ranking_pipeline.arank(
             RankRequest(
@@ -190,7 +188,7 @@ class ReadingCandidateLocator:
             in selected_block_keys
         ]
         if not selected:
-            return await self._create_empty_result(request, semantic_query)
+            return await self._create_empty_result(request)
 
         records = await self._verify_selected(selected)
         sections = build_retrieved_section_views(records)
@@ -202,7 +200,6 @@ class ReadingCandidateLocator:
         state = await self._state_store.create(
             user_id=request.permission_scope.user_id,
             session_id=request.session_id,
-            root_query=semantic_query,
             known_node_ids=[node.node_id for node in nodes],
         )
         return LocateResult(
@@ -272,12 +269,10 @@ class ReadingCandidateLocator:
     async def _create_empty_result(
         self,
         request: LocateRequest,
-        semantic_query: str,
     ) -> LocateResult:
         state = await self._state_store.create(
             user_id=request.permission_scope.user_id,
             session_id=request.session_id,
-            root_query=semantic_query,
             known_node_ids=[],
         )
         return LocateResult(

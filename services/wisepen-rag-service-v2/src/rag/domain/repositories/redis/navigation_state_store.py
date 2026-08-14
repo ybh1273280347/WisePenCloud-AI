@@ -14,7 +14,6 @@ class NavigationStateStore(Protocol):
         *,
         user_id: str,
         session_id: str,
-        root_query: str,
         known_node_ids: Sequence[str],
     ) -> NavigationState: ...
 

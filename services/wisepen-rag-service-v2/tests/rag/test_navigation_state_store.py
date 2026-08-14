@@ -48,7 +48,6 @@ async def test_state_persists_only_graph_navigation_anchors() -> None:
     state = await store.create(
         user_id="user-1",
         session_id="session-1",
-        root_query="问题",
         known_node_ids=["node-1", "node-1"],
     )
 
@@ -56,7 +55,6 @@ async def test_state_persists_only_graph_navigation_anchors() -> None:
     assert set(redis.hashes[key]) == {
         "user_id",
         "session_id",
-        "root_query",
         "known_nodes",
     }
     loaded = await store.get(state.state_id)
@@ -72,7 +70,6 @@ async def test_add_known_nodes_is_atomic_and_refreshes_ttl() -> None:
     state = await store.create(
         user_id="user-1",
         session_id="session-1",
-        root_query="问题",
         known_node_ids=[],
     )
 

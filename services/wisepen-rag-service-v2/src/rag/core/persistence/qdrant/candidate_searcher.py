@@ -2,14 +2,13 @@
 
 from collections.abc import Mapping, Sequence
 
-from qdrant_client import AsyncQdrantClient, models as qdrant_models
+from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
 from rag.domain import PermissionScope
 from rag.domain.models.retrieval import CandidateSearchRequest, RetrievalCandidate
 from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
 from rag.utils.chunkers import SourceSpan
-
 
 _PAYLOAD_FIELDS = [
     "content_revision",
@@ -107,14 +106,6 @@ class QdrantCandidateSearcher(CandidateSearcher):
             ),
             _permission_filter(request.permission_scope),
         ]
-        resource_ids = list(dict.fromkeys(request.resource_ids))
-        if resource_ids:
-            must.append(
-                qdrant_models.FieldCondition(
-                    key="resource_id",
-                    match=qdrant_models.MatchAny(any=resource_ids),
-                )
-            )
         return qdrant_models.Filter(must=must)
 
 

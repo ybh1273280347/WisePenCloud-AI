@@ -33,7 +33,6 @@ class _StateStore:
             state_id=state_id,
             user_id="user-1",
             session_id="session-1",
-            root_query="根问题",
             known_node_ids=["node-a"],
         )
 
@@ -104,7 +103,7 @@ async def test_expand_ranks_verifies_and_adds_only_new_nodes() -> None:
 
     result = await expander.expand(_request())
 
-    assert ranking.request.query.text == "根问题"
+    assert ranking.request.query.text == "扩展问题"
     assert traversal.request.seed_node_ids == ["node-a"]
     assert verifier.calls[0]["source_ref_ids"] == ["ref-1"]
     assert state_store.calls[0]["node_ids"] == ["node-b"]
@@ -267,6 +266,7 @@ def _request() -> GraphExpandRequest:
         session_id="session-1",
         permission_scope=PermissionScope(user_id="user-1"),
         seed_node_ids=["node-a"],
+        query="扩展问题",
     )
 
 

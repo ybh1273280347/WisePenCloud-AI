@@ -40,7 +40,6 @@ async def locate_candidate(
                 session_id=request.session_id,
                 semantic_query=request.semantic_query,
                 lexical_query=request.lexical_query,
-                resource_ids=request.resource_ids,
                 max_results=request.max_results,
                 permission_scope=_permission_scope(user_id),
             )

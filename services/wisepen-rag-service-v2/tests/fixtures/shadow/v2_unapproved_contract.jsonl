@@ -1,6 +1,0 @@
-{"case_id":"document-sectioned","capability":"document","facts":{"resource_id":"resource-1","content_revision":"revision-1","structure_mode":"sectioned","page_labels":["1"],"sections":[{"section_id":"section-1","title":"标题","section_path":["标题"]}]}}
-{"case_id":"read-page-existing","capability":"read.page","facts":{"resource_id":"resource-1","content_revision":"revision-1","items":{"1":{"text":"正文","start_offset":0,"end_offset":2}}}}
-{"case_id":"read-section-empty","capability":"read.section","facts":{"resource_id":"resource-1","content_revision":"revision-1","items":{"section-1":{"reading_blocks":[]}}}}
-{"case_id":"locate-relevant","capability":"locate","facts":{"decision":"irrelevant","section_ids":["section-1"],"node_ids":["node-1"],"source_ref_ids":["ref-1"]}}
-{"case_id":"expand-one-hop","capability":"expand","facts":{"node_ids":["node-1","node-2"],"edge_ids":["edge-1"],"source_ref_ids":["ref-1"]}}
-{"case_id":"verify-exact-source","capability":"verify","facts":{"resource_id":"resource-1","content_revision":"revision-1","source_ref_id":"ref-1","content":"正文"}}

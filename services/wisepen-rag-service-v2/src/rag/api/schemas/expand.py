@@ -24,6 +24,7 @@ class GraphExpandRequest(BaseModel):
     session_id: NonEmptyText
     state_id: NonEmptyText
     seed_node_ids: list[NonEmptyText] = Field(min_length=1, max_length=16)
+    query: NonEmptyText
     relation_types: list[KnowledgeRelationType] = Field(
         default_factory=list,
         max_length=16,
@@ -31,7 +32,6 @@ class GraphExpandRequest(BaseModel):
     direction: TraversalDirection = TraversalDirection.BOTH
     max_depth: int = Field(default=1, ge=1, le=2)
     max_results: int = Field(default=10, ge=1, le=20)
-    query: NonEmptyText | None = None
 
 
 class GraphExpandResponse(BaseModel):

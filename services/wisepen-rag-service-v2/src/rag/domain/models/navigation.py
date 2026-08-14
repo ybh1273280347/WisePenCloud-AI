@@ -14,5 +14,4 @@ class NavigationState:
     state_id: str
     user_id: str
     session_id: str
-    root_query: str
     known_node_ids: list[str] = field(default_factory=list)

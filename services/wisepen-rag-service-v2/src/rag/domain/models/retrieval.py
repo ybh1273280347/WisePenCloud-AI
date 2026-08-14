@@ -52,7 +52,6 @@ class CandidateSearchRequest:
     lexical_query: str
     semantic_vector: Sequence[float]
     permission_scope: PermissionScope
-    resource_ids: list[str] = field(default_factory=list)
     limit: int = 80
 
 

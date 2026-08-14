@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from _demo_documents import (
@@ -61,12 +61,26 @@ class _CandidateSearch:
         self._candidates = candidates
 
     async def search(self, request):
-        allowed = set(request.resource_ids)
+        tokens = JiebaRankingTokenizer().tokenize(request.lexical_query)
+        ranked = sorted(
+            self._candidates,
+            key=lambda candidate: sum(
+                token in candidate.raw_text for token in tokens if token.strip()
+            ),
+            reverse=True,
+        )
         return [
-            candidate
-            for candidate in self._candidates
-            if not allowed or candidate.resource_id in allowed
-        ][: request.limit]
+            replace(
+                candidate,
+                score=candidate.score
+                + sum(
+                    token in candidate.raw_text
+                    for token in tokens
+                    if token.strip()
+                ),
+            )
+            for candidate in ranked[: request.limit]
+        ]
 
 
 class _AclStore:
@@ -210,7 +224,6 @@ async def main() -> None:
             session_id="demo-session",
             semantic_query="连续降雨后积水迟迟不退，应先检查什么？",
             permission_scope=scope,
-            resource_ids=[sectioned.resource_id],
             max_results=1,
         )
     )
@@ -219,7 +232,6 @@ async def main() -> None:
             session_id="demo-session",
             semantic_query="果园为什么在日出前仍要持续监测温度？",
             permission_scope=scope,
-            resource_ids=[flat_text.resource_id],
             max_results=1,
         )
     )

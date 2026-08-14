@@ -35,12 +35,11 @@ def _search(client: _QdrantClient) -> QdrantCandidateSearcher:
     )
 
 
-def _request(*, resource_ids: list[str] | None = None) -> CandidateSearchRequest:
+def _request() -> CandidateSearchRequest:
     return CandidateSearchRequest(
         lexical_query="关键词",
         semantic_vector=[0.1, 0.2, 0.3],
         permission_scope=PermissionScope(user_id="user-1"),
-        resource_ids=resource_ids or [],
         limit=5,
     )
 
@@ -69,7 +68,7 @@ async def test_search_uses_active_acl_filter_and_hybrid_fusion() -> None:
         )
     ]
 
-    candidates = await _search(client).search(_request(resource_ids=["resource-1"]))
+    candidates = await _search(client).search(_request())
 
     assert candidates[0].chunk_id == "chunk-1"
     assert candidates[0].score == 0.75
@@ -79,12 +78,11 @@ async def test_search_uses_active_acl_filter_and_hybrid_fusion() -> None:
     assert client.request["prefetch"][1].using == "sparse"
     query_filter = client.request["query_filter"]
     assert any(condition.key == "active" for condition in query_filter.must)
-    resource_filter = next(
-        condition for condition in client.request["prefetch"][0].filter.must
-        if isinstance(condition, qdrant_models.FieldCondition)
+    assert not any(
+        isinstance(condition, qdrant_models.FieldCondition)
         and condition.key == "resource_id"
+        for condition in client.request["prefetch"][0].filter.must
     )
-    assert resource_filter.match.any == ["resource-1"]
 
 
 @pytest.mark.asyncio

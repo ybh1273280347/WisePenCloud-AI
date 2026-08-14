@@ -18,7 +18,6 @@ class CandidateLocateRequest(BaseModel):
     session_id: NonEmptyText
     semantic_query: NonEmptyText
     lexical_query: NonEmptyText | None = None
-    resource_ids: list[NonEmptyText] = Field(default_factory=list, max_length=50)
     max_results: int = Field(default=10, ge=1, le=20)
 
 

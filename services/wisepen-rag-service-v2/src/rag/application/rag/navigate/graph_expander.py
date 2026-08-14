@@ -46,11 +46,11 @@ class GraphExpandRequest:
     session_id: str
     permission_scope: PermissionScope
     seed_node_ids: list[str]
+    query: str
     relation_types: list[KnowledgeRelationType] = field(default_factory=list)
     direction: TraversalDirection = TraversalDirection.BOTH
     max_depth: int = 1
     max_results: int = 10
-    query: str | None = None
 
 
 @dataclass(slots=True)
@@ -142,9 +142,9 @@ class KnowledgeGraphExpander:
         if not paths:
             return GraphExpandResult(state_id=state.state_id)
 
-        effective_query = (request.query or state.root_query).strip()
+        effective_query = request.query.strip()
         if not effective_query:
-            raise ValueError("expand query and state root query are both empty")
+            raise ValueError("expand query must not be empty")
         ranking = await self._ranking_pipeline.arank(
             RankRequest(
                 query=RankQuery(text=effective_query),
