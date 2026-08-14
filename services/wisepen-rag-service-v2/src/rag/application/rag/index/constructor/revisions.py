@@ -33,7 +33,7 @@ def create_content_revision(
         index_schema_version: 索引 schema 版本；变更后所有派生 ID 会随之改变。
 
     返回:
-        ``ContentRevision`` 实例，包含 revision ID、内容哈希、结构模式、页面列表等元信息。
+        ``ContentRevision`` 实例，只包含 revision 身份与完整性校验元数据。
     """
     if not resource_id:
         raise ValueError("resource_id must not be empty")
@@ -59,10 +59,6 @@ def create_content_revision(
         document_version=document_version,
         content_hash=content_hash,
         index_schema_version=index_schema_version,
-        structure_mode=structure.mode,
-        total_length=len(markdown),
-        pages=list(structure.pages),
-        anchors=list(structure.anchors),
     )
 
 

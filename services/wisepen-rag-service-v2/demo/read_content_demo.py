@@ -18,7 +18,10 @@ from rag.application.rag.read.content import (
     SectionContentView,
 )
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import ContentWindow, SectionContent, SectionFrontier
+from rag.domain.repositories.mongo.published_resource_reader import (
+    PublishedPageContent,
+    PublishedSectionContent,
+)
 
 
 class _AllowAuthorizer:
@@ -34,18 +37,18 @@ class _DemoPublishedResourceReader:
 
     async def get_pages(self, resource_id, page_labels):
         document = self._documents[resource_id]
-        pages_by_label = {page.page_label: page for page in document.revision.pages}
+        pages_by_label = {
+            page.page_label: page for page in document.structure.pages
+        }
         result = {}
         for label in dict.fromkeys(page_labels):
             page = pages_by_label.get(label)
             if page is None:
                 continue
-            result[label] = ContentWindow(
+            result[label] = PublishedPageContent(
                 text=document.markdown[
                     page.source_span.start_offset : page.source_span.end_offset
                 ],
-                source_span=page.source_span,
-                page_labels=[label],
                 sections=[
                     section
                     for section in document.sections
@@ -59,7 +62,7 @@ class _DemoPublishedResourceReader:
                 ],
                 anchor_labels=[
                     anchor.label
-                    for anchor in document.revision.anchors
+                    for anchor in document.structure.anchors
                     if _overlaps(anchor.source_span, page.source_span)
                 ],
             )
@@ -81,7 +84,7 @@ class _DemoPublishedResourceReader:
                 continue
             siblings = siblings_by_parent[section.parent_section_id]
             index = siblings.index(section)
-            result[section_id] = SectionContent(
+            result[section_id] = PublishedSectionContent(
                 section=section,
                 text="\n\n".join(
                     document.markdown[span.start_offset : span.end_offset]
@@ -89,7 +92,7 @@ class _DemoPublishedResourceReader:
                 ),
                 page_labels=[
                     page.page_label
-                    for page in document.revision.pages
+                    for page in document.structure.pages
                     if any(
                         _overlaps(span, page.source_span)
                         for span in section.content_spans
@@ -97,18 +100,16 @@ class _DemoPublishedResourceReader:
                 ],
                 anchor_labels=[
                     anchor.label
-                    for anchor in document.revision.anchors
+                    for anchor in document.structure.anchors
                     if any(
                         _overlaps(span, anchor.source_span)
                         for span in section.content_spans
                     )
                 ],
-                frontier=SectionFrontier(
-                    parent=sections_by_id.get(section.parent_section_id),
-                    previous=siblings[index - 1] if index else None,
-                    next=(siblings[index + 1] if index + 1 < len(siblings) else None),
-                    children=siblings_by_parent.get(section_id, []),
-                ),
+                parent=sections_by_id.get(section.parent_section_id),
+                previous=siblings[index - 1] if index else None,
+                next=(siblings[index + 1] if index + 1 < len(siblings) else None),
+                children=siblings_by_parent.get(section_id, []),
             )
         return result
 
@@ -178,7 +179,7 @@ async def main() -> None:
 async def _read_document(*, reader, document, selected, scope) -> dict[str, object]:
     pages = await reader.get_pages(
         resource_id=document.resource_id,
-        page_labels=[page.page_label for page in document.revision.pages],
+        page_labels=[page.page_label for page in document.structure.pages],
         permission_scope=scope,
     )
     sections = await reader.get_sections(

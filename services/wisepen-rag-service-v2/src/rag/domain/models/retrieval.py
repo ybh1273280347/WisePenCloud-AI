@@ -1,9 +1,7 @@
 """检索索引、召回请求和候选命中模型。"""
 
-from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
-from rag.domain.models.acl import PermissionScope
 from rag.utils.chunkers import SourceSpan
 
 
@@ -27,17 +25,6 @@ class RetrievalChunk:
             self,
             index_text=f"Context: {contextual_text}\n\n{self.index_text}",
         )
-
-
-@dataclass(slots=True)
-class CandidateSearchRequest:
-    """一次 Qdrant 混合召回所需的查询事实。"""
-
-    lexical_query: str
-    semantic_vector: Sequence[float]
-    permission_scope: PermissionScope
-    limit: int = 80
-
 
 @dataclass(slots=True)
 class RetrievalCandidate:

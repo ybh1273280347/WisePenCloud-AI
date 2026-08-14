@@ -10,10 +10,7 @@ from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.graph import KnowledgeNode, KnowledgeNodeKind
 from rag.domain.models.provenance import SourceEvidence
-from rag.domain.models.retrieval import (
-    CandidateSearchRequest,
-    RetrievalCandidate,
-)
+from rag.domain.models.retrieval import RetrievalCandidate
 from rag.domain.repositories.mongo import PublishedResourceReader
 from rag.domain.repositories.neo4j import KnowledgeGraphRepository
 from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
@@ -114,12 +111,10 @@ class ReadingCandidateLocator:
             raise LocateError("query embedding response must contain one vector")
 
         candidates = await self._candidate_search.search(
-            CandidateSearchRequest(
-                lexical_query=lexical_query,
-                semantic_vector=embedding.embeddings[0],
-                permission_scope=request.permission_scope,
-                limit=request.candidate_limit,
-            )
+            lexical_query=lexical_query,
+            semantic_vector=embedding.embeddings[0],
+            permission_scope=request.permission_scope,
+            limit=request.candidate_limit,
         )
         candidates = await self._filter_readable_candidates(
             candidates,
@@ -191,11 +186,11 @@ class ReadingCandidateLocator:
             return await self._create_empty_result(request)
 
         records = await self._verify_selected(selected)
-        sections = build_retrieved_section_views(records)
         readable_records = await self._filter_readable_evidence(
             records,
             request.permission_scope,
         )
+        sections = build_retrieved_section_views(readable_records)
         nodes = await self._knowledge_graph.find_nodes(
             evidence=readable_records,
             permission_scope=request.permission_scope,
@@ -239,9 +234,11 @@ class ReadingCandidateLocator:
         for resource_id in dict.fromkeys(
             candidate.resource_id for candidate in candidates
         ):
-            revision = await self._published_resources.get_revision(resource_id)
-            if revision is not None:
-                published_revisions[resource_id] = revision.content_revision
+            content_revision = (
+                await self._published_resources.get_content_revision(resource_id)
+            )
+            if content_revision is not None:
+                published_revisions[resource_id] = content_revision
         return [
             candidate
             for candidate in candidates
@@ -257,14 +254,14 @@ class ReadingCandidateLocator:
         """图反查前复查证据资源，避免沿用召回开始时的 ACL 快照。"""
         readable_resource_ids = set(
             await self._authorizer.readable_resource_ids(
-                (record.revision.resource_id for record in evidence),
+                (record.source_ref.resource_id for record in evidence),
                 scope=permission_scope,
             )
         )
         return [
             record
             for record in evidence
-            if record.revision.resource_id in readable_resource_ids
+            if record.source_ref.resource_id in readable_resource_ids
         ]
 
     async def _filter_readable_nodes(

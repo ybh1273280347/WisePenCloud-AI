@@ -3,9 +3,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from rag.core.persistence.mongo import MongoPublishedResourceReader, published_resource_reader
-from rag.core.persistence.mongo.published_resource_reader import _assemble_source_text
-from rag.domain.models.content import SourcePart
+from rag.core.persistence.mongo import (
+    MongoPublishedResourceReader,
+    published_resource_reader,
+)
+from rag.core.persistence.mongo.source_parts import SourcePart, assemble_source_text
 from rag.domain.repositories.mongo import (
     PublishedResourceCorruptError,
     PublishedResourceRevisionError,
@@ -145,25 +147,33 @@ def _install_published_resource(
         async def find_one(cls, query):
             return revision
 
-    monkeypatch.setattr(published_resource, "ResourceIndexStateEntity", _StateEntity)
-    monkeypatch.setattr(published_resource, "ContentRevisionEntity", _RevisionEntity)
     monkeypatch.setattr(
-        published_resource,
+        published_resource_reader,
+        "ResourceIndexStateEntity",
+        _StateEntity,
+    )
+    monkeypatch.setattr(
+        published_resource_reader,
+        "ContentRevisionEntity",
+        _RevisionEntity,
+    )
+    monkeypatch.setattr(
+        published_resource_reader,
         "SectionEntity",
         _find_entity([following_section, section]),
     )
     monkeypatch.setattr(
-        published_resource,
+        published_resource_reader,
         "ReadingBlockEntity",
         _find_entity([following_block, block] if include_block else []),
     )
     monkeypatch.setattr(
-        published_resource,
+        published_resource_reader,
         "SourceRefEntity",
         _find_entity([source_ref]),
     )
     monkeypatch.setattr(
-        published_resource,
+        published_resource_reader,
         "SourcePartEntity",
         _find_entity([source_part]),
     )
@@ -177,13 +187,13 @@ async def test_reader_returns_none_without_published_revision(monkeypatch) -> No
             return None
 
     monkeypatch.setattr(
-        published_resource,
+        published_resource_reader,
         "ResourceIndexStateEntity",
         _MissingState,
     )
     reader = MongoPublishedResourceReader()
 
-    assert await reader.get_revision("resource-1") is None
+    assert await reader.get_content_revision("resource-1") is None
     assert await reader.get_document_structure("resource-1") is None
     assert await reader.get_pages("resource-1", ["1"]) is None
     assert await reader.get_sections("resource-1", ["section-1"]) is None
@@ -215,17 +225,21 @@ async def test_reader_projects_structure_content_evidence_and_graph_source(
     )
 
     assert structure is not None
-    assert structure.revision.content_revision == "revision-1"
+    assert structure.content_revision == "revision-1"
     assert [section.section_id for section in structure.sections] == [
         "section-1",
         "section-2",
     ]
     assert pages is not None and pages["1"].text == "TitleBodyTail"
     assert sections is not None and sections["section-1"].text == "Body"
-    assert sections["section-1"].frontier.next is not None
-    assert sections["section-1"].frontier.next.section_id == "section-2"
+    assert sections["section-1"].next is not None
+    assert sections["section-1"].next.section_id == "section-2"
     assert evidence is not None and evidence["ref-1"].source_text == "Body"
     assert graph_source.markdown == "TitleBodyTail"
+    assert [section.section_id for section in graph_source.structure.sections] == [
+        "section-1",
+        "section-2",
+    ]
     assert [block.block_id for block in graph_source.reading_blocks] == [
         "block-1",
         "block-2",
@@ -260,21 +274,21 @@ async def test_reader_rejects_source_ref_without_ownership_records(monkeypatch) 
 def test_source_text_assembly_joins_contiguous_parts() -> None:
     parts = [_part(0, 0, 3, "abc"), _part(1, 3, 6, "def")]
 
-    assert _assemble_source_text(parts, [SourceSpan(1, 5)]) == "bcde"
+    assert assemble_source_text(parts, [SourceSpan(1, 5)]) == "bcde"
 
 
 def test_source_text_assembly_rejects_gaps() -> None:
     parts = [_part(0, 0, 3, "abc"), _part(1, 4, 6, "ef")]
 
     with pytest.raises(RuntimeError, match="gap"):
-        _assemble_source_text(parts, [SourceSpan(0, 6)])
+        assemble_source_text(parts, [SourceSpan(0, 6)])
 
 
 def test_source_text_assembly_rejects_overlapping_parts() -> None:
     parts = [_part(0, 0, 4, "abcd"), _part(1, 3, 6, "def")]
 
     with pytest.raises(RuntimeError, match="overlap"):
-        _assemble_source_text(parts, [SourceSpan(0, 6)])
+        assemble_source_text(parts, [SourceSpan(0, 6)])
 
 
 def _part(index: int, start: int, end: int, text: str) -> SourcePart:

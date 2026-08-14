@@ -30,9 +30,7 @@ from neo4j_graphrag.experimental.components.schema import (
 from rag.domain.models.graph import (
     KnowledgeEntityType,
     KnowledgeNodeKind,
-    KnowledgeRelationProfile,
     KnowledgeRelationType,
-    KnowledgeWindowExtraction,
 )
 from rag.domain.models.structure import StructureMode
 from rag.domain.repositories.mongo import PublishedResourceReader
@@ -47,7 +45,12 @@ from .candidate_codec import (
 )
 from .candidate_validator import KnowledgeCandidateValidator
 from .llm import GraphRagCandidateExtractor, QueryClientGraphRagLLM
-from .relations import relation_descriptions, relation_pattern_allowed
+from .models import KnowledgeWindowExtraction
+from .relations import (
+    KnowledgeRelationProfile,
+    relation_descriptions,
+    relation_pattern_allowed,
+)
 from .windows import (
     KnowledgeExtractionWindow,
     build_extraction_windows,
@@ -111,7 +114,7 @@ class KnowledgeGraphExtractor:
             resource_id,
             content_revision,
         )
-        if source.structure_mode is not StructureMode.SECTIONED:
+        if source.structure.mode is not StructureMode.SECTIONED:
             return []
         return await self._extract_windows(build_extraction_windows(source))
 

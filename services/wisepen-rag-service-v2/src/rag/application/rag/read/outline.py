@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import ContentRevision
 from rag.domain.models.structure import PageRange, Section
 from rag.domain.repositories.mongo import PublishedResourceReader
 
@@ -33,7 +32,10 @@ class DocumentOutlineNode:
 class DocumentOutlineResult:
     """READ outline 面向 API 的最终返回结果。"""
 
-    revision: ContentRevision
+    resource_id: str
+    content_revision: str
+    document_version: int
+    total_length: int
     outline: list[DocumentOutlineNode] = field(default_factory=list)
 
 
@@ -75,8 +77,11 @@ class DocumentOutlineReader:
             raise ContentAccessRevokedError(resource_id)
 
         return DocumentOutlineResult(
-            revision=snapshot.revision,
-            outline=_to_outline(snapshot.sections, snapshot.revision.pages),
+            resource_id=snapshot.resource_id,
+            content_revision=snapshot.content_revision,
+            document_version=snapshot.document_version,
+            total_length=snapshot.total_length,
+            outline=_to_outline(snapshot.sections, snapshot.pages),
         )
 
 

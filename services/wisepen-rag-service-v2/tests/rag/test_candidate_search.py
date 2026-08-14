@@ -5,7 +5,6 @@ from qdrant_client.http import models as qdrant_http_models
 
 from rag.core.persistence.qdrant import QdrantCandidateSearcher
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.retrieval import CandidateSearchRequest
 
 
 class _QdrantClient:
@@ -35,13 +34,13 @@ def _search(client: _QdrantClient) -> QdrantCandidateSearcher:
     )
 
 
-def _request() -> CandidateSearchRequest:
-    return CandidateSearchRequest(
-        lexical_query="关键词",
-        semantic_vector=[0.1, 0.2, 0.3],
-        permission_scope=PermissionScope(user_id="user-1"),
-        limit=5,
-    )
+def _request() -> dict[str, object]:
+    return {
+        "lexical_query": "关键词",
+        "semantic_vector": [0.1, 0.2, 0.3],
+        "permission_scope": PermissionScope(user_id="user-1"),
+        "limit": 5,
+    }
 
 
 @pytest.mark.asyncio
@@ -68,7 +67,7 @@ async def test_search_uses_active_acl_filter_and_hybrid_fusion() -> None:
         )
     ]
 
-    candidates = await _search(client).search(_request())
+    candidates = await _search(client).search(**_request())
 
     assert candidates[0].chunk_id == "chunk-1"
     assert candidates[0].score == 0.75
@@ -88,12 +87,12 @@ async def test_search_uses_active_acl_filter_and_hybrid_fusion() -> None:
 @pytest.mark.asyncio
 async def test_search_returns_empty_without_collection_or_limit() -> None:
     client = _QdrantClient(exists=False)
-    assert await _search(client).search(_request()) == []
+    assert await _search(client).search(**_request()) == []
 
     client.exists = True
     request = _request()
-    request.limit = 0
-    assert await _search(client).search(request) == []
+    request["limit"] = 0
+    assert await _search(client).search(**request) == []
     assert client.request is None
 
 
@@ -101,14 +100,14 @@ async def test_search_returns_empty_without_collection_or_limit() -> None:
 async def test_search_rejects_invalid_query_contract() -> None:
     client = _QdrantClient()
     request = _request()
-    request.lexical_query = "  "
+    request["lexical_query"] = "  "
     with pytest.raises(ValueError, match="lexical_query"):
-        await _search(client).search(request)
+        await _search(client).search(**request)
 
     request = _request()
-    request.semantic_vector = [0.1]
+    request["semantic_vector"] = [0.1]
     with pytest.raises(ValueError, match="size"):
-        await _search(client).search(request)
+        await _search(client).search(**request)
 
 
 @pytest.mark.asyncio
@@ -123,7 +122,7 @@ async def test_search_rejects_missing_candidate_payload() -> None:
         )
     ]
     with pytest.raises(ValueError, match="payload is missing"):
-        await _search(client).search(_request())
+        await _search(client).search(**_request())
 
 
 def test_permission_filter_contains_nested_group_acl_conditions() -> None:

@@ -22,12 +22,12 @@ from rag.application.rag.read import (
     DocumentContentReader,
     DocumentOutlineReader,
 )
-from rag.core.persistence.mongo.resource_index_writer import _decide_stage
-from rag.domain.models.acl import PermissionScope, ResourceAcl
-from rag.domain.models.content import (
-    ReadingBlock,
-    ResourceIndexState,
+from rag.core.persistence.mongo.resource_index_writer import (
+    _decide_stage,
+    _ResourceIndexState,
 )
+from rag.domain.models.acl import PermissionScope, ResourceAcl
+from rag.domain.models.content import ReadingBlock
 from rag.domain.models.provenance import SourceEvidence, SourceRef
 from rag.domain.models.retrieval import RetrievalCandidate, RetrievalChunk
 from rag.domain.repositories import PublishedResourceRevisionError, StageAction
@@ -54,9 +54,16 @@ def _revision(markdown: str = "# 标题\n\n正文🙂。"):
 
 
 def test_revision_identity_and_unicode_length_are_stable() -> None:
-    revision = _revision()
+    markdown = "# 标题\n\n正文🙂。"
+    revision = _revision(markdown)
+    structure = parse_document_structure(
+        resource_id=revision.resource_id,
+        content_revision=revision.content_revision,
+        markdown=markdown,
+    )
     assert revision.content_revision == _revision().content_revision
-    assert revision.total_length == len("# 标题\n\n正文🙂。")
+    assert not hasattr(revision, "total_length")
+    assert structure.total_length == len(markdown)
     assert revision.content_hash
     assert revision.index_schema_version == "rag-v2-content:v2"
 
@@ -66,7 +73,7 @@ def test_revision_identity_and_unicode_length_are_stable() -> None:
     [
         (None, StageAction.STAGED),
         (
-            ResourceIndexState(
+            _ResourceIndexState(
                 resource_id="resource-1",
                 applied_content_revision="same",
                 applied_document_version=1,
@@ -74,7 +81,7 @@ def test_revision_identity_and_unicode_length_are_stable() -> None:
             StageAction.ALREADY_APPLIED,
         ),
         (
-            ResourceIndexState(
+            _ResourceIndexState(
                 resource_id="resource-1",
                 applied_content_revision="newer",
                 applied_document_version=2,
@@ -93,7 +100,7 @@ def test_stage_decision(state, expected) -> None:
 def test_same_document_version_with_corrected_content_is_staged() -> None:
     original = _revision("原文")
     corrected = _revision("修正后的原文")
-    state = ResourceIndexState(
+    state = _ResourceIndexState(
         resource_id="resource-1",
         applied_content_revision=original.content_revision,
         applied_document_version=1,
@@ -239,9 +246,9 @@ class _PublishedResourceReader:
         content_revision,
         source_ref_ids,
     ):
-        if resource_id != self.record.revision.resource_id:
+        if resource_id != self.record.source_ref.resource_id:
             return None
-        if content_revision != self.record.revision.content_revision:
+        if content_revision != self.record.source_ref.content_revision:
             raise PublishedResourceRevisionError(content_revision)
         return {self.record.source_ref.ref_id: self.record}
 
@@ -250,7 +257,6 @@ class _PublishedResourceReader:
 async def test_verifier_accepts_authoritative_retrieval_candidate() -> None:
     markdown, structure, blocks, chunks, refs, revision = _evidence_facts()
     record = SourceEvidence(
-        revision=revision,
         source_ref=refs[0],
         reading_block=blocks[0],
         section=next(
@@ -274,7 +280,6 @@ async def test_verifier_accepts_authoritative_retrieval_candidate() -> None:
 async def test_verifier_rejects_missing_ref_and_wrong_chunk() -> None:
     _, structure, blocks, chunks, refs, revision = _evidence_facts()
     record = SourceEvidence(
-        revision=revision,
         source_ref=refs[0],
         reading_block=blocks[0],
         section=next(
@@ -319,7 +324,6 @@ async def test_verifier_rejects_missing_ref_and_wrong_chunk() -> None:
 async def test_verifier_rejects_candidate_identity_or_text_drift(changes) -> None:
     _, structure, blocks, chunks, refs, revision = _evidence_facts()
     record = SourceEvidence(
-        revision=revision,
         source_ref=refs[0],
         reading_block=blocks[0],
         section=next(
@@ -344,7 +348,6 @@ async def test_verifier_rejects_candidate_identity_or_text_drift(changes) -> Non
 async def test_verifier_accepts_only_authoritative_graph_quote() -> None:
     markdown, structure, blocks, _, refs, revision = _evidence_facts()
     record = SourceEvidence(
-        revision=revision,
         source_ref=refs[0],
         reading_block=blocks[0],
         section=next(

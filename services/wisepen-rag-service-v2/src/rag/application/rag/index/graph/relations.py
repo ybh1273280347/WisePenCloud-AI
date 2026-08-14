@@ -9,11 +9,20 @@
    三元组，避免模型输出语义错误的关系（如 ENTITY→RESOURCE 没有意义）。
 """
 
+from enum import StrEnum
+
 from rag.domain.models.graph import (
     KnowledgeNodeKind,
-    KnowledgeRelationProfile,
     KnowledgeRelationType,
 )
+
+
+class KnowledgeRelationProfile(StrEnum):
+    """图抽取阶段可启用的关系策略集合。"""
+
+    CORE = "core"
+    LEARNING = "learning"
+    SCHOLARLY = "scholarly"
 
 # CORE profile：覆盖文档中最常见的关系，适用于所有领域。
 CORE_RELATIONS = {

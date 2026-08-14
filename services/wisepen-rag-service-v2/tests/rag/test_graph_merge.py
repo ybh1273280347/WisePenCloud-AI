@@ -1,14 +1,15 @@
 from rag.application.rag.index.constructor import merge_candidate_graph
-from rag.domain.models.graph import (
+from rag.application.rag.index.graph.models import (
     ExtractedKnowledgeNode,
     ExtractedKnowledgeRelation,
-    KnowledgeEntityType,
     KnowledgeEvidence,
-    KnowledgeNodeKind,
-    KnowledgeRelationType,
     KnowledgeWindowExtraction,
 )
-from rag.utils.chunkers import SourceSpan
+from rag.domain.models.graph import (
+    KnowledgeEntityType,
+    KnowledgeNodeKind,
+    KnowledgeRelationType,
+)
 
 
 def test_merge_canonicalizes_unicode_case_and_builds_mentions() -> None:
@@ -119,24 +120,20 @@ def _extraction(
         evidence_id=f"{evidence_id}:alpha",
         reading_block_id=reading_block_id,
         quote="Alpha",
-        source_span=SourceSpan(0, 5),
     )
     beta_evidence = _evidence(
         evidence_id=f"{evidence_id}:beta",
         reading_block_id=reading_block_id,
         quote="Beta",
-        source_span=SourceSpan(17, 21),
     )
     relation_evidence = _evidence(
         evidence_id=f"{evidence_id}:relation",
         reading_block_id=reading_block_id,
         quote="Alpha depends on Beta.",
-        source_span=SourceSpan(0, 22),
     )
     return KnowledgeWindowExtraction(
         resource_id="resource-1",
         content_revision=content_revision,
-        reading_block_id=reading_block_id,
         nodes=[
             ExtractedKnowledgeNode(
                 local_id=f"{reading_block_id}:{alpha_label}",
@@ -169,12 +166,10 @@ def _evidence(
     evidence_id: str,
     reading_block_id: str,
     quote: str,
-    source_span: SourceSpan,
 ) -> KnowledgeEvidence:
     return KnowledgeEvidence(
         evidence_id=evidence_id,
         reading_block_id=reading_block_id,
         quote=quote,
-        source_span=source_span,
         source_ref_ids=["source-1"],
     )

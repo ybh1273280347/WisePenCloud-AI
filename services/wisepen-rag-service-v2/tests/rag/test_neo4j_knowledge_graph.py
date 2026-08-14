@@ -4,9 +4,8 @@ import pytest
 
 from rag.core.persistence.neo4j import Neo4jKnowledgeGraphRepository
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import ContentRevision, ReadingBlock
+from rag.domain.models.content import ReadingBlock
 from rag.domain.models.graph import (
-    GraphTraversalRequest,
     KnowledgeEntityType,
     KnowledgeGraph,
     KnowledgeNode,
@@ -15,7 +14,7 @@ from rag.domain.models.graph import (
     TraversalDirection,
 )
 from rag.domain.models.provenance import SourceEvidence, SourceRef
-from rag.domain.models.structure import Section, StructureMode
+from rag.domain.models.structure import Section
 from rag.domain.repositories import KnowledgeGraphRevisionSupersededError
 from rag.utils.chunkers import SourceSpan
 
@@ -198,14 +197,12 @@ async def test_find_paths_uses_bounded_direction_revision_and_cycle_filter() -> 
     repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
 
     paths = await repository.find_paths(
-        GraphTraversalRequest(
-            seed_node_ids=["node-a"],
-            permission_scope=PermissionScope(user_id="user-1"),
-            relation_types=[KnowledgeRelationType.DEPENDS_ON],
-            direction=TraversalDirection.OUT,
-            max_depth=2,
-            limit=5,
-        )
+        seed_node_ids=["node-a"],
+        permission_scope=PermissionScope(user_id="user-1"),
+        relation_types=[KnowledgeRelationType.DEPENDS_ON],
+        direction=TraversalDirection.OUT,
+        max_depth=2,
+        limit=5,
     )
 
     query, parameters = driver.calls[0]
@@ -223,10 +220,8 @@ async def test_find_paths_does_not_query_without_seed_nodes() -> None:
     repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
 
     paths = await repository.find_paths(
-        GraphTraversalRequest(
-            seed_node_ids=[],
-            permission_scope=PermissionScope(user_id="user-1"),
-        )
+        seed_node_ids=[],
+        permission_scope=PermissionScope(user_id="user-1"),
     )
 
     assert paths == []
@@ -249,18 +244,8 @@ def _graph() -> KnowledgeGraph:
 
 
 def _evidence() -> SourceEvidence:
-    revision = ContentRevision(
-        resource_id="resource-1",
-        content_revision="revision-1",
-        document_version=1,
-        content_hash="hash",
-        index_schema_version="v1",
-        structure_mode=StructureMode.SECTIONED,
-        total_length=5,
-    )
     source_span = SourceSpan(0, 5)
     return SourceEvidence(
-        revision=revision,
         source_ref=SourceRef(
             ref_id="ref-1",
             resource_id="resource-1",

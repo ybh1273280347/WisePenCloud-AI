@@ -9,22 +9,22 @@
 
 import json
 import re
-from _hashlib import openssl_sha256
-
 import unicodedata
 from hashlib import sha256
 
-from rag.domain.models.graph import (
+from rag.application.rag.index.graph.models import (
     ExtractedKnowledgeNode,
     ExtractedKnowledgeRelation,
     KnowledgeEvidence,
+    KnowledgeWindowExtraction,
+)
+from rag.domain.models.graph import (
     KnowledgeGraph,
     KnowledgeMention,
     KnowledgeNode,
     KnowledgeNodeKind,
     KnowledgeRelation,
     KnowledgeRelationType,
-    KnowledgeWindowExtraction,
 )
 
 # 用于在 graph_facts 中标记当前合并产物的版本，参与 graph_revision 计算，

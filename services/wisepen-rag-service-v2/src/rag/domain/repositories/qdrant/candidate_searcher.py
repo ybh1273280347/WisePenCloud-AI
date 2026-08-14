@@ -1,8 +1,10 @@
 """候选召回能力的领域 port。"""
 
+from collections.abc import Sequence
 from typing import Protocol
 
-from rag.domain.models.retrieval import CandidateSearchRequest, RetrievalCandidate
+from rag.domain.models.acl import PermissionScope
+from rag.domain.models.retrieval import RetrievalCandidate
 
 
 class CandidateSearcher(Protocol):
@@ -10,5 +12,9 @@ class CandidateSearcher(Protocol):
 
     async def search(
         self,
-        request: CandidateSearchRequest,
+        *,
+        lexical_query: str,
+        semantic_vector: Sequence[float],
+        permission_scope: PermissionScope,
+        limit: int,
     ) -> list[RetrievalCandidate]: ...

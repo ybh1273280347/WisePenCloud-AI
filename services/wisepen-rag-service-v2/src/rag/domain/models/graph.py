@@ -1,13 +1,7 @@
-"""知识图谱抽取、发布和遍历共享的稳定领域模型。"""
+"""已发布知识图谱共享的稳定领域模型。"""
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-
-from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import ReadingBlock
-from rag.domain.models.provenance import SourceRef
-from rag.domain.models.structure import Section, StructureMode
-from rag.utils.chunkers import SourceSpan
 
 
 class KnowledgeNodeKind(StrEnum):
@@ -28,12 +22,6 @@ class KnowledgeEntityType(StrEnum):
     PLACE = "place"
     DOCUMENT = "document"
     OTHER = "other"
-
-
-class KnowledgeRelationProfile(StrEnum):
-    CORE = "core"
-    LEARNING = "learning"
-    SCHOLARLY = "scholarly"
 
 
 class KnowledgeRelationType(StrEnum):
@@ -64,70 +52,6 @@ class KnowledgeRelationType(StrEnum):
     USES_METHOD = "USES_METHOD"
     SUPPLEMENTS = "SUPPLEMENTS"
     RETRACTS = "RETRACTS"
-
-
-class KnowledgeAssertion(StrEnum):
-    AFFIRMED = "affirmed"
-    NEGATED = "negated"
-    CONDITIONAL = "conditional"
-    UNCERTAIN = "uncertain"
-
-
-class GraphStatus(StrEnum):
-    """资源图在 Neo4j 中的发布状态。"""
-
-    BUILDING = "building"
-    PUBLISHED = "published"
-    SKIPPED = "skipped"
-
-
-@dataclass(slots=True)
-class GraphBuildSource:
-    """同一已发布 revision 的图构建输入。"""
-
-    resource_id: str
-    content_revision: str
-    structure_mode: StructureMode
-    markdown: str
-    sections: list[Section] = field(default_factory=list)
-    reading_blocks: list[ReadingBlock] = field(default_factory=list)
-    source_refs: list[SourceRef] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class KnowledgeEvidence:
-    evidence_id: str
-    reading_block_id: str
-    quote: str
-    source_span: SourceSpan
-    source_ref_ids: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class ExtractedKnowledgeNode:
-    local_id: str
-    kind: KnowledgeNodeKind
-    label: str
-    entity_type: KnowledgeEntityType | None = None
-    evidence: KnowledgeEvidence | None = None
-
-
-@dataclass(slots=True)
-class ExtractedKnowledgeRelation:
-    source_local_id: str
-    target_local_id: str
-    relation_type: KnowledgeRelationType
-    evidence: KnowledgeEvidence
-    predicate: str | None = None
-
-
-@dataclass(slots=True)
-class KnowledgeWindowExtraction:
-    resource_id: str
-    content_revision: str
-    reading_block_id: str
-    nodes: list[ExtractedKnowledgeNode] = field(default_factory=list)
-    relations: list[ExtractedKnowledgeRelation] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -181,38 +105,3 @@ class TraversalDirection(StrEnum):
     IN = "in"
     OUT = "out"
     BOTH = "both"
-
-
-@dataclass(slots=True)
-class TraversedEdge:
-    """图遍历返回的边视图，保留回源证据引用供 EXPAND 继续核验。"""
-
-    edge_id: str
-    source_node_id: str
-    target_node_id: str
-    relation_type: KnowledgeRelationType
-    evidence_resource_id: str
-    source_content_revision: str
-    evidence_quotes: list[str]
-    evidence_source_ref_ids: list[str]
-    predicate: str | None = None
-
-
-@dataclass(slots=True)
-class TraversedPath:
-    """一次有界图遍历得到的节点路径。"""
-
-    nodes: list[KnowledgeNode] = field(default_factory=list)
-    edges: list[TraversedEdge] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class GraphTraversalRequest:
-    """提交给图遍历仓储 port 的查询约束。"""
-
-    seed_node_ids: list[str]
-    permission_scope: PermissionScope
-    relation_types: list[KnowledgeRelationType] = field(default_factory=list)
-    direction: TraversalDirection = TraversalDirection.BOTH
-    max_depth: int = 1
-    limit: int = 40

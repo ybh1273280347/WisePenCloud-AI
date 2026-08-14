@@ -1,16 +1,59 @@
 """当前已发布资源的统一读取契约。"""
 
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import Protocol
 
-from rag.domain.models.content import (
-    ContentRevision,
-    ContentWindow,
-    PublishedDocumentStructure,
-    SectionContent,
-)
-from rag.domain.models.graph import GraphBuildSource
-from rag.domain.models.provenance import SourceEvidence
+from rag.domain.models.content import ReadingBlock
+from rag.domain.models.provenance import SourceEvidence, SourceRef
+from rag.domain.models.structure import DocumentStructure, PageRange, Section
+
+
+@dataclass(slots=True)
+class PublishedDocumentOutline:
+    """目录用例读取的已发布版本元数据和结构事实。"""
+
+    resource_id: str
+    content_revision: str
+    document_version: int
+    total_length: int
+    pages: list[PageRange] = field(default_factory=list)
+    sections: list[Section] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class PublishedPageContent:
+    """一个已发布页面的正文及其结构入口。"""
+
+    text: str
+    sections: list[Section] = field(default_factory=list)
+    anchor_labels: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class PublishedSectionContent:
+    """一个 Section 的直属正文和标题树导航事实。"""
+
+    section: Section
+    text: str = ""
+    page_labels: list[str] = field(default_factory=list)
+    anchor_labels: list[str] = field(default_factory=list)
+    parent: Section | None = None
+    previous: Section | None = None
+    next: Section | None = None
+    children: list[Section] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class GraphBuildSource:
+    """图抽取用例从同一已发布 revision 读取的完整输入。"""
+
+    resource_id: str
+    content_revision: str
+    markdown: str
+    structure: DocumentStructure
+    reading_blocks: list[ReadingBlock] = field(default_factory=list)
+    source_refs: list[SourceRef] = field(default_factory=list)
 
 
 class PublishedResourceRevisionError(RuntimeError):
@@ -24,24 +67,24 @@ class PublishedResourceCorruptError(RuntimeError):
 class PublishedResourceReader(Protocol):
     """从同一发布资源聚合读取 revision、结构、正文和来源证据。"""
 
-    async def get_revision(self, resource_id: str) -> ContentRevision | None: ...
+    async def get_content_revision(self, resource_id: str) -> str | None: ...
 
     async def get_document_structure(
         self,
         resource_id: str,
-    ) -> PublishedDocumentStructure | None: ...
+    ) -> PublishedDocumentOutline | None: ...
 
     async def get_pages(
         self,
         resource_id: str,
         page_labels: Sequence[str],
-    ) -> dict[str, ContentWindow] | None: ...
+    ) -> dict[str, PublishedPageContent] | None: ...
 
     async def get_sections(
         self,
         resource_id: str,
         section_ids: Sequence[str],
-    ) -> dict[str, SectionContent] | None: ...
+    ) -> dict[str, PublishedSectionContent] | None: ...
 
     async def get_source_evidence(
         self,

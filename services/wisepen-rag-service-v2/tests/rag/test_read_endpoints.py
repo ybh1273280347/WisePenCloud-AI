@@ -21,13 +21,11 @@ from rag.application.rag.read.outline import (
     _to_outline,
 )
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import (
-    ContentRevision,
-    ContentWindow,
-    SectionContent,
-    SectionFrontier,
+from rag.domain.models.structure import PageRange, Section
+from rag.domain.repositories.mongo.published_resource_reader import (
+    PublishedPageContent,
+    PublishedSectionContent,
 )
-from rag.domain.models.structure import PageRange, Section, StructureMode
 from rag.utils.chunkers import SourceSpan
 
 
@@ -39,10 +37,8 @@ class _AllowAuthorizer:
 class _PublishedResourceReader:
     async def get_pages(self, resource_id, page_labels):
         return {
-            "1": ContentWindow(
+            "1": PublishedPageContent(
                 text="<!-- page 1 -->\n正文",
-                source_span=SourceSpan(0, 22),
-                page_labels=["1"],
                 sections=[_section()],
                 anchor_labels=["Table 1"],
             )
@@ -50,12 +46,12 @@ class _PublishedResourceReader:
 
     async def get_sections(self, resource_id, section_ids):
         return {
-            "section-1": SectionContent(
+            "section-1": PublishedSectionContent(
                 section=_section(),
                 text="正文",
                 page_labels=["1"],
                 anchor_labels=["Table 1"],
-                frontier=SectionFrontier(children=[_child_section()]),
+                children=[_child_section()],
             )
         }
 
@@ -94,15 +90,10 @@ class _OutlineReader:
     async def get_document_outline(self, *, resource_id, permission_scope):
         self.scope = permission_scope
         return DocumentOutlineResult(
-            revision=ContentRevision(
-                resource_id=resource_id,
-                content_revision="revision-1",
-                document_version=3,
-                content_hash="hash",
-                index_schema_version="rag-v2-content:v2",
-                structure_mode=StructureMode.SECTIONED,
-                total_length=12,
-            ),
+            resource_id=resource_id,
+            content_revision="revision-1",
+            document_version=3,
+            total_length=12,
             outline=[
                 DocumentOutlineNode(
                     section_id="section-1",
@@ -295,17 +286,15 @@ def test_outline_uses_human_page_range() -> None:
 class _FlatPublishedResourceReader:
     async def get_pages(self, resource_id, page_labels):
         return {
-            "1": ContentWindow(
+            "1": PublishedPageContent(
                 text="平铺正文",
-                source_span=SourceSpan(0, 4),
-                page_labels=["1"],
                 sections=[_flat_section()],
             )
         }
 
     async def get_sections(self, resource_id, section_ids):
         return {
-            "flat-section": SectionContent(
+            "flat-section": PublishedSectionContent(
                 section=_flat_section(),
                 text="平铺正文",
                 page_labels=["1"],

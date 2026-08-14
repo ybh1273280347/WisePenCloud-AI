@@ -9,8 +9,8 @@
 
 from dataclasses import dataclass, field
 
-from rag.domain.models.graph import GraphBuildSource
 from rag.domain.models.provenance import SourceRef
+from rag.domain.repositories.mongo.published_resource_reader import GraphBuildSource
 from rag.utils.chunkers import SourceSpan
 from rag.utils.xml_markup import xml_attr, xml_cdata
 
@@ -73,7 +73,9 @@ def build_extraction_windows(
        （end == len(raw_text)）注入 next_context，避免上下文重复。
     4. 同一 Section 内的邻接 block 才会被选作上下文，跨 Section 不连上下文。
     """
-    sections_by_id = {section.section_id: section for section in source.sections}
+    sections_by_id = {
+        section.section_id: section for section in source.structure.sections
+    }
     windows: list[KnowledgeExtractionWindow] = []
 
     for block_index, block in enumerate(source.reading_blocks):

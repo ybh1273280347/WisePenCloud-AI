@@ -19,9 +19,10 @@ from rag.application.rag.index.graph.windows import (
     build_extraction_windows,
 )
 from rag.domain.models.content import ReadingBlock
-from rag.domain.models.graph import GraphBuildSource, KnowledgeRelationType
+from rag.domain.models.graph import KnowledgeRelationType
 from rag.domain.models.provenance import SourceRef
-from rag.domain.models.structure import Section, StructureMode
+from rag.domain.models.structure import DocumentStructure, Section, StructureMode
+from rag.domain.repositories.mongo.published_resource_reader import GraphBuildSource
 from rag.utils.chunkers import SourceSpan
 
 
@@ -41,20 +42,23 @@ def _source(text: str, *, split: int | None = None) -> GraphBuildSource:
     return GraphBuildSource(
         resource_id="resource-1",
         content_revision="revision-1",
-        structure_mode=StructureMode.SECTIONED,
         markdown=text,
-        sections=[
-            Section(
-                section_id="section-1",
-                title="标题",
-                level=1,
-                parent_section_id=None,
-                ordinal=0,
-                section_path=["标题"],
-                own_span=SourceSpan(0, len(text)),
-                subtree_span=SourceSpan(0, len(text)),
-            )
-        ],
+        structure=DocumentStructure(
+            mode=StructureMode.SECTIONED,
+            total_length=len(text),
+            sections=[
+                Section(
+                    section_id="section-1",
+                    title="标题",
+                    level=1,
+                    parent_section_id=None,
+                    ordinal=0,
+                    section_path=["标题"],
+                    own_span=SourceSpan(0, len(text)),
+                    subtree_span=SourceSpan(0, len(text)),
+                )
+            ],
+        ),
         reading_blocks=[block],
         source_refs=[
             SourceRef(
@@ -121,7 +125,7 @@ def test_validator_accepts_only_continuous_mapped_quote() -> None:
     result = validator.validate(_candidate_graph(window.window_id), window)
 
     assert result.relations[0].evidence.quote == "方法甲"
-    assert result.relations[0].evidence.source_span == SourceSpan(0, 3)
+    assert result.relations[0].evidence.source_ref_ids == ["ref-1"]
 
 
 def test_validator_discards_invalid_nodes_relations_and_non_affirmed_assertions() -> (

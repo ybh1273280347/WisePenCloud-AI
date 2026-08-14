@@ -1,6 +1,7 @@
 """从 Mongo 读取当前已发布资源的统一 adapter。"""
 
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from hashlib import sha256
 
 from rag.domain.entities import (
@@ -12,34 +13,55 @@ from rag.domain.entities import (
     SourceRefEntity,
 )
 from rag.domain.models.content import (
-    ContentRevision,
-    ContentWindow,
-    PublishedDocumentStructure,
     ReadingBlock,
-    SectionContent,
-    SectionFrontier,
-    SourcePart,
 )
-from rag.domain.models.graph import GraphBuildSource
 from rag.domain.models.provenance import SourceEvidence, SourceRef
 from rag.domain.models.structure import (
     DocumentAnchor,
+    DocumentStructure,
     PageRange,
     Section,
     StructureMode,
 )
 from rag.domain.repositories.mongo.published_resource_reader import (
+    GraphBuildSource,
+    PublishedDocumentOutline,
+    PublishedPageContent,
     PublishedResourceCorruptError,
     PublishedResourceReader,
     PublishedResourceRevisionError,
+    PublishedSectionContent,
 )
 from rag.utils.chunkers import SourceSpan
+
+from .source_parts import SourcePart, assemble_source_text
+
+
+@dataclass(slots=True)
+class _PublishedRevision:
+    """Mongo revision 文档与独立 Section collection 的内部连接点。"""
+
+    resource_id: str
+    content_revision: str
+    document_version: int
+    content_hash: str
+    structure_mode: StructureMode
+    total_length: int
+    pages: list[PageRange] = field(default_factory=list)
+    anchors: list[DocumentAnchor] = field(default_factory=list)
 
 
 class MongoPublishedResourceReader(PublishedResourceReader):
     """统一读取一个资源当前发布 revision 的结构、正文和来源证据。"""
 
-    async def get_revision(self, resource_id: str) -> ContentRevision | None:
+    async def get_content_revision(self, resource_id: str) -> str | None:
+        revision = await self._get_published_revision(resource_id)
+        return revision.content_revision if revision is not None else None
+
+    async def _get_published_revision(
+        self,
+        resource_id: str,
+    ) -> _PublishedRevision | None:
         state = await ResourceIndexStateEntity.find_one({"resource_id": resource_id})
         if state is None or state.applied_content_revision is None:
             return None
@@ -54,13 +76,13 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             raise PublishedResourceCorruptError(
                 f"resource {resource_id} published revision is missing"
             )
-        return _to_content_revision(entity)
+        return _to_published_revision(entity)
 
     async def get_document_structure(
         self,
         resource_id: str,
-    ) -> PublishedDocumentStructure | None:
-        revision = await self.get_revision(resource_id)
+    ) -> PublishedDocumentOutline | None:
+        revision = await self._get_published_revision(resource_id)
         if revision is None:
             return None
 
@@ -74,8 +96,12 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             .sort("+own_start")
             .to_list()
         )
-        return PublishedDocumentStructure(
-            revision=revision,
+        return PublishedDocumentOutline(
+            resource_id=revision.resource_id,
+            content_revision=revision.content_revision,
+            document_version=revision.document_version,
+            total_length=revision.total_length,
+            pages=list(revision.pages),
             sections=[_to_section(entity) for entity in entities],
         )
 
@@ -83,8 +109,8 @@ class MongoPublishedResourceReader(PublishedResourceReader):
         self,
         resource_id: str,
         page_labels: Sequence[str],
-    ) -> dict[str, ContentWindow] | None:
-        revision = await self.get_revision(resource_id)
+    ) -> dict[str, PublishedPageContent] | None:
+        revision = await self._get_published_revision(resource_id)
         if revision is None:
             return None
 
@@ -99,7 +125,7 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             revision.content_revision,
         )
 
-        windows: dict[str, ContentWindow] = {}
+        windows: dict[str, PublishedPageContent] = {}
         for page in selected_pages:
             parts = await self._get_parts(
                 revision.content_revision,
@@ -116,10 +142,8 @@ class MongoPublishedResourceReader(PublishedResourceReader):
                     _overlaps(span, page.source_span) for span in section.content_spans
                 )
             ]
-            windows[page.page_label] = ContentWindow(
-                text=_assemble_source_text(parts, [page.source_span]),
-                source_span=page.source_span,
-                page_labels=[page.page_label],
+            windows[page.page_label] = PublishedPageContent(
+                text=assemble_source_text(parts, [page.source_span]),
                 sections=sections,
                 anchor_labels=list(
                     dict.fromkeys(
@@ -135,8 +159,8 @@ class MongoPublishedResourceReader(PublishedResourceReader):
         self,
         resource_id: str,
         section_ids: Sequence[str],
-    ) -> dict[str, SectionContent] | None:
-        revision = await self.get_revision(resource_id)
+    ) -> dict[str, PublishedSectionContent] | None:
+        revision = await self._get_published_revision(resource_id)
         if revision is None:
             return None
 
@@ -171,7 +195,7 @@ class MongoPublishedResourceReader(PublishedResourceReader):
         for siblings in siblings_by_parent.values():
             siblings.sort(key=lambda section: section.ordinal)
 
-        result: dict[str, SectionContent] = {}
+        result: dict[str, PublishedSectionContent] = {}
         for section in selected:
             siblings = siblings_by_parent[section.parent_section_id]
             index = next(
@@ -179,9 +203,9 @@ class MongoPublishedResourceReader(PublishedResourceReader):
                 for index, sibling in enumerate(siblings)
                 if sibling.section_id == section.section_id
             )
-            result[section.section_id] = SectionContent(
+            result[section.section_id] = PublishedSectionContent(
                 section=section,
-                text=_assemble_source_text(parts, section.content_spans),
+                text=assemble_source_text(parts, section.content_spans),
                 page_labels=_overlapping_labels(
                     section.content_spans,
                     revision.pages,
@@ -190,12 +214,10 @@ class MongoPublishedResourceReader(PublishedResourceReader):
                     section.content_spans,
                     revision.anchors,
                 ),
-                frontier=SectionFrontier(
-                    parent=sections_by_id.get(section.parent_section_id),
-                    previous=siblings[index - 1] if index else None,
-                    next=siblings[index + 1] if index + 1 < len(siblings) else None,
-                    children=siblings_by_parent.get(section.section_id, []),
-                ),
+                parent=sections_by_id.get(section.parent_section_id),
+                previous=siblings[index - 1] if index else None,
+                next=siblings[index + 1] if index + 1 < len(siblings) else None,
+                children=siblings_by_parent.get(section.section_id, []),
             )
         return result
 
@@ -205,14 +227,14 @@ class MongoPublishedResourceReader(PublishedResourceReader):
         content_revision: str,
         source_ref_ids: Sequence[str],
     ) -> dict[str, SourceEvidence] | None:
-        revision = await self.get_revision(resource_id)
+        revision = await self._get_published_revision(resource_id)
         if revision is None:
             return None
         self._require_revision(revision, content_revision)
 
         full_span = SourceSpan(0, revision.total_length)
         parts = await self._get_parts(content_revision, [full_span])
-        full_text = _assemble_source_text(parts, [full_span])
+        full_text = assemble_source_text(parts, [full_span])
         if sha256(full_text.encode("utf-8")).hexdigest() != revision.content_hash:
             raise PublishedResourceCorruptError(
                 f"content revision {content_revision} hash does not match source parts"
@@ -256,11 +278,10 @@ class MongoPublishedResourceReader(PublishedResourceReader):
                     f"source ref {source_ref.ref_id} has missing ownership records"
                 )
             evidence[source_ref.ref_id] = SourceEvidence(
-                revision=revision,
                 source_ref=source_ref,
                 reading_block=block,
                 section=section,
-                source_text=_assemble_source_text(parts, source_ref.source_spans),
+                source_text=assemble_source_text(parts, source_ref.source_spans),
             )
         return evidence
 
@@ -269,7 +290,7 @@ class MongoPublishedResourceReader(PublishedResourceReader):
         resource_id: str,
         content_revision: str,
     ) -> GraphBuildSource:
-        revision = await self.get_revision(resource_id)
+        revision = await self._get_published_revision(resource_id)
         if revision is None:
             raise PublishedResourceRevisionError(
                 f"resource {resource_id} has no published revision"
@@ -294,9 +315,14 @@ class MongoPublishedResourceReader(PublishedResourceReader):
         return GraphBuildSource(
             resource_id=resource_id,
             content_revision=content_revision,
-            structure_mode=revision.structure_mode,
-            markdown=_assemble_source_text(parts, [full_span]),
-            sections=[_to_section(entity) for entity in sections],
+            markdown=assemble_source_text(parts, [full_span]),
+            structure=DocumentStructure(
+                mode=revision.structure_mode,
+                total_length=revision.total_length,
+                sections=[_to_section(entity) for entity in sections],
+                pages=list(revision.pages),
+                anchors=list(revision.anchors),
+            ),
             reading_blocks=[_to_reading_block(entity) for entity in blocks],
             source_refs=[_to_source_ref(entity) for entity in refs],
         )
@@ -340,7 +366,7 @@ class MongoPublishedResourceReader(PublishedResourceReader):
 
     @staticmethod
     def _require_revision(
-        revision: ContentRevision,
+        revision: _PublishedRevision,
         content_revision: str,
     ) -> None:
         if revision.content_revision != content_revision:
@@ -350,70 +376,12 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             )
 
 
-def _assemble_source_text(
-    parts: Sequence[SourcePart],
-    source_spans: Sequence[SourceSpan],
-) -> str:
-    """拼接 Python 字符 span，并拒绝缺失、重叠或损坏的存储分片。"""
-    if not source_spans:
-        return ""
-    ordered_parts = sorted(parts, key=lambda part: part.source_span.start_offset)
-    revision = ordered_parts[0].content_revision if ordered_parts else "unknown"
-    _validate_parts(ordered_parts, revision)
-
-    fragments: list[str] = []
-    for span in source_spans:
-        cursor = span.start_offset
-        span_fragments: list[str] = []
-        for part in ordered_parts:
-            part_start = part.source_span.start_offset
-            part_end = part.source_span.end_offset
-            if part_end <= cursor:
-                continue
-            if part_start >= span.end_offset:
-                break
-            if part_start > cursor:
-                raise PublishedResourceCorruptError(
-                    f"content revision {revision} source parts have a gap"
-                )
-            fragment_end = min(part_end, span.end_offset)
-            span_fragments.append(
-                part.text[cursor - part_start : fragment_end - part_start]
-            )
-            cursor = fragment_end
-            if cursor == span.end_offset:
-                break
-        if cursor != span.end_offset:
-            raise PublishedResourceCorruptError(
-                f"content revision {revision} source parts do not cover span"
-            )
-        fragments.append("".join(span_fragments))
-    return "\n\n".join(fragments)
-
-
-def _validate_parts(parts: Sequence[SourcePart], content_revision: str) -> None:
-    previous_end = None
-    for part in parts:
-        start = part.source_span.start_offset
-        end = part.source_span.end_offset
-        if end - start != len(part.text):
-            raise PublishedResourceCorruptError(
-                f"content revision {content_revision} has an invalid source part"
-            )
-        if previous_end is not None and start < previous_end:
-            raise PublishedResourceCorruptError(
-                f"content revision {content_revision} source parts overlap"
-            )
-        previous_end = end
-
-
-def _to_content_revision(record: ContentRevisionEntity) -> ContentRevision:
-    return ContentRevision(
+def _to_published_revision(record: ContentRevisionEntity) -> _PublishedRevision:
+    return _PublishedRevision(
         resource_id=record.resource_id,
         content_revision=record.content_revision,
         document_version=record.document_version,
         content_hash=record.content_hash,
-        index_schema_version=record.index_schema_version,
         structure_mode=StructureMode(record.structure_mode),
         total_length=record.total_length,
         pages=[

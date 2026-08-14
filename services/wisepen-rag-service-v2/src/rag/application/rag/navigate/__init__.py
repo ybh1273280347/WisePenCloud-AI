@@ -1,8 +1,5 @@
 from rag.domain.models.graph import (
-    GraphTraversalRequest,
     TraversalDirection,
-    TraversedEdge,
-    TraversedPath,
 )
 
 from .candidate_locator import (
@@ -19,6 +16,7 @@ from .graph_expander import (
     GraphPathStepView,
     GraphPathView,
     KnowledgeGraphExpander,
+    NavigationStateNotFoundError,
     UnknownSeedNodeError,
 )
 from .source_evidence_verifier import (
@@ -47,21 +45,19 @@ __all__ = [
     "GraphExpandResult",
     "GraphPathStepView",
     "GraphPathView",
-    "GraphTraversalRequest",
     "KnowledgeGraphExpander",
     "KnowledgeNodeView",
     "LocateError",
     "LocateRequest",
     "LocateResult",
     "MatchRangeView",
+    "NavigationStateNotFoundError",
     "ReadingCandidateLocator",
     "RetrievalMatchView",
     "RetrievalReadingBlockView",
     "RetrievedSectionView",
     "SourceEvidenceVerifier",
     "TraversalDirection",
-    "TraversedEdge",
-    "TraversedPath",
     "UnknownSeedNodeError",
     "build_retrieved_section_views",
     "to_knowledge_node_view",

@@ -23,7 +23,9 @@ from rag.api.schemas import DocumentOutlineResponse
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.read.outline import DocumentOutlineNode, DocumentOutlineReader
 from rag.domain.models.acl import PermissionScope, ResourceAcl
-from rag.domain.models.content import PublishedDocumentStructure
+from rag.domain.repositories.mongo.published_resource_reader import (
+    PublishedDocumentOutline,
+)
 
 
 class _DemoAclStore:
@@ -44,12 +46,16 @@ class _DemoStructureReader:
     async def get_document_structure(
         self,
         resource_id: str,
-    ) -> PublishedDocumentStructure | None:
+    ) -> PublishedDocumentOutline | None:
         document = self._documents.get(resource_id)
         if document is None:
             return None
-        return PublishedDocumentStructure(
-            revision=document.revision,
+        return PublishedDocumentOutline(
+            resource_id=document.resource_id,
+            content_revision=document.revision.content_revision,
+            document_version=document.revision.document_version,
+            total_length=document.structure.total_length,
+            pages=document.structure.pages,
             sections=document.sections,
         )
 
@@ -114,7 +120,7 @@ def _document_output(
         resource_id=document.resource_id,
         document_version=document.revision.document_version,
         content_revision=document.revision.content_revision,
-        total_length=document.revision.total_length,
+        total_length=document.structure.total_length,
         outline=outline,
     ).model_dump(mode="json", exclude_none=True)
     return [

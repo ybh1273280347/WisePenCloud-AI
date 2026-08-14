@@ -143,11 +143,11 @@ class ResourceIndexer:
         # 2. 资源元数据暂存
         # STALE 表示该 revision 与已上线版本完全一致，跳过昂贵的下游步骤。
         action = await self._resource_writer.stage_revision(
-            revision,
-            markdown,
-            sections,
-            reading_blocks,
-            source_refs,
+            revision=revision,
+            markdown=markdown,
+            structure=structure,
+            reading_blocks=reading_blocks,
+            source_refs=source_refs,
         )
         if action is StageAction.STALE:
             return action

@@ -2,10 +2,8 @@ import json
 
 import pytest
 
-from rag.core.persistence.redis import (
-    NavigationStateNotFoundError,
-    RedisNavigationStateStore,
-)
+from rag.core.persistence.redis import RedisNavigationStateStore
+from rag.domain.repositories.redis import NavigationStateMissingError
 
 
 class _Redis:
@@ -84,7 +82,7 @@ async def test_add_known_nodes_is_atomic_and_refreshes_ttl() -> None:
 
 @pytest.mark.asyncio
 async def test_add_known_nodes_rejects_missing_state() -> None:
-    with pytest.raises(NavigationStateNotFoundError):
+    with pytest.raises(NavigationStateMissingError):
         await _store(_Redis()).add_known_nodes(
             state_id="missing",
             node_ids=["node"],

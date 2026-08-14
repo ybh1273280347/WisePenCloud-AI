@@ -1,28 +1,35 @@
 """Neo4j v2 知识图谱发布与查询的统一 adapter。"""
 
 from collections.abc import Sequence
+from enum import StrEnum
 
 from neo4j import AsyncDriver, RoutingControl
 
 from rag.application.rag.index.constructor.graph_merge import resource_node_id
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.graph import (
-    GraphStatus,
-    GraphTraversalRequest,
     KnowledgeEntityType,
     KnowledgeGraph,
     KnowledgeNode,
     KnowledgeNodeKind,
     KnowledgeRelationType,
     TraversalDirection,
-    TraversedEdge,
-    TraversedPath,
 )
 from rag.domain.models.provenance import SourceEvidence
 from rag.domain.repositories.neo4j.knowledge_graph_repository import (
     KnowledgeGraphRepository,
     KnowledgeGraphRevisionSupersededError,
+    TraversedEdge,
+    TraversedPath,
 )
+
+
+class GraphStatus(StrEnum):
+    """Neo4j 资源图节点的持久化发布状态。"""
+
+    BUILDING = "building"
+    PUBLISHED = "published"
+    SKIPPED = "skipped"
 
 _NODE_LABEL = "RagV2Node"
 _RESOURCE_LABEL = "RagV2ResourceNode"
@@ -386,8 +393,8 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
 
         query_evidence = [
             {
-                "resource_id": record.revision.resource_id,
-                "content_revision": record.revision.content_revision,
+                "resource_id": record.source_ref.resource_id,
+                "content_revision": record.source_ref.content_revision,
                 "source_ref_id": record.source_ref.ref_id,
             }
             for record in evidence
@@ -412,20 +419,26 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
 
     async def find_paths(
         self,
-        request: GraphTraversalRequest,
+        *,
+        seed_node_ids: Sequence[str],
+        permission_scope: PermissionScope,
+        relation_types: Sequence[KnowledgeRelationType] = (),
+        direction: TraversalDirection = TraversalDirection.BOTH,
+        max_depth: int = 1,
+        limit: int = 40,
     ) -> list[TraversedPath]:
-        if not request.seed_node_ids or request.limit <= 0:
+        if not seed_node_ids or limit <= 0:
             return []
-        pattern = _PATH_PATTERNS.get((request.direction, request.max_depth))
+        pattern = _PATH_PATTERNS.get((direction, max_depth))
         if pattern is None:
             raise ValueError("graph traversal depth must be 1 or 2")
 
         evidence_acl, acl_parameters = _acl_predicate(
-            request.permission_scope,
+            permission_scope,
             resource_alias="evidence",
         )
         path_node_acl, _ = _acl_predicate(
-            request.permission_scope,
+            permission_scope,
             resource_alias="path_node",
         )
         result = await self._driver.execute_query(
@@ -482,9 +495,9 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
             ORDER BY size(edges), nodes[-1].node_id
             LIMIT $limit
             """,
-            seed_node_ids=list(dict.fromkeys(request.seed_node_ids)),
-            relation_types=[item.value for item in request.relation_types],
-            limit=request.limit,
+            seed_node_ids=list(dict.fromkeys(seed_node_ids)),
+            relation_types=[item.value for item in relation_types],
+            limit=limit,
             **acl_parameters,
             database_=self._database,
             routing_=RoutingControl.READ,

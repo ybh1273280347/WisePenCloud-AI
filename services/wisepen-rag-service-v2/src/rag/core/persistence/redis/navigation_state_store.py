@@ -6,8 +6,11 @@ from uuid import uuid4
 
 from redis.asyncio import Redis
 
-from rag.domain.models.navigation import NavigationState, NavigationStateNotFoundError
-from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
+from rag.domain.repositories.redis.navigation_state_store import (
+    NavigationState,
+    NavigationStateMissingError,
+    NavigationStateStore,
+)
 
 _KEY_PREFIX = "wisepen:rag:v2:navigation-state:"
 _NODES_FIELD = "known_nodes"
@@ -85,7 +88,7 @@ class RedisNavigationStateStore(NavigationStateStore):
             self._ttl_seconds,
         )
         if result is None:
-            raise NavigationStateNotFoundError(state_id)
+            raise NavigationStateMissingError(state_id)
         value = result.decode() if isinstance(result, bytes) else result
         added = json.loads(value)
         if not isinstance(added, list) or not all(

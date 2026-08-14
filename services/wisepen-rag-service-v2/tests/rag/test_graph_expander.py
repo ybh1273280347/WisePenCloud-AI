@@ -7,17 +7,16 @@ from rag.application.rag.navigate import (
 )
 from rag.application.rag.navigate.graph_expander import _render_path, _to_path_view
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import ContentRevision, ReadingBlock
+from rag.domain.models.content import ReadingBlock
 from rag.domain.models.graph import (
     KnowledgeNode,
     KnowledgeNodeKind,
     KnowledgeRelationType,
-    TraversedEdge,
-    TraversedPath,
 )
-from rag.domain.models.navigation import NavigationState
 from rag.domain.models.provenance import SourceEvidence, SourceRef
-from rag.domain.models.structure import Section, StructureMode
+from rag.domain.models.structure import Section
+from rag.domain.repositories.neo4j import TraversedEdge, TraversedPath
+from rag.domain.repositories.redis import NavigationState
 from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import RankCandidate, RankedCandidate, RankResult
 
@@ -45,8 +44,8 @@ class _KnowledgeGraph:
         self.paths = paths
         self.request = None
 
-    async def find_paths(self, request):
-        self.request = request
+    async def find_paths(self, **kwargs):
+        self.request = kwargs
         return self.paths
 
 
@@ -108,7 +107,7 @@ async def test_expand_ranks_verifies_and_adds_only_new_nodes() -> None:
     result = await expander.expand(_request())
 
     assert ranking.request.query.text == "扩展问题"
-    assert knowledge_graph.request.seed_node_ids == ["node-a"]
+    assert knowledge_graph.request["seed_node_ids"] == ["node-a"]
     assert verifier.calls[0]["source_ref_ids"] == ["ref-1"]
     assert state_store.calls[0]["node_ids"] == ["node-b"]
     assert [node.node_id for node in result.discovered_nodes] == ["node-b"]
@@ -338,15 +337,6 @@ def _record(
     ref_id: str = "ref-1", text: str = "Alpha depends on Beta."
 ) -> SourceEvidence:
     span = SourceSpan(0, len(text))
-    revision = ContentRevision(
-        resource_id="resource-1",
-        content_revision="revision-1",
-        document_version=1,
-        content_hash="hash",
-        index_schema_version="rag-v2-content:v2",
-        structure_mode=StructureMode.SECTIONED,
-        total_length=len(text),
-    )
     section = Section(
         section_id=f"section-{ref_id}",
         title="测试章节",
@@ -359,7 +349,6 @@ def _record(
         content_spans=[span],
     )
     return SourceEvidence(
-        revision=revision,
         source_ref=SourceRef(
             ref_id=ref_id,
             resource_id="resource-1",

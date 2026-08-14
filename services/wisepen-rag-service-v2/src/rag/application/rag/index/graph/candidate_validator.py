@@ -3,33 +3,44 @@
 GraphRAG SDK 输出的是原始候选图（节点 + 关系 + properties），存在如下问题：
 - 节点 ID 带窗口前缀，无法跨窗口稳定。
 - 没有强制的原文证据（evidence_quote 是字符串，但可能不是原文连续子串）。
-- 没有强制的 source_span / source_ref_ids，无法回源。
+- 没有强制的原文坐标和 source_ref_ids，无法回源。
 
 本模块的 ``KnowledgeCandidateValidator`` 负责把这些原始候选收紧为
 ``KnowledgeWindowExtraction``：
 1. 只接受符合 schema 的节点 / 关系（type、assertion、predicate 合法）。
-2. 把 evidence_quote 映射回原文坐标，生成稳定的 evidence_id 和 source_span。
-3. 同时收集与该 span 相交的 source_ref_ids，构成完整回源链。
+2. 把 evidence_quote 映射回原文坐标，生成稳定的 evidence_id。
+3. 收集与该原文范围相交的 source_ref_ids，构成完整回源链。
 """
 
+from enum import StrEnum
 from hashlib import sha256
 
 from neo4j_graphrag.experimental.components.types import Neo4jGraph, Neo4jNode
 
 from rag.domain.models.graph import (
-    ExtractedKnowledgeNode,
-    ExtractedKnowledgeRelation,
-    KnowledgeAssertion,
     KnowledgeEntityType,
-    KnowledgeEvidence,
     KnowledgeNodeKind,
     KnowledgeRelationType,
-    KnowledgeWindowExtraction,
 )
 from rag.utils.chunkers import SourceSpan
 
+from .models import (
+    ExtractedKnowledgeNode,
+    ExtractedKnowledgeRelation,
+    KnowledgeEvidence,
+    KnowledgeWindowExtraction,
+)
 from .relations import relation_pattern_allowed
 from .windows import KnowledgeExtractionWindow
+
+
+class KnowledgeAssertion(StrEnum):
+    """GraphRAG 候选关系声明的校验词汇。"""
+
+    AFFIRMED = "affirmed"
+    NEGATED = "negated"
+    CONDITIONAL = "conditional"
+    UNCERTAIN = "uncertain"
 
 
 class KnowledgeCandidateValidator:
@@ -122,7 +133,6 @@ class KnowledgeCandidateValidator:
         return KnowledgeWindowExtraction(
             resource_id=window.resource_id,
             content_revision=window.content_revision,
-            reading_block_id=window.reading_block_id,
             nodes=list(nodes.values()),
             relations=list(relations.values()),
         )
@@ -184,7 +194,7 @@ def _locate_evidence(
     window: KnowledgeExtractionWindow,
     raw_quote: object,
 ) -> KnowledgeEvidence | None:
-    """在窗口文本中查找 quote 并映射回原文坐标，生成 ``KnowledgeEvidence``。
+    """在窗口文本中定位 quote，并以原文坐标确定其 SourceRef 归属。
 
     关键步骤：
     1. 在 ``window.text`` 中查找 quote 的所有出现位置（``find`` 返回首个，
@@ -235,7 +245,6 @@ def _locate_evidence(
                     ),
                     reading_block_id=window.reading_block_id,
                     quote=quote,
-                    source_span=source_span,
                     source_ref_ids=source_ref_ids,
                 )
         # 同一 quote 可能出现多次，继续寻找能够完整落入一条映射的匹配。

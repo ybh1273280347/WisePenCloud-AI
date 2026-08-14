@@ -77,17 +77,17 @@ def build_retrieved_section_views(
     blocks: dict[tuple[str, str], RetrievalReadingBlockView] = {}
 
     for record in records:
-        section_key = (record.revision.resource_id, record.section.section_id)
+        section_key = (record.source_ref.resource_id, record.section.section_id)
         section_view = sections.setdefault(
             section_key,
             RetrievedSectionView(
-                resource_id=record.revision.resource_id,
+                resource_id=record.source_ref.resource_id,
                 section_id=record.section.section_id,
                 title=record.section.title,
                 section_path=" > ".join(record.section.section_path),
             ),
         )
-        block_key = (record.revision.resource_id, record.reading_block.block_id)
+        block_key = (record.source_ref.resource_id, record.reading_block.block_id)
         block_view = blocks.get(block_key)
         if block_view is None:
             block_view = RetrievalReadingBlockView(

@@ -75,7 +75,8 @@ class _ResourceWriter:
         self.stale = stale
         self.applied = False
 
-    async def stage_revision(self, *args):
+    async def stage_revision(self, **kwargs):
+        assert kwargs["structure"].total_length == len(kwargs["markdown"])
         self._failure.hit("mongo_stage")
         if self.stale:
             return StageAction.STALE

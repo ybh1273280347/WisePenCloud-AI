@@ -19,11 +19,11 @@ from rag.application.rag.navigate import (
     GraphAccessRevokedError,
     GraphExpandRequest,
     KnowledgeGraphExpander,
+    NavigationStateNotFoundError,
     UnknownSeedNodeError,
 )
 from rag.domain.error_codes import RagErrorCode
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.navigation import NavigationStateNotFoundError
 
 router = APIRouter()
 

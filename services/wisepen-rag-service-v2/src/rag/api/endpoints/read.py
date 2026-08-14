@@ -62,10 +62,10 @@ async def get_document_outline(
         raise ServiceException(RagErrorCode.RESOURCE_READ_FAILED) from error
     return R.success(
         DocumentOutlineResponse(
-            resource_id=result.revision.resource_id,
-            document_version=result.revision.document_version,
-            content_revision=result.revision.content_revision,
-            total_length=result.revision.total_length,
+            resource_id=result.resource_id,
+            document_version=result.document_version,
+            content_revision=result.content_revision,
+            total_length=result.total_length,
             outline=result.outline,
         )
     )

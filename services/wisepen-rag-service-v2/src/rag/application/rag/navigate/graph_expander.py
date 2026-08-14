@@ -6,16 +6,19 @@ from dataclasses import dataclass, field
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.graph import (
-    GraphTraversalRequest,
     KnowledgeRelationType,
     TraversalDirection,
+)
+from rag.domain.models.provenance import SourceEvidence
+from rag.domain.repositories.neo4j.knowledge_graph_repository import (
+    KnowledgeGraphRepository,
     TraversedEdge,
     TraversedPath,
 )
-from rag.domain.models.navigation import NavigationStateNotFoundError
-from rag.domain.models.provenance import SourceEvidence
-from rag.domain.repositories.neo4j import KnowledgeGraphRepository
-from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
+from rag.domain.repositories.redis.navigation_state_store import (
+    NavigationStateMissingError,
+    NavigationStateStore,
+)
 from rag.utils.ranking import (
     RankCandidate,
     RankingPipeline,
@@ -38,6 +41,10 @@ class UnknownSeedNodeError(RuntimeError):
 
 class GraphAccessRevokedError(RuntimeError):
     """图谱展开期间证据所属资源失去可读权限。"""
+
+
+class NavigationStateNotFoundError(RuntimeError):
+    """导航状态不存在，或不属于当前用户与会话。"""
 
 
 @dataclass(slots=True)
@@ -125,14 +132,12 @@ class KnowledgeGraphExpander:
             raise UnknownSeedNodeError(unknown_seed_ids[0])
 
         paths = await self._knowledge_graph.find_paths(
-            GraphTraversalRequest(
-                seed_node_ids=seed_node_ids,
-                permission_scope=request.permission_scope,
-                relation_types=relation_types,
-                direction=request.direction,
-                max_depth=request.max_depth,
-                limit=min(request.max_results * 4, 80),
-            )
+            seed_node_ids=seed_node_ids,
+            permission_scope=request.permission_scope,
+            relation_types=relation_types,
+            direction=request.direction,
+            max_depth=request.max_depth,
+            limit=min(request.max_results * 4, 80),
         )
         paths = await self._filter_readable_paths(paths, request.permission_scope)
         paths = [
@@ -186,10 +191,13 @@ class KnowledgeGraphExpander:
                 if node.node_id not in known_node_ids
             )
         )
-        added_node_ids = await self._state_store.add_known_nodes(
-            state_id=state.state_id,
-            node_ids=candidate_new_ids,
-        )
+        try:
+            added_node_ids = await self._state_store.add_known_nodes(
+                state_id=state.state_id,
+                node_ids=candidate_new_ids,
+            )
+        except NavigationStateMissingError as error:
+            raise NavigationStateNotFoundError(state.state_id) from error
         added_node_id_set = set(added_node_ids)
         paths = [
             path
@@ -207,7 +215,7 @@ class KnowledgeGraphExpander:
             path_views.append(path_view)
             for record in path_evidence:
                 retained_evidence[
-                    (record.revision.resource_id, record.source_ref.ref_id)
+                    (record.source_ref.resource_id, record.source_ref.ref_id)
                 ] = record
 
         evidence_sections = build_retrieved_section_views(
@@ -322,7 +330,7 @@ def _to_path_view(
             )
             for record in matching_records:
                 retained_records[
-                    (record.revision.resource_id, record.source_ref.ref_id)
+                    (record.source_ref.resource_id, record.source_ref.ref_id)
                 ] = record
         steps.append(GraphPathStepView(relation=relation, evidence=evidence))
 

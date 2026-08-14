@@ -27,13 +27,11 @@ from rag.domain.models.graph import (
     KnowledgeNode,
     KnowledgeNodeKind,
     KnowledgeRelationType,
-    TraversedEdge,
-    TraversedPath,
 )
-from rag.domain.models.navigation import NavigationState
 from rag.domain.models.provenance import SourceEvidence
 from rag.domain.models.retrieval import RetrievalCandidate
-from rag.domain.models.structure import StructureMode
+from rag.domain.repositories.neo4j import TraversedEdge, TraversedPath
+from rag.domain.repositories.redis import NavigationState
 from rag.utils.ranking import RankingPipeline
 from rag.utils.ranking.fusion import WeightedRrfFusion
 from rag.utils.ranking.rank_gates import (
@@ -60,8 +58,15 @@ class _CandidateSearch:
     def __init__(self, candidates: list[RetrievalCandidate]) -> None:
         self._candidates = candidates
 
-    async def search(self, request):
-        tokens = JiebaRankingTokenizer().tokenize(request.lexical_query)
+    async def search(
+        self,
+        *,
+        lexical_query,
+        semantic_vector,
+        permission_scope,
+        limit,
+    ):
+        tokens = JiebaRankingTokenizer().tokenize(lexical_query)
         ranked = sorted(
             self._candidates,
             key=lambda candidate: sum(
@@ -75,7 +80,7 @@ class _CandidateSearch:
                 score=candidate.score
                 + sum(token in candidate.raw_text for token in tokens if token.strip()),
             )
-            for candidate in ranked[: request.limit]
+            for candidate in ranked[:limit]
         ]
 
 
@@ -90,10 +95,11 @@ class _AclStore:
 class _RevisionReader:
     def __init__(self, documents: list[DemoDocument]) -> None:
         self._revisions = {
-            document.resource_id: document.revision for document in documents
+            document.resource_id: document.revision.content_revision
+            for document in documents
         }
 
-    async def get_revision(self, resource_id):
+    async def get_content_revision(self, resource_id):
         return self._revisions.get(resource_id)
 
 
@@ -102,7 +108,7 @@ class _PublishedResourceReader:
 
     def __init__(self, records: list[SourceEvidence]) -> None:
         self._records = {
-            (record.revision.resource_id, record.source_ref.ref_id): record
+            (record.source_ref.resource_id, record.source_ref.ref_id): record
             for record in records
         }
 
@@ -118,7 +124,7 @@ class _PublishedResourceReader:
             if (resource_id, ref_id) in self._records
         }
         if any(
-            record.revision.content_revision != content_revision
+            record.source_ref.content_revision != content_revision
             for record in records.values()
         ):
             return None
@@ -130,7 +136,7 @@ class _MentionGraph:
 
     async def find_nodes(self, *, evidence, permission_scope, limit):
         if not any(
-            record.revision.structure_mode is StructureMode.SECTIONED
+            record.source_ref.resource_id == "demo-rain-garden"
             for record in evidence
         ):
             return []
@@ -172,8 +178,8 @@ class _TraversalGraph:
     def __init__(self, path: TraversedPath) -> None:
         self._path = path
 
-    async def find_paths(self, request):
-        return [self._path] if "kn_demo_surface_water" in request.seed_node_ids else []
+    async def find_paths(self, *, seed_node_ids, **kwargs):
+        return [self._path] if "kn_demo_surface_water" in seed_node_ids else []
 
 
 async def main() -> None:
@@ -326,7 +332,6 @@ def _evidence_records(documents: list[DemoDocument]) -> list[SourceEvidence]:
             chunk = chunks_by_id[source_ref.chunk_id]
             records.append(
                 SourceEvidence(
-                    revision=document.revision,
                     source_ref=source_ref,
                     reading_block=blocks_by_id[source_ref.reading_block_id],
                     section=sections_by_id[source_ref.section_id],

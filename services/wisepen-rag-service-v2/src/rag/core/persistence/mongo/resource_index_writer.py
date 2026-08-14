@@ -1,6 +1,7 @@
 """Resource index writer backed by Beanie entities."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from pymongo.errors import DuplicateKeyError
 
@@ -18,18 +19,27 @@ from rag.domain.entities import (
 from rag.domain.models.content import (
     ContentRevision,
     ReadingBlock,
-    ResourceIndexState,
-    SourcePart,
 )
 from rag.domain.models.provenance import SourceRef
-from rag.domain.models.structure import Section
+from rag.domain.models.structure import DocumentStructure, Section
 from rag.domain.repositories.mongo.resource_index_writer import (
     ResourceIndexWriter,
     StageAction,
 )
 from rag.utils.chunkers import SourceSpan
 
-_SOURCE_PART_CHARACTERS = 1_000_000
+from .source_parts import SourcePart, split_source_parts
+
+
+@dataclass(slots=True)
+class _ResourceIndexState:
+    """Mongo 发布状态机的内部 revision 指针投影。"""
+
+    resource_id: str
+    staged_content_revision: str | None = None
+    staged_document_version: int | None = None
+    applied_content_revision: str | None = None
+    applied_document_version: int | None = None
 
 
 class MongoResourceIndexWriter(ResourceIndexWriter):
@@ -39,11 +49,11 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         self,
         revision: ContentRevision,
         markdown: str,
-        sections: Sequence[Section],
+        structure: DocumentStructure,
         reading_blocks: Sequence[ReadingBlock],
         source_refs: Sequence[SourceRef],
     ) -> StageAction:
-        if revision.total_length != len(markdown):
+        if structure.total_length != len(markdown):
             raise ValueError("content revision length does not match markdown")
         expected_revision = build_content_revision_id(
             resource_id=revision.resource_id,
@@ -55,7 +65,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             raise ValueError("content revision identity does not match markdown")
         _validate_structure_records(
             revision=revision,
-            sections=sections,
+            structure=structure,
             reading_blocks=reading_blocks,
             source_refs=source_refs,
         )
@@ -63,7 +73,9 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         if action is not StageAction.STAGED:
             return action
 
-        stored_revision = ContentRevisionEntity(**_revision_document(revision))
+        stored_revision = ContentRevisionEntity(
+            **_revision_document(revision, structure)
+        )
         existing_revision = await ContentRevisionEntity.find_one(
             {"content_revision": revision.content_revision}
         )
@@ -76,7 +88,11 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         await SourcePartEntity.find(
             {"content_revision": revision.content_revision}
         ).delete_many()
-        parts = split_source_parts(revision, markdown)
+        parts = split_source_parts(
+            resource_id=revision.resource_id,
+            content_revision=revision.content_revision,
+            markdown=markdown,
+        )
         if parts:
             await SourcePartEntity.insert_many(
                 [SourcePartEntity(**_source_part_document(part)) for part in parts]
@@ -85,11 +101,11 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             await entity_type.find(
                 {"content_revision": revision.content_revision}
             ).delete_many()
-        if sections:
+        if structure.sections:
             await SectionEntity.insert_many(
                 [
                     SectionEntity(**_section_document(revision, section))
-                    for section in sections
+                    for section in structure.sections
                 ]
             )
         if reading_blocks:
@@ -172,7 +188,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             f"content revision {revision.content_revision} is no longer staged"
         )
 
-    async def _get_state(self, resource_id: str) -> ResourceIndexState | None:
+    async def _get_state(self, resource_id: str) -> _ResourceIndexState | None:
         entity = await ResourceIndexStateEntity.find_one({"resource_id": resource_id})
         if entity is None:
             return None
@@ -232,25 +248,8 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
             ).delete_many()
 
 
-def split_source_parts(revision: ContentRevision, markdown: str) -> list[SourcePart]:
-    if revision.total_length != len(markdown):
-        raise ValueError("content revision length does not match markdown")
-    return [
-        SourcePart(
-            resource_id=revision.resource_id,
-            content_revision=revision.content_revision,
-            part_index=index,
-            source_span=SourceSpan(
-                start, min(start + _SOURCE_PART_CHARACTERS, len(markdown))
-            ),
-            text=markdown[start : start + _SOURCE_PART_CHARACTERS],
-        )
-        for index, start in enumerate(range(0, len(markdown), _SOURCE_PART_CHARACTERS))
-    ]
-
-
-def _to_resource_index_state(record: ResourceIndexStateEntity) -> ResourceIndexState:
-    return ResourceIndexState(
+def _to_resource_index_state(record: ResourceIndexStateEntity) -> _ResourceIndexState:
+    return _ResourceIndexState(
         resource_id=record.resource_id,
         staged_content_revision=record.staged_content_revision,
         staged_document_version=record.staged_document_version,
@@ -259,15 +258,18 @@ def _to_resource_index_state(record: ResourceIndexStateEntity) -> ResourceIndexS
     )
 
 
-def _revision_document(revision: ContentRevision) -> dict[str, object]:
+def _revision_document(
+    revision: ContentRevision,
+    structure: DocumentStructure,
+) -> dict[str, object]:
     return {
         "resource_id": revision.resource_id,
         "content_revision": revision.content_revision,
         "document_version": revision.document_version,
         "content_hash": revision.content_hash,
         "index_schema_version": revision.index_schema_version,
-        "structure_mode": revision.structure_mode.value,
-        "total_length": revision.total_length,
+        "structure_mode": structure.mode.value,
+        "total_length": structure.total_length,
         "pages": [
             {
                 "page_index": page.page_index,
@@ -275,7 +277,7 @@ def _revision_document(revision: ContentRevision) -> dict[str, object]:
                 "start_offset": page.source_span.start_offset,
                 "end_offset": page.source_span.end_offset,
             }
-            for page in revision.pages
+            for page in structure.pages
         ],
         "anchors": [
             {
@@ -283,7 +285,7 @@ def _revision_document(revision: ContentRevision) -> dict[str, object]:
                 "start_offset": anchor.source_span.start_offset,
                 "end_offset": anchor.source_span.end_offset,
             }
-            for anchor in revision.anchors
+            for anchor in structure.anchors
         ],
     }
 
@@ -386,10 +388,11 @@ def _stage_state_filter(revision: ContentRevision) -> dict[str, object]:
 def _validate_structure_records(
     *,
     revision: ContentRevision,
-    sections: Sequence[Section],
+    structure: DocumentStructure,
     reading_blocks: Sequence[ReadingBlock],
     source_refs: Sequence[SourceRef],
 ) -> None:
+    sections = structure.sections
     sections_by_id = {section.section_id: section for section in sections}
     blocks_by_id = {block.block_id: block for block in reading_blocks}
 
@@ -406,7 +409,7 @@ def _validate_structure_records(
         raise ValueError("source refs contain duplicate chunk identities")
 
     for section in sections:
-        if section.own_span.end_offset > revision.total_length:
+        if section.own_span.end_offset > structure.total_length:
             raise ValueError(f"section {section.section_id} exceeds content revision")
         if (
             section.parent_section_id is not None
@@ -448,7 +451,7 @@ def _validate_structure_records(
 
 def _decide_stage(
     revision: ContentRevision,
-    state: ResourceIndexState | None,
+    state: _ResourceIndexState | None,
 ) -> StageAction:
     if state is None:
         return StageAction.STAGED

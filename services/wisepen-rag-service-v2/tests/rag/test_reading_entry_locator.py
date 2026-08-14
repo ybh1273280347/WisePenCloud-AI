@@ -10,12 +10,12 @@ from rag.application.rag.navigate import (
     build_retrieved_section_views,
 )
 from rag.domain.models.acl import PermissionScope, ResourceAcl
-from rag.domain.models.content import ContentRevision, ReadingBlock
+from rag.domain.models.content import ReadingBlock
 from rag.domain.models.graph import KnowledgeNode, KnowledgeNodeKind
-from rag.domain.models.navigation import NavigationState
 from rag.domain.models.provenance import SourceEvidence, SourceRef
 from rag.domain.models.retrieval import RetrievalCandidate
-from rag.domain.models.structure import Section, StructureMode
+from rag.domain.models.structure import Section
+from rag.domain.repositories.redis import NavigationState
 from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import RankDecision, RankedCandidate, RankResult
 
@@ -34,7 +34,7 @@ class _CandidateSearch:
     def __init__(self, candidates):
         self.candidates = candidates
 
-    async def search(self, request):
+    async def search(self, **kwargs):
         return self.candidates
 
 
@@ -54,9 +54,23 @@ class _AclReader:
         }
 
 
+class _RevokingAclReader(_AclReader):
+    """允许初次召回过滤，但在证据核验后撤销本地读取权限。"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+
+    async def get_resource_acls(self, resource_ids):
+        self.calls += 1
+        if self.calls == 1:
+            return await super().get_resource_acls(resource_ids)
+        return {}
+
+
 class _RevisionReader:
-    async def get_revision(self, resource_id):
-        return _revision(resource_id)
+    async def get_content_revision(self, resource_id):
+        return "revision-1"
 
 
 class _PublishedResourceReader:
@@ -122,18 +136,6 @@ class _StateStore:
         return NavigationState(state_id="nav-1", **kwargs)
 
 
-def _revision(resource_id="resource-1") -> ContentRevision:
-    return ContentRevision(
-        resource_id=resource_id,
-        content_revision="revision-1",
-        document_version=1,
-        content_hash="hash",
-        index_schema_version="rag-v2-content:v2",
-        structure_mode=StructureMode.SECTIONED,
-        total_length=10,
-    )
-
-
 def _section() -> Section:
     return Section(
         section_id="section-1",
@@ -167,7 +169,6 @@ def _candidate(chunk_id, span, *, block_id="block-1") -> RetrievalCandidate:
 
 def _record(candidate) -> SourceEvidence:
     return SourceEvidence(
-        revision=_revision(),
         source_ref=SourceRef(
             ref_id=candidate.source_ref_id,
             resource_id=candidate.resource_id,
@@ -267,7 +268,6 @@ async def test_locate_promotes_chunks_to_one_block_with_minimal_match_anchors() 
 def test_flat_text_retrieval_view_keeps_synthetic_section_context() -> None:
     candidate = _candidate("chunk-1", SourceSpan(0, 4))
     record = _record(candidate)
-    record.revision.structure_mode = StructureMode.FLAT_TEXT
     record.section.title = "全文片段 1"
     record.section.section_path = ["全文片段 1"]
 
@@ -358,5 +358,28 @@ async def test_locate_filters_resource_node_revoked_after_neo4j_query() -> None:
         )
     )
 
+    assert result.nodes == []
+    assert state_store.created["known_node_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_locate_drops_evidence_revoked_after_authoritative_read() -> None:
+    candidate = _candidate("chunk-1", SourceSpan(0, 4))
+    locator, state_store, _ = _locator(
+        [candidate],
+        ranked_ids=[_candidate_id(candidate)],
+        acl_reader=_RevokingAclReader(),
+        knowledge_graph=_KnowledgeGraph(nodes=[]),
+    )
+
+    result = await locator.locate(
+        LocateRequest(
+            session_id="session-1",
+            semantic_query="问题",
+            permission_scope=PermissionScope(user_id="user-1"),
+        )
+    )
+
+    assert result.sections == []
     assert result.nodes == []
     assert state_store.created["known_node_ids"] == []

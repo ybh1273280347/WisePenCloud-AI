@@ -6,7 +6,7 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qdrant_models
 
 from rag.domain import PermissionScope
-from rag.domain.models.retrieval import CandidateSearchRequest, RetrievalCandidate
+from rag.domain.models.retrieval import RetrievalCandidate
 from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
 from rag.utils.chunkers import SourceSpan
 
@@ -51,45 +51,52 @@ class QdrantCandidateSearcher(CandidateSearcher):
         self._bm25_options = dict(bm25_options or {})
         self._dense_vector_size = dense_vector_size
 
-    async def search(self, request: CandidateSearchRequest) -> list[RetrievalCandidate]:
-        if request.limit <= 0:
+    async def search(
+        self,
+        *,
+        lexical_query: str,
+        semantic_vector: Sequence[float],
+        permission_scope: PermissionScope,
+        limit: int,
+    ) -> list[RetrievalCandidate]:
+        if limit <= 0:
             return []
         if not await self._client.collection_exists(self._collection_name):
             return []
-        if not request.lexical_query.strip():
+        if not lexical_query.strip():
             raise ValueError("lexical_query must not be empty")
-        if not request.semantic_vector:
+        if not semantic_vector:
             raise ValueError("semantic_vector must not be empty")
         if (
             self._dense_vector_size is not None
-            and len(request.semantic_vector) != self._dense_vector_size
+            and len(semantic_vector) != self._dense_vector_size
         ):
             raise ValueError("semantic_vector size does not match collection")
 
-        query_filter = self._build_filter(request)
+        query_filter = self._build_filter(permission_scope)
         response = await self._client.query_points(
             collection_name=self._collection_name,
             prefetch=[
                 qdrant_models.Prefetch(
-                    query=list(request.semantic_vector),
+                    query=list(semantic_vector),
                     using=self._dense_vector_name,
                     filter=query_filter,
-                    limit=request.limit,
+                    limit=limit,
                 ),
                 qdrant_models.Prefetch(
                     query=qdrant_models.Document(
-                        text=request.lexical_query,
+                        text=lexical_query,
                         model="qdrant/bm25",
                         options=self._bm25_options or None,
                     ),
                     using=self._sparse_vector_name,
                     filter=query_filter,
-                    limit=request.limit,
+                    limit=limit,
                 ),
             ],
             query=qdrant_models.FusionQuery(fusion=qdrant_models.Fusion.RRF),
             query_filter=query_filter,
-            limit=request.limit,
+            limit=limit,
             with_payload=_PAYLOAD_FIELDS,
         )
         return [
@@ -98,13 +105,13 @@ class QdrantCandidateSearcher(CandidateSearcher):
         ]
 
     @staticmethod
-    def _build_filter(request: CandidateSearchRequest) -> qdrant_models.Filter:
+    def _build_filter(permission_scope: PermissionScope) -> qdrant_models.Filter:
         must: list[qdrant_models.Condition] = [
             qdrant_models.FieldCondition(
                 key="active",
                 match=qdrant_models.MatchValue(value=True),
             ),
-            _permission_filter(request.permission_scope),
+            _permission_filter(permission_scope),
         ]
         return qdrant_models.Filter(must=must)
 

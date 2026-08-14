@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from rag.domain.models.content import ContentRevision, ReadingBlock
+from rag.domain.models.content import ReadingBlock
 from rag.domain.models.structure import Section
 from rag.utils.chunkers import SourceSpan
 
@@ -27,7 +27,6 @@ class SourceRef:
 class SourceEvidence:
     """按 SourceRef 从当前已发布资源解析出的权威证据。"""
 
-    revision: ContentRevision
     source_ref: SourceRef
     reading_block: ReadingBlock
     section: Section

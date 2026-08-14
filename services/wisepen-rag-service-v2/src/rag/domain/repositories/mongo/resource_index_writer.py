@@ -6,7 +6,7 @@ from typing import Protocol
 
 from rag.domain.models.content import ContentRevision, ReadingBlock
 from rag.domain.models.provenance import SourceRef
-from rag.domain.models.structure import Section
+from rag.domain.models.structure import DocumentStructure
 
 
 class StageAction(StrEnum):
@@ -22,7 +22,7 @@ class ResourceIndexWriter(Protocol):
         self,
         revision: ContentRevision,
         markdown: str,
-        sections: Sequence[Section],
+        structure: DocumentStructure,
         reading_blocks: Sequence[ReadingBlock],
         source_refs: Sequence[SourceRef],
     ) -> StageAction: ...

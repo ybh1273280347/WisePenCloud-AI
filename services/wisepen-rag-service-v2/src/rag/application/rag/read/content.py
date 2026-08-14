@@ -5,9 +5,12 @@ from dataclasses import dataclass, field
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import ContentWindow, SectionContent
 from rag.domain.models.structure import Section
 from rag.domain.repositories.mongo import PublishedResourceReader
+from rag.domain.repositories.mongo.published_resource_reader import (
+    PublishedPageContent,
+    PublishedSectionContent,
+)
 
 
 class ContentNotFoundError(RuntimeError):
@@ -95,8 +98,8 @@ class DocumentContentReader:
         ):
             raise ContentAccessRevokedError(resource_id)
         return {
-            page_label: _to_page_content_view(window)
-            for page_label, window in pages.items()
+            page_label: _to_page_content_view(page_label, content)
+            for page_label, content in pages.items()
         }
 
     async def get_sections(
@@ -135,20 +138,22 @@ def format_page_range(page_labels: Sequence[str]) -> str | None:
     return f"{labels[0]} - {labels[-1]}"
 
 
-def _to_page_content_view(window: ContentWindow) -> PageContentView:
+def _to_page_content_view(
+    page_label: str,
+    content: PublishedPageContent,
+) -> PageContentView:
     return PageContentView(
-        text=window.text,
-        page_range=format_page_range(window.page_labels),
+        text=content.text,
+        page_range=page_label,
         sections=[
             _to_section_anchor_view(section, include_preview=False)
-            for section in window.sections
+            for section in content.sections
         ],
-        anchor_labels=list(window.anchor_labels),
+        anchor_labels=list(content.anchor_labels),
     )
 
 
-def _to_section_content_view(content: SectionContent) -> SectionContentView:
-    frontier = content.frontier
+def _to_section_content_view(content: PublishedSectionContent) -> SectionContentView:
     return SectionContentView(
         title=content.section.title,
         section_path=" > ".join(content.section.section_path),
@@ -156,10 +161,10 @@ def _to_section_content_view(content: SectionContent) -> SectionContentView:
         page_range=format_page_range(content.page_labels),
         anchor_labels=list(content.anchor_labels),
         navigation=SectionNavigationView(
-            parent=_optional_section_anchor_view(frontier.parent),
-            previous=_optional_section_anchor_view(frontier.previous),
-            next=_optional_section_anchor_view(frontier.next),
-            children=[_to_section_anchor_view(child) for child in frontier.children],
+            parent=_optional_section_anchor_view(content.parent),
+            previous=_optional_section_anchor_view(content.previous),
+            next=_optional_section_anchor_view(content.next),
+            children=[_to_section_anchor_view(child) for child in content.children],
         ),
     )
 
