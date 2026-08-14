@@ -3,20 +3,11 @@
 from dataclasses import dataclass, field
 
 from rag.domain.models.graph import (
+    GraphEvidence,
     KnowledgeEntityType,
     KnowledgeNodeKind,
     KnowledgeRelationType,
 )
-
-
-@dataclass(slots=True)
-class KnowledgeEvidence:
-    """窗口候选已定位到 SourceRef 的权威证据。"""
-
-    evidence_id: str
-    reading_block_id: str
-    quote: str
-    source_ref_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -25,7 +16,7 @@ class ExtractedKnowledgeNode:
     kind: KnowledgeNodeKind
     label: str
     entity_type: KnowledgeEntityType | None = None
-    evidence: KnowledgeEvidence | None = None
+    evidence: GraphEvidence | None = None
 
 
 @dataclass(slots=True)
@@ -33,7 +24,7 @@ class ExtractedKnowledgeRelation:
     source_local_id: str
     target_local_id: str
     relation_type: KnowledgeRelationType
-    evidence: KnowledgeEvidence
+    evidence: GraphEvidence
     predicate: str | None = None
 
 

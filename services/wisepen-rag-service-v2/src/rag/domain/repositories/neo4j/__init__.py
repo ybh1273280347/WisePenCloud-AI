@@ -1,5 +1,6 @@
 from .graph_acl_writer import GraphAclWriter
 from .knowledge_graph_repository import (
+    GraphSeedBlock,
     KnowledgeGraphRepository,
     KnowledgeGraphRevisionSupersededError,
     TraversedEdge,
@@ -8,6 +9,7 @@ from .knowledge_graph_repository import (
 
 __all__ = [
     "GraphAclWriter",
+    "GraphSeedBlock",
     "KnowledgeGraphRepository",
     "KnowledgeGraphRevisionSupersededError",
     "TraversedEdge",

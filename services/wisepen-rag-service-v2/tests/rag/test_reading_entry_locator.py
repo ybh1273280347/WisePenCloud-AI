@@ -122,8 +122,10 @@ class _KnowledgeGraph:
             if nodes is None
             else nodes
         )
+        self.request = None
 
     async def find_nodes(self, **kwargs):
+        self.request = kwargs
         return self.nodes
 
 
@@ -263,6 +265,35 @@ async def test_locate_promotes_chunks_to_one_block_with_minimal_match_anchors() 
     assert not hasattr(result.nodes[0], "resource_id")
     assert state_store.created["known_node_ids"] == ["node-1"]
     assert "known_sections" not in state_store.created
+
+
+@pytest.mark.asyncio
+async def test_locate_seeds_graph_from_full_promoted_block() -> None:
+    first = _candidate("chunk-1", SourceSpan(1, 4))
+    second = _candidate("chunk-2", SourceSpan(6, 9))
+    graph = _KnowledgeGraph()
+    locator, _, _ = _locator(
+        [first, second],
+        ranked_ids=[_candidate_id(first), _candidate_id(second)],
+        knowledge_graph=graph,
+    )
+
+    await locator.locate(
+        LocateRequest(
+            session_id="session-1",
+            semantic_query="问题",
+            permission_scope=PermissionScope(user_id="user-1"),
+            max_results=1,
+        )
+    )
+
+    blocks = graph.request["reading_blocks"]
+    assert len(blocks) == 1
+    assert blocks[0].reading_block_id == "block-1"
+    assert blocks[0].matched_source_spans == [
+        SourceSpan(1, 4),
+        SourceSpan(6, 9),
+    ]
 
 
 def test_flat_text_retrieval_view_keeps_synthetic_section_context() -> None:

@@ -4,18 +4,19 @@ import pytest
 
 from rag.core.persistence.neo4j import Neo4jKnowledgeGraphRepository
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import ReadingBlock
 from rag.domain.models.graph import (
+    GraphEvidence,
     KnowledgeEntityType,
     KnowledgeGraph,
+    KnowledgeMention,
     KnowledgeNode,
     KnowledgeNodeKind,
+    KnowledgeRelation,
     KnowledgeRelationType,
     TraversalDirection,
 )
-from rag.domain.models.provenance import SourceEvidence, SourceRef
-from rag.domain.models.structure import Section
 from rag.domain.repositories import KnowledgeGraphRevisionSupersededError
+from rag.domain.repositories.neo4j import GraphSeedBlock
 from rag.utils.chunkers import SourceSpan
 
 
@@ -78,6 +79,10 @@ async def test_repository_uses_v2_namespace_and_publishes_last() -> None:
         parameters for query, parameters in driver.calls if "UNWIND $relations" in query
     )
     assert all("relation_id" not in item for item in relation_call["relations"])
+    assert relation_call["relations"][0]["evidence_ids"] == ["evidence-1"]
+    assert relation_call["relations"][0]["evidence_reading_block_ids"] == [
+        "block-1"
+    ]
     assert any("RAG_V2_MENTION" in query for query in queries)
     publish_index = next(
         index
@@ -150,10 +155,10 @@ async def test_find_nodes_filters_published_revision_and_deduplicates() -> None:
         ]
     )
     repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
-    evidence = _evidence()
+    block = _seed_block()
 
     nodes = await repository.find_nodes(
-        evidence=[evidence, evidence],
+        reading_blocks=[block, block],
         permission_scope=PermissionScope(user_id="user-1"),
         limit=3,
     )
@@ -163,11 +168,15 @@ async def test_find_nodes_filters_published_revision_and_deduplicates() -> None:
     assert "resource.owner_id = $acl_user_id" in query
     assert "resource.content_revision = item.content_revision" in query
     assert "mention.graph_revision = resource.graph_revision" in query
-    assert parameters["evidence"] == [
+    assert parameters["reading_blocks"] == [
         {
             "resource_id": "resource-1",
             "content_revision": "revision-1",
-            "source_ref_id": "ref-1",
+            "reading_block_id": "block-1",
+            "rank": 0,
+            "matched_source_spans": [
+                {"start_offset": 0, "end_offset": 5}
+            ],
         }
     ]
     assert parameters["limit"] == 3
@@ -182,13 +191,50 @@ async def test_find_nodes_does_not_query_when_limit_is_zero() -> None:
     repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
 
     nodes = await repository.find_nodes(
-        evidence=[_evidence()],
+        reading_blocks=[_seed_block()],
         permission_scope=PermissionScope(user_id="user-1"),
         limit=0,
     )
 
     assert nodes == []
     assert driver.calls == []
+
+
+@pytest.mark.asyncio
+async def test_find_mentions_scopes_resources_prefers_blocks_and_limits_per_node() -> (
+    None
+):
+    driver = _Driver(
+        records=[
+            {
+                "mention_id": "mention-1",
+                "node_id": "node-1",
+                "evidence_id": "evidence-1",
+                "resource_id": "resource-1",
+                "content_revision": "revision-1",
+                "reading_block_id": "block-1",
+                "quote": "Alpha",
+                "start_offset": 0,
+                "end_offset": 5,
+            }
+        ]
+    )
+    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+
+    mentions = await repository.find_mentions(
+        node_ids=["node-1"],
+        resource_ids=["resource-1"],
+        preferred_reading_block_ids=["block-1"],
+        permission_scope=PermissionScope(user_id="user-1"),
+        limit_per_node=3,
+    )
+
+    query, parameters = driver.calls[0]
+    assert "RAG_V2_MENTION" in query
+    assert "collect(mention)[..$limit_per_node]" in query
+    assert parameters["preferred_reading_block_ids"] == ["block-1"]
+    assert parameters["limit_per_node"] == 3
+    assert mentions[0].evidence == _graph_evidence()
 
 
 @pytest.mark.asyncio
@@ -207,6 +253,7 @@ async def test_find_paths_uses_bounded_direction_revision_and_cycle_filter() -> 
 
     query, parameters = driver.calls[0]
     assert "*1..2]->(target)" in query
+    assert "RAG_V2_MENTION" not in query
     assert "single(other IN nodes(path)" in query
     assert "evidence.graph_status = 'published'" in query
     assert "evidence.graph_revision = relation.graph_revision" in query
@@ -228,7 +275,24 @@ async def test_find_paths_does_not_query_without_seed_nodes() -> None:
     assert driver.calls == []
 
 
+@pytest.mark.asyncio
+async def test_find_paths_rejects_misaligned_persisted_evidence_arrays() -> None:
+    record = _path_record()
+    record["edges"][0]["evidence_end_offsets"] = []
+    repository = Neo4jKnowledgeGraphRepository(
+        driver=_Driver(records=[record]),
+        database="rag-v2",
+    )
+
+    with pytest.raises(ValueError, match="misaligned"):
+        await repository.find_paths(
+            seed_node_ids=["node-a"],
+            permission_scope=PermissionScope(user_id="user-1"),
+        )
+
+
 def _graph() -> KnowledgeGraph:
+    evidence = _graph_evidence()
     return KnowledgeGraph(
         resource_id="resource-1",
         content_revision="revision-1",
@@ -238,42 +302,52 @@ def _graph() -> KnowledgeGraph:
                 node_id="entity-1",
                 kind=KnowledgeNodeKind.ENTITY,
                 label="Alpha",
+                entity_type=KnowledgeEntityType.CONCEPT,
+            ),
+            KnowledgeNode(
+                node_id="entity-2",
+                kind=KnowledgeNodeKind.ENTITY,
+                label="Beta",
+                entity_type=KnowledgeEntityType.CONCEPT,
+            )
+        ],
+        mentions=[
+            KnowledgeMention(
+                mention_id="mention-1",
+                node_id="entity-1",
+                evidence=evidence,
+            )
+        ],
+        relations=[
+            KnowledgeRelation(
+                edge_id="edge-1",
+                source_node_id="entity-1",
+                target_node_id="entity-2",
+                relation_type=KnowledgeRelationType.DEPENDS_ON,
+                evidence=[evidence],
             )
         ],
     )
 
 
-def _evidence() -> SourceEvidence:
-    source_span = SourceSpan(0, 5)
-    return SourceEvidence(
-        source_ref=SourceRef(
-            ref_id="ref-1",
-            resource_id="resource-1",
-            content_revision="revision-1",
-            chunk_id="chunk-1",
-            reading_block_id="block-1",
-            section_id="section-1",
-            section_path=["Alpha"],
-            source_spans=[source_span],
-        ),
-        reading_block=ReadingBlock(
-            block_id="block-1",
-            section_id="section-1",
-            ordinal=0,
-            raw_text="Alpha",
-            source_spans=[source_span],
-        ),
-        section=Section(
-            section_id="section-1",
-            title="Alpha",
-            level=1,
-            parent_section_id=None,
-            ordinal=0,
-            section_path=["Alpha"],
-            own_span=source_span,
-            subtree_span=source_span,
-        ),
-        source_text="Alpha",
+def _seed_block() -> GraphSeedBlock:
+    return GraphSeedBlock(
+        resource_id="resource-1",
+        content_revision="revision-1",
+        reading_block_id="block-1",
+        rank=0,
+        matched_source_spans=[SourceSpan(0, 5)],
+    )
+
+
+def _graph_evidence() -> GraphEvidence:
+    return GraphEvidence(
+        evidence_id="evidence-1",
+        resource_id="resource-1",
+        content_revision="revision-1",
+        reading_block_id="block-1",
+        source_span=SourceSpan(0, 5),
+        quote="Alpha",
     )
 
 
@@ -302,10 +376,13 @@ def _path_record() -> dict:
                 "target_node_id": "node-b",
                 "relation_type": "DEPENDS_ON",
                 "predicate": None,
-                "evidence_resource_id": "resource-1",
-                "source_content_revision": "revision-1",
+                "evidence_ids": ["evidence-1"],
+                "evidence_resource_ids": ["resource-1"],
+                "evidence_content_revisions": ["revision-1"],
+                "evidence_reading_block_ids": ["block-1"],
                 "evidence_quotes": ["Alpha depends on Beta."],
-                "evidence_source_ref_ids": ["ref-1"],
+                "evidence_start_offsets": [0],
+                "evidence_end_offsets": [22],
             }
         ],
     }

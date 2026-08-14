@@ -55,7 +55,16 @@ locateCandidate
       "node_id": "kn_demo_soil_compaction",
       "label": "土壤板结",
       "kind": "Entity",
-      "entity_type": "concept"
+      "entity_type": "concept",
+      "evidence": [
+        {
+          "evidence_id": "knev_demo_soil_compaction_mention",
+          "resource_id": "resource_demo_1",
+          "reading_block_id": "block_demo_mention",
+          "quote": "复核记录中的土壤板结样点",
+          "range": {"start_offset": 0, "end_offset": 12}
+        }
+      ]
     }
   ],
   "sections": [
@@ -234,8 +243,11 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
           "relation": "(\"土壤板结\")-[:CAUSES]->(\"表层积水\")",
           "evidence": [
             {
+              "evidence_id": "knev_demo_compaction_relation",
+              "resource_id": "resource_demo_1",
+              "reading_block_id": "block_demo_relation",
               "quote": "土壤板结会降低入渗速度，并使表层积水消退时间延长。",
-              "source_ref_ids": ["source_ref_demo_1"]
+              "range": {"start_offset": 0, "end_offset": 25}
             }
           ]
         }
@@ -250,17 +262,10 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
       "section_path": "入渗与排水检查 > 土壤表层",
       "reading_blocks": [
         {
-          "reading_block_id": "block_demo_1",
+          "reading_block_id": "block_demo_relation",
           "text": "土壤板结会降低入渗速度，并使表层积水消退时间延长。",
           "page_range": "1",
-          "anchor_labels": [],
-          "matches": [
-            {
-              "chunk_id": "chunk_demo_1",
-              "source_ref_id": "source_ref_demo_1",
-              "ranges": [{"start_offset": 0, "end_offset": 25}]
-            }
-          ]
+          "anchor_labels": []
         }
       ]
     }
@@ -270,19 +275,20 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
 
 契约重点：
 
-- `discovered_nodes` 只包含本次原子写入 state 的新节点，顺序保持首次发现顺序。
+- `discovered_nodes` 只包含本次原子写入 state 的新节点；每个非 Resource 节点携带路径资源内最多三条 mention 证据，并优先关系证据所在 ReadingBlock。
 - `paths[].text` 是按遍历顺序渲染的 Cypher 风格路线；节点标签经过 JSON 字符串转义。
 - `paths[].node_ids` 与路线中的节点位置对应，用于处理同名节点和后续导航。
 - `steps[].relation` 始终按关系事实的 `source -> target` 方向表达，不随遍历方向反转。
 - `RELATED_TO` 才会渲染 predicate；其他关系不输出 predicate。
-- `steps[].evidence` 将 quote 精确配对到真正包含它的 SourceRef。
-- `evidence_sections` 只包含本次实际引用的证据，并沿用 LOCATE 的 Section/ReadingBlock 视图。
+- `steps[].evidence` 直接给出关系 quote、ReadingBlock ID 和块内 Python 字符半开区间。
+- `evidence_sections` 是关系证据块与新节点 mention 证据块的去重并集，不包含 LOCATE 专属的 `chunk_id`、`source_ref_id` 或 `matches`。
+- MENTION 是节点到资源正文的内部来源边，只用于 LOCATE seed 和节点证据查询，不参与路径遍历。
 - 没有新增路径时固定返回 `discovered_nodes: []`、`paths: []`、`evidence_sections: []`，但保留 `state_id`。
 
 `relation_types` 支持：
 
 ```text
-MENTIONS, ABOUT, RELATED_TO, PART_OF, USES, PRODUCES, DEPENDS_ON,
+ABOUT, RELATED_TO, PART_OF, USES, PRODUCES, DEPENDS_ON,
 DERIVED_FROM, IMPLEMENTS, APPLIES_TO, CAUSES, COMPARES_WITH,
 CONTRADICTS, EXTENDS, SUPERSEDES, LOCATED_IN, AUTHORED_BY, DEFINES,
 EXPLAINS, EXAMPLE_OF, REQUIRES, CITES, PUBLISHED_IN, USES_DATASET,

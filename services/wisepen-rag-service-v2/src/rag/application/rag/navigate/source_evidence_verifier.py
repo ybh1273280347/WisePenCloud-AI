@@ -72,40 +72,6 @@ class SourceEvidenceVerifier:
             verified.append(record)
         return verified
 
-    async def verify_graph_evidence_refs(
-        self,
-        *,
-        resource_id: str,
-        content_revision: str,
-        source_ref_ids: Sequence[str],
-        quotes: Sequence[str],
-    ) -> list[SourceEvidence]:
-        """核验图关系引用仍属于当前发布 revision 的权威原文。"""
-        ids = list(dict.fromkeys(source_ref_ids))
-        try:
-            records = await self._reader.get_source_evidence(
-                resource_id,
-                content_revision,
-                ids,
-            )
-        except PublishedResourceRevisionError as error:
-            raise EvidenceRevisionError(str(error)) from error
-        except PublishedResourceCorruptError as error:
-            raise EvidenceCorruptError(str(error)) from error
-        if records is None:
-            raise EvidenceNotFoundError(resource_id)
-        if set(records) != set(ids):
-            missing = next(ref_id for ref_id in ids if ref_id not in records)
-            raise EvidenceNotFoundError(missing)
-
-        ordered = [records[ref_id] for ref_id in ids]
-        for quote in dict.fromkeys(quotes):
-            if not quote or not any(quote in record.source_text for record in ordered):
-                raise EvidenceCorruptError(
-                    f"knowledge evidence quote is absent from {resource_id}"
-                )
-        return ordered
-
     @staticmethod
     def _verify_candidate(
         candidate: RetrievalCandidate,

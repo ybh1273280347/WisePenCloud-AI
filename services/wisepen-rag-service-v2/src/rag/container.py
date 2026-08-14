@@ -22,6 +22,7 @@ from rag.application.rag.index import (
 from rag.application.rag.index.contextualize import ContextualTextIndexer
 from rag.application.rag.index.graph import QueryClientGraphRagLLM
 from rag.application.rag.navigate import (
+    GraphEvidenceVerifier,
     KnowledgeGraphExpander,
     ReadingCandidateLocator,
     SourceEvidenceVerifier,
@@ -174,6 +175,10 @@ class Container(containers.DeclarativeContainer):
     published_resource_reader = providers.Singleton(MongoPublishedResourceReader)
     evidence_verifier = providers.Singleton(
         SourceEvidenceVerifier,
+        reader=published_resource_reader,
+    )
+    graph_evidence_verifier = providers.Singleton(
+        GraphEvidenceVerifier,
         reader=published_resource_reader,
     )
 
@@ -357,7 +362,7 @@ class Container(containers.DeclarativeContainer):
         KnowledgeGraphExpander,
         knowledge_graph=knowledge_graph_repository,
         ranking_pipeline=expand_ranking_pipeline,
-        evidence_verifier=evidence_verifier,
+        evidence_verifier=graph_evidence_verifier,
         authorizer=permission_authorizer,
         state_store=navigation_state_store,
     )

@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from rag.utils.chunkers import SourceSpan
+
 
 class KnowledgeNodeKind(StrEnum):
     ENTITY = "Entity"
@@ -25,7 +27,6 @@ class KnowledgeEntityType(StrEnum):
 
 
 class KnowledgeRelationType(StrEnum):
-    MENTIONS = "MENTIONS"
     ABOUT = "ABOUT"
     RELATED_TO = "RELATED_TO"
     PART_OF = "PART_OF"
@@ -66,14 +67,42 @@ class KnowledgeNode:
 
 
 @dataclass(slots=True)
+class GraphEvidence:
+    """图事实在权威 Markdown 与 ReadingBlock 中的稳定证据。"""
+
+    evidence_id: str
+    resource_id: str
+    content_revision: str
+    reading_block_id: str
+    # Python 字符半开区间，坐标系属于当前 revision 的权威 Markdown。
+    source_span: SourceSpan
+    quote: str
+
+    def __post_init__(self) -> None:
+        if not all(
+            (
+                self.evidence_id,
+                self.resource_id,
+                self.content_revision,
+                self.reading_block_id,
+                self.quote,
+            )
+        ):
+            raise ValueError("graph evidence identity and quote must not be empty")
+        if (
+            self.source_span.end_offset - self.source_span.start_offset
+            != len(self.quote)
+        ):
+            raise ValueError("graph evidence span length must match quote length")
+
+
+@dataclass(slots=True)
 class KnowledgeMention:
     """一个知识节点在当前资源权威原文中的有证据出现。"""
 
     mention_id: str
     node_id: str
-    reading_block_id: str
-    source_ref_ids: list[str]
-    evidence_quote: str
+    evidence: GraphEvidence
 
 
 @dataclass(slots=True)
@@ -84,8 +113,7 @@ class KnowledgeRelation:
     source_node_id: str
     target_node_id: str
     relation_type: KnowledgeRelationType
-    evidence_quotes: list[str]
-    evidence_source_ref_ids: list[str]
+    evidence: list[GraphEvidence] = field(default_factory=list)
     predicate: str | None = None
 
 

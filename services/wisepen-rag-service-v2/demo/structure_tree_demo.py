@@ -24,7 +24,7 @@ from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.read.outline import DocumentOutlineNode, DocumentOutlineReader
 from rag.domain.models.acl import PermissionScope, ResourceAcl
 from rag.domain.repositories.mongo.published_resource_reader import (
-    PublishedDocumentOutline,
+    PublishedDocumentStructure,
 )
 
 
@@ -46,11 +46,11 @@ class _DemoStructureReader:
     async def get_document_structure(
         self,
         resource_id: str,
-    ) -> PublishedDocumentOutline | None:
+    ) -> PublishedDocumentStructure | None:
         document = self._documents.get(resource_id)
         if document is None:
             return None
-        return PublishedDocumentOutline(
+        return PublishedDocumentStructure(
             resource_id=document.resource_id,
             content_revision=document.revision.content_revision,
             document_version=document.revision.document_version,

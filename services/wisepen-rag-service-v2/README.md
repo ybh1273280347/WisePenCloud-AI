@@ -28,13 +28,13 @@ WisePen RAG v2 是 WisePen 的文档知识服务。它不把 RAG 简化成“召
              └──────────────┬──────┴──────────────┬──────┘
                             │                     │
                        navigation state      VERIFY
-                                               SourceRef -> 原文
+                                      SourceRef / GraphEvidence -> 原文
 ```
 
 - **检索结果是阅读入口。** Qdrant 命中的 RetrievalChunk 会先经过核验，再提升成完整 ReadingBlock；模型得到的是可读正文和 Section 锚点，而不是孤立的内部 chunk。
 - **确定性阅读不依赖检索。** `getPageContent` 和 `getSectionContent` 直接读取 applied revision。Section 是稳定地址，`flat_text` 也通过 synthetic Section 保留这条路径。
 - **图谱结果是可导航的事实。** `expandGraph` 将领域 node/edge/path 投影成模型可读的有向路径文本，同时保留 node ID 作为后续导航锚点。
-- **证据不是装饰字段。** 每条关系 quote 都会和实际包含该 quote 的 SourceRef 精确配对，并回到同构的 Section/ReadingBlock 视图。
+- **证据不是装饰字段。** LOCATE 用 SourceRef 核验检索入口；EXPAND 用 GraphEvidence 将关系和新节点提及直接定位到权威 Markdown 与 ReadingBlock。
 - **权限和 revision 是每次读取的边界。** 资源撤权、applied revision 切换或证据不一致时，服务 fail closed，不返回看似完整的旧数据。
 
 ## 能力地图
@@ -57,7 +57,7 @@ locateCandidate
       ├──> getSectionContent       直接读取权威正文
       │
       └──> expandGraph             沿新节点探索
-              │ source_ref_ids
+              │ relation / node evidence ReadingBlocks
               └──> getSectionContent
 ```
 
@@ -94,7 +94,8 @@ POST /internal/rag/expandGraph
 | `Section` | 导航 | 标题层级、稳定地址和阅读顺序 |
 | `ReadingBlock` | LLM | 连续、完整、适合阅读的父级正文窗口 |
 | `RetrievalChunk` | 检索器 | embedding、BM25、融合和 rerank 的评分单位 |
-| `SourceRef` | 证据系统 | 将派生结果映射回权威 Markdown 的字符范围 |
+| `SourceRef` | 检索核验 | 将 RetrievalChunk 映射回权威 Markdown 与 ReadingBlock |
+| `GraphEvidence` | 图谱核验 | 将关系或节点提及直接映射到权威 Markdown 与 ReadingBlock |
 | graph node/relation | 探索器 | 提供可继续扩展且有原文证据的关系路径 |
 
 搜索对象、阅读对象、导航对象和证据对象被有意分开。这是 v2 最重要的设计约束之一。

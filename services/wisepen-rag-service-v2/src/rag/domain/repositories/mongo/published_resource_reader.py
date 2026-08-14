@@ -5,12 +5,14 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from rag.domain.models.content import ReadingBlock
-from rag.domain.models.provenance import SourceEvidence, SourceRef
+from rag.domain.models.graph import GraphEvidence
+from rag.domain.models.provenance import SourceEvidence
 from rag.domain.models.structure import DocumentStructure, PageRange, Section
+from rag.utils.chunkers import SourceSpan
 
 
 @dataclass(slots=True)
-class PublishedDocumentOutline:
+class PublishedDocumentStructure:
     """目录用例读取的已发布版本元数据和结构事实。"""
 
     resource_id: str
@@ -53,7 +55,17 @@ class GraphBuildSource:
     markdown: str
     structure: DocumentStructure
     reading_blocks: list[ReadingBlock] = field(default_factory=list)
-    source_refs: list[SourceRef] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class PublishedGraphEvidence:
+    """已从当前发布 revision 核验并定位到 ReadingBlock 的图谱证据。"""
+
+    evidence: GraphEvidence
+    reading_block: ReadingBlock
+    section: Section
+    # Python 字符半开区间，坐标系属于 reading_block.raw_text。
+    block_range: SourceSpan
 
 
 class PublishedResourceRevisionError(RuntimeError):
@@ -72,7 +84,7 @@ class PublishedResourceReader(Protocol):
     async def get_document_structure(
         self,
         resource_id: str,
-    ) -> PublishedDocumentOutline | None: ...
+    ) -> PublishedDocumentStructure | None: ...
 
     async def get_pages(
         self,
@@ -92,6 +104,13 @@ class PublishedResourceReader(Protocol):
         content_revision: str,
         source_ref_ids: Sequence[str],
     ) -> dict[str, SourceEvidence] | None: ...
+
+    async def get_graph_evidence(
+        self,
+        resource_id: str,
+        content_revision: str,
+        evidence: Sequence[GraphEvidence],
+    ) -> dict[str, PublishedGraphEvidence] | None: ...
 
     async def get_graph_build_source(
         self,

@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from common.core.domain import GroupRoleType
 from common.core.exceptions import ServiceException
@@ -7,10 +9,14 @@ from rag.api.endpoints.expand import expand_graph
 from rag.api.endpoints.locate import locate_candidate
 from rag.api.schemas import CandidateLocateRequest, GraphExpandRequest
 from rag.application.rag.navigate import (
-    GraphEvidenceView,
+    DiscoveredKnowledgeNodeView,
+    GraphEvidenceRangeView,
+    GraphEvidenceRefView,
+    GraphEvidenceSectionView,
     GraphExpandResult,
     GraphPathStepView,
     GraphPathView,
+    GraphReadingBlockView,
     KnowledgeNodeView,
     LocateError,
     LocateResult,
@@ -76,6 +82,22 @@ def _source() -> RetrievedSectionView:
     )
 
 
+def _graph_source() -> GraphEvidenceSectionView:
+    return GraphEvidenceSectionView(
+        resource_id="resource-1",
+        section_id="section-1",
+        title="标题",
+        section_path="父标题 > 标题",
+        reading_blocks=[
+            GraphReadingBlockView(
+                reading_block_id="block-1",
+                text="完整正文",
+                page_range="1 - 2",
+            )
+        ],
+    )
+
+
 @pytest.mark.asyncio
 async def test_locate_endpoint_uses_authenticated_identity_and_compact_contract() -> None:
     locator = _Locator(
@@ -119,8 +141,20 @@ async def test_graph_endpoint_returns_llm_readable_paths_and_evidence_sections()
         GraphExpandResult(
             state_id="state-1",
             discovered_nodes=[
-                KnowledgeNodeView("node-1", "Alpha", KnowledgeNodeKind.ENTITY),
-                KnowledgeNodeView("node-2", "Beta", KnowledgeNodeKind.ENTITY),
+                DiscoveredKnowledgeNodeView(
+                    "node-2",
+                    "Beta",
+                    KnowledgeNodeKind.ENTITY,
+                    evidence=[
+                        GraphEvidenceRefView(
+                            evidence_id="node-evidence-1",
+                            resource_id="resource-1",
+                            reading_block_id="block-1",
+                            quote="正文",
+                            range=GraphEvidenceRangeView(2, 4),
+                        )
+                    ],
+                ),
             ],
             paths=[
                 GraphPathView(
@@ -130,16 +164,19 @@ async def test_graph_endpoint_returns_llm_readable_paths_and_evidence_sections()
                         GraphPathStepView(
                             relation='("Alpha")-[:DEPENDS_ON]->("Beta")',
                             evidence=[
-                                GraphEvidenceView(
+                                GraphEvidenceRefView(
+                                    evidence_id="relation-evidence-1",
+                                    resource_id="resource-1",
+                                    reading_block_id="block-1",
                                     quote="正文",
-                                    source_ref_ids=["ref-1"],
+                                    range=GraphEvidenceRangeView(2, 4),
                                 )
                             ],
                         )
                     ],
                 )
             ],
-            evidence_sections=[_source()],
+            evidence_sections=[_graph_source()],
         )
     )
 
@@ -157,11 +194,24 @@ async def test_graph_endpoint_returns_llm_readable_paths_and_evidence_sections()
     payload = response.data.model_dump(mode="json")
     assert payload["paths"][0]["text"] == '("Alpha")-[:DEPENDS_ON]->("Beta")'
     assert payload["paths"][0]["steps"][0]["evidence"] == [
-        {"quote": "正文", "source_ref_ids": ["ref-1"]}
+        {
+            "evidence_id": "relation-evidence-1",
+            "resource_id": "resource-1",
+            "reading_block_id": "block-1",
+            "quote": "正文",
+            "range": {"start_offset": 2, "end_offset": 4},
+        }
     ]
-    assert payload["evidence_sections"][0]["reading_blocks"][0]["matches"][0][
-        "source_ref_id"
-    ] == "ref-1"
+    assert payload["discovered_nodes"][0]["evidence"][0]["reading_block_id"] == (
+        "block-1"
+    )
+    graph_block = payload["evidence_sections"][0]["reading_blocks"][0]
+    assert graph_block["page_range"] == "1 - 2"
+    assert "page_labels" not in graph_block
+    serialized = json.dumps(payload)
+    assert "chunk_id" not in serialized
+    assert "source_ref" not in serialized
+    assert "matches" not in serialized
     assert "nodes" not in payload
     assert "edges" not in payload
     assert "sources" not in payload

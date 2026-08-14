@@ -9,6 +9,9 @@ from rag.domain.models.graph import (
     KnowledgeNodeKind,
 )
 from rag.domain.models.provenance import SourceEvidence
+from rag.domain.repositories.mongo.published_resource_reader import (
+    PublishedGraphEvidence,
+)
 
 
 @dataclass(slots=True)
@@ -48,6 +51,27 @@ class RetrievedSectionView:
     title: str
     section_path: str
     reading_blocks: list[RetrievalReadingBlockView] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class GraphReadingBlockView:
+    """EXPAND 证据对应的完整 ReadingBlock，不携带检索命中字段。"""
+
+    reading_block_id: str
+    text: str
+    page_range: str | None = None
+    anchor_labels: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class GraphEvidenceSectionView:
+    """EXPAND 为新关系或新节点补充的结构化阅读材料。"""
+
+    resource_id: str
+    section_id: str
+    title: str
+    section_path: str
+    reading_blocks: list[GraphReadingBlockView] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -103,6 +127,41 @@ def build_retrieved_section_views(
                 chunk_id=record.source_ref.chunk_id,
                 source_ref_id=record.source_ref.ref_id,
                 ranges=_relative_match_ranges(record),
+            )
+        )
+
+    return list(sections.values())
+
+
+def build_graph_evidence_section_views(
+    records: Sequence[PublishedGraphEvidence],
+) -> list[GraphEvidenceSectionView]:
+    """按首次证据顺序聚合完整 ReadingBlock，并彻底隔离检索 matches。"""
+    sections: dict[tuple[str, str], GraphEvidenceSectionView] = {}
+    seen_blocks: set[tuple[str, str]] = set()
+
+    for record in records:
+        resource_id = record.evidence.resource_id
+        section_key = (resource_id, record.section.section_id)
+        section_view = sections.setdefault(
+            section_key,
+            GraphEvidenceSectionView(
+                resource_id=resource_id,
+                section_id=record.section.section_id,
+                title=record.section.title,
+                section_path=" > ".join(record.section.section_path),
+            ),
+        )
+        block_key = (resource_id, record.reading_block.block_id)
+        if block_key in seen_blocks:
+            continue
+        seen_blocks.add(block_key)
+        section_view.reading_blocks.append(
+            GraphReadingBlockView(
+                reading_block_id=record.reading_block.block_id,
+                text=record.reading_block.raw_text,
+                page_range=_format_page_range(record.reading_block.page_labels),
+                anchor_labels=list(record.reading_block.anchor_labels),
             )
         )
 

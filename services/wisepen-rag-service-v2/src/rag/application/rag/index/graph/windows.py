@@ -9,7 +9,6 @@
 
 from dataclasses import dataclass, field
 
-from rag.domain.models.provenance import SourceRef
 from rag.domain.repositories.mongo.published_resource_reader import GraphBuildSource
 from rag.utils.chunkers import SourceSpan
 from rag.utils.xml_markup import xml_attr, xml_cdata
@@ -42,7 +41,6 @@ class KnowledgeExtractionWindow:
     字段说明：
     - ``text``：窗口主文本（必属当前 ReadingBlock）。
     - ``source_mappings``：窗口局部坐标到原文坐标的映射表。
-    - ``source_refs``：当前 ReadingBlock 全部 SourceRef，供证据命中后回源。
     - ``previous_context`` / ``next_context``：邻接 ReadingBlock 的上下文，仅作消歧，
       不可作为 evidence 来源。
     """
@@ -55,7 +53,6 @@ class KnowledgeExtractionWindow:
     ordinal: int
     text: str
     source_mappings: list[ExtractionSourceMapping] = field(default_factory=list)
-    source_refs: list[SourceRef] = field(default_factory=list)
     previous_context: str = ""
     next_context: str = ""
 
@@ -87,15 +84,6 @@ def build_extraction_windows(
 
         # 计算 ReadingBlock 全量文本的局部→原文映射，供后续窗口裁剪复用。
         mappings = _source_mappings(source.markdown, block.raw_text, block.source_spans)
-        # 当前 block 的全部 SourceRef；evidence 命中后通过这些 ref 回源。
-        source_refs = [
-            source_ref
-            for source_ref in source.source_refs
-            if source_ref.reading_block_id == block.block_id
-        ]
-        if not source_refs:
-            continue
-
         # 邻接 ReadingBlock：仅同 Section 内的前/后块才作为上下文，避免跨主题污染。
         previous = source.reading_blocks[block_index - 1] if block_index else None
         next_block = (
@@ -124,7 +112,6 @@ def build_extraction_windows(
                     text=block.raw_text[start:end],
                     # 把全量 mappings 裁剪到当前窗口范围内，并转换为窗口局部坐标。
                     source_mappings=_clip_mappings(mappings, start, end),
-                    source_refs=list(source_refs),
                     # 仅在窗口起点注入 previous_context（避免每个切分窗口都重复携带）。
                     previous_context=(
                         previous.raw_text[-_ADJACENT_CONTEXT_CHARACTERS:]

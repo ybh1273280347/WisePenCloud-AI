@@ -2,14 +2,15 @@ from rag.application.rag.index.constructor import merge_candidate_graph
 from rag.application.rag.index.graph.models import (
     ExtractedKnowledgeNode,
     ExtractedKnowledgeRelation,
-    KnowledgeEvidence,
     KnowledgeWindowExtraction,
 )
 from rag.domain.models.graph import (
+    GraphEvidence,
     KnowledgeEntityType,
     KnowledgeNodeKind,
     KnowledgeRelationType,
 )
+from rag.utils.chunkers import SourceSpan
 
 
 def test_merge_canonicalizes_unicode_case_and_builds_mentions() -> None:
@@ -38,7 +39,7 @@ def test_merge_canonicalizes_unicode_case_and_builds_mentions() -> None:
     assert len(alpha_nodes) == 1
     assert alpha_nodes[0].label == "Alpha"
     assert len(graph.mentions) == 4
-    assert {mention.reading_block_id for mention in graph.mentions} == {
+    assert {mention.evidence.reading_block_id for mention in graph.mentions} == {
         "block-1",
         "block-2",
     }
@@ -65,8 +66,10 @@ def test_merge_deduplicates_equivalent_relations_and_evidence_across_windows() -
     )
 
     assert len(graph.relations) == 1
-    assert graph.relations[0].evidence_quotes == ["Alpha depends on Beta."]
-    assert graph.relations[0].evidence_source_ref_ids == ["source-1"]
+    assert [
+        item.quote for item in graph.relations[0].evidence
+    ] == ["Alpha depends on Beta."]
+    assert graph.relations[0].evidence[0].reading_block_id == "block-1"
     assert len(graph.mentions) == 2
 
 
@@ -120,16 +123,19 @@ def _extraction(
         evidence_id=f"{evidence_id}:alpha",
         reading_block_id=reading_block_id,
         quote="Alpha",
+        content_revision=content_revision,
     )
     beta_evidence = _evidence(
         evidence_id=f"{evidence_id}:beta",
         reading_block_id=reading_block_id,
         quote="Beta",
+        content_revision=content_revision,
     )
     relation_evidence = _evidence(
         evidence_id=f"{evidence_id}:relation",
         reading_block_id=reading_block_id,
         quote="Alpha depends on Beta.",
+        content_revision=content_revision,
     )
     return KnowledgeWindowExtraction(
         resource_id="resource-1",
@@ -166,10 +172,13 @@ def _evidence(
     evidence_id: str,
     reading_block_id: str,
     quote: str,
-) -> KnowledgeEvidence:
-    return KnowledgeEvidence(
+    content_revision: str,
+) -> GraphEvidence:
+    return GraphEvidence(
         evidence_id=evidence_id,
+        resource_id="resource-1",
+        content_revision=content_revision,
         reading_block_id=reading_block_id,
+        source_span=SourceSpan(0, len(quote)),
         quote=quote,
-        source_ref_ids=["source-1"],
     )

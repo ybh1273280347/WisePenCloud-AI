@@ -8,6 +8,7 @@ from rag.core.persistence.mongo import (
     published_resource_reader,
 )
 from rag.core.persistence.mongo.source_parts import SourcePart, assemble_source_text
+from rag.domain.models.graph import GraphEvidence
 from rag.domain.repositories.mongo import (
     PublishedResourceCorruptError,
     PublishedResourceRevisionError,
@@ -200,6 +201,14 @@ async def test_reader_returns_none_without_published_revision(monkeypatch) -> No
     assert (
         await reader.get_source_evidence("resource-1", "revision-1", ["ref-1"]) is None
     )
+    assert (
+        await reader.get_graph_evidence(
+            "resource-1",
+            "revision-1",
+            [_graph_evidence()],
+        )
+        is None
+    )
     with pytest.raises(PublishedResourceRevisionError):
         await reader.get_graph_build_source("resource-1", "revision-1")
 
@@ -223,6 +232,11 @@ async def test_reader_projects_structure_content_evidence_and_graph_source(
         "resource-1",
         "revision-1",
     )
+    graph_evidence = await reader.get_graph_evidence(
+        "resource-1",
+        "revision-1",
+        [_graph_evidence()],
+    )
 
     assert structure is not None
     assert structure.content_revision == "revision-1"
@@ -244,6 +258,9 @@ async def test_reader_projects_structure_content_evidence_and_graph_source(
         "block-1",
         "block-2",
     ]
+    assert graph_evidence is not None
+    assert graph_evidence["evidence-1"].block_range == SourceSpan(0, 4)
+    assert graph_evidence["evidence-1"].reading_block.raw_text == "Body"
 
 
 @pytest.mark.asyncio
@@ -268,6 +285,23 @@ async def test_reader_rejects_source_ref_without_ownership_records(monkeypatch) 
             "resource-1",
             "revision-1",
             ["ref-1"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_reader_rejects_graph_evidence_outside_its_reading_block(
+    monkeypatch,
+) -> None:
+    _install_published_resource(monkeypatch)
+    evidence = _graph_evidence()
+    evidence.source_span = SourceSpan(9, 13)
+    evidence.quote = "Tail"
+
+    with pytest.raises(PublishedResourceCorruptError, match="outside"):
+        await MongoPublishedResourceReader().get_graph_evidence(
+            "resource-1",
+            "revision-1",
+            [evidence],
         )
 
 
@@ -298,4 +332,15 @@ def _part(index: int, start: int, end: int, text: str) -> SourcePart:
         part_index=index,
         source_span=SourceSpan(start, end),
         text=text,
+    )
+
+
+def _graph_evidence() -> GraphEvidence:
+    return GraphEvidence(
+        evidence_id="evidence-1",
+        resource_id="resource-1",
+        content_revision="revision-1",
+        reading_block_id="block-1",
+        source_span=SourceSpan(5, 9),
+        quote="Body",
     )

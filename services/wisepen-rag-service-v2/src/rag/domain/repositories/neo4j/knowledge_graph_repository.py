@@ -6,16 +6,30 @@ from typing import Protocol
 
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.graph import (
+    GraphEvidence,
     KnowledgeGraph,
+    KnowledgeMention,
     KnowledgeNode,
     KnowledgeRelationType,
     TraversalDirection,
 )
-from rag.domain.models.provenance import SourceEvidence
+from rag.utils.chunkers import SourceSpan
 
 
 class KnowledgeGraphRevisionSupersededError(RuntimeError):
     """写入任务对应的内容版本已被更新版本取代。"""
+
+
+@dataclass(slots=True)
+class GraphSeedBlock:
+    """LOCATE 提升出的 ReadingBlock 及其检索排序提示。"""
+
+    resource_id: str
+    content_revision: str
+    reading_block_id: str
+    rank: int
+    # 命中区间只影响块内 mention 排序，不限制 seed 候选范围。
+    matched_source_spans: list[SourceSpan] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -26,10 +40,7 @@ class TraversedEdge:
     source_node_id: str
     target_node_id: str
     relation_type: KnowledgeRelationType
-    evidence_resource_id: str
-    source_content_revision: str
-    evidence_quotes: list[str]
-    evidence_source_ref_ids: list[str]
+    evidence: list[GraphEvidence] = field(default_factory=list)
     predicate: str | None = None
 
 
@@ -74,10 +85,20 @@ class KnowledgeGraphRepository(Protocol):
     async def find_nodes(
         self,
         *,
-        evidence: Sequence[SourceEvidence],
+        reading_blocks: Sequence[GraphSeedBlock],
         permission_scope: PermissionScope,
         limit: int,
     ) -> list[KnowledgeNode]: ...
+
+    async def find_mentions(
+        self,
+        *,
+        node_ids: Sequence[str],
+        resource_ids: Sequence[str],
+        preferred_reading_block_ids: Sequence[str],
+        permission_scope: PermissionScope,
+        limit_per_node: int,
+    ) -> list[KnowledgeMention]: ...
 
     async def find_paths(
         self,

@@ -65,8 +65,8 @@ class DocumentOutlineReader:
         ):
             raise ContentNotFoundError(resource_id)
 
-        snapshot = await self._structure_reader.get_document_structure(resource_id)
-        if snapshot is None:
+        structure = await self._structure_reader.get_document_structure(resource_id)
+        if structure is None:
             raise ContentNotFoundError(resource_id)
 
         # 返回前再次校验，避免读取期间资源失去可读权限。
@@ -77,11 +77,11 @@ class DocumentOutlineReader:
             raise ContentAccessRevokedError(resource_id)
 
         return DocumentOutlineResult(
-            resource_id=snapshot.resource_id,
-            content_revision=snapshot.content_revision,
-            document_version=snapshot.document_version,
-            total_length=snapshot.total_length,
-            outline=_to_outline(snapshot.sections, snapshot.pages),
+            resource_id=structure.resource_id,
+            content_revision=structure.content_revision,
+            document_version=structure.document_version,
+            total_length=structure.total_length,
+            outline=_to_outline(structure.sections, structure.pages),
         )
 
 

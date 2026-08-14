@@ -15,6 +15,7 @@ from rag.application.rag.navigate import (
     EvidenceCorruptError,
     EvidenceNotFoundError,
     EvidenceRevisionError,
+    GraphEvidenceVerifier,
     SourceEvidenceVerifier,
 )
 from rag.application.rag.read import (
@@ -28,9 +29,14 @@ from rag.core.persistence.mongo.resource_index_writer import (
 )
 from rag.domain.models.acl import PermissionScope, ResourceAcl
 from rag.domain.models.content import ReadingBlock
+from rag.domain.models.graph import GraphEvidence
 from rag.domain.models.provenance import SourceEvidence, SourceRef
 from rag.domain.models.retrieval import RetrievalCandidate, RetrievalChunk
+from rag.domain.models.structure import Section
 from rag.domain.repositories import PublishedResourceRevisionError, StageAction
+from rag.domain.repositories.mongo.published_resource_reader import (
+    PublishedGraphEvidence,
+)
 from rag.utils.chunkers import SourceSpan
 
 
@@ -65,7 +71,7 @@ def test_revision_identity_and_unicode_length_are_stable() -> None:
     assert not hasattr(revision, "total_length")
     assert structure.total_length == len(markdown)
     assert revision.content_hash
-    assert revision.index_schema_version == "rag-v2-content:v2"
+    assert revision.index_schema_version == "rag-v2-content:v3"
 
 
 @pytest.mark.parametrize(
@@ -345,37 +351,42 @@ async def test_verifier_rejects_candidate_identity_or_text_drift(changes) -> Non
 
 
 @pytest.mark.asyncio
-async def test_verifier_accepts_only_authoritative_graph_quote() -> None:
-    markdown, structure, blocks, _, refs, revision = _evidence_facts()
-    record = SourceEvidence(
-        source_ref=refs[0],
-        reading_block=blocks[0],
-        section=next(
-            section
-            for section in structure.sections
-            if section.section_id == refs[0].section_id
-        ),
-        source_text=markdown[
-            refs[0].source_spans[0].start_offset : refs[0].source_spans[0].end_offset
-        ],
+async def test_graph_verifier_preserves_graph_evidence_identity_and_order() -> None:
+    evidence = GraphEvidence(
+        evidence_id="evidence-1",
+        resource_id="resource-1",
+        content_revision="revision-1",
+        reading_block_id="block-1",
+        source_span=SourceSpan(0, 4),
+        quote="正文内容",
     )
-    verifier = SourceEvidenceVerifier(reader=_PublishedResourceReader(record))
+    span = SourceSpan(0, 4)
+    block = ReadingBlock(
+        block_id="block-1",
+        section_id="section-1",
+        ordinal=0,
+        raw_text="正文内容",
+        source_spans=[span],
+    )
+    section = Section(
+        section_id="section-1",
+        title="标题",
+        level=1,
+        parent_section_id=None,
+        ordinal=0,
+        section_path=["标题"],
+        own_span=span,
+        subtree_span=span,
+    )
+    record = PublishedGraphEvidence(evidence, block, section, span)
 
-    verified = await verifier.verify_graph_evidence_refs(
-        resource_id=revision.resource_id,
-        content_revision=revision.content_revision,
-        source_ref_ids=[refs[0].ref_id],
-        quotes=["正文内容"],
-    )
+    class _Reader:
+        async def get_graph_evidence(self, resource_id, content_revision, items):
+            return {evidence.evidence_id: record}
+
+    verified = await GraphEvidenceVerifier(reader=_Reader()).verify([evidence])
 
     assert verified == [record]
-    with pytest.raises(EvidenceCorruptError):
-        await verifier.verify_graph_evidence_refs(
-            resource_id=revision.resource_id,
-            content_revision=revision.content_revision,
-            source_ref_ids=[refs[0].ref_id],
-            quotes=["不存在的断言"],
-        )
 
 
 def _retrieval_candidate(

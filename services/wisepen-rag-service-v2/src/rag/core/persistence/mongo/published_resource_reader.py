@@ -15,6 +15,7 @@ from rag.domain.entities import (
 from rag.domain.models.content import (
     ReadingBlock,
 )
+from rag.domain.models.graph import GraphEvidence
 from rag.domain.models.provenance import SourceEvidence, SourceRef
 from rag.domain.models.structure import (
     DocumentAnchor,
@@ -25,7 +26,8 @@ from rag.domain.models.structure import (
 )
 from rag.domain.repositories.mongo.published_resource_reader import (
     GraphBuildSource,
-    PublishedDocumentOutline,
+    PublishedDocumentStructure,
+    PublishedGraphEvidence,
     PublishedPageContent,
     PublishedResourceCorruptError,
     PublishedResourceReader,
@@ -81,7 +83,7 @@ class MongoPublishedResourceReader(PublishedResourceReader):
     async def get_document_structure(
         self,
         resource_id: str,
-    ) -> PublishedDocumentOutline | None:
+    ) -> PublishedDocumentStructure | None:
         revision = await self._get_published_revision(resource_id)
         if revision is None:
             return None
@@ -96,7 +98,7 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             .sort("+own_start")
             .to_list()
         )
-        return PublishedDocumentOutline(
+        return PublishedDocumentStructure(
             resource_id=revision.resource_id,
             content_revision=revision.content_revision,
             document_version=revision.document_version,
@@ -309,9 +311,6 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             .sort([("start_offset", 1), ("ordinal", 1)])
             .to_list()
         )
-        refs = await SourceRefEntity.find(
-            {"resource_id": resource_id, "content_revision": content_revision}
-        ).to_list()
         return GraphBuildSource(
             resource_id=resource_id,
             content_revision=content_revision,
@@ -324,8 +323,113 @@ class MongoPublishedResourceReader(PublishedResourceReader):
                 anchors=list(revision.anchors),
             ),
             reading_blocks=[_to_reading_block(entity) for entity in blocks],
-            source_refs=[_to_source_ref(entity) for entity in refs],
         )
+
+    async def get_graph_evidence(
+        self,
+        resource_id: str,
+        content_revision: str,
+        evidence: Sequence[GraphEvidence],
+    ) -> dict[str, PublishedGraphEvidence] | None:
+        """把图谱原文坐标解析为当前发布 ReadingBlock 内的精确区间。"""
+        revision = await self._get_published_revision(resource_id)
+        if revision is None:
+            return None
+        self._require_revision(revision, content_revision)
+
+        requested: dict[str, GraphEvidence] = {}
+        for item in evidence:
+            if (
+                item.resource_id != resource_id
+                or item.content_revision != content_revision
+            ):
+                raise PublishedResourceCorruptError(
+                    f"graph evidence {item.evidence_id} has invalid revision ownership"
+                )
+            existing = requested.get(item.evidence_id)
+            if existing is not None and existing != item:
+                raise PublishedResourceCorruptError(
+                    f"graph evidence {item.evidence_id} has conflicting payloads"
+                )
+            requested[item.evidence_id] = item
+        if not requested:
+            return {}
+
+        full_span = SourceSpan(0, revision.total_length)
+        parts = await self._get_parts(content_revision, [full_span])
+        markdown = assemble_source_text(parts, [full_span])
+        if sha256(markdown.encode("utf-8")).hexdigest() != revision.content_hash:
+            raise PublishedResourceCorruptError(
+                f"content revision {content_revision} hash does not match source parts"
+            )
+
+        block_entities = await ReadingBlockEntity.find(
+            {
+                "resource_id": resource_id,
+                "content_revision": content_revision,
+                "block_id": {
+                    "$in": list(
+                        {item.reading_block_id for item in requested.values()}
+                    )
+                },
+            }
+        ).to_list()
+        blocks_by_id = {
+            entity.block_id: _to_reading_block(entity) for entity in block_entities
+        }
+        section_entities = await SectionEntity.find(
+            {
+                "resource_id": resource_id,
+                "content_revision": content_revision,
+                "section_id": {
+                    "$in": list(
+                        {block.section_id for block in blocks_by_id.values()}
+                    )
+                },
+            }
+        ).to_list()
+        sections_by_id = {
+            entity.section_id: _to_section(entity) for entity in section_entities
+        }
+
+        resolved: dict[str, PublishedGraphEvidence] = {}
+        for item in requested.values():
+            block = blocks_by_id.get(item.reading_block_id)
+            if block is None:
+                raise PublishedResourceCorruptError(
+                    f"graph evidence {item.evidence_id} has no ReadingBlock"
+                )
+            section = sections_by_id.get(block.section_id)
+            if section is None:
+                raise PublishedResourceCorruptError(
+                    f"ReadingBlock {block.block_id} has no Section"
+                )
+            if (
+                item.source_span.start_offset < 0
+                or item.source_span.end_offset > len(markdown)
+                or markdown[
+                    item.source_span.start_offset : item.source_span.end_offset
+                ]
+                != item.quote
+            ):
+                raise PublishedResourceCorruptError(
+                    f"graph evidence {item.evidence_id} does not match markdown"
+                )
+
+            block_range = _relative_graph_range(block, item)
+            if block.raw_text[
+                block_range.start_offset : block_range.end_offset
+            ] != item.quote:
+                raise PublishedResourceCorruptError(
+                    f"graph evidence {item.evidence_id} does not match ReadingBlock"
+                )
+            resolved[item.evidence_id] = PublishedGraphEvidence(
+                evidence=item,
+                reading_block=block,
+                section=section,
+                block_range=block_range,
+            )
+        return resolved
 
     async def _get_sections_for_revision(
         self,
@@ -465,6 +569,31 @@ def _to_source_ref(record: SourceRefEntity) -> SourceRef:
 
 def _overlaps(left: SourceSpan, right: SourceSpan) -> bool:
     return left.start_offset < right.end_offset and right.start_offset < left.end_offset
+
+
+def _relative_graph_range(
+    block: ReadingBlock,
+    evidence: GraphEvidence,
+) -> SourceSpan:
+    """把单一原文 span 映射为 ReadingBlock 拼接文本中的字符半开区间。"""
+    block_offset = 0
+    for index, block_span in enumerate(block.source_spans):
+        if (
+            evidence.source_span.start_offset >= block_span.start_offset
+            and evidence.source_span.end_offset <= block_span.end_offset
+        ):
+            start = (
+                block_offset
+                + evidence.source_span.start_offset
+                - block_span.start_offset
+            )
+            return SourceSpan(start, start + len(evidence.quote))
+        block_offset += block_span.end_offset - block_span.start_offset
+        if index + 1 < len(block.source_spans):
+            block_offset += 2
+    raise PublishedResourceCorruptError(
+        f"graph evidence {evidence.evidence_id} is outside its ReadingBlock"
+    )
 
 
 def _overlapping_labels(

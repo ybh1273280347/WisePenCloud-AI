@@ -8,20 +8,23 @@ from neo4j import AsyncDriver, RoutingControl
 from rag.application.rag.index.constructor.graph_merge import resource_node_id
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.graph import (
+    GraphEvidence,
     KnowledgeEntityType,
     KnowledgeGraph,
+    KnowledgeMention,
     KnowledgeNode,
     KnowledgeNodeKind,
     KnowledgeRelationType,
     TraversalDirection,
 )
-from rag.domain.models.provenance import SourceEvidence
 from rag.domain.repositories.neo4j.knowledge_graph_repository import (
+    GraphSeedBlock,
     KnowledgeGraphRepository,
     KnowledgeGraphRevisionSupersededError,
     TraversedEdge,
     TraversedPath,
 )
+from rag.utils.chunkers import SourceSpan
 
 
 class GraphStatus(StrEnum):
@@ -90,8 +93,13 @@ MERGE (source)-[relation:{_RELATION_TYPE} {{edge_id: item.edge_id}}]->(target)
 SET relation.relation_type = item.relation_type,
     relation.predicate = item.predicate,
     relation.evidence_resource_id = $resource_id,
+    relation.evidence_ids = item.evidence_ids,
+    relation.evidence_resource_ids = item.evidence_resource_ids,
+    relation.evidence_content_revisions = item.evidence_content_revisions,
+    relation.evidence_reading_block_ids = item.evidence_reading_block_ids,
     relation.evidence_quotes = item.evidence_quotes,
-    relation.evidence_source_ref_ids = item.evidence_source_ref_ids,
+    relation.evidence_start_offsets = item.evidence_start_offsets,
+    relation.evidence_end_offsets = item.evidence_end_offsets,
     relation.source_content_revision = $content_revision,
     relation.graph_revision = $graph_revision
 """
@@ -102,8 +110,10 @@ MATCH (resource:{_RESOURCE_LABEL} {{resource_id: $resource_id}})
 MATCH (target:{_NODE_LABEL} {{node_id: item.node_id}})
 MERGE (resource)-[mention:{_MENTION_TYPE} {{mention_id: item.mention_id}}]->(target)
 SET mention.reading_block_id = item.reading_block_id,
-    mention.source_ref_ids = item.source_ref_ids,
+    mention.evidence_id = item.evidence_id,
     mention.evidence_quote = item.evidence_quote,
+    mention.evidence_start_offset = item.evidence_start_offset,
+    mention.evidence_end_offset = item.evidence_end_offset,
     mention.evidence_resource_id = $resource_id,
     mention.source_content_revision = $content_revision,
     mention.graph_revision = $graph_revision
@@ -164,16 +174,26 @@ DELETE acl
 """
 
 _FIND_NODES = """
-UNWIND $evidence AS item
+UNWIND $reading_blocks AS item
 MATCH (resource:RagV2ResourceNode {{resource_id: item.resource_id}})
       -[mention:RAG_V2_MENTION]->(node:RagV2Node)
 WHERE resource.graph_status = $published_status
   AND resource.content_revision = item.content_revision
   AND mention.source_content_revision = item.content_revision
+  AND mention.evidence_resource_id = resource.resource_id
   AND mention.graph_revision = resource.graph_revision
-  AND item.source_ref_id IN mention.source_ref_ids
+  AND mention.reading_block_id = item.reading_block_id
   AND {acl_filter}
-RETURN DISTINCT node.node_id AS node_id,
+WITH node,
+     min(item.rank) AS block_rank,
+     min(CASE
+       WHEN any(span IN item.matched_source_spans
+         WHERE span.start_offset < mention.evidence_end_offset
+           AND span.end_offset > mention.evidence_start_offset)
+       THEN 0 ELSE 1
+     END) AS match_rank,
+     min(mention.evidence_start_offset) AS evidence_start
+RETURN node.node_id AS node_id,
        CASE
            WHEN node:RagV2EntityNode THEN 'Entity'
            WHEN node:RagV2ExternalSourceNode THEN 'ExternalSource'
@@ -182,35 +202,69 @@ RETURN DISTINCT node.node_id AS node_id,
        coalesce(node.label, node.resource_id) AS label,
        node.entity_type AS entity_type,
        node.resource_id AS resource_id
-ORDER BY node_id
+ORDER BY block_rank, match_rank, evidence_start, node_id
 LIMIT $limit
+"""
+
+_FIND_MENTIONS = """
+UNWIND $node_ids AS requested_node_id
+MATCH (resource:RagV2ResourceNode)-[mention:RAG_V2_MENTION]->
+      (node:RagV2Node)
+WHERE node.node_id = requested_node_id
+  AND resource.resource_id IN $resource_ids
+  AND resource.graph_status = $published_status
+  AND mention.source_content_revision = resource.content_revision
+  AND mention.evidence_resource_id = resource.resource_id
+  AND mention.graph_revision = resource.graph_revision
+  AND {acl_filter}
+WITH requested_node_id AS node_id, mention
+ORDER BY node_id, mention.evidence_start_offset, mention.evidence_id
+WITH node_id, mention.reading_block_id AS block_id, head(collect(mention)) AS mention
+WITH node_id, mention,
+     CASE WHEN mention.reading_block_id IN $preferred_reading_block_ids
+          THEN 0 ELSE 1 END AS preferred_rank
+ORDER BY node_id, preferred_rank, mention.evidence_resource_id,
+         mention.evidence_start_offset, mention.evidence_id
+WITH node_id, collect(mention)[..$limit_per_node] AS mentions
+UNWIND mentions AS mention
+RETURN mention.mention_id AS mention_id,
+       node_id,
+       mention.evidence_id AS evidence_id,
+       mention.evidence_resource_id AS resource_id,
+       mention.source_content_revision AS content_revision,
+       mention.reading_block_id AS reading_block_id,
+       mention.evidence_quote AS quote,
+       mention.evidence_start_offset AS start_offset,
+       mention.evidence_end_offset AS end_offset
+ORDER BY node_id, mention.evidence_resource_id,
+         mention.evidence_start_offset, mention.evidence_id
 """
 
 _PATH_PATTERNS = {
     (
         TraversalDirection.OUT,
         1,
-    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1]->(target)",
+    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION*1]->(target)",
     (
         TraversalDirection.OUT,
         2,
-    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1..2]->(target)",
+    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION*1..2]->(target)",
     (
         TraversalDirection.IN,
         1,
-    ): "(seed)<-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1]-(target)",
+    ): "(seed)<-[:RAG_V2_KNOWLEDGE_RELATION*1]-(target)",
     (
         TraversalDirection.IN,
         2,
-    ): "(seed)<-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1..2]-(target)",
+    ): "(seed)<-[:RAG_V2_KNOWLEDGE_RELATION*1..2]-(target)",
     (
         TraversalDirection.BOTH,
         1,
-    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1]-(target)",
+    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION*1]-(target)",
     (
         TraversalDirection.BOTH,
         2,
-    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION|RAG_V2_MENTION*1..2]-(target)",
+    ): "(seed)-[:RAG_V2_KNOWLEDGE_RELATION*1..2]-(target)",
 }
 
 
@@ -292,8 +346,31 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
                     "target_node_id": relation.target_node_id,
                     "relation_type": relation.relation_type.value,
                     "predicate": relation.predicate,
-                    "evidence_quotes": list(relation.evidence_quotes),
-                    "evidence_source_ref_ids": list(relation.evidence_source_ref_ids),
+                    # Neo4j relationship properties不能存嵌套对象；并行数组由读取适配器
+                    # 校验等长后重建 GraphEvidence，避免 quote 与坐标失去关联。
+                    "evidence_ids": [
+                        evidence.evidence_id for evidence in relation.evidence
+                    ],
+                    "evidence_resource_ids": [
+                        evidence.resource_id for evidence in relation.evidence
+                    ],
+                    "evidence_content_revisions": [
+                        evidence.content_revision for evidence in relation.evidence
+                    ],
+                    "evidence_reading_block_ids": [
+                        evidence.reading_block_id for evidence in relation.evidence
+                    ],
+                    "evidence_quotes": [
+                        evidence.quote for evidence in relation.evidence
+                    ],
+                    "evidence_start_offsets": [
+                        evidence.source_span.start_offset
+                        for evidence in relation.evidence
+                    ],
+                    "evidence_end_offsets": [
+                        evidence.source_span.end_offset
+                        for evidence in relation.evidence
+                    ],
                 }
                 for relation in graph.relations
             ],
@@ -305,9 +382,13 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
                 {
                     "mention_id": mention.mention_id,
                     "node_id": mention.node_id,
-                    "reading_block_id": mention.reading_block_id,
-                    "source_ref_ids": list(mention.source_ref_ids),
-                    "evidence_quote": mention.evidence_quote,
+                    "reading_block_id": mention.evidence.reading_block_id,
+                    "evidence_id": mention.evidence.evidence_id,
+                    "evidence_quote": mention.evidence.quote,
+                    "evidence_start_offset": (
+                        mention.evidence.source_span.start_offset
+                    ),
+                    "evidence_end_offset": mention.evidence.source_span.end_offset,
                 }
                 for mention in graph.mentions
             ],
@@ -384,31 +465,59 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
     async def find_nodes(
         self,
         *,
-        evidence: Sequence[SourceEvidence],
+        reading_blocks: Sequence[GraphSeedBlock],
         permission_scope: PermissionScope,
         limit: int,
     ) -> list[KnowledgeNode]:
-        if not evidence or limit <= 0:
+        if not reading_blocks or limit <= 0:
             return []
 
-        query_evidence = [
+        blocks_by_key: dict[tuple[str, str, str], GraphSeedBlock] = {}
+        for block in reading_blocks:
+            key = (
+                block.resource_id,
+                block.content_revision,
+                block.reading_block_id,
+            )
+            item = blocks_by_key.get(key)
+            if item is None:
+                item = GraphSeedBlock(
+                    resource_id=block.resource_id,
+                    content_revision=block.content_revision,
+                    reading_block_id=block.reading_block_id,
+                    rank=block.rank,
+                )
+                blocks_by_key[key] = item
+            else:
+                item.rank = min(item.rank, block.rank)
+            for span in block.matched_source_spans:
+                if span not in item.matched_source_spans:
+                    item.matched_source_spans.append(span)
+
+        query_blocks = [
             {
-                "resource_id": record.source_ref.resource_id,
-                "content_revision": record.source_ref.content_revision,
-                "source_ref_id": record.source_ref.ref_id,
+                "resource_id": block.resource_id,
+                "content_revision": block.content_revision,
+                "reading_block_id": block.reading_block_id,
+                "rank": block.rank,
+                "matched_source_spans": [
+                    {
+                        "start_offset": span.start_offset,
+                        "end_offset": span.end_offset,
+                    }
+                    for span in block.matched_source_spans
+                ],
             }
-            for record in evidence
+            for block in blocks_by_key.values()
         ]
-        query_evidence = list(
-            {tuple(sorted(item.items())): item for item in query_evidence}.values()
-        )
+
         acl_filter, acl_parameters = _acl_predicate(
             permission_scope,
             resource_alias="resource",
         )
         result = await self._driver.execute_query(
             _FIND_NODES.format(acl_filter=acl_filter),
-            evidence=query_evidence,
+            reading_blocks=query_blocks,
             limit=limit,
             published_status=GraphStatus.PUBLISHED.value,
             **acl_parameters,
@@ -416,6 +525,37 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
             routing_=RoutingControl.READ,
         )
         return [_to_knowledge_node(record) for record in result.records]
+
+    async def find_mentions(
+        self,
+        *,
+        node_ids: Sequence[str],
+        resource_ids: Sequence[str],
+        preferred_reading_block_ids: Sequence[str],
+        permission_scope: PermissionScope,
+        limit_per_node: int,
+    ) -> list[KnowledgeMention]:
+        if not node_ids or not resource_ids or limit_per_node <= 0:
+            return []
+
+        acl_filter, acl_parameters = _acl_predicate(
+            permission_scope,
+            resource_alias="resource",
+        )
+        result = await self._driver.execute_query(
+            _FIND_MENTIONS.format(acl_filter=acl_filter),
+            node_ids=list(dict.fromkeys(node_ids)),
+            resource_ids=list(dict.fromkeys(resource_ids)),
+            preferred_reading_block_ids=list(
+                dict.fromkeys(preferred_reading_block_ids)
+            ),
+            limit_per_node=limit_per_node,
+            published_status=GraphStatus.PUBLISHED.value,
+            **acl_parameters,
+            database_=self._database,
+            routing_=RoutingControl.READ,
+        )
+        return [_to_mention(record) for record in result.records]
 
     async def find_paths(
         self,
@@ -453,8 +593,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
                 WHERE NOT path_node:RagV2ResourceNode OR {path_node_acl})
               AND all(relation IN relationships(path)
                 WHERE (size($relation_types) = 0
-                       OR coalesce(relation.relation_type, 'MENTIONS')
-                          IN $relation_types)
+                       OR relation.relation_type IN $relation_types)
                   AND EXISTS {{
                     MATCH (evidence:RagV2ResourceNode {{
                       resource_id: relation.evidence_resource_id
@@ -476,21 +615,20 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
                      resource_id: path_node.resource_id
                    }}] AS nodes,
                    [relation IN relationships(path) | {{
-                     edge_id: coalesce(relation.edge_id, relation.mention_id),
+                     edge_id: relation.edge_id,
                      source_node_id: startNode(relation).node_id,
                      target_node_id: endNode(relation).node_id,
-                     relation_type: coalesce(relation.relation_type, 'MENTIONS'),
+                     relation_type: relation.relation_type,
                      predicate: relation.predicate,
-                     evidence_resource_id: relation.evidence_resource_id,
-                     source_content_revision: relation.source_content_revision,
-                     evidence_quotes: coalesce(
-                       relation.evidence_quotes,
-                       [relation.evidence_quote]
-                     ),
-                     evidence_source_ref_ids: coalesce(
-                       relation.evidence_source_ref_ids,
-                       relation.source_ref_ids
-                     )
+                     evidence_ids: relation.evidence_ids,
+                     evidence_resource_ids: relation.evidence_resource_ids,
+                     evidence_content_revisions:
+                       relation.evidence_content_revisions,
+                     evidence_reading_block_ids:
+                       relation.evidence_reading_block_ids,
+                     evidence_quotes: relation.evidence_quotes,
+                     evidence_start_offsets: relation.evidence_start_offsets,
+                     evidence_end_offsets: relation.evidence_end_offsets
                    }}] AS edges
             ORDER BY size(edges), nodes[-1].node_id
             LIMIT $limit
@@ -536,11 +674,61 @@ def _to_edge(item) -> TraversedEdge:
         target_node_id=item["target_node_id"],
         relation_type=KnowledgeRelationType(item["relation_type"]),
         predicate=item.get("predicate"),
-        evidence_resource_id=item["evidence_resource_id"],
-        source_content_revision=item["source_content_revision"],
-        evidence_quotes=list(item["evidence_quotes"]),
-        evidence_source_ref_ids=list(item["evidence_source_ref_ids"]),
+        evidence=_to_evidence(item),
     )
+
+
+def _to_mention(item) -> KnowledgeMention:
+    return KnowledgeMention(
+        mention_id=item["mention_id"],
+        node_id=item["node_id"],
+        evidence=GraphEvidence(
+            evidence_id=item["evidence_id"],
+            resource_id=item["resource_id"],
+            content_revision=item["content_revision"],
+            reading_block_id=item["reading_block_id"],
+            source_span=SourceSpan(item["start_offset"], item["end_offset"]),
+            quote=item["quote"],
+        ),
+    )
+
+
+def _to_evidence(item) -> list[GraphEvidence]:
+    """校验 Neo4j 并行数组并重建不可拆分的图谱证据对象。"""
+    fields = [
+        list(item["evidence_ids"]),
+        list(item["evidence_resource_ids"]),
+        list(item["evidence_content_revisions"]),
+        list(item["evidence_reading_block_ids"]),
+        list(item["evidence_quotes"]),
+        list(item["evidence_start_offsets"]),
+        list(item["evidence_end_offsets"]),
+    ]
+    evidence_count = len(fields[0])
+    if not evidence_count or any(
+        len(values) != evidence_count for values in fields[1:]
+    ):
+        raise ValueError("graph relation evidence arrays are empty or misaligned")
+
+    return [
+        GraphEvidence(
+            evidence_id=evidence_id,
+            resource_id=resource_id,
+            content_revision=content_revision,
+            reading_block_id=reading_block_id,
+            source_span=SourceSpan(start_offset, end_offset),
+            quote=quote,
+        )
+        for (
+            evidence_id,
+            resource_id,
+            content_revision,
+            reading_block_id,
+            quote,
+            start_offset,
+            end_offset,
+        ) in zip(*fields, strict=True)
+    ]
 
 
 def _acl_predicate(

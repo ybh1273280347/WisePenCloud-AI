@@ -3,7 +3,7 @@
 合并流程的核心目标：
 1. 把不同窗口抽取出的 ``ExtractedKnowledgeNode`` / ``ExtractedKnowledgeRelation``
    规范化为统一的 ``KnowledgeNode`` / ``KnowledgeRelation``，按 canonical key 去重。
-2. 保留每条知识对应的 evidence（引用、ReadingBlock、source_ref），用于回源。
+2. 保留每条知识对应的完整 GraphEvidence，不拆散引用、ReadingBlock 与原文坐标。
 3. 通过序列化后的稳定哈希生成 ``graph_revision``，使图谱内容可比对、可缓存。
 """
 
@@ -15,10 +15,10 @@ from hashlib import sha256
 from rag.application.rag.index.graph.models import (
     ExtractedKnowledgeNode,
     ExtractedKnowledgeRelation,
-    KnowledgeEvidence,
     KnowledgeWindowExtraction,
 )
 from rag.domain.models.graph import (
+    GraphEvidence,
     KnowledgeGraph,
     KnowledgeMention,
     KnowledgeNode,
@@ -29,7 +29,7 @@ from rag.domain.models.graph import (
 
 # 用于在 graph_facts 中标记当前合并产物的版本，参与 graph_revision 计算，
 # 便于在 schema 变更时让旧 revision 失效。
-_GRAPH_MERGE_VERSION = "knowledge-graph-merge:v1"
+_GRAPH_MERGE_VERSION = "knowledge-graph-merge:v2"
 
 
 def merge_candidate_graph(
@@ -61,7 +61,7 @@ def merge_candidate_graph(
     }
     # mention 索引：(node_id, evidence_id) -> evidence。
     # 同一个节点可能在多个窗口被提及，evidence_id 用于区分不同的引用来源。
-    mentions: dict[tuple[str, str], KnowledgeEvidence] = {}
+    mentions: dict[tuple[str, str], GraphEvidence] = {}
     # 关系分组：按 (source, target, type, predicate_key) 聚合同一对节点间的同型关系，
     # 用于后续合并 evidence、生成稳定 edge_id。
     grouped_relations: dict[
@@ -90,11 +90,21 @@ def merge_candidate_graph(
 
             # 资源节点本身不收集 evidence（避免把资源根节点当作可被引用的实体）。
             if candidate.evidence is not None and node.kind is not KnowledgeNodeKind.RESOURCE:
+                _require_evidence_ownership(
+                    candidate.evidence,
+                    resource_id,
+                    content_revision,
+                )
                 mentions[(node.node_id, candidate.evidence.evidence_id)] = (
                     candidate.evidence
                 )
 
         for relation in extraction.relations:
+            _require_evidence_ownership(
+                relation.evidence,
+                resource_id,
+                content_revision,
+            )
             source_node_id = local_node_ids.get(relation.source_local_id)
             target_node_id = local_node_ids.get(relation.target_local_id)
             # 引用的端点未在该窗口出现则丢弃该关系（无法稳定解析端点）。
@@ -142,9 +152,14 @@ def merge_candidate_graph(
             {
                 "node_id": node_id,
                 "evidence_id": evidence_id,
+                "resource_id": evidence.resource_id,
+                "content_revision": evidence.content_revision,
                 "reading_block_id": evidence.reading_block_id,
+                "source_span": [
+                    evidence.source_span.start_offset,
+                    evidence.source_span.end_offset,
+                ],
                 "quote": evidence.quote,
-                "source_ref_ids": sorted(set(evidence.source_ref_ids)),
             }
             for (node_id, evidence_id), evidence in sorted(mentions.items())
         ],
@@ -187,9 +202,7 @@ def merge_candidate_graph(
                     evidence_id,
                 ),
                 node_id=node_id,
-                reading_block_id=evidence.reading_block_id,
-                source_ref_ids=sorted(set(evidence.source_ref_ids)),
-                evidence_quote=evidence.quote,
+                evidence=evidence,
             )
             for (node_id, evidence_id), evidence in sorted(mentions.items())
         ],
@@ -273,8 +286,14 @@ def _relation_fact(
         "evidence": [
             {
                 "evidence_id": evidence_id,
+                "resource_id": item.resource_id,
+                "content_revision": item.content_revision,
+                "reading_block_id": item.reading_block_id,
+                "source_span": [
+                    item.source_span.start_offset,
+                    item.source_span.end_offset,
+                ],
                 "quote": item.quote,
-                "source_ref_ids": sorted(set(item.source_ref_ids)),
             }
             for evidence_id, item in sorted(evidence.items())
         ],
@@ -291,8 +310,7 @@ def _merged_relation(
     合并策略：
     - edge_id 由 graph_revision + 端点 + 类型 + predicate_key 共同哈希得到，
       保证只要图谱内容相同，关系 ID 就稳定。
-    - evidence_quotes / evidence_source_ref_ids 取所有原始关系的并集并排序，
-      用于回源展示。
+    - evidence 按 evidence_id 去重并排序，证据各字段保持同一对象内的关联。
     """
     source_node_id, target_node_id, relation_type, predicate_key = key
     evidence = {
@@ -312,14 +330,7 @@ def _merged_relation(
         target_node_id=target_node_id,
         relation_type=relation_type,
         predicate=predicate,
-        evidence_quotes=sorted({item.quote for item in evidence.values()}),
-        evidence_source_ref_ids=sorted(
-            {
-                source_ref_id
-                for item in evidence.values()
-                for source_ref_id in item.source_ref_ids
-            }
-        ),
+        evidence=[item for _, item in sorted(evidence.items())],
     )
 
 
@@ -339,6 +350,18 @@ def _relation_predicate(
         for relation in relations
         if relation.predicate is not None
     )
+
+
+def _require_evidence_ownership(
+    evidence: GraphEvidence,
+    resource_id: str,
+    content_revision: str,
+) -> None:
+    """阻止窗口候选把其它资源或 revision 的原文坐标混入当前图。"""
+    if evidence.resource_id != resource_id:
+        raise ValueError("knowledge evidence belongs to another resource")
+    if evidence.content_revision != content_revision:
+        raise ValueError("knowledge evidence belongs to another revision")
 
 
 def _normalize_label(label: str) -> str:

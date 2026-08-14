@@ -3,13 +3,13 @@
 GraphRAG SDK 输出的是原始候选图（节点 + 关系 + properties），存在如下问题：
 - 节点 ID 带窗口前缀，无法跨窗口稳定。
 - 没有强制的原文证据（evidence_quote 是字符串，但可能不是原文连续子串）。
-- 没有强制的原文坐标和 source_ref_ids，无法回源。
+- 没有强制的原文坐标，无法回到 ReadingBlock 和权威 Markdown。
 
 本模块的 ``KnowledgeCandidateValidator`` 负责把这些原始候选收紧为
 ``KnowledgeWindowExtraction``：
 1. 只接受符合 schema 的节点 / 关系（type、assertion、predicate 合法）。
 2. 把 evidence_quote 映射回原文坐标，生成稳定的 evidence_id。
-3. 收集与该原文范围相交的 source_ref_ids，构成完整回源链。
+3. 保留 ReadingBlock 归属与权威 Markdown 坐标，构成图谱自己的回源链。
 """
 
 from enum import StrEnum
@@ -18,6 +18,7 @@ from hashlib import sha256
 from neo4j_graphrag.experimental.components.types import Neo4jGraph, Neo4jNode
 
 from rag.domain.models.graph import (
+    GraphEvidence,
     KnowledgeEntityType,
     KnowledgeNodeKind,
     KnowledgeRelationType,
@@ -27,7 +28,6 @@ from rag.utils.chunkers import SourceSpan
 from .models import (
     ExtractedKnowledgeNode,
     ExtractedKnowledgeRelation,
-    KnowledgeEvidence,
     KnowledgeWindowExtraction,
 )
 from .relations import relation_pattern_allowed
@@ -193,16 +193,16 @@ class KnowledgeCandidateValidator:
 def _locate_evidence(
     window: KnowledgeExtractionWindow,
     raw_quote: object,
-) -> KnowledgeEvidence | None:
-    """在窗口文本中定位 quote，并以原文坐标确定其 SourceRef 归属。
+) -> GraphEvidence | None:
+    """在窗口文本中定位 quote，并记录其 ReadingBlock 与原文坐标。
 
     关键步骤：
     1. 在 ``window.text`` 中查找 quote 的所有出现位置（``find`` 返回首个，
        失败则继续向后搜索）。
     2. 对每个候选位置，用 ``_map_source_span`` 把窗口局部坐标映射到原文坐标。
        一次 quote 可能跨多个 source mapping，此时该位置无法稳定映射，跳过。
-    3. 找到能完整落入某个 mapping 的位置后，计算与该 span 相交的 source_ref_ids，
-       生成稳定的 evidence_id（包含 resource/revision/block/span/quote 五元组）。
+    3. 找到能完整落入某个 mapping 的位置后，生成稳定的 evidence_id；身份包含
+       resource/revision/block/span/quote，且不依赖检索分块。
 
     返回 ``None`` 表示 quote 不是窗口文本的连续子串，或无法稳定映射到原文。
     """
@@ -218,35 +218,21 @@ def _locate_evidence(
         local_end = local_start + len(quote)
         source_span = _map_source_span(window, local_start, local_end)
         if source_span is not None:
-            # 收集与该 span 相交的 source_ref_ids（按出现顺序去重）。
-            # ``dict.fromkeys`` 保持插入顺序，等价于有序去重。
-            source_ref_ids = list(
-                dict.fromkeys(
-                    source_ref.ref_id
-                    for source_ref in window.source_refs
-                    if any(
-                        span.start_offset < source_span.end_offset
-                        and span.end_offset > source_span.start_offset
-                        for span in source_ref.source_spans
-                    )
-                )
+            identity = (
+                f"{window.resource_id}\0{window.content_revision}\0"
+                f"{window.reading_block_id}\0{source_span.start_offset}\0"
+                f"{source_span.end_offset}\0{quote}"
             )
-            if source_ref_ids:
-                # evidence_id 由 resource/revision/block/span/quote 共同决定，
-                # 相同内容会得到相同 ID，便于跨窗口去重。
-                identity = (
-                    f"{window.resource_id}\0{window.content_revision}\0"
-                    f"{window.reading_block_id}\0{source_span.start_offset}\0"
-                    f"{source_span.end_offset}\0{quote}"
-                )
-                return KnowledgeEvidence(
-                    evidence_id=(
-                        "knev_" + sha256(identity.encode("utf-8")).hexdigest()[:32]
-                    ),
-                    reading_block_id=window.reading_block_id,
-                    quote=quote,
-                    source_ref_ids=source_ref_ids,
-                )
+            return GraphEvidence(
+                evidence_id=(
+                    "knev_" + sha256(identity.encode("utf-8")).hexdigest()[:32]
+                ),
+                resource_id=window.resource_id,
+                content_revision=window.content_revision,
+                reading_block_id=window.reading_block_id,
+                source_span=source_span,
+                quote=quote,
+            )
         # 同一 quote 可能出现多次，继续寻找能够完整落入一条映射的匹配。
         search_start = local_start + 1
 

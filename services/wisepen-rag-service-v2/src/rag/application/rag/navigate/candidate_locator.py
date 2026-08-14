@@ -12,7 +12,7 @@ from rag.domain.models.graph import KnowledgeNode, KnowledgeNodeKind
 from rag.domain.models.provenance import SourceEvidence
 from rag.domain.models.retrieval import RetrievalCandidate
 from rag.domain.repositories.mongo import PublishedResourceReader
-from rag.domain.repositories.neo4j import KnowledgeGraphRepository
+from rag.domain.repositories.neo4j import GraphSeedBlock, KnowledgeGraphRepository
 from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
 from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 from rag.utils.ranking import (
@@ -130,7 +130,11 @@ class ReadingCandidateLocator:
                 candidates=tuple(
                     RankCandidate(
                         candidate_id=_candidate_key(candidate),
-                        text=candidate.raw_text,
+                        text=(
+                            " > ".join(candidate.section_path)
+                            + "\n"
+                            + candidate.raw_text
+                        ),
                         fields={
                             "section": " > ".join(candidate.section_path),
                             "anchor": "\n".join(candidate.anchor_labels),
@@ -191,8 +195,30 @@ class ReadingCandidateLocator:
             request.permission_scope,
         )
         sections = build_retrieved_section_views(readable_records)
+        # seed 的候选范围属于模型实际读到的完整 ReadingBlock；检索 span 只用于
+        # 块内 mention 排序，不能继续充当图谱来源过滤条件。
+        seed_blocks: dict[tuple[str, str, str], GraphSeedBlock] = {}
+        for record in readable_records:
+            source_ref = record.source_ref
+            key = (
+                source_ref.resource_id,
+                source_ref.content_revision,
+                source_ref.reading_block_id,
+            )
+            block = seed_blocks.setdefault(
+                key,
+                GraphSeedBlock(
+                    resource_id=source_ref.resource_id,
+                    content_revision=source_ref.content_revision,
+                    reading_block_id=source_ref.reading_block_id,
+                    rank=len(seed_blocks),
+                ),
+            )
+            for span in source_ref.source_spans:
+                if span not in block.matched_source_spans:
+                    block.matched_source_spans.append(span)
         nodes = await self._knowledge_graph.find_nodes(
-            evidence=readable_records,
+            reading_blocks=list(seed_blocks.values()),
             permission_scope=request.permission_scope,
             limit=request.max_results,
         )

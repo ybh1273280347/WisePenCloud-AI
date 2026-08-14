@@ -15,6 +15,7 @@ from _demo_documents import (
 from rag.api.schemas import CandidateLocateResponse, GraphExpandResponse
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.navigate import (
+    GraphEvidenceVerifier,
     GraphExpandRequest,
     KnowledgeGraphExpander,
     LocateRequest,
@@ -23,15 +24,21 @@ from rag.application.rag.navigate import (
 )
 from rag.domain.models.acl import PermissionScope, ResourceAcl
 from rag.domain.models.graph import (
+    GraphEvidence,
     KnowledgeEntityType,
+    KnowledgeMention,
     KnowledgeNode,
     KnowledgeNodeKind,
     KnowledgeRelationType,
 )
 from rag.domain.models.provenance import SourceEvidence
 from rag.domain.models.retrieval import RetrievalCandidate
+from rag.domain.repositories.mongo.published_resource_reader import (
+    PublishedGraphEvidence,
+)
 from rag.domain.repositories.neo4j import TraversedEdge, TraversedPath
 from rag.domain.repositories.redis import NavigationState
+from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import RankingPipeline
 from rag.utils.ranking.fusion import WeightedRrfFusion
 from rag.utils.ranking.rank_gates import (
@@ -104,12 +111,19 @@ class _RevisionReader:
 
 
 class _PublishedResourceReader:
-    """代替 Mongo 查询；SourceEvidenceVerifier 仍逐字段校验权威记录。"""
+    """代替 Mongo 查询；两个生产 verifier 仍负责各自证据边界。"""
 
-    def __init__(self, records: list[SourceEvidence]) -> None:
+    def __init__(
+        self,
+        records: list[SourceEvidence],
+        documents: list[DemoDocument],
+    ) -> None:
         self._records = {
             (record.source_ref.resource_id, record.source_ref.ref_id): record
             for record in records
+        }
+        self._documents = {
+            document.resource_id: document for document in documents
         }
 
     async def get_source_evidence(
@@ -130,14 +144,50 @@ class _PublishedResourceReader:
             return None
         return records
 
+    async def get_graph_evidence(
+        self,
+        resource_id,
+        content_revision,
+        evidence,
+    ):
+        document = self._documents.get(resource_id)
+        if (
+            document is None
+            or document.revision.content_revision != content_revision
+        ):
+            return None
+        blocks_by_id = {
+            block.block_id: block for block in document.reading_blocks
+        }
+        sections_by_id = {
+            section.section_id: section for section in document.sections
+        }
+        result = {}
+        for item in evidence:
+            block = blocks_by_id[item.reading_block_id]
+            local_start = block.raw_text.index(item.quote)
+            assert document.markdown[
+                item.source_span.start_offset : item.source_span.end_offset
+            ] == item.quote
+            result[item.evidence_id] = PublishedGraphEvidence(
+                evidence=item,
+                reading_block=block,
+                section=sections_by_id[block.section_id],
+                block_range=SourceSpan(
+                    local_start,
+                    local_start + len(item.quote),
+                ),
+            )
+        return result
+
 
 class _MentionGraph:
     """代替 Neo4j mention 查询；flat text 按生产规则没有图节点。"""
 
-    async def find_nodes(self, *, evidence, permission_scope, limit):
+    async def find_nodes(self, *, reading_blocks, permission_scope, limit):
         if not any(
-            record.source_ref.resource_id == "demo-rain-garden"
-            for record in evidence
+            block.resource_id == "demo-rain-garden"
+            for block in reading_blocks
         ):
             return []
         return [
@@ -175,11 +225,23 @@ class _StateStore:
 class _TraversalGraph:
     """代替 Neo4j 查询，返回一次 LLM 抽取并发布后的固定图事实。"""
 
-    def __init__(self, path: TraversedPath) -> None:
+    def __init__(
+        self,
+        path: TraversedPath,
+        mentions: list[KnowledgeMention],
+    ) -> None:
         self._path = path
+        self._mentions = mentions
 
     async def find_paths(self, *, seed_node_ids, **kwargs):
         return [self._path] if "kn_demo_surface_water" in seed_node_ids else []
+
+    async def find_mentions(self, *, node_ids, **kwargs):
+        return [
+            mention
+            for mention in self._mentions
+            if mention.node_id in node_ids
+        ]
 
 
 async def main() -> None:
@@ -191,12 +253,14 @@ async def main() -> None:
         resource_id="demo-orchard-frost-log",
         markdown=flat_text_markdown(),
     )
-    sectioned_phrase = "土壤板结会降低入渗速度"
+    sectioned_phrase = "若四十八小时后仍有连续积水"
     flat_phrase = "日出前后最容易出现当夜最低温"
     sectioned_candidate = _candidate_containing(sectioned, sectioned_phrase, 0.93)
     flat_candidate = _candidate_containing(flat_text, flat_phrase, 0.89)
     records = _evidence_records([sectioned, flat_text])
-    evidence_verifier = SourceEvidenceVerifier(reader=_PublishedResourceReader(records))
+    published_reader = _PublishedResourceReader(records, [sectioned, flat_text])
+    evidence_verifier = SourceEvidenceVerifier(reader=published_reader)
+    graph_evidence_verifier = GraphEvidenceVerifier(reader=published_reader)
     state_store = _StateStore()
     authorizer = PermissionAuthorizer(local_store=_AclStore())
     locator = ReadingCandidateLocator(
@@ -242,16 +306,16 @@ async def main() -> None:
         knowledge_graph=_TraversalGraph(
             _graph_path(
                 document=sectioned,
-                source_ref_id=sectioned_candidate.source_ref_id,
                 quote=graph_quote,
                 related_quote=graph_related_quote,
-            )
+            ),
+            _graph_mentions(sectioned),
         ),
         ranking_pipeline=RankingPipeline(
             scorers=(BM25Scorer(tokenizer=JiebaRankingTokenizer()),),
             fusion=WeightedRrfFusion(),
         ),
-        evidence_verifier=evidence_verifier,
+        evidence_verifier=graph_evidence_verifier,
         authorizer=authorizer,
         state_store=state_store,
     ).expand(
@@ -344,10 +408,19 @@ def _evidence_records(documents: list[DemoDocument]) -> list[SourceEvidence]:
 def _graph_path(
     *,
     document: DemoDocument,
-    source_ref_id: str,
     quote: str,
     related_quote: str,
 ) -> TraversedPath:
+    relation_evidence = _graph_evidence(
+        document,
+        "knev_demo_compaction_delays_infiltration",
+        quote,
+    )
+    related_evidence = _graph_evidence(
+        document,
+        "knev_demo_compaction_common_in_traffic_area",
+        related_quote,
+    )
     return TraversedPath(
         nodes=[
             KnowledgeNode(
@@ -375,10 +448,7 @@ def _graph_path(
                 source_node_id="kn_demo_soil_compaction",
                 target_node_id="kn_demo_surface_water",
                 relation_type=KnowledgeRelationType.CAUSES,
-                evidence_resource_id=document.resource_id,
-                source_content_revision=document.revision.content_revision,
-                evidence_quotes=[quote],
-                evidence_source_ref_ids=[source_ref_id],
+                evidence=[relation_evidence],
             ),
             TraversedEdge(
                 edge_id="ke_demo_compaction_common_in_traffic_area",
@@ -386,12 +456,57 @@ def _graph_path(
                 target_node_id="kn_demo_high_traffic_area",
                 relation_type=KnowledgeRelationType.RELATED_TO,
                 predicate="常见于",
-                evidence_resource_id=document.resource_id,
-                source_content_revision=document.revision.content_revision,
-                evidence_quotes=[related_quote],
-                evidence_source_ref_ids=[source_ref_id],
+                evidence=[related_evidence],
             ),
         ],
+    )
+
+
+def _graph_mentions(document: DemoDocument) -> list[KnowledgeMention]:
+    return [
+        KnowledgeMention(
+            mention_id="knm_demo_soil_compaction",
+            node_id="kn_demo_soil_compaction",
+            evidence=_graph_evidence(
+                document,
+                "knev_demo_soil_compaction_mention",
+                "复核记录中的土壤板结样点",
+            ),
+        ),
+        KnowledgeMention(
+            mention_id="knm_demo_high_traffic_area",
+            node_id="kn_demo_high_traffic_area",
+            evidence=_graph_evidence(
+                document,
+                "knev_demo_high_traffic_area_mention",
+                "复核记录中的高频踩踏区",
+            ),
+        ),
+    ]
+
+
+def _graph_evidence(
+    document: DemoDocument,
+    evidence_id: str,
+    quote: str,
+) -> GraphEvidence:
+    start = document.markdown.index(quote)
+    end = start + len(quote)
+    block = next(
+        block
+        for block in document.reading_blocks
+        if any(
+            start >= span.start_offset and end <= span.end_offset
+            for span in block.source_spans
+        )
+    )
+    return GraphEvidence(
+        evidence_id=evidence_id,
+        resource_id=document.resource_id,
+        content_revision=document.revision.content_revision,
+        reading_block_id=block.block_id,
+        source_span=SourceSpan(start, end),
+        quote=quote,
     )
 
 
@@ -426,20 +541,11 @@ def _assert_contracts(
         "section_path",
         "reading_blocks",
     }
-    assert graph_payload["discovered_nodes"] == [
-        {
-            "node_id": "kn_demo_soil_compaction",
-            "label": "土壤板结",
-            "kind": "Entity",
-            "entity_type": "concept",
-        },
-        {
-            "node_id": "kn_demo_high_traffic_area",
-            "label": "高频踩踏区",
-            "kind": "Entity",
-            "entity_type": "concept",
-        },
+    assert [node["node_id"] for node in graph_payload["discovered_nodes"]] == [
+        "kn_demo_soil_compaction",
+        "kn_demo_high_traffic_area",
     ]
+    assert all(node["evidence"] for node in graph_payload["discovered_nodes"])
     assert graph_payload["paths"][0]["text"] == (
         '("表层积水")<-[:CAUSES]-("土壤板结")'
         '-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")'
@@ -449,37 +555,30 @@ def _assert_contracts(
         "kn_demo_soil_compaction",
         "kn_demo_high_traffic_area",
     ]
-    assert graph_payload["paths"][0]["steps"] == [
-        {
-            "relation": '("土壤板结")-[:CAUSES]->("表层积水")',
-            "evidence": [
-                {
-                    "quote": graph_quote,
-                    "source_ref_ids": [
-                        sectioned_payload["sections"][0]["reading_blocks"][0][
-                            "matches"
-                        ][0]["source_ref_id"]
-                    ],
-                }
-            ],
-        },
-        {
-            "relation": (
-                '("土壤板结")-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")'
-            ),
-            "evidence": [
-                {
-                    "quote": graph_related_quote,
-                    "source_ref_ids": [
-                        sectioned_payload["sections"][0]["reading_blocks"][0][
-                            "matches"
-                        ][0]["source_ref_id"]
-                    ],
-                }
-            ],
-        },
+    assert [
+        step["relation"] for step in graph_payload["paths"][0]["steps"]
+    ] == [
+        '("土壤板结")-[:CAUSES]->("表层积水")',
+        '("土壤板结")-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")',
     ]
-    assert graph_payload["evidence_sections"] == sectioned_payload["sections"]
+    assert [
+        step["evidence"][0]["quote"]
+        for step in graph_payload["paths"][0]["steps"]
+    ] == [graph_quote, graph_related_quote]
+    locate_block_id = sectioned_payload["sections"][0]["reading_blocks"][0][
+        "reading_block_id"
+    ]
+    graph_block_ids = {
+        block["reading_block_id"]
+        for section in graph_payload["evidence_sections"]
+        for block in section["reading_blocks"]
+    }
+    assert locate_block_id not in graph_block_ids
+    assert len(graph_block_ids) >= 2
+    serialized_graph = json.dumps(graph_payload)
+    assert "chunk_id" not in serialized_graph
+    assert "source_ref" not in serialized_graph
+    assert "matches" not in serialized_graph
     assert "nodes" not in graph_payload
     assert "edges" not in graph_payload
     assert "sources" not in graph_payload
@@ -519,7 +618,8 @@ def _write_outputs(
         [
             "=== Review notes ===",
             "- Neo4j traversal 和 LLM 图谱抽取结果用固定 demo ID/type 表示。",
-            "- seed 校验、BM25/WeightedRRF 路径排序、SourceEvidenceVerifier quote 核验、状态扩展和 ReadingBlock 回补使用生产实现。",
+            "- seed 校验、BM25/WeightedRRF 路径排序、GraphEvidenceVerifier、状态扩展和 ReadingBlock 回补使用生产实现。",
+            "- LOCATE、关系证据和新节点 mention 分别来自不同 ReadingBlock，EXPAND 不复述检索命中字段。",
             "- flat text 在生产索引阶段跳过图谱抽取，因此没有伪造 expandGraph 结果。",
             "",
             "=== Simulated extracted graph fact ===",
