@@ -14,7 +14,7 @@ from rag.api.kafka import (
     ResourceDestroyHandler,
 )
 from rag.application.rag.acl import PermissionAuthorizer, ResourceAclRefresher
-from rag.application.rag.expand import DiscoveredSectionExpander, KnowledgeGraphExpander
+from rag.application.rag.expand import KnowledgeGraphExpander
 from rag.application.rag.index import KnowledgeGraphExtractor, ResourceIndexer
 from rag.application.rag.index.contextualize import ContextualTextIndexer
 from rag.application.rag.index.graph import QueryClientGraphRagLLM
@@ -297,7 +297,7 @@ class Container(containers.DeclarativeContainer):
     )
     permission_authorizer = providers.Singleton(
         PermissionAuthorizer,
-        reader=resource_acl_store,
+        local_store=resource_acl_store,
     )
     document_outline_reader = providers.Singleton(
         DocumentOutlineReader,
@@ -347,13 +347,6 @@ class Container(containers.DeclarativeContainer):
         generation_artifacts=generation_artifact_store,
         acl_store=resource_acl_store,
     )
-    discovered_section_expander = providers.Singleton(
-        DiscoveredSectionExpander,
-        content_reader=applied_content_reader,
-        revision_reader=applied_revision_reader,
-        authorizer=permission_authorizer,
-        state_store=navigation_state_store,
-    )
     mention_lookup = providers.Singleton(
         Neo4jMentionLookup,
         driver=neo4j_driver,
@@ -392,7 +385,6 @@ class Container(containers.DeclarativeContainer):
         evidence_verifier=evidence_verifier,
         mention_lookup=mention_lookup,
         revision_reader=applied_revision_reader,
-        structure_reader=applied_structure_reader,
         state_store=navigation_state_store,
     )
     knowledge_graph_expander = providers.Singleton(
@@ -401,8 +393,6 @@ class Container(containers.DeclarativeContainer):
         ranking_pipeline=expand_ranking_pipeline,
         evidence_verifier=evidence_verifier,
         authorizer=permission_authorizer,
-        content_reader=applied_content_reader,
-        revision_reader=applied_revision_reader,
         state_store=navigation_state_store,
     )
 

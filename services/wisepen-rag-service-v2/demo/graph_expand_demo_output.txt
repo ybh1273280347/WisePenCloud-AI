@@ -1,0 +1,98 @@
+=== Review notes ===
+- Neo4j traversal 和 LLM 图谱抽取结果用固定 demo ID/type 表示。
+- seed 校验、BM25/WeightedRRF 路径排序、EvidenceVerifier quote 核验、状态扩展和 ReadingBlock 回补使用生产实现。
+- flat text 在生产索引阶段跳过图谱抽取，因此没有伪造 expandGraph 结果。
+
+=== Simulated extracted graph fact ===
+quote: 土壤板结会降低入渗速度，并使表层积水消退时间延长。
+quote: 检查时可比较高频踩踏区与封闭区的入渗差异
+entity anchors: kn_demo_surface_water, kn_demo_soil_compaction, kn_demo_high_traffic_area
+relations:
+  ("土壤板结")-[:CAUSES]->("表层积水")
+  ("土壤板结")-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")
+
+=== SECTIONED expandGraph ===
+{
+  "state_id": "nav_demo_1",
+  "discovered_nodes": [
+    {
+      "node_id": "kn_demo_soil_compaction",
+      "label": "土壤板结",
+      "kind": "Entity",
+      "entity_type": "concept"
+    },
+    {
+      "node_id": "kn_demo_high_traffic_area",
+      "label": "高频踩踏区",
+      "kind": "Entity",
+      "entity_type": "concept"
+    }
+  ],
+  "paths": [
+    {
+      "text": "(\"表层积水\")<-[:CAUSES]-(\"土壤板结\")-[:RELATED_TO {predicate: \"常见于\"}]->(\"高频踩踏区\")",
+      "node_ids": [
+        "kn_demo_surface_water",
+        "kn_demo_soil_compaction",
+        "kn_demo_high_traffic_area"
+      ],
+      "steps": [
+        {
+          "relation": "(\"土壤板结\")-[:CAUSES]->(\"表层积水\")",
+          "evidence": [
+            {
+              "quote": "土壤板结会降低入渗速度，并使表层积水消退时间延长。",
+              "source_ref_ids": [
+                "rsrc_d399adf13671867e14d0f9ad20a52791"
+              ]
+            }
+          ]
+        },
+        {
+          "relation": "(\"土壤板结\")-[:RELATED_TO {predicate: \"常见于\"}]->(\"高频踩踏区\")",
+          "evidence": [
+            {
+              "quote": "检查时可比较高频踩踏区与封闭区的入渗差异",
+              "source_ref_ids": [
+                "rsrc_d399adf13671867e14d0f9ad20a52791"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "evidence_sections": [
+    {
+      "resource_id": "demo-rain-garden",
+      "section_id": "rsec_59a50faa441155221b1b0411500e3e24",
+      "title": "二.1 土壤表层",
+      "section_path": "城市雨水花园巡检手册 > 二、入渗与排水检查 > 二.1 土壤表层",
+      "reading_blocks": [
+        {
+          "reading_block_id": "rsb_c78dd248a8af5e832b2ca7e0cc7a912c",
+          "text": "土壤板结会降低入渗速度，并使表层积水消退时间延长。检查时可比较高频踩踏区与封闭区的入渗差异，不宜仅凭一次局部积水判断设施失效。\n",
+          "page_range": "1",
+          "anchor_labels": [],
+          "matches": [
+            {
+              "chunk_id": "rrc_be82aab6403a08bb2d7820d18fe2bb2a",
+              "source_ref_id": "rsrc_d399adf13671867e14d0f9ad20a52791",
+              "ranges": [
+                {
+                  "start_offset": 0,
+                  "end_offset": 64
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+=== FLAT_TEXT graph behavior ===
+structure_mode: flat_text
+graph extraction: skipped
+expandGraph: not applicable

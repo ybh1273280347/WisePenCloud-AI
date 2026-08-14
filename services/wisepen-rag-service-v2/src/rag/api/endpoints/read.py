@@ -11,8 +11,10 @@ from fastapi import APIRouter, Depends
 from rag.api.schemas import (
     DocumentOutlineResponse,
     PageContentRequest,
+    PageContentResponse,
     ResourceRequest,
     SectionContentRequest,
+    SectionContentResponse,
 )
 from rag.application.rag.read import (
     ContentAccessRevokedError,
@@ -22,7 +24,6 @@ from rag.application.rag.read import (
 )
 from rag.domain.error_codes import RagErrorCode
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import ContentWindow, SectionContent
 
 router = APIRouter()
 
@@ -37,7 +38,11 @@ ContentReader = Annotated[
 ]
 
 
-@router.post("/getDocumentOutline", response_model=R[DocumentOutlineResponse])
+@router.post(
+    "/getDocumentOutline",
+    response_model=R[DocumentOutlineResponse],
+    response_model_exclude_none=True,
+)
 @inject
 async def get_document_outline(
         request: ResourceRequest,
@@ -66,13 +71,17 @@ async def get_document_outline(
     )
 
 
-@router.post("/getPageContent", response_model=R[dict[str, ContentWindow]])
+@router.post(
+    "/getPageContent",
+    response_model=R[PageContentResponse],
+    response_model_exclude_none=True,
+)
 @inject
 async def get_page_content(
         request: PageContentRequest,
         user_id: AuthenticatedUser,
         reader: ContentReader,
-) -> R[dict[str, ContentWindow]]:
+) -> R[PageContentResponse]:
     try:
         result = await reader.get_pages(
             resource_id=request.resource_id,
@@ -88,13 +97,17 @@ async def get_page_content(
     return R.success(result)
 
 
-@router.post("/getSectionContent", response_model=R[dict[str, SectionContent]])
+@router.post(
+    "/getSectionContent",
+    response_model=R[SectionContentResponse],
+    response_model_exclude_none=True,
+)
 @inject
 async def get_section_content(
         request: SectionContentRequest,
         user_id: AuthenticatedUser,
         reader: ContentReader,
-) -> R[dict[str, SectionContent]]:
+) -> R[SectionContentResponse]:
     try:
         result = await reader.get_sections(
             resource_id=request.resource_id,

@@ -1,22 +1,26 @@
 """从 navigation state 的已知节点扩展有证据的知识路径。"""
 
+import json
 from dataclasses import dataclass, field
 
+from rag.application.rag.acl import PermissionAuthorizer
+from rag.application.rag.navigation_views import (
+    KnowledgeNodeView,
+    RetrievedSectionView,
+    build_retrieved_section_views,
+    to_knowledge_node_view,
+)
+from rag.application.rag.verify import EvidenceVerifier
+from rag.domain.models.acl import PermissionScope
+from rag.domain.models.evidence import EvidenceRecord
 from rag.domain.models.graph import (
     GraphTraversalRequest,
+    KnowledgeRelationType,
     TraversalDirection,
     TraversedEdge,
     TraversedPath,
 )
-from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import SectionView
-from rag.domain.models.evidence import EvidenceRecord
-from rag.domain.models.graph import KnowledgeNode, KnowledgeRelationType
 from rag.domain.models.navigation import NavigationStateNotFoundError
-from rag.domain.models.navigation import KnownSection
-from rag.application.rag.acl import PermissionAuthorizer
-from rag.domain.repositories.mongo.readers.applied_content import AppliedContentReader
-from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.domain.repositories.neo4j.graph_traversal import GraphTraversal
 from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
 from rag.utils.ranking import (
@@ -24,12 +28,6 @@ from rag.utils.ranking import (
     RankingPipeline,
     RankQuery,
     RankRequest,
-)
-
-from rag.application.rag.verify import (
-    EvidenceCorruptError,
-    EvidenceRevisionError,
-    EvidenceVerifier,
 )
 
 
@@ -57,10 +55,34 @@ class GraphExpandRequest:
 @dataclass(slots=True)
 class GraphExpandResult:
     state_id: str
-    nodes: list[KnowledgeNode] = field(default_factory=list)
-    edges: list[TraversedEdge] = field(default_factory=list)
-    paths: list[TraversedPath] = field(default_factory=list)
-    sources: list[SectionView] = field(default_factory=list)
+    discovered_nodes: list[KnowledgeNodeView] = field(default_factory=list)
+    paths: list["GraphPathView"] = field(default_factory=list)
+    evidence_sections: list[RetrievedSectionView] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class GraphEvidenceView:
+    """一段关系引文及实际包含该引文的权威 SourceRef。"""
+
+    quote: str
+    source_ref_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class GraphPathStepView:
+    """按关系语义方向表达的单步路径及其证据。"""
+
+    relation: str
+    evidence: list[GraphEvidenceView] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class GraphPathView:
+    """模型可直接阅读的有向路径，node IDs 只保留作后续导航锚点。"""
+
+    text: str
+    node_ids: list[str] = field(default_factory=list)
+    steps: list[GraphPathStepView] = field(default_factory=list)
 
 
 class KnowledgeGraphExpander:
@@ -73,16 +95,12 @@ class KnowledgeGraphExpander:
         ranking_pipeline: RankingPipeline,
         evidence_verifier: EvidenceVerifier,
         authorizer: PermissionAuthorizer,
-        content_reader: AppliedContentReader,
-        revision_reader: AppliedRevisionReader,
         state_store: NavigationStateStore,
     ) -> None:
         self._traversal = traversal
         self._ranking_pipeline = ranking_pipeline
         self._evidence_verifier = evidence_verifier
         self._authorizer = authorizer
-        self._content_reader = content_reader
-        self._revision_reader = revision_reader
         self._state_store = state_store
 
     async def expand(self, request: GraphExpandRequest) -> GraphExpandResult:
@@ -132,7 +150,7 @@ class KnowledgeGraphExpander:
                 candidates=tuple(
                     RankCandidate(
                         candidate_id=str(index),
-                        text=_path_text(path),
+                        text=_render_path(path)[0],
                         fields={
                             "nodes": "\n".join(node.label for node in path.nodes),
                             "relations": "\n".join(
@@ -156,7 +174,7 @@ class KnowledgeGraphExpander:
             )
         )
         paths = [paths[int(item.candidate_id)] for item in ranking.ranked]
-        evidence = await self._verify_path_evidence(paths)
+        evidence_by_edge = await self._verify_path_evidence(paths)
 
         candidate_new_ids = list(
             dict.fromkeys(
@@ -166,159 +184,81 @@ class KnowledgeGraphExpander:
                 if node.node_id not in known_node_ids
             )
         )
-        added_node_ids = set(
-            await self._state_store.add_known_nodes(
-                state_id=state.state_id,
-                node_ids=candidate_new_ids,
-            )
+        added_node_ids = await self._state_store.add_known_nodes(
+            state_id=state.state_id,
+            node_ids=candidate_new_ids,
         )
+        added_node_id_set = set(added_node_ids)
         paths = [
             path
             for path in paths
-            if any(node.node_id in added_node_ids for node in path.nodes)
+            if any(node.node_id in added_node_id_set for node in path.nodes)
         ]
         if not paths:
             return GraphExpandResult(state_id=state.state_id)
 
         nodes_by_id = {node.node_id: node for path in paths for node in path.nodes}
-        edges_by_id = {edge.edge_id: edge for path in paths for edge in path.edges}
-        retained_evidence = {
-            (edge.evidence_resource_id, source_ref_id)
-            for edge in edges_by_id.values()
-            for source_ref_id in edge.evidence_source_ref_ids
-        }
-        sources = await self._build_source_views(
-            [
-                record
-                for record in evidence
-                if (
-                    record.revision.resource_id,
-                    record.source_ref.ref_id,
-                )
-                in retained_evidence
-            ]
+        path_views: list[GraphPathView] = []
+        retained_evidence: dict[tuple[str, str], EvidenceRecord] = {}
+        for path in paths:
+            path_view, path_evidence = _to_path_view(path, evidence_by_edge)
+            path_views.append(path_view)
+            for record in path_evidence:
+                retained_evidence[
+                    (record.revision.resource_id, record.source_ref.ref_id)
+                ] = record
+
+        evidence_sections = build_retrieved_section_views(
+            list(retained_evidence.values())
         )
-        await self._ensure_sources_readable(sources, request.permission_scope)
-        await self._state_store.add_known_sections(
-            state_id=state.state_id,
-            sections=_known_sections(sources),
+        await self._ensure_sources_readable(
+            evidence_sections,
+            request.permission_scope,
         )
         return GraphExpandResult(
             state_id=state.state_id,
-            nodes=[nodes_by_id[node_id] for node_id in sorted(nodes_by_id)],
-            edges=[edges_by_id[edge_id] for edge_id in sorted(edges_by_id)],
-            paths=paths,
-            sources=sources,
+            discovered_nodes=[
+                to_knowledge_node_view(nodes_by_id[node_id])
+                for node_id in added_node_ids
+            ],
+            paths=path_views,
+            evidence_sections=evidence_sections,
         )
 
     async def _verify_path_evidence(
         self,
         paths: list[TraversedPath],
-    ) -> list[EvidenceRecord]:
+    ) -> dict[str, list[EvidenceRecord]]:
         edges = {edge.edge_id: edge for path in paths for edge in path.edges}
-        records: dict[tuple[str, str], EvidenceRecord] = {}
+        records_by_edge: dict[str, list[EvidenceRecord]] = {}
         for edge in edges.values():
-            verified = await self._evidence_verifier.verify_refs(
-                resource_id=edge.evidence_resource_id,
-                content_revision=edge.source_content_revision,
-                source_ref_ids=edge.evidence_source_ref_ids,
-                quotes=edge.evidence_quotes,
-            )
-            for record in verified:
-                records[(record.revision.resource_id, record.source_ref.ref_id)] = record
-        return list(records.values())
-
-    async def _build_source_views(
-        self,
-        evidence: list[EvidenceRecord],
-    ) -> list[SectionView]:
-        """把图谱证据还原成可继续阅读的 SectionView。
-
-        v1 的 cypher 返回的是 evidence 所在 Section 的阅读上下文和标题树
-        frontier，而不是孤立证据片段。这里在 VERIFY 之后回读 Section 内容，
-        让 graph expand 发现的证据也能进入后续标题树探索。
-        """
-        records_by_section: dict[tuple[str, str], list[EvidenceRecord]] = {}
-        expected_revisions: dict[str, str] = {}
-        section_order: list[tuple[str, str]] = []
-        for record in evidence:
-            resource_id = record.revision.resource_id
-            expected_revision = expected_revisions.setdefault(
-                resource_id,
-                record.revision.content_revision,
-            )
-            if expected_revision != record.revision.content_revision:
-                raise EvidenceRevisionError(resource_id)
-
-            key = (resource_id, record.section.section_id)
-            if key not in records_by_section:
-                section_order.append(key)
-            records_by_section.setdefault(key, []).append(record)
-
-        views_by_key: dict[tuple[str, str], SectionView] = {}
-        for resource_id in dict.fromkeys(resource_id for resource_id, _ in section_order):
-            revision = await self._revision_reader.get_applied_revision(resource_id)
-            if (
-                revision is None
-                or revision.content_revision != expected_revisions[resource_id]
-            ):
-                raise EvidenceRevisionError(resource_id)
-
-            section_ids = [
-                section_id
-                for item_resource_id, section_id in section_order
-                if item_resource_id == resource_id
-            ]
-            contents = await self._content_reader.get_applied_sections(
-                resource_id,
-                section_ids,
-            )
-            if contents is None:
-                raise EvidenceRevisionError(resource_id)
-
-            # Section 内容读取期间 revision 可能切换，返回前再次校验，避免旧证据配新正文。
-            revision = await self._revision_reader.get_applied_revision(resource_id)
-            if (
-                revision is None
-                or revision.content_revision != expected_revisions[resource_id]
-            ):
-                raise EvidenceRevisionError(resource_id)
-
-            for section_id in section_ids:
-                content = contents.get(section_id)
-                if content is None:
-                    raise EvidenceCorruptError(
-                        f"graph evidence section {section_id} is absent"
-                    )
-                key = (resource_id, section_id)
-                views_by_key[key] = SectionView(
-                    resource_id=resource_id,
-                    content_revision=expected_revisions[resource_id],
-                    section=content.section,
-                    reading_blocks=content.reading_blocks,
-                    frontier=content.frontier,
-                    evidence=records_by_section[key],
+            records_by_edge[edge.edge_id] = (
+                await self._evidence_verifier.verify_graph_evidence_refs(
+                    resource_id=edge.evidence_resource_id,
+                    content_revision=edge.source_content_revision,
+                    source_ref_ids=edge.evidence_source_ref_ids,
+                    quotes=edge.evidence_quotes,
                 )
-
-        return [views_by_key[key] for key in section_order]
+            )
+        return records_by_edge
 
     async def _ensure_sources_readable(
         self,
-        sources: list[SectionView],
+        sections: list[RetrievedSectionView],
         permission_scope: PermissionScope,
     ) -> None:
         """返回前再核一次证据所属资源可读，避免读中途 ACL 变化。"""
         readable_resource_ids = set(
             await self._authorizer.readable_resource_ids(
-                (source.resource_id for source in sources),
+                (section.resource_id for section in sections),
                 scope=permission_scope,
             )
         )
         denied = next(
             (
-                source.resource_id
-                for source in sources
-                if source.resource_id not in readable_resource_ids
+                section.resource_id
+                for section in sections
+                if section.resource_id not in readable_resource_ids
             ),
             None,
         )
@@ -326,32 +266,96 @@ class KnowledgeGraphExpander:
             raise GraphAccessRevokedError(denied)
 
 
-def _path_text(path: TraversedPath) -> str:
-    nodes = " -> ".join(node.label for node in path.nodes)
-    relations = "\n".join(
-        " | ".join(
-            value
-            for value in (edge.relation_type.value, edge.predicate)
-            if value
-        )
-        for edge in path.edges
-    )
-    return f"Path: {nodes}\nRelations:\n{relations}"
+def _to_path_view(
+    path: TraversedPath,
+    evidence_by_edge: dict[str, list[EvidenceRecord]],
+) -> tuple[GraphPathView, list[EvidenceRecord]]:
+    """把一条已核验领域路径投影为可读路径，并收紧到实际支撑引文的记录。"""
+    text, relations = _render_path(path)
+    retained_records: dict[tuple[str, str], EvidenceRecord] = {}
+    steps: list[GraphPathStepView] = []
 
-
-def _known_sections(sources: list[SectionView]) -> dict[str, KnownSection]:
-    known: dict[str, KnownSection] = {}
-    for source in sources:
-        for section in (
-            source.section,
-            source.frontier.parent,
-            source.frontier.previous,
-            source.frontier.next,
-            *source.frontier.children,
-        ):
-            if section is not None:
-                known[section.section_id] = KnownSection(
-                    resource_id=source.resource_id,
-                    content_revision=source.content_revision,
+    for edge, relation in zip(path.edges, relations, strict=True):
+        records = evidence_by_edge[edge.edge_id]
+        evidence: list[GraphEvidenceView] = []
+        for quote in dict.fromkeys(edge.evidence_quotes):
+            matching_records = [
+                record for record in records if quote in record.source_text
+            ]
+            if not matching_records:
+                raise RuntimeError(
+                    f"verified graph quote is not mapped to edge {edge.edge_id}"
                 )
-    return known
+            evidence.append(
+                GraphEvidenceView(
+                    quote=quote,
+                    source_ref_ids=list(
+                        dict.fromkeys(
+                            record.source_ref.ref_id for record in matching_records
+                        )
+                    ),
+                )
+            )
+            for record in matching_records:
+                retained_records[
+                    (record.revision.resource_id, record.source_ref.ref_id)
+                ] = record
+        steps.append(GraphPathStepView(relation=relation, evidence=evidence))
+
+    return (
+        GraphPathView(
+            text=text,
+            node_ids=[node.node_id for node in path.nodes],
+            steps=steps,
+        ),
+        list(retained_records.values()),
+    )
+
+
+def _render_path(path: TraversedPath) -> tuple[str, list[str]]:
+    """按遍历顺序排列节点，同时让箭头始终指向关系事实的 target。"""
+    if not path.nodes or len(path.edges) != len(path.nodes) - 1:
+        raise RuntimeError("graph path must contain one edge between adjacent nodes")
+
+    parts = [_render_node(path.nodes[0].label)]
+    relations: list[str] = []
+    for current, following, edge in zip(
+        path.nodes[:-1],
+        path.nodes[1:],
+        path.edges,
+        strict=True,
+    ):
+        relation = _render_relation_type(edge)
+        if (
+            edge.source_node_id == current.node_id
+            and edge.target_node_id == following.node_id
+        ):
+            parts.extend((f"-{relation}->", _render_node(following.label)))
+            source, target = current, following
+        elif (
+            edge.source_node_id == following.node_id
+            and edge.target_node_id == current.node_id
+        ):
+            parts.extend((f"<-{relation}-", _render_node(following.label)))
+            source, target = following, current
+        else:
+            raise RuntimeError(
+                f"graph edge {edge.edge_id} does not connect adjacent path nodes"
+            )
+        relations.append(
+            f"{_render_node(source.label)}-{relation}->{_render_node(target.label)}"
+        )
+    return "".join(parts), relations
+
+
+def _render_relation_type(edge: TraversedEdge) -> str:
+    if edge.relation_type is not KnowledgeRelationType.RELATED_TO:
+        return f"[:{edge.relation_type.value}]"
+    if not edge.predicate:
+        raise RuntimeError(f"RELATED_TO edge {edge.edge_id} is missing predicate")
+    predicate = json.dumps(edge.predicate, ensure_ascii=False)
+    return f"[:{edge.relation_type.value} {{predicate: {predicate}}}]"
+
+
+def _render_node(label: str) -> str:
+    return f"({json.dumps(label, ensure_ascii=False)})"

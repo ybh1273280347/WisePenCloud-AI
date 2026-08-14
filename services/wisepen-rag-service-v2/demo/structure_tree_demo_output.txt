@@ -1,370 +1,91 @@
-=== 原始长文本 ===
-# Demo 文档
+=== Review notes ===
+- 两种文档都经过生产 INDEX 构造器，再经过 DocumentOutlineReader。
+- outline 节点同时保留当前 title 与完整 section_path；不暴露 level。
+- 无标题、无页标记的纯文本仍保留 synthetic Section，且不伪造 page_range。
 
-这是前言。它不属于任何标题节点的正文，但会落入 root section 的 subtree_span。
+=== SECTIONED source text ===
+# 城市雨水花园巡检手册
+
+雨水花园通过下凹绿地、种植土和排水设施暂存并净化地表径流。巡检记录应同时描述天气、积水和植被状态。
 
 <!-- page 1 -->
 
-## 一、背景
+## 一、降雨后现场巡检
 
-这里是背景说明的第一段。
+巡检宜在降雨结束后二十四小时内进行。工作人员先记录进水口是否被落叶或泥沙堵塞，再沿设施边缘检查冲刷沟和裸露土面。
 
-这里是背景说明的第二段，继续给后面的章节提供上下文。
+## 二、入渗与排水检查
 
-### 一.1 现状
+正常情况下，浅层积水会在降雨结束后逐步消退。若四十八小时后仍有连续积水，应复查溢流口、盲管和种植土的含水状态。
 
-现状部分会跨页，并且保留自己的 own_span。
+### 二.1 土壤表层
+
+土壤板结会降低入渗速度，并使表层积水消退时间延长。检查时可比较高频踩踏区与封闭区的入渗差异，不宜仅凭一次局部积水判断设施失效。
 
 <!-- page 2 -->
 
-### 一.2 问题
+### 二.2 排水构件
 
-问题部分说明为什么需要标题树和正文分离。
+溢流口周围不得堆积覆盖物。盲管检查口若持续满水，应排查下游管线是否堵塞，并记录水位恢复所需时间。
 
-## 二、方案
+## 三、季节性植被维护
 
-这里开始进入方案主线。
+春季补植应优先选择耐短时淹水的乡土植物。修剪后保留地表覆盖，减少暴雨直接冲刷种植土。
 
-### 二.1 读取
-
-读取能力只负责把 section_id 映射成正文。
-
-### 二.2 展开
-
-展开能力只处理已发现节点，不接受任意 section_id。
-
-<!-- page 3 -->
-
-#### 二.2.1 继续展开
-
-这一层只是为了演示更深的 section_path。
-
-## 三、结论
-
-最后一章总结一下。
-
-
-=== parse_document_structure 结果（INDEX 事实）===
+=== SECTIONED index summary ===
 {
-  "mode": "sectioned",
-  "total_length": 410,
-  "pages": [
-    {
-      "page_label": "1",
-      "source_span": {
-        "start_offset": 65,
-        "end_offset": 172
-      }
-    },
-    {
-      "page_label": "2",
-      "source_span": {
-        "start_offset": 172,
-        "end_offset": 329
-      }
-    },
-    {
-      "page_label": "3",
-      "source_span": {
-        "start_offset": 329,
-        "end_offset": 410
-      }
-    }
-  ],
-  "sections": [
-    {
-      "section_id": "rsec_3354e5dbed9474829d0b9813a2e2a294",
-      "title": "",
-      "level": 0,
-      "parent_section_id": null,
-      "ordinal": 0,
-      "section_path": [],
-      "own_span": {
-        "start_offset": 0,
-        "end_offset": 0
-      },
-      "subtree_span": {
-        "start_offset": 0,
-        "end_offset": 410
-      },
-      "preview": ""
-    },
-    {
-      "section_id": "rsec_df5931bd1f9eb465763039617e391626",
-      "title": "Demo 文档",
-      "level": 1,
-      "parent_section_id": "rsec_3354e5dbed9474829d0b9813a2e2a294",
-      "ordinal": 0,
-      "section_path": [
-        "Demo 文档"
-      ],
-      "own_span": {
-        "start_offset": 0,
-        "end_offset": 82
-      },
-      "subtree_span": {
-        "start_offset": 0,
-        "end_offset": 410
-      },
-      "preview": ""
-    },
-    {
-      "section_id": "rsec_6d8e780a7febcdb342f867df6e82cdcd",
-      "title": "一、背景",
-      "level": 2,
-      "parent_section_id": "rsec_df5931bd1f9eb465763039617e391626",
-      "ordinal": 0,
-      "section_path": [
-        "Demo 文档",
-        "一、背景"
-      ],
-      "own_span": {
-        "start_offset": 82,
-        "end_offset": 133
-      },
-      "subtree_span": {
-        "start_offset": 82,
-        "end_offset": 223
-      },
-      "preview": ""
-    },
-    {
-      "section_id": "rsec_5f46a40aeb4b2b83922d3156d1669523",
-      "title": "一.1 现状",
-      "level": 3,
-      "parent_section_id": "rsec_6d8e780a7febcdb342f867df6e82cdcd",
-      "ordinal": 0,
-      "section_path": [
-        "Demo 文档",
-        "一、背景",
-        "一.1 现状"
-      ],
-      "own_span": {
-        "start_offset": 133,
-        "end_offset": 189
-      },
-      "subtree_span": {
-        "start_offset": 133,
-        "end_offset": 189
-      },
-      "preview": ""
-    },
-    {
-      "section_id": "rsec_8f1809b8d128a35219396401e6e73907",
-      "title": "一.2 问题",
-      "level": 3,
-      "parent_section_id": "rsec_6d8e780a7febcdb342f867df6e82cdcd",
-      "ordinal": 1,
-      "section_path": [
-        "Demo 文档",
-        "一、背景",
-        "一.2 问题"
-      ],
-      "own_span": {
-        "start_offset": 189,
-        "end_offset": 223
-      },
-      "subtree_span": {
-        "start_offset": 189,
-        "end_offset": 223
-      },
-      "preview": ""
-    },
-    {
-      "section_id": "rsec_156aa6b0af4be4a5a5bfa3e00e6b1235",
-      "title": "二、方案",
-      "level": 2,
-      "parent_section_id": "rsec_df5931bd1f9eb465763039617e391626",
-      "ordinal": 1,
-      "section_path": [
-        "Demo 文档",
-        "二、方案"
-      ],
-      "own_span": {
-        "start_offset": 223,
-        "end_offset": 245
-      },
-      "subtree_span": {
-        "start_offset": 223,
-        "end_offset": 391
-      },
-      "preview": ""
-    },
-    {
-      "section_id": "rsec_f9ecca1bb4036766cfb5e61dcdd37238",
-      "title": "二.1 读取",
-      "level": 3,
-      "parent_section_id": "rsec_156aa6b0af4be4a5a5bfa3e00e6b1235",
-      "ordinal": 0,
-      "section_path": [
-        "Demo 文档",
-        "二、方案",
-        "二.1 读取"
-      ],
-      "own_span": {
-        "start_offset": 245,
-        "end_offset": 285
-      },
-      "subtree_span": {
-        "start_offset": 245,
-        "end_offset": 285
-      },
-      "preview": ""
-    },
-    {
-      "section_id": "rsec_69bb7471518bf947c59d9f50d0a9ecd5",
-      "title": "二.2 展开",
-      "level": 3,
-      "parent_section_id": "rsec_156aa6b0af4be4a5a5bfa3e00e6b1235",
-      "ordinal": 1,
-      "section_path": [
-        "Demo 文档",
-        "二、方案",
-        "二.2 展开"
-      ],
-      "own_span": {
-        "start_offset": 285,
-        "end_offset": 346
-      },
-      "subtree_span": {
-        "start_offset": 285,
-        "end_offset": 391
-      },
-      "preview": ""
-    },
-    {
-      "section_id": "rsec_2cc2a44db26f8d8931021a08492976e6",
-      "title": "二.2.1 继续展开",
-      "level": 4,
-      "parent_section_id": "rsec_69bb7471518bf947c59d9f50d0a9ecd5",
-      "ordinal": 0,
-      "section_path": [
-        "Demo 文档",
-        "二、方案",
-        "二.2 展开",
-        "二.2.1 继续展开"
-      ],
-      "own_span": {
-        "start_offset": 346,
-        "end_offset": 391
-      },
-      "subtree_span": {
-        "start_offset": 346,
-        "end_offset": 391
-      },
-      "preview": ""
-    },
-    {
-      "section_id": "rsec_36cfb95d7afa58b366c0a4de67aaa1a2",
-      "title": "三、结论",
-      "level": 2,
-      "parent_section_id": "rsec_df5931bd1f9eb465763039617e391626",
-      "ordinal": 2,
-      "section_path": [
-        "Demo 文档",
-        "三、结论"
-      ],
-      "own_span": {
-        "start_offset": 391,
-        "end_offset": 410
-      },
-      "subtree_span": {
-        "start_offset": 391,
-        "end_offset": 410
-      },
-      "preview": ""
-    }
-  ]
+  "structure_mode": "sectioned",
+  "section_count": 7,
+  "reading_block_count": 6,
+  "retrieval_chunk_count": 6
 }
-
-=== getDocumentOutline 可直接返回的 outline ===
+=== SECTIONED getDocumentOutline ===
 {
-  "resource_id": "demo-resource",
+  "resource_id": "demo-rain-garden",
   "document_version": 1,
-  "content_revision": "rrev_0806256d78336c218135832f3cda0c88",
-  "total_length": 410,
+  "content_revision": "rrev_bbf29d2de8300bb8ec05f9d837d91e88",
+  "total_length": 442,
   "outline": [
     {
-      "section_id": "rsec_df5931bd1f9eb465763039617e391626",
-      "title": "Demo 文档",
-      "level": 1,
-      "hierarchy": "Demo 文档",
-      "start_page_label": "1",
-      "end_page_label": "3",
+      "section_id": "rsec_157bd33d2492fc70eeeb39c70f6a14c2",
+      "title": "城市雨水花园巡检手册",
+      "section_path": "城市雨水花园巡检手册",
+      "page_range": "1 - 2",
       "children": [
         {
-          "section_id": "rsec_6d8e780a7febcdb342f867df6e82cdcd",
-          "title": "一、背景",
-          "level": 2,
-          "hierarchy": "Demo 文档 > 一、背景",
-          "start_page_label": "1",
-          "end_page_label": "2",
+          "section_id": "rsec_28e19196109fe660a4e7e7757be7f84a",
+          "title": "一、降雨后现场巡检",
+          "section_path": "城市雨水花园巡检手册 > 一、降雨后现场巡检",
+          "page_range": "1",
+          "children": []
+        },
+        {
+          "section_id": "rsec_e9d9e3245f7921038461d20d580c29da",
+          "title": "二、入渗与排水检查",
+          "section_path": "城市雨水花园巡检手册 > 二、入渗与排水检查",
+          "page_range": "1 - 2",
           "children": [
             {
-              "section_id": "rsec_5f46a40aeb4b2b83922d3156d1669523",
-              "title": "一.1 现状",
-              "level": 3,
-              "hierarchy": "Demo 文档 > 一、背景 > 一.1 现状",
-              "start_page_label": "1",
-              "end_page_label": "2",
+              "section_id": "rsec_59a50faa441155221b1b0411500e3e24",
+              "title": "二.1 土壤表层",
+              "section_path": "城市雨水花园巡检手册 > 二、入渗与排水检查 > 二.1 土壤表层",
+              "page_range": "1 - 2",
               "children": []
             },
             {
-              "section_id": "rsec_8f1809b8d128a35219396401e6e73907",
-              "title": "一.2 问题",
-              "level": 3,
-              "hierarchy": "Demo 文档 > 一、背景 > 一.2 问题",
-              "start_page_label": "2",
-              "end_page_label": "2",
+              "section_id": "rsec_28901e0a7f3b4378ee06cf75f6a61fda",
+              "title": "二.2 排水构件",
+              "section_path": "城市雨水花园巡检手册 > 二、入渗与排水检查 > 二.2 排水构件",
+              "page_range": "2",
               "children": []
             }
           ]
         },
         {
-          "section_id": "rsec_156aa6b0af4be4a5a5bfa3e00e6b1235",
-          "title": "二、方案",
-          "level": 2,
-          "hierarchy": "Demo 文档 > 二、方案",
-          "start_page_label": "2",
-          "end_page_label": "3",
-          "children": [
-            {
-              "section_id": "rsec_f9ecca1bb4036766cfb5e61dcdd37238",
-              "title": "二.1 读取",
-              "level": 3,
-              "hierarchy": "Demo 文档 > 二、方案 > 二.1 读取",
-              "start_page_label": "2",
-              "end_page_label": "2",
-              "children": []
-            },
-            {
-              "section_id": "rsec_69bb7471518bf947c59d9f50d0a9ecd5",
-              "title": "二.2 展开",
-              "level": 3,
-              "hierarchy": "Demo 文档 > 二、方案 > 二.2 展开",
-              "start_page_label": "2",
-              "end_page_label": "3",
-              "children": [
-                {
-                  "section_id": "rsec_2cc2a44db26f8d8931021a08492976e6",
-                  "title": "二.2.1 继续展开",
-                  "level": 4,
-                  "hierarchy": "Demo 文档 > 二、方案 > 二.2 展开 > 二.2.1 继续展开",
-                  "start_page_label": "3",
-                  "end_page_label": "3",
-                  "children": []
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "section_id": "rsec_36cfb95d7afa58b366c0a4de67aaa1a2",
-          "title": "三、结论",
-          "level": 2,
-          "hierarchy": "Demo 文档 > 三、结论",
-          "start_page_label": "3",
-          "end_page_label": "3",
+          "section_id": "rsec_9f1f8d1f819389d5dbd83d9d2e80f401",
+          "title": "三、季节性植被维护",
+          "section_path": "城市雨水花园巡检手册 > 三、季节性植被维护",
+          "page_range": "2",
           "children": []
         }
       ]
@@ -372,9 +93,34 @@
   ]
 }
 
-=== 你该怎么看这份输出 ===
-1. structure.sections 是 INDEX 的扁平事实：每个 Section 都有 own_span / subtree_span。
-2. getDocumentOutline 是 READ 的目录投影：Section 只出现一次，页码作为边界信息附着在节点上。
-3. READ 返回不暴露 structure_mode、section_tree 或 Mongo snapshot 等内部字段。
-4. READ 的 getDocumentOutline 先给目录；getSectionContent 再按 section_id 读正文；
-   EXPAND 只处理 navigation state 已发现的 Section。
+=== FLAT_TEXT source text ===
+果园霜冻观测记录，四月十二日。傍晚十八时，坡底测点温度为六点八摄氏度，坡肩测点为八点一摄氏度，风速低于每秒一米。天空晴朗，地表长波辐射散失明显，值班人员因此将本夜判断为辐射降温风险较高。
+
+二十二时三十分，坡底温度降至三点二摄氏度，叶面仍未结霜。工作人员检查风机燃油、转向和警戒范围，并确认灌溉主管无渗漏。按照预案，风机不因单个测点短时下降立即启动，而要结合坡底与坡肩温差、露点和连续下降趋势判断。
+
+次日零时四十分，坡底与坡肩温差扩大到三点四摄氏度，近地层出现稳定逆温。风机于零时四十五分启动，每二十分钟复测一次。启动后坡底温度回升约零点七摄氏度，叶面未发现冰晶。
+
+日出前后最容易出现当夜最低温。值班人员在五时二十分停止风机前，先确认东方云量增加、坡底温度连续三次回升，并保留一组未干预地块作为对照。最终记录应注明仪器编号、校准日期和缺测时段，避免把设备漂移误判为防霜措施效果。
+
+=== FLAT_TEXT index summary ===
+{
+  "structure_mode": "flat_text",
+  "section_count": 1,
+  "reading_block_count": 1,
+  "retrieval_chunk_count": 1
+}
+=== FLAT_TEXT getDocumentOutline ===
+{
+  "resource_id": "demo-orchard-frost-log",
+  "document_version": 1,
+  "content_revision": "rrev_edf8a59d25767294872e6cae1ebda31e",
+  "total_length": 392,
+  "outline": [
+    {
+      "section_id": "rsec_9b40cd26557417ae336c0d071d66c6c7",
+      "title": "全文片段 1",
+      "section_path": "全文片段 1",
+      "children": []
+    }
+  ]
+}

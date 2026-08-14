@@ -19,6 +19,12 @@ class StoredPage(BaseModel):
     end_offset: int
 
 
+class StoredAnchor(BaseModel):
+    label: str
+    start_offset: int
+    end_offset: int
+
+
 class ResourceIndexStateEntity(Document):
     resource_id: str
     staged_content_revision: str | None = None
@@ -46,6 +52,7 @@ class ContentRevisionEntity(Document):
     structure_mode: str
     total_length: int
     pages: list[StoredPage] = Field(default_factory=list)
+    anchors: list[StoredAnchor] = Field(default_factory=list)
 
     class Settings:
         name = "wisepen_rag_v2_content_revisions"
@@ -98,6 +105,7 @@ class SectionEntity(Document):
     own_start: int
     own_end: int
     subtree_end: int
+    content_spans: list[StoredSpan]
 
     class Settings:
         name = "wisepen_rag_v2_sections"

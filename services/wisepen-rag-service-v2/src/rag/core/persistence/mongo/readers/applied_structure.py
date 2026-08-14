@@ -51,5 +51,9 @@ def _to_section(record: SectionEntity) -> Section:
         section_path=list(record.section_path),
         own_span=SourceSpan(record.own_start, record.own_end),
         subtree_span=SourceSpan(record.own_start, record.subtree_end),
+        content_spans=[
+            SourceSpan(span.start_offset, span.end_offset)
+            for span in record.content_spans
+        ],
         preview=record.preview,
     )

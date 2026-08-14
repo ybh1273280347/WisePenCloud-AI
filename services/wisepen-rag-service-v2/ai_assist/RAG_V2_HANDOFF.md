@@ -52,12 +52,12 @@ base:     origin/main @ e1af497f7
 | CP19.1 | `693296c9` | 将知识关系稳定身份统一为 Repo.md 冻结的 `edge_id`。 |
 | CP20 | `a9c2e06d` | MentionLookup 按已核验 SourceRef、published graph、revision 和 ACL 发现初始节点并写入 navigation state。 |
 | CP21 | `4a3e5961` | EXPAND 有界图遍历、路径排序、逐边 VERIFY 和并发安全的 known node 原子扩展。 |
-| CP22 | `8e05be98` | 有状态 Section READ：state/ACL/revision 校验、完整正文读取与 frontier 原子扩展。 |
+| CP22 | `8e05be98` | 确定性 Section READ：直属正文、ACL/revision 校验与 frontier 导航，不依赖 state 或 ReadingBlock。 |
 | CP23 | `7e3a1a224` | 权威 ACL 刷新、本地单调写入、Qdrant/Neo4j 显式同步和统一图查询 predicate。 |
 | CP24 | `cb73b1a57` | ResourceIndexer 编排结构、contextual、embedding、Mongo/Qdrant 发布、图 publish/skip 和重试补偿。 |
 | CP25 | `ae9b0c44d` | 先清 Mongo 发布指针 fail closed，再并行删除内容、缓存、Qdrant、Neo4j 和本地 ACL。 |
 | CP26 | `e285530b0` | 确定性 document structure/page/section READ HTTP schema、统一 ACL 和资源读取错误码。 |
-| CP27 | `98b0e3555` | LOCATE、发现后 Section READ、EXPAND HTTP schema、可信身份与导航错误映射。 |
+| CP27 | `98b0e3555` | LOCATE ReadingBlock 提升、确定性 Section READ、图 EXPAND HTTP schema、可信身份与导航错误映射。 |
 | CP28 | `c6888c42e` | 三类 Kafka adapter、保序 offset 重试、显式运行时配置与服务生命周期装配。 |
 | CP29 | 当前工作树 | 集成门、稳定事实 golden、shadow 差异审批工具、回放/切流/回滚 runbook，并修复 HTTP 错误码与 LOCATE seed 返回闭环。 |
 
@@ -262,16 +262,16 @@ CP21 EXPAND 边界：
 
 - `expand/ports.py` 的 `GraphTraversal` 只查询 node、edge、path 与 evidence SourceRef 身份，不排序、不读取正文、不修改 state。
 - `Neo4jGraphTraversal` 只使用固定方向/深度 pattern，并要求 evidence resource 的 graph 仍为当前 `published` revision；统一 ACL 在返回前复查。
-- `KnowledgeGraphExpander` 校验 state 用户/session 与 seed 白名单，按请求 query 或 root query 排序，逐 edge 调用 `EvidenceVerifier.verify_refs()`，最后原子扩展 known nodes。
+- `KnowledgeGraphExpander` 校验 state 用户/session 与 seed 白名单，按请求 query 或 root query 排序，逐 edge 调用 `EvidenceVerifier.verify_graph_evidence_refs()`，最后原子扩展 known nodes。
 - `NavigationStateStore.add_known_nodes()` 返回本次原子操作实际新增的 node IDs；并发调用只允许一个结果返回对应新路径，不使用 `get -> compare -> add`。
-- EXPAND 返回领域 node、edge、path 和权威 `EvidenceRecord`，不组装 HTTP/MCP/Agent 文案。
+- EXPAND application 将领域 node/edge/path 投影为 `discovered_nodes`、带有向箭头的可读 `paths` 和 `evidence_sections`；`paths[].text` 是 Cypher 风格路径，`steps[].relation` 固定按 source -> target 事实方向，`steps[].evidence` 只配对实际包含 quote 的 SourceRef；领域模型仍只承载图事实，HTTP 不再暴露 node/edge 的 ID join 结构。
 
-CP22 已发现 Section 展开边界：
+CP22 Section 导航边界：
 
-- `DiscoveredSectionExpander` 只展开 navigation state 中已经发现的 Section；无状态 `DocumentContentReader` 的 page/Section 行为不变。
-- state 必须匹配当前 user/session；未知 Section 直接抛 `SectionNotDiscoveredError`，不静默扩大读取范围。
-- 正文查询前后各执行一次统一 ACL 与 applied revision 校验，读取期间发生撤权或 revision 切换时 fail closed。
-- `AppliedContentReader` 返回完整 `SectionContent` 后，parent/previous/next/children 使用现有 `add_known_sections()` 原子加入同一 state。
+- Section 是确定性 READ 地址，不进入 navigation state；调用方拿到 `section_id` 后直接使用 `getSectionContent`。
+- `getSectionContent` 返回该 Section 的直属正文和 parent/previous/next/children 导航，不返回检索概念 `ReadingBlock`。
+- 正文查询统一执行 ACL 与 applied revision 校验；撤权或 revision 切换时 fail closed。
+- LOCATE 负责把命中的 RetrievalChunk 提升成完整 ReadingBlock，并在 Section 视图中保留 `section_id`、`title` 和 `section_path` 作为后续 READ 锚点。
 
 CP23 ACL 同步边界：
 
@@ -300,17 +300,20 @@ CP26 HTTP READ adapter 边界：
 
 - `/resources/document-structure`、`/page-content`、`/section-content` 沿用内部服务路由惯例，使用 `R[...]`、`require_login` 和 dependency-injector 注入 application reader。
 - `DocumentStructureReader` 与 `DocumentContentReader` 在 application 层统一执行 ACL；未授权与 applied 内容不存在都抛 `ContentNotFoundError`，HTTP 映射为同一 `RESOURCE_CONTENT_NOT_FOUND`。
-- 批量 page/section 响应使用请求 key 到领域事实的字典，只返回实际存在 key；合法空 Section 返回 `reading_blocks=[]`，不生成 `kind/reason/windows`。
-- schema 使用 list 而非 tuple，最多接收 20 个 page label 或 section ID，所有请求 `extra=forbid`；响应只序列化稳定结构、正文、offset、frontier 和锚点事实。
+- 批量 page/section 响应使用请求 key 到领域事实的字典，只返回实际存在 key；合法空 Section 返回 `text=""`，不生成 `kind/reason/windows`。
+- 所有模型可见页归属统一为紧凑 `page_range`；`page_labels` 只保留在请求、索引和 VERIFY 内部事实中，无页标记时不伪造范围。
+- outline 返回 `section_id`、当前 `title`、完整 `section_path` 和 `page_range`；flat text 使用 synthetic Section 保持结构 READ 可用。
+- page 只返回正文、Section 定位锚点和 anchor labels，不重复 Section preview；Section 返回直属正文、page range/anchor labels、标题路径和 frontier。
+- schema 使用 list 而非 tuple，最多接收 20 个 page label 或 section ID，所有请求 `extra=forbid`；响应只序列化稳定结构、正文、frontier 和锚点事实。
 - 非预期 application/依赖异常映射为 `RESOURCE_READ_FAILED`，不把底层异常文本、存储结构或资源存在性泄漏给调用方。
 
 CP27 HTTP Navigation adapter 边界：
 
-- `locate`、`expandDiscoveredSections`、`expandGraph` 分别调用 `ReadingEntryLocator`、`DiscoveredSectionExpander` 和 `KnowledgeGraphExpander`，不恢复 v1 的聚合 service 或 cypher 命名。
+- `locate` 与 `expandGraph` 分别调用 `ReadingEntryLocator` 和 `KnowledgeGraphExpander`；Section 后续阅读统一走无状态 `getSectionContent`。
 - 请求 body 只包含 session、查询、state 和导航边界；`PermissionScope.user_id` 与群组角色始终来自 `require_login` 和 `SecurityContextHolder`，客户端不能伪造身份。
-- locate 返回 state、相关性 decision、Section frontier 和已核验证据；expand 返回领域 node、edge、path 和 SourceRef 回源事实；不组装 Agent reason 或探索提示。
-- 请求 schema 使用 list，Section 最多 12 个、seed/relation type 最多 16 个、depth 只允许 1/2、结果最多 20 个，所有请求 `extra=forbid`。
-- state 不存在/过期/身份不匹配映射为 `NAVIGATION_STATE_NOT_FOUND`；撤权或 revision/evidence 失效映射为 `NAVIGATION_STATE_INVALIDATED`；未知 Section/seed 与输入错误映射为 `NAVIGATION_INVALID`；依赖失败映射为 `NAVIGATION_FAILED` 且不透传内部文本。
+- locate 返回 state、`retrieval_status`、按 Section 分组的完整 ReadingBlock 和紧凑 graph nodes；expandGraph 返回本次新增节点、可读有向路径、逐 quote SourceRef 配对及证据所属的同构 Section/ReadingBlock 视图。
+- 请求 schema 使用 list，seed/relation type 最多 16 个、depth 只允许 1/2、结果最多 20 个，所有请求 `extra=forbid`。
+- state 不存在/过期/身份不匹配映射为 `NAVIGATION_STATE_NOT_FOUND`；撤权或 revision/evidence 失效映射为 `NAVIGATION_STATE_INVALIDATED`；未知 seed 与输入错误映射为 `NAVIGATION_INVALID`；依赖失败映射为 `NAVIGATION_FAILED` 且不透传内部文本。
 
 CP28 Kafka 与服务生命周期边界：
 
@@ -341,11 +344,11 @@ CP14 的实现边界：
 
 CP15 的实现边界：
 
-- `NavigationState` 与 `KnownSection` 位于 `domain/navigation.py`；Section 映射同时保存 `resource_id` 和发现时的 `content_revision`。
-- `NavigationStateStore` 位于 `domain/repositories`，只暴露 create/get/add sections/add nodes，不暴露 Redis key、hash 或 Lua 类型。
-- `RedisNavigationStateStore` 使用一个 `wisepen:rag:v2:navigation-state:<state_id>` hash；`known_sections` 和 `known_nodes` 作为 JSON 字段，避免 v1 多 key 结构产生孤立状态。
+- `NavigationState` 位于 `domain/navigation.py`，只保存 graph 导航需要的稳定 node ID；Section 使用确定性 READ，不保存发现状态。
+- `NavigationStateStore` 位于 `domain/repositories`，只暴露 create/get/add nodes，不暴露 Redis key、hash 或 Lua 类型。
+- `RedisNavigationStateStore` 使用一个 `wisepen:rag:v2:navigation-state:<state_id>` hash；`known_nodes` 作为 JSON 字段，与主状态共享 TTL。
 - Redis 状态的 hash/JSON 映射私有内联在唯一的 `navigation_state_store.py` 中，不建立 mappers 子目录。
-- create 写入完整 hash 后设置统一 TTL；两个 add 操作用 Lua 原子检查主 key、合并集合并续期主 key，状态不存在直接抛出 `NavigationStateNotFoundError`。
+- create 写入完整 hash 后设置统一 TTL；add nodes 使用 Lua 原子检查主 key、合并集合并续期主 key，状态不存在直接抛出 `NavigationStateNotFoundError`。
 - CP15 不实现 LOCATE/READ/EXPAND 用例、state 用户/session 校验或删除编排；这些由 CP16、CP22、CP21/CP25 的 application 负责。
 
 CP16 的实现边界：

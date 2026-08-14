@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from rag.domain.models.structure import (
+    DocumentAnchor,
     PageRange,
     Section,
     StructureMode,
 )
 from rag.utils.chunkers import SourceSpan
-
-if TYPE_CHECKING:
-    from rag.domain.models.evidence import EvidenceRecord
 
 
 @dataclass(slots=True)
@@ -39,6 +36,7 @@ class ContentRevision:
     structure_mode: StructureMode
     total_length: int
     pages: list[PageRange] = field(default_factory=list)
+    anchors: list[DocumentAnchor] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -67,13 +65,12 @@ class ReadingBlock:
 
 @dataclass(slots=True)
 class ContentWindow:
-    """READ 返回的正文窗口，source_span 使用 Python 字符偏移。"""
+    """内部 page 正文窗口，保留 Python 字符偏移供回源使用。"""
 
     text: str
     source_span: SourceSpan
-    source_spans: list[SourceSpan] = field(default_factory=list)
     page_labels: list[str] = field(default_factory=list)
-    section_ids: list[str] = field(default_factory=list)
+    sections: list[Section] = field(default_factory=list)
     anchor_labels: list[str] = field(default_factory=list)
 
 
@@ -89,20 +86,10 @@ class SectionFrontier:
 
 @dataclass(slots=True)
 class SectionContent:
-    """Section 正文及相邻标题入口。"""
+    """从权威 SourcePart 读取的 Section 直属正文及相邻标题入口。"""
 
     section: Section
-    reading_blocks: list[ReadingBlock] = field(default_factory=list)
+    text: str = ""
+    page_labels: list[str] = field(default_factory=list)
+    anchor_labels: list[str] = field(default_factory=list)
     frontier: SectionFrontier = field(default_factory=SectionFrontier)
-
-
-@dataclass(slots=True)
-class SectionView:
-    """Agent 可读取并继续展开的标题树节点视图。"""
-
-    resource_id: str
-    content_revision: str
-    section: Section
-    reading_blocks: list[ReadingBlock] = field(default_factory=list)
-    frontier: SectionFrontier = field(default_factory=SectionFrontier)
-    evidence: list[EvidenceRecord] = field(default_factory=list)

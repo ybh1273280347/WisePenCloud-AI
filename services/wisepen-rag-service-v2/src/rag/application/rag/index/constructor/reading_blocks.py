@@ -9,8 +9,8 @@ ReadingBlock 是介于 Section 和 RetrivalChunk 之间的中等粒度文本单�
 from collections.abc import Sequence
 from hashlib import sha256
 
-from rag.domain.models.structure import DocumentStructure, Section, StructureMode
 from rag.domain.models.content import ReadingBlock
+from rag.domain.models.structure import DocumentStructure, Section, StructureMode
 from rag.utils.chunkers import (
     BlockKind,
     ChunkDocument,
@@ -23,7 +23,7 @@ from rag.utils.chunkers import (
 from rag.utils.chunkers.markdown import MarkdownParser
 
 from ._source_spans import _map_rendered_spans_to_source, _overlaps, _render_source_text
-from .structure import _build_section_id
+from .structure import _build_section_id, _build_section_preview
 
 # 单个 ReadingBlock 的最大字符数，与下游窗口抽取的最大上下文长度对齐。
 _READING_BLOCK_MAX_CHARACTERS = 4000
@@ -67,6 +67,8 @@ def build_flat_text_sections(
                 section_path=[title],
                 own_span=own_span,
                 subtree_span=own_span,
+                content_spans=list(source_spans),
+                preview=_build_section_preview(markdown, source_spans),
             )
         )
 
@@ -89,8 +91,7 @@ def build_reading_blocks(
             ``build_flat_text_sections``，SECTIONED 模式下来自 ``parse_document_structure``。
 
     返回:
-        ReadingBlock 列表；函数会同时回填 ``section.preview``（取该 Section 下
-        所有 block 的拼接文本前 500 字符），用于导航展示。
+        ReadingBlock 列表；Section 导航预览已由结构构建阶段从权威正文生成。
     """
     if structure.total_length != len(markdown):
         raise ValueError("document structure length does not match markdown")
@@ -116,14 +117,6 @@ def build_reading_blocks(
             sections=sections,
         )
 
-    # 回填 section.preview：把该 Section 下所有 block 的原文拼接（替换换行）取前 500 字符。
-    blocks_by_section: dict[str, list[ReadingBlock]] = {}
-    for block in blocks:
-        blocks_by_section.setdefault(block.section_id, []).append(block)
-    for section in sections:
-        section.preview = " ".join(
-            block.raw_text for block in blocks_by_section.get(section.section_id, [])
-        ).replace("\n", " ")[:500]
     return blocks
 
 

@@ -4,14 +4,14 @@
 
 ## 1. locate：先找“可以继续读”的入口
 
-目标：从问题里找到一组可信的 section 入口和 graph 节点，作为后续阅读的起点。
+目标：从问题里召回 RetrievalChunk，核验后提升成完整 ReadingBlock，并返回可继续确定性阅读的 section 锚点和 graph 节点。
 
 流程：
 1. 接口接收 `semantic_query`、可选 `lexical_query`、资源白名单和 `max_results`。
 2. `ReadingCandidateLocator` 先做召回，再做排序。
-3. 排序后先去重，再做回源校验。
-4. 校验通过后，补出 section frontier，写入 navigation state。
-5. 返回 `state_id`、排序决策、graph nodes 和 section 入口。
+3. 按 ReadingBlock 去重后做回源校验，并把命中范围换算成 block 内相对字符范围。
+4. 将命中的 RetrievalChunk 提升成完整 ReadingBlock，再按 Section 分组。
+5. 返回 `state_id`、`retrieval_status`、紧凑 graph nodes 和带 `section_id/title/section_path` 的 section 入口。
 
 对应文件：
 - `src/rag/api/endpoints/locate.py`
@@ -25,8 +25,9 @@
 - `src/rag/domain/repositories/redis/navigation_state_store.py`
 
 ### reviewer 重点
-- 有没有只返回“候选”而没有变成“可继续阅读入口”。
-- section frontier 有没有保留 parent / previous / next / children。
+- 命中的 RetrievalChunk 有没有提升成完整 ReadingBlock，而不是泄漏内部候选结构。
+- Section 是否同时保留 `section_id`、当前 `title` 和 `section_path`，方便模型定位并继续 READ。
+- `level`、revision、重复 source text 等内部或冗余字段有没有泄漏到视图。
 - 排序和核验是不是在正确边界内完成。
 
 ## 2. read：直接读文档结构、页、section 正文
@@ -37,7 +38,7 @@
 1. `getDocumentStructure` 先拿 applied revision。
 2. 结构只返回页面和 section 树，不读正文。
 3. `getPageContent` 按页读正文窗口。
-4. `getSectionContent` 按 section 读正文块和 frontier。
+4. `getSectionContent` 按 section 直接读直属正文和 frontier，不经过 ReadingBlock。
 5. 权限不通过或 applied revision 不存在时直接失败关闭。
 
 对应文件：
@@ -51,6 +52,10 @@
 ### reviewer 重点
 - `structure` 读的是结构，不是正文。
 - `page` 和 `section` 是两条独立读取路径。
+- 所有模型可见页归属统一使用 `page_range`；内部 `page_labels` 只用于请求、索引和回源校验，无页标记时不伪造范围。
+- page 的 Section 锚点不带 preview，避免与页正文重复。
+- outline 同时保留当前 `title` 和完整 `section_path`；flat text 使用 synthetic Section，确保纯文本也能通过 Section READ 导航和读取。
+- outline 去掉无消费价值的 `level`。
 - `SectionContent` 是否仍带 frontier，方便继续展开。
 
 ## 3. verify：把证据变成可相信的证据
@@ -75,22 +80,20 @@
 - 不要把业务语义 reason 塞进 verifier 里。
 - graph 引用和 locate 候选都要能在这里闭环。
 
-## 4. expand：沿已发现标题或图谱节点继续探索
+## 4. expand：沿已发现图谱节点继续探索
 
-目标：把 navigation state 中已经发现的 section / node 继续展开成可读、可探索的新入口。
+目标：把 navigation state 中已经发现的 graph node 继续展开，并将图证据提升为与 LOCATE 对齐的可读 Section/ReadingBlock 入口。
 
 流程：
-1. `expandDiscoveredSections` 只读取当前 state 已发现 section 的正文和 frontier。
-2. 返回完整 `SectionView`，里面有 section、reading blocks、frontier 和 evidence。
-3. `expandGraph` 从已知 node 出发找路径、排序、核验证据。
-4. 现在 graph 的 evidence 也会回补成 `SectionView`，并写回 navigation state。
-5. 所以 graph 扩展后，调用方可以继续沿着证据所在 section 读标题树。
-6. 如果调用方只是从 `getDocumentStructure.section_tree` 里选标题读正文，应走 read 的 `getSectionContent`，不要绕进 expand 状态机。
+1. `expandGraph` 从已知 node 出发找路径、排序、核验证据。
+2. application 将路径投影为带有向箭头的可读文本，node ID 只保留作后续导航锚点。
+3. 每条关系的 quote 与实际 SourceRef 配对，evidence 按 Section 分组，并回补成与 LOCATE 相同的完整 ReadingBlock 视图。
+4. graph 扩展只把新 node 写回 navigation state。
+5. 调用方使用证据 Section 的 `section_id` 调用 `getSectionContent`，继续确定性阅读正文与标题导航；新发现节点的 `node_id` 可继续作为 EXPAND seed。
 
 对应文件：
 - `src/rag/api/endpoints/expand.py`
 - `src/rag/api/schemas/expand.py`
-- `src/rag/application/rag/expand/discovered_section_expander.py`
 - `src/rag/application/rag/expand/graph_expander.py`
 - `src/rag/application/rag/expand/__init__.py`
 - `src/rag/domain/models/content.py`
@@ -98,10 +101,10 @@
 - `src/rag/domain/repositories/neo4j/graph_traversal.py`
 
 ### reviewer 重点
-- `expandDiscoveredSections` 是有状态探索能力，只能展开 state 中已发现的 section。
-- `getSectionContent` 是无状态正文读取能力，用于从文档结构直接进入标题正文。
-- `expandGraph` 不能只吐证据片段，必须保留可继续阅读的 section 上下文。
-- 发现的新 section / node 要写回 state，不然能力只能看不能继续走。
+- `getSectionContent` 是无状态正文读取能力，任何合法 Section 锚点都可以直接进入。
+- ReadingBlock 只属于检索和图证据视图，不能进入确定性 READ 输出。
+- `expandGraph` 不能只吐证据片段，必须返回证据所属的完整 ReadingBlock 和 Section 锚点。
+- 发现的新 node 要写回 state；Section 不需要发现状态。
 
 ## 5. index：把原始文档变成可读、可检索、可追溯的数据
 
@@ -133,5 +136,5 @@
 
 ### reviewer 重点
 - `retrieval_chunks` 是给检索用的，不等于 graph 抽取输入。
-- `reading_blocks` 是给图谱和回源用的，不要混成一锅。
+- `reading_blocks` 是检索命中提升和图谱证据的可读单元，不要混入 page/section 确定性 READ。
 - 不要让 index 阶段偷偷承担 read/expand 的职责。

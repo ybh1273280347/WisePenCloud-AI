@@ -13,19 +13,18 @@ from rag.domain.repositories.mongo.readers.applied_structure import (
     AppliedStructureReader,
 )
 
+from ..page_range import format_page_range
 from .content import ContentAccessRevokedError, ContentNotFoundError
 
 
 @dataclass(slots=True)
 class DocumentOutlineNode:
-    """目录树中的标题节点。"""
+    """目录节点；flat text 由 synthetic Section 提供可读取结构。"""
 
     section_id: str
     title: str
-    level: int
-    hierarchy: str
-    start_page_label: str | None = None
-    end_page_label: str | None = None
+    section_path: str
+    page_range: str | None = None
     children: list[DocumentOutlineNode] = field(default_factory=list)
 
 
@@ -137,10 +136,8 @@ def _to_outline_node(
     return DocumentOutlineNode(
         section_id=section.section_id,
         title=section.title,
-        level=section.level,
-        hierarchy=" > ".join(section.section_path),
-        start_page_label=page_labels[0] if page_labels else None,
-        end_page_label=page_labels[-1] if page_labels else None,
+        section_path=" > ".join(section.section_path),
+        page_range=format_page_range(page_labels),
         children=[
             _to_outline_node(
                 section=child,

@@ -29,10 +29,11 @@ class EvidenceVerifier:
     def __init__(self, *, reader: EvidenceReader) -> None:
         self._reader = reader
 
-    async def verify(
+    async def verify_retrieval_candidates(
         self,
         candidates: Sequence[EvidenceCandidate],
     ) -> list[EvidenceRecord]:
+        """回源并验证检索候选与 applied 证据的完整身份链。"""
         if not candidates:
             return []
 
@@ -62,7 +63,7 @@ class EvidenceVerifier:
             verified.append(record)
         return verified
 
-    async def verify_refs(
+    async def verify_graph_evidence_refs(
         self,
         *,
         resource_id: str,

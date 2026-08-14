@@ -7,23 +7,21 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from rag.application.rag.acl import PermissionAuthorizer
+from rag.application.rag.navigation_views import (
+    KnowledgeNodeView,
+    RetrievedSectionView,
+    build_retrieved_section_views,
+    to_knowledge_node_view,
+)
 from rag.application.rag.verify import EvidenceVerifier
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.content import SectionFrontier
 from rag.domain.models.evidence import EvidenceCandidate, EvidenceRecord
-from rag.domain.models.graph import KnowledgeNode
-from rag.domain.models.navigation import KnownSection
 from rag.domain.models.retrieval import (
     CandidateSearchRequest,
     RetrievalCandidate,
     RetrievalChunk,
 )
-from rag.domain.models.structure import Section
 from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
-from rag.domain.repositories.mongo.readers.applied_structure import (
-    AppliedStructureReader,
-    AppliedStructureSnapshot,
-)
 from rag.domain.repositories.neo4j.mention_lookup import MentionLookup
 from rag.domain.repositories.qdrant.candidate_searcher import CandidateSearcher
 from rag.domain.repositories.redis.navigation_state_store import NavigationStateStore
@@ -55,33 +53,13 @@ class LocateRequest:
 
 
 @dataclass(slots=True)
-class LocatedEvidence:
-    """一个已核验 ReadingBlock 命中的权威证据。"""
-
-    source_ref_id: str
-    reading_block_id: str
-    source_text: str
-
-
-@dataclass(slots=True)
-class LocatedSection:
-    """LOCATE 发现的 Section 入口及命中证据和可导航 frontier。"""
-
-    resource_id: str
-    content_revision: str
-    section: Section
-    frontier: SectionFrontier
-    evidence: list[LocatedEvidence] = field(default_factory=list)
-
-
-@dataclass(slots=True)
 class LocateResult:
     """一次 LOCATE 的排序结论、已核验入口与后续 navigation state。"""
 
     state_id: str
-    decision: RankDecision
-    nodes: list[KnowledgeNode] = field(default_factory=list)
-    sections: list[LocatedSection] = field(default_factory=list)
+    retrieval_status: RankDecision
+    nodes: list[KnowledgeNodeView] = field(default_factory=list)
+    sections: list[RetrievedSectionView] = field(default_factory=list)
 
 
 class LocateError(RuntimeError):
@@ -100,7 +78,6 @@ class ReadingCandidateLocator:
         "_ranking_pipeline",
         "_revision_reader",
         "_state_store",
-        "_structure_reader",
     )
 
     def __init__(
@@ -113,7 +90,6 @@ class ReadingCandidateLocator:
         evidence_verifier: EvidenceVerifier,
         mention_lookup: MentionLookup,
         revision_reader: AppliedRevisionReader,
-        structure_reader: AppliedStructureReader,
         state_store: NavigationStateStore,
     ) -> None:
         self._embedding_client = embedding_client
@@ -123,14 +99,15 @@ class ReadingCandidateLocator:
         self._evidence_verifier = evidence_verifier
         self._mention_lookup = mention_lookup
         self._revision_reader = revision_reader
-        self._structure_reader = structure_reader
         self._state_store = state_store
 
     async def locate(self, request: LocateRequest) -> LocateResult:
         """只将 applied 且仍可读的候选提升为后续 READ 可用的入口。"""
         # 上游 schema 与鉴权层已经收口了公开入口边界，这里只做外部模型返回形状校验。
         semantic_query = request.semantic_query
-        lexical_query = semantic_query if request.lexical_query is None else request.lexical_query
+        lexical_query = (
+            semantic_query if request.lexical_query is None else request.lexical_query
+        )
 
         embedding = await self._embedding_client.aembed([semantic_query])
         if len(embedding.embeddings) != 1:
@@ -189,22 +166,33 @@ class ReadingCandidateLocator:
         candidates_by_id = {
             _candidate_key(candidate): candidate for candidate in candidates
         }
-        selected: list[RetrievalCandidate] = []
-        seen_blocks: set[tuple[str, str]] = set()
+        ranked_candidates: list[RetrievalCandidate] = []
+        selected_block_keys: set[tuple[str, str]] = set()
         for ranked in ranking.ranked:
             candidate = candidates_by_id.get(ranked.candidate_id)
             if candidate is None:
-                raise LocateError(f"ranking returned unknown candidate {ranked.candidate_id}")
+                raise LocateError(
+                    f"ranking returned unknown candidate {ranked.candidate_id}"
+                )
+            ranked_candidates.append(candidate)
             block_key = (candidate.resource_id, candidate.reading_block_id)
-            if block_key in seen_blocks:
-                continue
-            seen_blocks.add(block_key)
-            selected.append(candidate)
-            if len(selected) == request.max_results:
-                break
+            if (
+                block_key not in selected_block_keys
+                and len(selected_block_keys) < request.max_results
+            ):
+                selected_block_keys.add(block_key)
+
+        selected = [
+            candidate
+            for candidate in ranked_candidates
+            if (candidate.resource_id, candidate.reading_block_id)
+            in selected_block_keys
+        ]
+        if not selected:
+            return await self._create_empty_result(request, semantic_query)
 
         records = await self._verify_selected(selected)
-        sections = await self._build_sections(records)
+        sections = build_retrieved_section_views(records)
         nodes = await self._mention_lookup.find_nodes(
             evidence=records,
             permission_scope=request.permission_scope,
@@ -214,13 +202,12 @@ class ReadingCandidateLocator:
             user_id=request.permission_scope.user_id,
             session_id=request.session_id,
             root_query=semantic_query,
-            known_sections=_known_sections(sections),
             known_node_ids=[node.node_id for node in nodes],
         )
         return LocateResult(
             state_id=state.state_id,
-            decision=ranking.decision,
-            nodes=nodes,
+            retrieval_status=ranking.decision,
+            nodes=[to_knowledge_node_view(node) for node in nodes],
             sections=sections,
         )
 
@@ -273,86 +260,13 @@ class ReadingCandidateLocator:
 
         records_by_ref_id: dict[str, EvidenceRecord] = {}
         for grouped_candidates in candidates_by_revision.values():
-            verified = await self._evidence_verifier.verify(
+            verified = await self._evidence_verifier.verify_retrieval_candidates(
                 [_evidence_candidate(candidate) for candidate in grouped_candidates]
             )
             records_by_ref_id.update(
                 {record.source_ref.ref_id: record for record in verified}
             )
         return [records_by_ref_id[candidate.source_ref_id] for candidate in candidates]
-
-    async def _build_sections(
-        self,
-        records: Sequence[EvidenceRecord],
-    ) -> list[LocatedSection]:
-        resource_structures: dict[str, AppliedStructureSnapshot] = {}
-        revisions_by_resource = {
-            record.revision.resource_id: record.revision.content_revision
-            for record in records
-        }
-        for resource_id, content_revision in revisions_by_resource.items():
-            structure = await self._structure_reader.get_applied_document_structure(resource_id)
-            if structure is None:
-                raise LocateError(f"resource {resource_id} has no applied structure")
-            if structure.revision.content_revision != content_revision:
-                raise LocateError(
-                    f"resource {resource_id} changed revision during locate"
-                )
-            resource_structures[resource_id] = structure
-
-        grouped: dict[tuple[str, str], list[EvidenceRecord]] = {}
-        for record in records:
-            grouped.setdefault(
-                (record.revision.resource_id, record.section.section_id),
-                [],
-            ).append(record)
-
-        entries: list[LocatedSection] = []
-        for (resource_id, section_id), section_records in grouped.items():
-            structure = resource_structures[resource_id]
-            sections_by_id = {
-                section.section_id: section for section in structure.sections
-            }
-            siblings_by_parent: dict[str | None, list[Section]] = {}
-            for section in structure.sections:
-                siblings_by_parent.setdefault(section.parent_section_id, []).append(section)
-            for siblings in siblings_by_parent.values():
-                siblings.sort(key=lambda section: section.ordinal)
-            section = sections_by_id.get(section_id)
-            if section is None:
-                raise LocateError(f"verified section {section_id} is absent from structure")
-            siblings = siblings_by_parent[section.parent_section_id]
-            index = next(
-                index
-                for index, sibling in enumerate(siblings)
-                if sibling.section_id == section_id
-            )
-            entries.append(
-                LocatedSection(
-                    resource_id=resource_id,
-                    content_revision=structure.revision.content_revision,
-                    section=section,
-                    frontier=SectionFrontier(
-                        parent=sections_by_id.get(section.parent_section_id),
-                        previous=siblings[index - 1] if index else None,
-                        next=(
-                            siblings[index + 1]
-                            if index + 1 < len(siblings)
-                            else None
-                        ),
-                        children=siblings_by_parent.get(section.section_id, []),
-                    ),
-                    evidence=[
-                        LocatedEvidence(
-                            source_ref_id=record.source_ref.ref_id,
-                            reading_block_id=record.reading_block.block_id,
-                            source_text=record.source_text,
-                        )
-                        for record in section_records
-                    ],
-                )
-            )
-        return entries
 
     async def _create_empty_result(
         self,
@@ -363,12 +277,11 @@ class ReadingCandidateLocator:
             user_id=request.permission_scope.user_id,
             session_id=request.session_id,
             root_query=semantic_query,
-            known_sections={},
             known_node_ids=[],
         )
         return LocateResult(
             state_id=state.state_id,
-            decision=RankDecision.IRRELEVANT,
+            retrieval_status=RankDecision.IRRELEVANT,
         )
 
 
@@ -396,21 +309,3 @@ def _candidate_key(candidate: RetrievalCandidate) -> str:
     return (
         f"{candidate.resource_id}\0{candidate.content_revision}\0{candidate.chunk_id}"
     )
-
-
-def _known_sections(sections: Sequence[LocatedSection]) -> dict[str, KnownSection]:
-    known: dict[str, KnownSection] = {}
-    for entry in sections:
-        for section in (
-            entry.section,
-            entry.frontier.parent,
-            entry.frontier.previous,
-            entry.frontier.next,
-            *entry.frontier.children,
-        ):
-            if section is not None:
-                known[section.section_id] = KnownSection(
-                    resource_id=entry.resource_id,
-                    content_revision=entry.content_revision,
-                )
-    return known

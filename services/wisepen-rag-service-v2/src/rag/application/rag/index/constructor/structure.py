@@ -54,6 +54,7 @@ def parse_document_structure(
             _build_sections(
                 resource_id=resource_id,
                 content_revision=content_revision,
+                markdown=markdown,
                 text_length=len(markdown),
                 blocks=blocks,
             )
@@ -156,6 +157,7 @@ def _build_sections(
     *,
     resource_id: str,
     content_revision: str,
+    markdown: str,
     text_length: int,
     blocks: tuple[TextBlock, ...],
 ) -> list[Section]:
@@ -176,6 +178,7 @@ def _build_sections(
         raise ValueError("heading is missing its source offset")
 
     # 虚拟根 Section：覆盖第一个标题之前的全部内容（前言/文档头）。
+    root_content_spans = _content_spans(blocks, 0, first_heading_start)
     root = Section(
         section_id=_build_section_id(
             resource_id=resource_id,
@@ -191,6 +194,8 @@ def _build_sections(
         section_path=[],
         own_span=SourceSpan(0, first_heading_start),
         subtree_span=SourceSpan(0, text_length),
+        content_spans=root_content_spans,
+        preview=_build_section_preview(markdown, root_content_spans),
     )
     sections = [root]
     # 当前尚未闭合的 Section 在 ``sections`` 列表中的下标栈。
@@ -199,7 +204,7 @@ def _build_sections(
     child_counts: dict[str, int] = {}
 
     for heading_index, heading in enumerate(headings):
-        if heading.start_offset is None:
+        if heading.start_offset is None or heading.end_offset is None:
             raise ValueError("heading is missing its source offset")
         heading_level = heading.metadata.get("heading_level")
         title = heading.metadata.get("title")
@@ -234,6 +239,11 @@ def _build_sections(
         if next_heading_start is None:
             raise ValueError("heading is missing its source offset")
 
+        content_spans = _content_spans(
+            blocks,
+            heading.end_offset,
+            next_heading_start,
+        )
         section = Section(
             section_id=_build_section_id(
                 resource_id=resource_id,
@@ -251,11 +261,39 @@ def _build_sections(
             own_span=SourceSpan(heading.start_offset, next_heading_start),
             # subtree_span 初始覆盖到文档末尾；待后续闭合时再收敛。
             subtree_span=SourceSpan(heading.start_offset, text_length),
+            content_spans=content_spans,
+            preview=_build_section_preview(markdown, content_spans),
         )
         sections.append(section)
         open_section_indexes.append(len(sections) - 1)
 
     return sections
+
+
+def _content_spans(
+    blocks: tuple[TextBlock, ...],
+    start_offset: int,
+    end_offset: int,
+) -> list[SourceSpan]:
+    """保留 Section 直属语义块，确定性 READ 不依赖 ReadingBlock 分块结果。"""
+    return [
+        SourceSpan(block.start_offset, block.end_offset)
+        for block in blocks
+        if block.block_kind not in {BlockKind.HEADING, BlockKind.PAGE_MARKER}
+        and block.text.strip()
+        and block.start_offset is not None
+        and block.end_offset is not None
+        and start_offset <= block.start_offset
+        and block.end_offset <= end_offset
+    ]
+
+
+def _build_section_preview(markdown: str, source_spans: list[SourceSpan]) -> str:
+    """从权威直属正文生成导航预览，不借用 ReadingBlock 分块结果。"""
+    return " ".join(
+        markdown[span.start_offset : span.end_offset].replace("\n", " ").strip()
+        for span in source_spans
+    )[:500]
 
 
 def _build_section_id(

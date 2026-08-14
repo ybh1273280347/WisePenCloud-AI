@@ -48,6 +48,14 @@ def test_nested_headings_build_parent_paths_and_subtree_ranges() -> None:
     assert section_b.ordinal == 1
     assert section_c.subtree_span.end_offset == section_b.own_span.start_offset
     assert section_a.subtree_span.end_offset == len(markdown)
+    assert "# A" not in "\n\n".join(
+        markdown[span.start_offset : span.end_offset]
+        for span in section_a.content_spans
+    )
+    assert [
+        markdown[span.start_offset : span.end_offset].strip()
+        for span in section_a.content_spans
+    ] == ["A 正文。"]
 
 
 def test_nested_headings_keep_page_tree_entry_points() -> None:

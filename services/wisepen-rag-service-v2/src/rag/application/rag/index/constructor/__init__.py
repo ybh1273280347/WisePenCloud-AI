@@ -14,6 +14,6 @@ __all__ = [
     "build_retrieval_chunks",
     "build_source_refs",
     "create_content_revision",
-    "parse_document_structure",
     "merge_candidate_graph",
+    "parse_document_structure",
 ]

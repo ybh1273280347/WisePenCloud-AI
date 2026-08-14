@@ -59,6 +59,7 @@ def test_revision_identity_and_unicode_length_are_stable() -> None:
     assert revision.content_revision == _revision().content_revision
     assert revision.total_length == len("# 标题\n\n正文🙂。")
     assert revision.content_hash
+    assert revision.index_schema_version == "rag-v2-content:v2"
 
 
 @pytest.mark.parametrize(
@@ -236,7 +237,7 @@ class _EvidenceReader:
 
 
 @pytest.mark.asyncio
-async def test_verify_closes_index_to_authoritative_evidence() -> None:
+async def test_verify_retrieval_candidates_closes_index_to_authoritative_evidence() -> None:
     markdown, structure, blocks, chunks, refs, revision = _evidence_facts()
     record = EvidenceRecord(
         revision=revision,
@@ -245,7 +246,9 @@ async def test_verify_closes_index_to_authoritative_evidence() -> None:
         section=next(section for section in structure.sections if section.section_id == refs[0].section_id),
         source_text=markdown[refs[0].source_spans[0].start_offset : refs[0].source_spans[0].end_offset],
     )
-    verified = await EvidenceVerifier(reader=_EvidenceReader(record)).verify(
+    verified = await EvidenceVerifier(
+        reader=_EvidenceReader(record)
+    ).verify_retrieval_candidates(
         [
             EvidenceCandidate(
                 resource_id=revision.resource_id,
@@ -259,7 +262,7 @@ async def test_verify_closes_index_to_authoritative_evidence() -> None:
 
 
 @pytest.mark.asyncio
-async def test_verify_rejects_missing_ref_and_wrong_chunk_ownership() -> None:
+async def test_verify_retrieval_candidates_rejects_missing_ref_and_wrong_chunk_ownership() -> None:
     _, structure, blocks, chunks, refs, revision = _evidence_facts()
     record = EvidenceRecord(
         revision=revision,
@@ -276,7 +279,7 @@ async def test_verify_rejects_missing_ref_and_wrong_chunk_ownership() -> None:
         chunk=chunks[0],
     )
     with pytest.raises(EvidenceNotFoundError):
-        await EvidenceVerifier(reader=reader).verify([missing])
+        await EvidenceVerifier(reader=reader).verify_retrieval_candidates([missing])
 
     wrong_chunk = RetrievalChunk(
         chunk_id="wrong",
@@ -290,7 +293,7 @@ async def test_verify_rejects_missing_ref_and_wrong_chunk_ownership() -> None:
         anchor_labels=list(chunks[0].anchor_labels),
     )
     with pytest.raises(EvidenceCorruptError):
-        await EvidenceVerifier(reader=reader).verify(
+        await EvidenceVerifier(reader=reader).verify_retrieval_candidates(
             [
                 EvidenceCandidate(
                     resource_id=revision.resource_id,
@@ -303,7 +306,7 @@ async def test_verify_rejects_missing_ref_and_wrong_chunk_ownership() -> None:
 
 
 @pytest.mark.asyncio
-async def test_verify_refs_accepts_only_quote_from_authoritative_source() -> None:
+async def test_verify_graph_evidence_refs_accepts_only_quote_from_authoritative_source() -> None:
     markdown, structure, blocks, _, refs, revision = _evidence_facts()
     record = EvidenceRecord(
         revision=revision,
@@ -320,7 +323,7 @@ async def test_verify_refs_accepts_only_quote_from_authoritative_source() -> Non
     )
     verifier = EvidenceVerifier(reader=_EvidenceReader(record))
 
-    verified = await verifier.verify_refs(
+    verified = await verifier.verify_graph_evidence_refs(
         resource_id=revision.resource_id,
         content_revision=revision.content_revision,
         source_ref_ids=[refs[0].ref_id],
@@ -329,7 +332,7 @@ async def test_verify_refs_accepts_only_quote_from_authoritative_source() -> Non
 
     assert verified == [record]
     with pytest.raises(EvidenceCorruptError):
-        await verifier.verify_refs(
+        await verifier.verify_graph_evidence_refs(
             resource_id=revision.resource_id,
             content_revision=revision.content_revision,
             source_ref_ids=[refs[0].ref_id],

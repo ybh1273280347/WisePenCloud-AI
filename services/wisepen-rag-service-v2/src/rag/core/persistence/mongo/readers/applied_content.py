@@ -2,16 +2,18 @@
 
 from collections.abc import Sequence
 
-from pymongo import ASCENDING
-
-from rag.domain.entities import ReadingBlockEntity, SectionEntity
-from rag.domain.models.content import ContentWindow, SectionContent, SectionFrontier
-from rag.domain.models.content import ReadingBlock
-from rag.domain.models.structure import Section
+from rag.domain.entities import SectionEntity
+from rag.domain.models.content import (
+    ContentWindow,
+    SectionContent,
+    SectionFrontier,
+)
+from rag.domain.models.structure import DocumentAnchor, PageRange, Section
 from rag.domain.repositories.mongo.readers.applied_content import AppliedContentReader
 from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.domain.repositories.mongo.readers.source_parts import SourcePartReader
 from rag.utils.chunkers import SourceSpan
+
 from ..text_assembler import assemble_source_text
 
 
@@ -43,6 +45,18 @@ class MongoAppliedContentReader(AppliedContentReader):
             if label in pages_by_label
         ]
 
+        section_entities = (
+            await SectionEntity.find(
+                {
+                    "resource_id": resource_id,
+                    "content_revision": revision.content_revision,
+                }
+            )
+            .sort("+own_start")
+            .to_list()
+        )
+        all_sections = [_to_section(entity) for entity in section_entities]
+
         windows: dict[str, ContentWindow] = {}
         for page in selected_pages:
             parts = await self._source_parts.get_parts(
@@ -51,43 +65,26 @@ class MongoAppliedContentReader(AppliedContentReader):
             )
             text = assemble_source_text(parts, [page.source_span])
 
-            sections = await SectionEntity.find(
-                {
-                    "resource_id": resource_id,
-                    "content_revision": revision.content_revision,
-                    "own_start": {"$lt": page.source_span.end_offset},
-                    "own_end": {"$gt": page.source_span.start_offset},
-                }
-            ).to_list()
-
-            blocks = await ReadingBlockEntity.find(
-                {
-                    "resource_id": resource_id,
-                    "content_revision": revision.content_revision,
-                    "start_offset": {"$lt": page.source_span.end_offset},
-                    "end_offset": {"$gt": page.source_span.start_offset},
-                }
-            ).to_list()
-
-            page_blocks = [
-                _to_reading_block(entity)
-                for entity in blocks
-                if any(
-                    span.start_offset < page.source_span.end_offset
-                    and span.end_offset > page.source_span.start_offset
-                    for span in entity.source_spans
-                )
+            # Page 入口来自标题或权威直属正文的交集，不借用检索分块推断结构。
+            sections = [
+                section
+                for section in all_sections
+                if page.source_span.start_offset
+                <= section.own_span.start_offset
+                < page.source_span.end_offset
+                or any(_overlaps(span, page.source_span) for span in section.content_spans)
             ]
 
             windows[page.page_label] = ContentWindow(
                 text=text,
                 source_span=page.source_span,
-                source_spans=[page.source_span],
                 page_labels=[page.page_label],
-                section_ids=[section.section_id for section in sections],
+                sections=sections,
                 anchor_labels=list(
                     dict.fromkeys(
-                        label for block in page_blocks for label in block.anchor_labels
+                        anchor.label
+                        for anchor in revision.anchors
+                        if _overlaps(anchor.source_span, page.source_span)
                     )
                 ),
             )
@@ -128,22 +125,19 @@ class MongoAppliedContentReader(AppliedContentReader):
         if not selected:
             return {}
 
-        blocks = (
-            await ReadingBlockEntity.find(
-                {
-                    "resource_id": resource_id,
-                    "content_revision": revision.content_revision,
-                    "section_id": {"$in": [section.section_id for section in selected]},
-                }
+        requested_spans = [
+            span
+            for section in selected
+            for span in section.content_spans
+        ]
+        parts = (
+            await self._source_parts.get_parts(
+                revision.content_revision,
+                requested_spans,
             )
-            .sort([("section_id", ASCENDING), ("ordinal", ASCENDING)])
-            .to_list()
+            if requested_spans
+            else []
         )
-
-        blocks_by_section: dict[str, list[ReadingBlock]] = {}
-        for entity in blocks:
-            block = _to_reading_block(entity)
-            blocks_by_section.setdefault(block.section_id, []).append(block)
 
         siblings_by_parent: dict[str | None, list[Section]] = {}
         for section in all_sections:
@@ -163,7 +157,12 @@ class MongoAppliedContentReader(AppliedContentReader):
 
             result[section.section_id] = SectionContent(
                 section=section,
-                reading_blocks=blocks_by_section.get(section.section_id, []),
+                text=assemble_source_text(parts, section.content_spans),
+                page_labels=_overlapping_labels(section.content_spans, revision.pages),
+                anchor_labels=_overlapping_labels(
+                    section.content_spans,
+                    revision.anchors,
+                ),
                 frontier=SectionFrontier(
                     parent=sections_by_id.get(section.parent_section_id),
                     previous=siblings[index - 1] if index else None,
@@ -185,20 +184,30 @@ def _to_section(record: SectionEntity) -> Section:
         section_path=list(record.section_path),
         own_span=SourceSpan(record.own_start, record.own_end),
         subtree_span=SourceSpan(record.own_start, record.subtree_end),
+        content_spans=[
+            SourceSpan(span.start_offset, span.end_offset)
+            for span in record.content_spans
+        ],
         preview=record.preview,
     )
 
 
-def _to_reading_block(record: ReadingBlockEntity) -> ReadingBlock:
-    return ReadingBlock(
-        block_id=record.block_id,
-        section_id=record.section_id,
-        ordinal=record.ordinal,
-        raw_text=record.raw_text,
-        source_spans=[
-            SourceSpan(span.start_offset, span.end_offset)
-            for span in record.source_spans
-        ],
-        page_labels=list(record.page_labels),
-        anchor_labels=list(record.anchor_labels),
+def _overlaps(left: SourceSpan, right: SourceSpan) -> bool:
+    return (
+        left.start_offset < right.end_offset
+        and right.start_offset < left.end_offset
+    )
+
+
+def _overlapping_labels(
+    source_spans: Sequence[SourceSpan],
+    labeled_ranges: Sequence[PageRange | DocumentAnchor],
+) -> list[str]:
+    """按文档顺序投影页码或锚点标签，空正文不制造归属信息。"""
+    return list(
+        dict.fromkeys(
+            item.page_label if isinstance(item, PageRange) else item.label
+            for item in labeled_ranges
+            if any(_overlaps(span, item.source_span) for span in source_spans)
+        )
     )

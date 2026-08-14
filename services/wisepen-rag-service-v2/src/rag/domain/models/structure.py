@@ -43,23 +43,9 @@ class Section:
     section_path: list[str]
     own_span: SourceSpan
     subtree_span: SourceSpan
+    # 直属正文的 Python 字符半开区间，不包含标题、页标和子 Section。
+    content_spans: list[SourceSpan] = field(default_factory=list)
     preview: str = ""
-
-
-@dataclass(slots=True)
-class SectionTreeNode:
-    """READ structure 返回给 Agent 的标题树节点。"""
-
-    section_id: str
-    title: str
-    level: int
-    section_path: list[str]
-    has_content: bool
-    start_page_label: str | None = None
-    end_page_label: str | None = None
-    # 覆盖当前标题子树的页码标签，用来把“看目录”直接衔接到按页读取。
-    page_labels: list[str] = field(default_factory=list)
-    children: list["SectionTreeNode"] = field(default_factory=list)
 
 
 @dataclass(slots=True)

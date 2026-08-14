@@ -15,8 +15,12 @@ from rag.domain.entities import (
     SourcePartEntity,
     SourceRefEntity,
 )
-from rag.domain.models.content import ContentRevision, ResourceIndexState, SourcePart
-from rag.domain.models.content import ReadingBlock
+from rag.domain.models.content import (
+    ContentRevision,
+    ReadingBlock,
+    ResourceIndexState,
+    SourcePart,
+)
 from rag.domain.models.retrieval import SourceRef
 from rag.domain.models.structure import Section
 from rag.domain.repositories.mongo.writers.resource_index import (
@@ -262,6 +266,14 @@ def _revision_document(revision: ContentRevision) -> dict[str, object]:
             }
             for page in revision.pages
         ],
+        "anchors": [
+            {
+                "label": anchor.label,
+                "start_offset": anchor.source_span.start_offset,
+                "end_offset": anchor.source_span.end_offset,
+            }
+            for anchor in revision.anchors
+        ],
     }
 
 
@@ -293,6 +305,7 @@ def _section_document(
         "own_start": section.own_span.start_offset,
         "own_end": section.own_span.end_offset,
         "subtree_end": section.subtree_span.end_offset,
+        "content_spans": [_span_document(span) for span in section.content_spans],
     }
 
 
@@ -368,6 +381,12 @@ def _validate_structure_records(*, revision: ContentRevision, sections: Sequence
             raise ValueError(f"section {section.section_id} exceeds content revision")
         if section.parent_section_id is not None and section.parent_section_id not in sections_by_id:
             raise ValueError(f"section {section.section_id} has no parent")
+        if any(
+            span.start_offset < section.own_span.start_offset
+            or span.end_offset > section.own_span.end_offset
+            for span in section.content_spans
+        ):
+            raise ValueError(f"section {section.section_id} content exceeds its range")
 
     for block in reading_blocks:
         section = sections_by_id.get(block.section_id)

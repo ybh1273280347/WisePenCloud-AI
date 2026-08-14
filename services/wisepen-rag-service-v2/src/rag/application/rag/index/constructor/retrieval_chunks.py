@@ -10,9 +10,9 @@ RetrievalChunk 是最细粒度的索引单元，主要用于向量检索：
 
 from hashlib import sha256
 
-from rag.domain.models.structure import DocumentStructure, Section, StructureMode
 from rag.domain.models.content import ReadingBlock
 from rag.domain.models.retrieval import RetrievalChunk
+from rag.domain.models.structure import DocumentStructure, Section, StructureMode
 from rag.utils.chunkers import (
     ChunkDocument,
     MarkdownChunker,

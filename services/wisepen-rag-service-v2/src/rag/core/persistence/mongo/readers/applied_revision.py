@@ -2,7 +2,7 @@
 
 from rag.domain.entities import ContentRevisionEntity, ResourceIndexStateEntity
 from rag.domain.models.content import ContentRevision
-from rag.domain.models.structure import PageRange, StructureMode
+from rag.domain.models.structure import DocumentAnchor, PageRange, StructureMode
 from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisionReader
 from rag.utils.chunkers import SourceSpan
 
@@ -40,6 +40,13 @@ def _to_content_revision(record: ContentRevisionEntity) -> ContentRevision:
                 page_label=page.page_label,
                 source_span=SourceSpan(page.start_offset, page.end_offset),
             )
-            for page in record.pages
+                for page in record.pages
+        ],
+        anchors=[
+            DocumentAnchor(
+                label=anchor.label,
+                source_span=SourceSpan(anchor.start_offset, anchor.end_offset),
+            )
+            for anchor in record.anchors
         ],
     )

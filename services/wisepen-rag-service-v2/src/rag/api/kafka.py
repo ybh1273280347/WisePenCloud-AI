@@ -66,7 +66,7 @@ class DocumentReadyHandler:
         self._indexer = indexer
 
     async def handle(self, payload: Mapping[str, Any]) -> None:
-        message = _validate(DocumentReadyPayload, payload)
+        message = _validate_payload(DocumentReadyPayload, payload)
         await self._indexer.index_resource(
             resource_id=message.resource_id,
             document_version=message.version,
@@ -79,7 +79,7 @@ class AclRecalculateHandler:
         self._refresher = refresher
 
     async def handle(self, payload: Mapping[str, Any]) -> None:
-        message = _validate(AclRecalculatePayload, payload)
+        message = _validate_payload(AclRecalculatePayload, payload)
         try:
             await self._refresher.refresh(message.resource_id)
         except AuthoritativeAclNotFoundError:
@@ -95,9 +95,16 @@ class ResourceDestroyHandler:
         self._deleter = deleter
 
     async def handle(self, payload: Mapping[str, Any]) -> None:
-        resource_ids = _validate(ResourceDestroyPayload, payload).resource_ids
+        resource_ids = _validate_payload(ResourceDestroyPayload, payload).resource_ids
         if resource_ids:
             await self._deleter.delete_resources(resource_ids)
+
+
+def _validate_payload(model_type, payload: Mapping[str, Any]):
+    try:
+        return model_type.model_validate(payload)
+    except ValidationError as e:
+        raise KafkaPayloadError(str(e)) from e
 
 
 class KafkaEventConsumer:
@@ -204,15 +211,3 @@ class KafkaEventConsumer:
         if not isinstance(decoded, dict):
             raise KafkaPayloadError("Kafka payload is not a JSON object")
         return decoded
-
-
-def _validate(model_type, payload: Mapping[str, Any]):
-    try:
-        return model_type.model_validate(payload)
-    except ValidationError as e:
-        raise KafkaPayloadError(str(e)) from e
-
-
-
-
-

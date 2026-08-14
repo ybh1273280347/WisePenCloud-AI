@@ -13,6 +13,7 @@ from rag.domain.repositories.mongo.readers.applied_revision import AppliedRevisi
 from rag.domain.repositories.mongo.readers.evidence import EvidenceReader
 from rag.domain.repositories.mongo.readers.source_parts import SourcePartReader
 from rag.utils.chunkers import SourceSpan
+
 from ..text_assembler import assemble_source_text
 
 
@@ -116,6 +117,7 @@ def _to_section(record: SectionEntity) -> Section:
         section_path=list(record.section_path),
         own_span=SourceSpan(record.own_start, record.own_end),
         subtree_span=SourceSpan(record.own_start, record.subtree_end),
+        content_spans=[SourceSpan(span.start_offset, span.end_offset) for span in record.content_spans],
         preview=record.preview,
     )
 
