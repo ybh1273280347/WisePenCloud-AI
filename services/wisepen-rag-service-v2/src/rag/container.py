@@ -56,7 +56,7 @@ from rag.utils.llm_clients import EmbeddingClient, QueryClient
 from rag.utils.ranking import RankingPipeline
 from rag.utils.ranking.diversifiers import MmrDiversifier, MmrDiversifierConfig
 from rag.utils.ranking.fusion import WeightedRrfFusion
-from rag.utils.ranking.relevance_gate import (
+from rag.utils.ranking.rank_gates import (
     HighLowRelevanceGate,
     HighLowRelevanceGateConfig,
 )
