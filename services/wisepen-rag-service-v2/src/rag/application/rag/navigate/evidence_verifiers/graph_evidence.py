@@ -32,6 +32,7 @@ class GraphEvidenceVerifier:
         if not evidence:
             return []
 
+        # 按 (resource_id, revision) 分组，批量回源到权威存储
         grouped: dict[tuple[str, str], list[GraphEvidence]] = {}
         for item in evidence:
             grouped.setdefault(
@@ -55,6 +56,7 @@ class GraphEvidenceVerifier:
                 raise EvidenceNotFoundError(resource_id)
             records_by_id.update(records)
 
+        # 校验所有请求的 evidence_id 都能在回源结果中找到
         missing = next(
             (
                 item.evidence_id
@@ -65,4 +67,5 @@ class GraphEvidenceVerifier:
         )
         if missing is not None:
             raise EvidenceNotFoundError(missing)
+        # 按输入顺序返回，保持调用方期望的排序
         return [records_by_id[item.evidence_id] for item in evidence]

@@ -39,6 +39,7 @@ class SourceEvidenceVerifier:
         if not candidates:
             return []
 
+        # 校验所有候选必须属于同一资源和同一 revision
         resource_ids = {candidate.resource_id for candidate in candidates}
         revisions = {candidate.content_revision for candidate in candidates}
         if len(resource_ids) != 1 or len(revisions) != 1:
@@ -48,6 +49,7 @@ class SourceEvidenceVerifier:
 
         resource_id = next(iter(resource_ids))
         content_revision = next(iter(revisions))
+        # 按 source_ref_id 去重后批量回源到权威存储
         try:
             records = await self._reader.get_source_evidence(
                 resource_id,
@@ -63,6 +65,7 @@ class SourceEvidenceVerifier:
         if records is None:
             raise EvidenceNotFoundError(resource_id)
 
+        # 逐项校验候选与回源记录的一致性
         verified: list[SourceEvidence] = []
         for candidate in candidates:
             record = records.get(candidate.source_ref_id)
@@ -78,6 +81,7 @@ class SourceEvidenceVerifier:
         record: SourceEvidence,
     ) -> None:
         source_ref = record.source_ref
+        # 1. 资源与版本校验：确保候选属于正确的资源和 revision
         if source_ref.resource_id != candidate.resource_id:
             raise EvidenceRevisionError(
                 f"source ref {source_ref.ref_id} has invalid resource"
@@ -86,6 +90,7 @@ class SourceEvidenceVerifier:
             raise EvidenceRevisionError(
                 f"source ref {source_ref.ref_id} has invalid revision"
             )
+        # 2. 身份链校验：确保 ref_id、chunk_id、reading_block_id、section_id 一致
         if source_ref.ref_id != candidate.source_ref_id:
             raise EvidenceCorruptError(
                 "evidence reader returned a mismatched source ref"
@@ -102,6 +107,7 @@ class SourceEvidenceVerifier:
             raise EvidenceCorruptError(
                 f"chunk {candidate.chunk_id} has invalid section"
             )
+        # 3. 结构元数据校验：确保 section_path、source_spans、页码、锚点等一致
         if candidate.section_path != source_ref.section_path:
             raise EvidenceCorruptError(
                 f"chunk {candidate.chunk_id} has invalid section path"
@@ -118,6 +124,7 @@ class SourceEvidenceVerifier:
             raise EvidenceCorruptError(
                 f"chunk {candidate.chunk_id} has invalid anchor labels"
             )
+        # 4. 引用完整性校验：确保回源记录中的 ReadingBlock 和 Section 与 source_ref 一致
         if record.reading_block.block_id != source_ref.reading_block_id:
             raise EvidenceCorruptError(
                 f"source ref {source_ref.ref_id} has invalid block record"
@@ -130,6 +137,7 @@ class SourceEvidenceVerifier:
             raise EvidenceCorruptError(
                 f"source ref {source_ref.ref_id} has invalid section record"
             )
+        # 5. 正文一致性校验：确保候选文本与权威存储的原文完全一致
         if candidate.raw_text != record.source_text:
             raise EvidenceCorruptError(
                 f"chunk {candidate.chunk_id} does not match authoritative text"

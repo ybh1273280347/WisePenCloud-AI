@@ -82,7 +82,7 @@ class RetrievalReadingBlockView:
     text: str
     page_labels: list[str] = field(default_factory=list)
     anchor_labels: list[str] = field(default_factory=list)
-    matches: list[RetrievalMatchView] = field(default_factory=list)
+    matched_chunks: list[RetrievalMatchView] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -133,7 +133,7 @@ class ReadingCandidateLocator:
 
     async def locate(self, request: LocateRequest) -> LocateResult:
         """只将已发布且仍可读的候选提升为后续 READ 可用的入口。"""
-        # 上游 schema 与鉴权层已经收口了公开入口边界，这里只做外部模型返回形状校验。
+        # 分流语义查询和词法查询
         semantic_query = request.semantic_query
         lexical_query = (
             semantic_query if request.lexical_query is None else request.lexical_query
@@ -143,16 +143,19 @@ class ReadingCandidateLocator:
         if len(embedding.embeddings) != 1:
             raise LocateError("query embedding response must contain one vector")
 
+        # 召回候选
         candidates = await self._candidate_search.search(
             lexical_query=lexical_query,
             semantic_vector=embedding.embeddings[0],
             permission_scope=request.permission_scope,
             limit=request.candidate_limit,
         )
+        # 按 acl 权限过滤可读候选，淘汰用户无权访问的资源
         candidates = await self._filter_readable_candidates(
             candidates,
             request.permission_scope,
         )
+        # 确保候选对应数据已发布的最新版本，避免召回时命中旧数据或未发布数据
         candidates = await self._filter_published_candidates(candidates)
         if not candidates:
             return await self._create_empty_result(request)
@@ -191,9 +194,7 @@ class ReadingCandidateLocator:
                 candidate_limit=request.candidate_limit,
             )
         )
-        if ranking.decision is None:
-            raise LocateError("ranking pipeline did not produce a relevance decision")
-
+        # 对候选去重，并按照排名截断 max_results 
         candidates_by_id = {
             _candidate_key(candidate): candidate for candidate in candidates
         }
@@ -222,14 +223,17 @@ class ReadingCandidateLocator:
         if not selected:
             return await self._create_empty_result(request)
 
+        # 将召回的轻量候选回源到权威数据
         records = await self._verify_selected(selected)
+        # 证据 acl 复查，避免“召回-回源”时间窗口内的权限变化问题
         readable_records = await self._filter_readable_evidence(
             records,
             request.permission_scope,
         )
+        # 构建最终展示的section视图
         sections = _build_retrieved_section_views(readable_records)
-        # seed 的候选范围属于模型实际读到的完整 ReadingBlock；检索 span 只用于
-        # 块内 mention 排序，不能继续充当图谱来源过滤条件。
+
+        # 将 readable_records 按 ReadingBlock 聚合，构建图谱导航的种子块集合
         seed_blocks: dict[tuple[str, str, str], GraphSeedBlock] = {}
         for record in readable_records:
             source_ref = record.source_ref
@@ -247,16 +251,21 @@ class ReadingCandidateLocator:
                     rank=len(seed_blocks),
                 ),
             )
+            # 累积所有命中的 source_spans，避免图谱重复查询
             for span in source_ref.source_spans:
                 if span not in block.matched_source_spans:
                     block.matched_source_spans.append(span)
-        # 禁用图谱旁路时，这里找不到任何节点，最终不会展示任何图谱入口。
+
+        # 禁用图谱旁路时，这里找不到任何节点，最终不会展示任何图谱入口，section路径不受影响
         nodes = await self._knowledge_graph.find_nodes(
             reading_blocks=list(seed_blocks.values()),
             permission_scope=request.permission_scope,
             limit=request.max_results,
         )
+        # 对图谱中 RESOURCE 类型的节点做 acl 校验
         nodes = await self._filter_readable_nodes(nodes, request.permission_scope)
+        
+        # 创建会话级导航状态缓存
         state = await self._state_store.create(
             user_id=request.permission_scope.user_id,
             session_id=request.session_id,
@@ -423,7 +432,7 @@ def _build_retrieved_section_views(
             )
             blocks[block_key] = block_view
             section_view.reading_blocks.append(block_view)
-        block_view.matches.append(
+        block_view.matched_chunks.append(
             RetrievalMatchView(
                 chunk_id=record.source_ref.chunk_id,
                 source_ref_id=record.source_ref.ref_id,

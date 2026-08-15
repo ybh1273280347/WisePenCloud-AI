@@ -194,6 +194,11 @@ class KnowledgeGraphExpander:
         self._state_store = state_store
 
     async def expand(self, request: GraphExpandRequest) -> GraphExpandResult:
+        effective_query = request.query.strip()
+        if not effective_query:
+            raise ValueError("expand query must not be empty")
+
+        # 加载导航状态，校验用户和会话归属
         state = await self._state_store.get(request.state_id)
         if (
             state is None
@@ -202,6 +207,7 @@ class KnowledgeGraphExpander:
         ):
             raise NavigationStateNotFoundError(request.state_id)
 
+        # 校验 seed 节点必须已在 state 中（LOCATE 阶段已发现）
         known_node_ids = set(state.known_node_ids)
         unknown_seed_ids = [
             node_id
@@ -211,6 +217,7 @@ class KnowledgeGraphExpander:
         if unknown_seed_ids:
             raise UnknownSeedNodeError(unknown_seed_ids[0])
 
+        # 子图查询：从 seed 节点出发按方向/深度遍历图谱，返回路径和节点 mentions
         requested_path_limit = min(max(request.max_results * 4, 1), 80)
         subgraph = await self._knowledge_graph.find_subgraph(
             seed_node_ids=request.seed_node_ids,
@@ -222,7 +229,9 @@ class KnowledgeGraphExpander:
             mention_limit_per_node=3,
         )
         paths = subgraph.paths
+        # ACL 复查：过滤掉涉及无权限资源的路径
         paths = await self._filter_readable_paths(paths, request.permission_scope)
+        # 收集 seed 节点视图（按请求顺序排列）
         seed_nodes_by_id = {
             node.node_id: node
             for path in paths
@@ -234,6 +243,7 @@ class KnowledgeGraphExpander:
             for node_id in request.seed_node_ids
             if node_id in seed_nodes_by_id
         ]
+        # 只保留包含新节点（不在 known 中的）的路径
         paths = [
             path
             for path in paths
@@ -246,9 +256,7 @@ class KnowledgeGraphExpander:
                 seed_nodes=seed_nodes,
             )
 
-        effective_query = request.query.strip()
-        if not effective_query:
-            raise ValueError("expand query must not be empty")
+        # 按 query 对路径相关性精排
         ranking = await self._ranking_pipeline.arank(
             RankRequest(
                 query=RankQuery(text=effective_query),
@@ -260,12 +268,8 @@ class KnowledgeGraphExpander:
                             "nodes": "\n".join(node.label for node in path.nodes),
                             "relations": "\n".join(
                                 " ".join(
-                                    value
-                                    for value in (
-                                        edge.relation_type.value,
-                                        edge.predicate,
-                                    )
-                                    if value
+                                    value for value in 
+                                    (edge.relation_type.value, edge.predicate) if value
                                 )
                                 for edge in path.edges
                             ),
@@ -279,10 +283,12 @@ class KnowledgeGraphExpander:
             )
         )
         paths = [paths[int(item.candidate_id)] for item in ranking.ranked]
+        
+        # 批量核验每条路径的关系证据
         evidence_by_edge = await self._verify_path_evidence(paths)
 
-        # 子图查询已经一次性取得 mentions；这里按当前 ACL 复查后的路径裁剪，
-        # 再批量核验 authority Markdown，避免每条路径重复访问 Neo4j/Mongo。
+        # 批量核验路径中节点的 mention 证据
+        # 子图查询已一次性取得 mentions，这里按 ACL 复查后的路径裁剪，再批量回源
         path_node_ids = {
             node.node_id
             for path in paths
@@ -305,6 +311,8 @@ class KnowledgeGraphExpander:
         for mention, record in zip(mentions, verified_mentions, strict=True):
             mention_evidence_by_node.setdefault(mention.node_id, []).append(record)
 
+        # 为每条路径的每个新节点收集足够证据
+        # 实体节点用 mention 证据，RESOURCE 节点用关系证据（无 mention）
         eligible_paths: list[_EligiblePath] = []
         for path in paths:
             node_evidence = await self._resolve_new_node_evidence(
@@ -324,8 +332,8 @@ class KnowledgeGraphExpander:
                 seed_nodes=seed_nodes,
             )
 
-        # 所有外部读取和 ACL 复查必须在 state 写入前完成；一旦节点进入 state，
-        # 本次调用不应再因证据读取失败而留下无响应的半完成结果。
+        # 预写权限校验：所有外部读取必须在 state 写入前完成
+        # 一旦节点进入 state，不应因证据读取失败留下半完成结果
         candidate_evidence: list[PublishedGraphEvidence] = []
         for eligible in eligible_paths:
             for edge in eligible.path.edges:
@@ -337,6 +345,7 @@ class KnowledgeGraphExpander:
             request.permission_scope,
         )
 
+        # 原子写入 state：将新节点加入 known_nodes，冲突则整体回滚
         candidate_new_ids = list(
             dict.fromkeys(
                 node.node_id
@@ -353,6 +362,7 @@ class KnowledgeGraphExpander:
         except NavigationStateMissingError as error:
             raise NavigationStateNotFoundError(state.state_id) from error
         added_node_id_set = set(added_node_ids)
+        # 裁剪路径，只保留确实成功写入新节点的路径
         eligible_paths = [
             eligible
             for eligible in eligible_paths
@@ -367,6 +377,7 @@ class KnowledgeGraphExpander:
                 seed_nodes=seed_nodes,
             )
 
+        # 构建视图，组装节点视图、路径视图、证据 Section 视图
         nodes_by_id = {
             node.node_id: node
             for eligible in eligible_paths
@@ -393,6 +404,7 @@ class KnowledgeGraphExpander:
         evidence_sections = _build_graph_evidence_section_views(
             _deduplicate_evidence(retained_evidence)
         )
+  
         return GraphExpandResult(
             state_id=state.state_id,
             traversal_direction=request.direction,
@@ -593,7 +605,7 @@ def _deduplicate_evidence(
 
 
 def _render_path(path: TraversedPath) -> tuple[str, list[str]]:
-    """按遍历顺序生成 section path 风格文本，同时保留事实方向。"""
+    """按遍历顺序生成可读文本，同时保留事实方向。"""
     if not path.nodes or len(path.edges) != len(path.nodes) - 1:
         raise RuntimeError("graph path must contain one edge between adjacent nodes")
 
