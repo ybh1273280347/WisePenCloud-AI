@@ -390,7 +390,7 @@ class KnowledgeGraphExpander:
         for node_id in added_node_ids:
             retained_evidence.extend(node_evidence[node_id])
 
-        evidence_sections = build_graph_evidence_section_views(
+        evidence_sections = _build_graph_evidence_section_views(
             _deduplicate_evidence(retained_evidence)
         )
         return GraphExpandResult(
@@ -664,7 +664,7 @@ def _path_resource_ids(path: TraversedPath) -> set[str]:
     }
 
 
-def build_graph_evidence_section_views(
+def _build_graph_evidence_section_views(
     records: Sequence[PublishedGraphEvidence],
 ) -> list[GraphEvidenceSectionView]:
     """按首次证据顺序聚合完整 ReadingBlock，并彻底隔离检索 matches。"""

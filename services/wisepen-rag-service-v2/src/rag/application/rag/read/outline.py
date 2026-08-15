@@ -59,6 +59,7 @@ class DocumentOutlineReader:
         resource_id: str,
         permission_scope: PermissionScope,
     ) -> DocumentOutlineResult:
+        # 首次校验，避免无权限的资源被读取到结构事实。
         if not await self._authorizer.authorize_resource(
             resource_id=resource_id,
             scope=permission_scope,
@@ -93,37 +94,55 @@ def _to_outline(
         return []
 
     children_by_parent: dict[str | None, list[Section]] = defaultdict(list)
-    root_section_id: str | None = None
+    root_section: Section | None = None
+    # 查找虚拟根节点 (level == 0)；标题可能为空（无前言）或为合成标题（有前言）。
     for section in sections:
         children_by_parent[section.parent_section_id].append(section)
         if (
-            root_section_id is None
+            root_section is None
             and section.parent_section_id is None
             and section.level == 0
-            and not section.title
         ):
-            root_section_id = section.section_id
+            root_section = section
 
+    # 按出现顺序排列子节点
     for children in children_by_parent.values():
         children.sort(
             key=lambda section: (section.ordinal, section.own_span.start_offset)
         )
 
-    if root_section_id is not None:
-        root_sections = children_by_parent.get(root_section_id, [])
-    else:
+    # 虚拟根带合成标题（第一个标题之前存在前言正文）时，前言作为独立大纲节点
+    # 置顶展示，其子标题平级排在其后；无名 root 直接从其子标题展开。
+    if root_section is None:
         root_sections = [
             section for section in children_by_parent.get(None, []) if section.title
         ]
+        preamble_node = None
+    else:
+        root_sections = children_by_parent.get(root_section.section_id, [])
+        preamble_node = (
+            _to_outline_node(
+                section=root_section,
+                children_by_parent=children_by_parent,
+                pages=pages,
+                expand_children=False,
+            )
+            if root_section.title
+            else None
+        )
 
-    return [
+    nodes: list[DocumentOutlineNode] = []
+    if preamble_node is not None:
+        nodes.append(preamble_node)
+    nodes.extend(
         _to_outline_node(
             section=section,
             children_by_parent=children_by_parent,
             pages=pages,
         )
         for section in root_sections
-    ]
+    )
+    return nodes
 
 
 def _to_outline_node(
@@ -131,13 +150,17 @@ def _to_outline_node(
     section: Section,
     children_by_parent: dict[str | None, list[Section]],
     pages: list[PageRange],
+    expand_children: bool = True,
 ) -> DocumentOutlineNode:
+    """递归构建目录节点；前言节点不向下展开，避免重复出现同级标题。"""
+    # level 0 的前言节点用 own_span 计算页范围；其 subtree_span 覆盖全文，会误报整篇页码。
+    span = section.subtree_span if section.level > 0 else section.own_span
     page_labels = [
         page.page_label
         for page in pages
         if _overlaps(
-            section.subtree_span.start_offset,
-            section.subtree_span.end_offset,
+            span.start_offset,
+            span.end_offset,
             page,
         )
     ]
@@ -152,7 +175,11 @@ def _to_outline_node(
                 children_by_parent=children_by_parent,
                 pages=pages,
             )
-            for child in children_by_parent.get(section.section_id, [])
+            for child in (
+                children_by_parent.get(section.section_id, [])
+                if expand_children
+                else []
+            )
         ],
     )
 

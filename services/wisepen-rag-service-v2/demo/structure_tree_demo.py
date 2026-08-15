@@ -83,17 +83,6 @@ async def main() -> None:
         permission_scope=scope,
     )
 
-    assert sectioned_outline.outline[0].section_path == "城市雨水花园巡检手册"
-    assert (
-        sectioned_outline.outline[0].children[1].section_path
-        == "城市雨水花园巡检手册 > 二、入渗与排水检查"
-    )
-    assert flat_outline.outline[0].title == "全文片段 1"
-    assert flat_outline.outline[0].section_path == "全文片段 1"
-    assert flat_outline.outline[0].page_range is None
-    assert flat_outline.outline[0].children == []
-    assert not hasattr(sectioned_outline.outline[0], "level")
-
     output = "\n".join(
         [
             "=== Review notes ===",

@@ -165,7 +165,8 @@ def _build_sections(
 
     算法要点：
     - 创建一个虚拟 root（level 0），own_span 覆盖“第一个标题之前的全部内容”
-      （通常是文档元信息、前言等），subtree_span 覆盖整篇文档。
+      （通常是文档元信息、前言等），subtree_span 覆盖整篇文档；前言非空时
+      root 带合成标题“文档开头”，否则保持无名。
     - 维护一个 ``open_section_indexes`` 栈，记录当前尚未闭合的 Section。
     - 遇到新标题时，先把栈顶所有“level >= 当前标题 level”的 Section 闭合：
       闭合意味着把 subtree_span 的 end 截断到当前标题起点。
@@ -179,6 +180,9 @@ def _build_sections(
 
     # 虚拟根 Section：覆盖第一个标题之前的全部内容（前言/文档头）。
     root_content_spans = _content_spans(blocks, 0, first_heading_start)
+    # 前言非空时赋予合成标题，使 READ 大纲暴露可导航的前言入口（对齐 flat_text
+    # 的“全文片段”合成标题惯例）；前言为空时保持无名 root，大纲直接从一级标题展开。
+    root_title = "文档开头" if root_content_spans else ""
     root = Section(
         section_id=_build_section_id(
             resource_id=resource_id,
@@ -187,11 +191,11 @@ def _build_sections(
             start_offset=0,
             end_offset=first_heading_start,
         ),
-        title="",
+        title=root_title,
         level=0,
         parent_section_id=None,
         ordinal=0,
-        section_path=[],
+        section_path=[root_title] if root_title else [],
         own_span=SourceSpan(0, first_heading_start),
         subtree_span=SourceSpan(0, text_length),
         content_spans=root_content_spans,

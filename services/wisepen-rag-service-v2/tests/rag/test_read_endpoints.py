@@ -283,6 +283,84 @@ def test_outline_uses_human_page_range() -> None:
     assert flat_outline[0].children == []
 
 
+def test_outline_exposes_titled_root_as_preamble_entry() -> None:
+    # 带合成标题的虚拟根（第一个标题之前存在前言正文）应作为叶子节点置顶，
+    # 其子标题平级排在其后，且页范围按 own_span 而非覆盖全文的 subtree_span 计算。
+    root = Section(
+        section_id="root-section",
+        title="文档开头",
+        level=0,
+        parent_section_id=None,
+        ordinal=0,
+        section_path=["文档开头"],
+        own_span=SourceSpan(0, 4),
+        subtree_span=SourceSpan(0, 12),
+        content_spans=[SourceSpan(0, 4)],
+        preview="前言",
+    )
+    heading = Section(
+        section_id="section-1",
+        title="标题",
+        level=1,
+        parent_section_id="root-section",
+        ordinal=0,
+        section_path=["标题"],
+        own_span=SourceSpan(4, 12),
+        subtree_span=SourceSpan(4, 12),
+        content_spans=[SourceSpan(4, 12)],
+        preview="正文",
+    )
+
+    outline = _to_outline(
+        [root, heading],
+        [
+            PageRange(0, "1", SourceSpan(0, 6)),
+            PageRange(1, "3", SourceSpan(6, 12)),
+        ],
+    )
+
+    assert outline[0].title == "文档开头"
+    assert outline[0].section_path == "文档开头"
+    assert outline[0].page_range == "1"
+    assert outline[0].children == []
+    assert outline[1].title == "标题"
+    assert outline[1].page_range == "1 - 3"
+    assert outline[1].children == []
+
+
+def test_outline_skips_nameless_root_without_preamble() -> None:
+    # 无前言的无名 root 仍被隐藏，大纲直接从其子标题展开（维持既有行为）。
+    root = Section(
+        section_id="root-section",
+        title="",
+        level=0,
+        parent_section_id=None,
+        ordinal=0,
+        section_path=[],
+        own_span=SourceSpan(0, 0),
+        subtree_span=SourceSpan(0, 12),
+        content_spans=[],
+        preview="",
+    )
+    heading = Section(
+        section_id="section-1",
+        title="标题",
+        level=1,
+        parent_section_id="root-section",
+        ordinal=0,
+        section_path=["标题"],
+        own_span=SourceSpan(0, 12),
+        subtree_span=SourceSpan(0, 12),
+        content_spans=[SourceSpan(4, 12)],
+        preview="正文",
+    )
+
+    outline = _to_outline([root, heading], [])
+
+    assert [node.title for node in outline] == ["标题"]
+    assert outline[0].children == []
+
+
 class _FlatPublishedResourceReader:
     async def get_pages(self, resource_id, page_labels):
         return {

@@ -96,7 +96,9 @@ def build_demo_document(*, resource_id: str, markdown: str) -> DemoDocument:
 
 
 def sectioned_markdown() -> str:
-    return """# WisePen RAG 导航架构说明
+    return """版本号 v2.3，发布日期 2026-08-01。本手册供内部巡检人员使用。
+
+# WisePen RAG 导航架构说明
 
 WisePen RAG 面向企业文档问答场景，使用向量检索和结构化文档导航共同组织模型可读上下文。
 

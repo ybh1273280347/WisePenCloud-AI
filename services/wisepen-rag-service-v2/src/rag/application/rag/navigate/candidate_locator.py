@@ -227,7 +227,7 @@ class ReadingCandidateLocator:
             records,
             request.permission_scope,
         )
-        sections = build_retrieved_section_views(readable_records)
+        sections = _build_retrieved_section_views(readable_records)
         # seed 的候选范围属于模型实际读到的完整 ReadingBlock；检索 span 只用于
         # 块内 mention 排序，不能继续充当图谱来源过滤条件。
         seed_blocks: dict[tuple[str, str, str], GraphSeedBlock] = {}
@@ -394,7 +394,7 @@ def _candidate_key(candidate: RetrievalCandidate) -> str:
     )
 
 
-def build_retrieved_section_views(
+def _build_retrieved_section_views(
     records: list[SourceEvidence],
 ) -> list[RetrievedSectionView]:
     """按首次命中顺序把核验证据提升并归组为完整 ReadingBlock。"""

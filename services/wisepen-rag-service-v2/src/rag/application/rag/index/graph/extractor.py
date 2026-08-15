@@ -43,7 +43,8 @@ from .candidate_codec import (
     encode_candidate_graph,
     slice_candidate_graph,
 )
-from .candidate_validator import KnowledgeCandidateValidator
+# 注意：KnowledgeCandidateValidator 不能在模块级导入——candidate_validator 反向
+# 依赖本模块的数据类，模块级互相导入会形成循环；在 __init__ 内延迟导入。
 from .llm import GraphRagCandidateExtractor, QueryClientGraphRagLLM
 from .relations import (
     KnowledgeRelationProfile,
@@ -59,9 +60,6 @@ from .windows import (
 # 派生产物（SDK 原始候选图）的版本号；schema/编码规则变化时递增，使旧 artifact 失效。
 _ARTIFACT_VERSION = "graph-candidates:v1"
 
-
-
-
 @dataclass(slots=True)
 class ExtractedKnowledgeRelation:
     source_local_id: str
@@ -69,7 +67,6 @@ class ExtractedKnowledgeRelation:
     relation_type: KnowledgeRelationType
     evidence: GraphEvidence
     predicate: str | None = None
-
 
 
 @dataclass(slots=True)
@@ -114,6 +111,10 @@ class KnowledgeGraphExtractor:
             KnowledgeRelationType(item.label)
             for item in self._schema.relationship_types
         )
+
+        # 延迟导入以打破与 candidate_validator 的循环依赖（见文件头部说明）。
+        from .candidate_validator import KnowledgeCandidateValidator
+
         self._validator = KnowledgeCandidateValidator(active_relations)
         self._candidate_extractor = GraphRagCandidateExtractor(
             llm=llm,

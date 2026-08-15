@@ -11,7 +11,6 @@ from .candidate_locator import (
     RetrievalMatchView,
     RetrievalReadingBlockView,
     RetrievedSectionView,
-    build_retrieved_section_views,
 )
 from rag.application.rag.navigate.evidence_verifiers.graph_evidence import GraphEvidenceVerifier
 from .graph_expander import (
@@ -31,7 +30,6 @@ from .graph_expander import (
     KnowledgeGraphExpander,
     NavigationStateNotFoundError,
     UnknownSeedNodeError,
-    build_graph_evidence_section_views,
 )
 from rag.application.rag.navigate.evidence_verifiers.source_evidence import (
     EvidenceCorruptError,
@@ -71,6 +69,4 @@ __all__ = [
     "SourceEvidenceVerifier",
     "TraversalDirection",
     "UnknownSeedNodeError",
-    "build_graph_evidence_section_views",
-    "build_retrieved_section_views",
 ]
