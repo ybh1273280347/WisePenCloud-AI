@@ -28,7 +28,7 @@ from .constructor import (
     parse_document_structure,
 )
 from .contextualize import ContextualTextIndexer
-from .graph import KnowledgeGraphExtractor
+from .graph import KnowledgeGraphExtractor, merge_candidate_graph
 
 if TYPE_CHECKING:
     from rag.utils.llm_clients import EmbeddingClient
