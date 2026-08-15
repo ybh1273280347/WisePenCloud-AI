@@ -58,7 +58,8 @@ class AppSettings(BaseModel):
 
     # rag 参数配置
     KNOWLEDGE_GRAPH_EXTRACTION_MAX_CONCURRENCY: int = 5
-    # 图谱旁路默认关闭；EXPAND 接口仍由导航层独立暴露。
+
+    # 图谱旁路默认关闭。
     RAG_KNOWLEDGE_GRAPH_ENABLED: bool = False
 
     # 会话导航状态缓存

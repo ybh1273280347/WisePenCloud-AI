@@ -3,7 +3,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from rag.application.rag.navigate import KnowledgeNodeView, RetrievedSectionView
+from rag.application.rag.navigate import RetrievedSectionView
+from rag.domain.models.graph import KnowledgeNode
 from rag.utils.ranking import RankDecision
 
 NonEmptyText = Annotated[
@@ -26,5 +27,5 @@ class CandidateLocateResponse(BaseModel):
 
     state_id: str
     retrieval_status: RankDecision
-    nodes: list[KnowledgeNodeView]
+    nodes: list[KnowledgeNode]
     sections: list[RetrievedSectionView]

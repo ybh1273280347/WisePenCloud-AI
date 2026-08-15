@@ -20,7 +20,6 @@ from rag.application.rag.navigate import (
     GraphExpandResult,
     GraphPathView,
     GraphReadingBlockView,
-    KnowledgeNodeView,
     LocateError,
     LocateResult,
     MatchRangeView,
@@ -31,6 +30,7 @@ from rag.application.rag.navigate import (
 )
 from rag.domain.error_codes import RagErrorCode
 from rag.domain.models.graph import (
+    KnowledgeNode,
     KnowledgeNodeKind,
 )
 from rag.utils.ranking import RankDecision
@@ -72,7 +72,7 @@ def _source() -> RetrievedSectionView:
             RetrievalReadingBlockView(
                 reading_block_id="block-1",
                 text="完整正文",
-                page_range="1 - 2",
+                page_labels=["1", "2"],
                 matches=[
                     RetrievalMatchView(
                         chunk_id="chunk-1",
@@ -95,7 +95,7 @@ def _graph_source() -> GraphEvidenceSectionView:
             GraphReadingBlockView(
                 reading_block_id="block-1",
                 text="完整正文",
-                page_range="1 - 2",
+                page_labels=["1", "2"],
             )
         ],
     )
@@ -108,7 +108,7 @@ async def test_locate_endpoint_uses_authenticated_identity_and_compact_contract(
             state_id="state-1",
             retrieval_status=RankDecision.RELEVANT,
             nodes=[
-                KnowledgeNodeView(
+                KnowledgeNode(
                     node_id="node-1",
                     label="主题",
                     kind=KnowledgeNodeKind.ENTITY,
@@ -133,7 +133,7 @@ async def test_locate_endpoint_uses_authenticated_identity_and_compact_contract(
     assert payload["retrieval_status"] == "relevant"
     assert payload["sections"][0]["title"] == "标题"
     assert payload["sections"][0]["reading_blocks"][0]["text"] == "完整正文"
-    assert payload["sections"][0]["reading_blocks"][0]["page_range"] == "1 - 2"
+    assert payload["sections"][0]["reading_blocks"][0]["page_labels"] == ["1", "2"]
     assert "decision" not in payload
     assert "level" not in payload["sections"][0]
 
@@ -217,8 +217,7 @@ async def test_graph_endpoint_returns_llm_readable_paths_and_evidence_sections()
         "block-1"
     )
     graph_block = payload["evidence_sections"][0]["reading_blocks"][0]
-    assert graph_block["page_range"] == "1 - 2"
-    assert "page_labels" not in graph_block
+    assert graph_block["page_labels"] == ["1", "2"]
     serialized = json.dumps(payload)
     assert "chunk_id" not in serialized
     assert "source_ref" not in serialized
@@ -230,7 +229,6 @@ async def test_graph_endpoint_returns_llm_readable_paths_and_evidence_sections()
     assert "text" not in payload["paths"][0]
     assert "steps" not in payload["paths"][0]
     assert "node_ids" not in payload["paths"][0]
-    assert "page_labels" not in serialized
 
 
 @pytest.mark.asyncio

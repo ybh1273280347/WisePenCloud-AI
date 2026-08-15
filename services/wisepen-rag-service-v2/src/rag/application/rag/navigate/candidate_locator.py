@@ -26,12 +26,6 @@ from rag.utils.ranking import (
 )
 
 from rag.application.rag.navigate.evidence_verifiers import SourceEvidenceVerifier
-from .views import (
-    KnowledgeNodeView,
-    RetrievedSectionView,
-    build_retrieved_section_views,
-    to_knowledge_node_view,
-)
 
 if TYPE_CHECKING:
     from rag.utils.llm_clients.embedding import EmbeddingClient
@@ -55,12 +49,51 @@ class LocateResult:
 
     state_id: str
     retrieval_status: RankDecision
-    nodes: list[KnowledgeNodeView] = field(default_factory=list)
+    nodes: list[KnowledgeNode] = field(default_factory=list)
     sections: list[RetrievedSectionView] = field(default_factory=list)
 
 
 class LocateError(RuntimeError):
     """LOCATE 输入或模型返回不满足能力契约。"""
+
+
+@dataclass(slots=True)
+class MatchRangeView:
+    """相对于 ``RetrievalReadingBlockView.text`` 的 Python 字符半开区间。"""
+
+    start_offset: int
+    end_offset: int
+
+
+@dataclass(slots=True)
+class RetrievalMatchView:
+    """触发 ReadingBlock 提升的检索 chunk 锚点，不重复返回 chunk 文本。"""
+
+    chunk_id: str
+    source_ref_id: str
+    ranges: list[MatchRangeView] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class RetrievalReadingBlockView:
+    """检索命中后提升出的完整 ReadingBlock 正文及紧凑页范围。"""
+
+    reading_block_id: str
+    text: str
+    page_labels: list[str] = field(default_factory=list)
+    anchor_labels: list[str] = field(default_factory=list)
+    matches: list[RetrievalMatchView] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class RetrievedSectionView:
+    """承载命中 ReadingBlock；flat text 使用 synthetic Section 作为读取锚点。"""
+
+    resource_id: str
+    section_id: str
+    title: str
+    section_path: str
+    reading_blocks: list[RetrievalReadingBlockView] = field(default_factory=list)
 
 
 class ReadingCandidateLocator:
@@ -217,6 +250,7 @@ class ReadingCandidateLocator:
             for span in source_ref.source_spans:
                 if span not in block.matched_source_spans:
                     block.matched_source_spans.append(span)
+        # 禁用图谱旁路时，这里找不到任何节点，最终不会展示任何图谱入口。
         nodes = await self._knowledge_graph.find_nodes(
             reading_blocks=list(seed_blocks.values()),
             permission_scope=request.permission_scope,
@@ -231,7 +265,7 @@ class ReadingCandidateLocator:
         return LocateResult(
             state_id=state.state_id,
             retrieval_status=ranking.decision,
-            nodes=[to_knowledge_node_view(node) for node in nodes],
+            nodes=nodes,
             sections=sections,
         )
 
@@ -358,3 +392,68 @@ def _candidate_key(candidate: RetrievalCandidate) -> str:
     return (
         f"{candidate.resource_id}\0{candidate.content_revision}\0{candidate.chunk_id}"
     )
+
+
+def build_retrieved_section_views(
+    records: list[SourceEvidence],
+) -> list[RetrievedSectionView]:
+    """按首次命中顺序把核验证据提升并归组为完整 ReadingBlock。"""
+    sections: dict[tuple[str, str], RetrievedSectionView] = {}
+    blocks: dict[tuple[str, str], RetrievalReadingBlockView] = {}
+
+    for record in records:
+        section_key = (record.source_ref.resource_id, record.section.section_id)
+        section_view = sections.setdefault(
+            section_key,
+            RetrievedSectionView(
+                resource_id=record.source_ref.resource_id,
+                section_id=record.section.section_id,
+                title=record.section.title,
+                section_path=" > ".join(record.section.section_path),
+            ),
+        )
+        block_key = (record.source_ref.resource_id, record.reading_block.block_id)
+        block_view = blocks.get(block_key)
+        if block_view is None:
+            block_view = RetrievalReadingBlockView(
+                reading_block_id=record.reading_block.block_id,
+                text=record.reading_block.raw_text,
+                page_labels=record.reading_block.page_labels,
+                anchor_labels=record.reading_block.anchor_labels,
+            )
+            blocks[block_key] = block_view
+            section_view.reading_blocks.append(block_view)
+        block_view.matches.append(
+            RetrievalMatchView(
+                chunk_id=record.source_ref.chunk_id,
+                source_ref_id=record.source_ref.ref_id,
+                ranges=_relative_match_ranges(record),
+            )
+        )
+
+    return list(sections.values())
+
+
+def _relative_match_ranges(record: SourceEvidence) -> list[MatchRangeView]:
+    """把权威 source spans 映射到 ReadingBlock 拼接文本的相对字符坐标。"""
+    ranges: list[MatchRangeView] = []
+    block_offset = 0
+    for index, block_span in enumerate(record.reading_block.source_spans):
+        for match_span in record.source_ref.source_spans:
+            start = max(block_span.start_offset, match_span.start_offset)
+            end = min(block_span.end_offset, match_span.end_offset)
+            if start < end:
+                ranges.append(
+                    MatchRangeView(
+                        start_offset=block_offset + start - block_span.start_offset,
+                        end_offset=block_offset + end - block_span.start_offset,
+                    )
+                )
+        block_offset += block_span.end_offset - block_span.start_offset
+        if index + 1 < len(record.reading_block.source_spans):
+            block_offset += 2
+    if not ranges:
+        raise ValueError(
+            f"source ref {record.source_ref.ref_id} is outside its ReadingBlock"
+        )
+    return ranges

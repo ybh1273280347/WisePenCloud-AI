@@ -249,8 +249,7 @@ async def test_locate_promotes_chunks_to_one_block_with_minimal_match_anchors() 
     assert result.sections[0].section_path == "很长的父标题 > 当前标题"
     block = result.sections[0].reading_blocks[0]
     assert block.text == "abcdefghij"
-    assert block.page_range == "1"
-    assert not hasattr(block, "page_labels")
+    assert block.page_labels == ["1"]
     assert [match.chunk_id for match in block.matches] == ["chunk-1", "chunk-2"]
     assert (
         block.text[
@@ -262,7 +261,7 @@ async def test_locate_promotes_chunks_to_one_block_with_minimal_match_anchors() 
     )
     assert not hasattr(block.matches[0], "text")
     assert not hasattr(result.sections[0], "level")
-    assert not hasattr(result.nodes[0], "resource_id")
+    assert result.nodes[0].resource_id is None
     assert state_store.created["known_node_ids"] == ["node-1"]
     assert "known_sections" not in state_store.created
 
@@ -306,7 +305,7 @@ def test_flat_text_retrieval_view_keeps_synthetic_section_context() -> None:
 
     assert section.title == "全文片段 1"
     assert section.section_path == "全文片段 1"
-    assert section.reading_blocks[0].page_range == "1"
+    assert section.reading_blocks[0].page_labels == ["1"]
 
 
 @pytest.mark.asyncio

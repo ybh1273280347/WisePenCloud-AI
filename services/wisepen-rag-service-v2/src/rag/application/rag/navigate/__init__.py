@@ -6,7 +6,12 @@ from .candidate_locator import (
     LocateError,
     LocateRequest,
     LocateResult,
+    MatchRangeView,
     ReadingCandidateLocator,
+    RetrievalMatchView,
+    RetrievalReadingBlockView,
+    RetrievedSectionView,
+    build_retrieved_section_views,
 )
 from rag.application.rag.navigate.evidence_verifiers.graph_evidence import GraphEvidenceVerifier
 from .graph_expander import (
@@ -16,32 +21,23 @@ from .graph_expander import (
     GraphNodeView,
     GraphEvidenceRangeView,
     GraphEvidenceRefView,
+    GraphEvidenceSectionView,
     GraphExpandRequest,
     GraphExpandResult,
+    GraphReadingBlockView,
     GraphRelationEndpointView,
     GraphRelationView,
     GraphPathView,
     KnowledgeGraphExpander,
     NavigationStateNotFoundError,
     UnknownSeedNodeError,
+    build_graph_evidence_section_views,
 )
 from rag.application.rag.navigate.evidence_verifiers.source_evidence import (
     EvidenceCorruptError,
     EvidenceNotFoundError,
     EvidenceRevisionError,
     SourceEvidenceVerifier,
-)
-from .views import (
-    GraphEvidenceSectionView,
-    GraphReadingBlockView,
-    KnowledgeNodeView,
-    MatchRangeView,
-    RetrievalMatchView,
-    RetrievalReadingBlockView,
-    RetrievedSectionView,
-    build_graph_evidence_section_views,
-    build_retrieved_section_views,
-    to_knowledge_node_view,
 )
 
 __all__ = [
@@ -63,7 +59,6 @@ __all__ = [
     "GraphPathView",
     "GraphReadingBlockView",
     "KnowledgeGraphExpander",
-    "KnowledgeNodeView",
     "LocateError",
     "LocateRequest",
     "LocateResult",
@@ -78,5 +73,4 @@ __all__ = [
     "UnknownSeedNodeError",
     "build_graph_evidence_section_views",
     "build_retrieved_section_views",
-    "to_knowledge_node_view",
 ]
