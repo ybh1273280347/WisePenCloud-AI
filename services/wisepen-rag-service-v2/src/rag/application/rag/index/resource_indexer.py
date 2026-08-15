@@ -25,7 +25,6 @@ from .constructor import (
     build_retrieval_chunks,
     build_source_refs,
     create_content_revision,
-    merge_candidate_graph,
     parse_document_structure,
 )
 from .contextualize import ContextualTextIndexer

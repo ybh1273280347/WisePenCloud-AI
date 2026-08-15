@@ -2,7 +2,7 @@
 
 from neo4j import AsyncDriver
 
-from rag.application.rag.index.constructor.graph_merge import resource_node_id
+from rag.application.rag.index.graph.candidate_merge import resource_node_id
 from rag.domain.models.acl import ResourceAcl
 from rag.domain.repositories.neo4j.graph_acl_writer import GraphAclWriter
 from rag.domain.repositories.redis.graph_query_subgraph_cache import (

@@ -10,7 +10,7 @@ from rag.domain.repositories.mongo.published_resource_reader import (
     PublishedResourceRevisionError,
 )
 
-from .source_evidence_verifier import (
+from rag.application.rag.navigate.evidence_verifiers.source_evidence import (
     EvidenceCorruptError,
     EvidenceNotFoundError,
     EvidenceRevisionError,

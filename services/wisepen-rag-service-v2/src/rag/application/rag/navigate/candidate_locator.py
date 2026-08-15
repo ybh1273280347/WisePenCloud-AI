@@ -25,7 +25,7 @@ from rag.utils.ranking import (
     ScoreSignalKind,
 )
 
-from .source_evidence_verifier import SourceEvidenceVerifier
+from rag.application.rag.navigate.evidence_verifiers import SourceEvidenceVerifier
 from .views import (
     KnowledgeNodeView,
     RetrievedSectionView,

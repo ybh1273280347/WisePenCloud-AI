@@ -31,7 +31,7 @@ from rag.utils.ranking import (
     RankRequest,
 )
 
-from .graph_evidence_verifier import GraphEvidenceVerifier
+from rag.application.rag.navigate.evidence_verifiers import GraphEvidenceVerifier
 from .views import (
     GraphEvidenceSectionView,
     build_graph_evidence_section_views,

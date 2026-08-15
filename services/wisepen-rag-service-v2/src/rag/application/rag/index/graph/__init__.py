@@ -9,9 +9,11 @@
 from .extractor import KnowledgeGraphExtractor
 from .llm import QueryClientGraphRagLLM
 from .windows import build_extraction_windows
+from .candidate_merge import merge_candidate_graph
 
 __all__ = [
     "KnowledgeGraphExtractor",
     "QueryClientGraphRagLLM",
     "build_extraction_windows",
+    "merge_candidate_graph"
 ]

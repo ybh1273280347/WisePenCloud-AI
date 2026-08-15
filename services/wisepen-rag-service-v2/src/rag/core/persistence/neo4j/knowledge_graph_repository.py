@@ -8,7 +8,7 @@ from time import perf_counter
 from common.logger import debug
 from neo4j import AsyncDriver, RoutingControl
 
-from rag.application.rag.index.constructor.graph_merge import resource_node_id
+from rag.application.rag.index.graph.candidate_merge import resource_node_id
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.graph import (
     GraphEvidence,

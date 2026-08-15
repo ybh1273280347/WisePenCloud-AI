@@ -12,11 +12,8 @@ import re
 import unicodedata
 from hashlib import sha256
 
-from rag.application.rag.index.graph.models import (
-    ExtractedKnowledgeNode,
-    ExtractedKnowledgeRelation,
-    KnowledgeWindowExtraction,
-)
+from rag.application.rag.index.graph.extractor import KnowledgeWindowExtraction, ExtractedKnowledgeNode, \
+    ExtractedKnowledgeRelation
 from rag.domain.models.graph import (
     GraphEvidence,
     KnowledgeGraph,

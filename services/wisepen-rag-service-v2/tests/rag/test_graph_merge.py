@@ -1,9 +1,6 @@
-from rag.application.rag.index.constructor import merge_candidate_graph
-from rag.application.rag.index.graph.models import (
-    ExtractedKnowledgeNode,
-    ExtractedKnowledgeRelation,
-    KnowledgeWindowExtraction,
-)
+from rag.application.rag.index.graph import merge_candidate_graph
+from rag.application.rag.index.graph.extractor import KnowledgeWindowExtraction, ExtractedKnowledgeNode, \
+    ExtractedKnowledgeRelation
 from rag.domain.models.graph import (
     GraphEvidence,
     KnowledgeEntityType,

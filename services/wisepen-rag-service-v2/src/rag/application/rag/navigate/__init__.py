@@ -8,7 +8,7 @@ from .candidate_locator import (
     LocateResult,
     ReadingCandidateLocator,
 )
-from .graph_evidence_verifier import GraphEvidenceVerifier
+from rag.application.rag.navigate.evidence_verifiers.graph_evidence import GraphEvidenceVerifier
 from .graph_expander import (
     DiscoveredKnowledgeNodeView,
     GraphAccessRevokedError,
@@ -25,7 +25,7 @@ from .graph_expander import (
     NavigationStateNotFoundError,
     UnknownSeedNodeError,
 )
-from .source_evidence_verifier import (
+from rag.application.rag.navigate.evidence_verifiers.source_evidence import (
     EvidenceCorruptError,
     EvidenceNotFoundError,
     EvidenceRevisionError,

@@ -25,11 +25,7 @@ from rag.domain.models.graph import (
 )
 from rag.utils.chunkers import SourceSpan
 
-from .models import (
-    ExtractedKnowledgeNode,
-    ExtractedKnowledgeRelation,
-    KnowledgeWindowExtraction,
-)
+from .extractor import KnowledgeWindowExtraction, ExtractedKnowledgeNode, ExtractedKnowledgeRelation
 from .relations import relation_pattern_allowed
 from .windows import KnowledgeExtractionWindow
 

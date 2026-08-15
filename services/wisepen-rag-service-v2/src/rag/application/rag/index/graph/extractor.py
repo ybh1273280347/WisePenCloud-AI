@@ -13,7 +13,7 @@
 注意：派生产物只保存 SDK 原始候选图（``encode_candidate_graph``），不保存校验后的
 ``KnowledgeWindowExtraction``。这样在 schema/校验规则变化时仍可重新校验，无需重新调用 LLM。
 """
-
+from dataclasses import dataclass, field
 from hashlib import sha256
 
 from neo4j_graphrag import __version__ as graph_rag_version
@@ -30,7 +30,7 @@ from neo4j_graphrag.experimental.components.schema import (
 from rag.domain.models.graph import (
     KnowledgeEntityType,
     KnowledgeNodeKind,
-    KnowledgeRelationType,
+    KnowledgeRelationType, GraphEvidence,
 )
 from rag.domain.models.structure import StructureMode
 from rag.domain.repositories.mongo import PublishedResourceReader
@@ -45,7 +45,6 @@ from .candidate_codec import (
 )
 from .candidate_validator import KnowledgeCandidateValidator
 from .llm import GraphRagCandidateExtractor, QueryClientGraphRagLLM
-from .models import KnowledgeWindowExtraction
 from .relations import (
     KnowledgeRelationProfile,
     relation_descriptions,
@@ -59,6 +58,34 @@ from .windows import (
 
 # 派生产物（SDK 原始候选图）的版本号；schema/编码规则变化时递增，使旧 artifact 失效。
 _ARTIFACT_VERSION = "graph-candidates:v1"
+
+
+@dataclass(slots=True)
+class KnowledgeWindowExtraction:
+    """一个抽取窗口经过确定性校验后的节点和关系候选。"""
+
+    resource_id: str
+    content_revision: str
+    nodes: list[ExtractedKnowledgeNode] = field(default_factory=list)
+    relations: list[ExtractedKnowledgeRelation] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExtractedKnowledgeNode:
+    local_id: str
+    kind: KnowledgeNodeKind
+    label: str
+    entity_type: KnowledgeEntityType | None = None
+    evidence: GraphEvidence | None = None
+
+
+@dataclass(slots=True)
+class ExtractedKnowledgeRelation:
+    source_local_id: str
+    target_local_id: str
+    relation_type: KnowledgeRelationType
+    evidence: GraphEvidence
+    predicate: str | None = None
 
 
 class KnowledgeGraphExtractor:
@@ -314,3 +341,5 @@ def _build_schema(
         additional_relationship_types=False,
         additional_patterns=False,
     )
+
+
