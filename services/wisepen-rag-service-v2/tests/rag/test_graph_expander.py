@@ -19,7 +19,11 @@ from rag.domain.models.structure import Section
 from rag.domain.repositories.mongo.published_resource_reader import (
     PublishedGraphEvidence,
 )
-from rag.domain.repositories.neo4j import TraversedEdge, TraversedPath
+from rag.domain.repositories.neo4j import (
+    GraphQuerySubgraph,
+    TraversedEdge,
+    TraversedPath,
+)
 from rag.domain.repositories.redis import NavigationState
 from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import RankCandidate, RankedCandidate, RankResult
@@ -48,15 +52,11 @@ class _KnowledgeGraph:
         self.paths = paths
         self.mentions = [_mention()] if mentions is None else mentions
         self.path_request = None
-        self.mention_request = None
+        self.subgraph_request = None
 
-    async def find_paths(self, **kwargs):
-        self.path_request = kwargs
-        return self.paths
-
-    async def find_mentions(self, **kwargs):
-        self.mention_request = kwargs
-        return self.mentions
+    async def find_subgraph(self, **kwargs):
+        self.subgraph_request = kwargs
+        return GraphQuerySubgraph(paths=self.paths, mentions=self.mentions)
 
 
 class _RankingPipeline:
@@ -120,9 +120,8 @@ async def test_expand_returns_relation_and_discovered_node_reading_blocks() -> N
     result = await expander.expand(_request())
 
     assert ranking.request.query.text == "扩展问题"
-    assert knowledge_graph.path_request["seed_node_ids"] == ["node-a"]
-    assert knowledge_graph.mention_request["node_ids"] == ["node-b"]
-    assert knowledge_graph.mention_request["limit_per_node"] == 3
+    assert knowledge_graph.subgraph_request["seed_node_ids"] == ["node-a"]
+    assert knowledge_graph.subgraph_request["mention_limit_per_node"] == 3
     assert state_store.calls[0]["node_ids"] == ["node-b"]
     assert [node.node_id for node in result.discovered_nodes] == ["node-b"]
     assert result.discovered_nodes[0].evidence[0].reading_block_id == "block-node"

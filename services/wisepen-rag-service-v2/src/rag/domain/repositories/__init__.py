@@ -14,13 +14,14 @@ from .neo4j import (
     KnowledgeGraphRevisionSupersededError,
 )
 from .qdrant import CandidateSearcher, RetrievalAclWriter, RetrievalIndexWriter
-from .redis import NavigationStateStore
+from .redis import GraphQuerySubgraphCache, NavigationStateStore
 
 __all__ = [
     "AuthoritativeAclReader",
     "CandidateSearcher",
     "GenerationArtifactStore",
     "GraphAclWriter",
+    "GraphQuerySubgraphCache",
     "KnowledgeGraphRepository",
     "KnowledgeGraphRevisionSupersededError",
     "NavigationStateStore",

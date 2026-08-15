@@ -2,9 +2,12 @@
 
 from neo4j import AsyncDriver
 
-from rag.domain.models.acl import ResourceAcl
 from rag.application.rag.index.constructor.graph_merge import resource_node_id
+from rag.domain.models.acl import ResourceAcl
 from rag.domain.repositories.neo4j.graph_acl_writer import GraphAclWriter
+from rag.domain.repositories.redis.graph_query_subgraph_cache import (
+    GraphQuerySubgraphCache,
+)
 
 _SCHEMA_QUERIES = (
     """
@@ -40,9 +43,16 @@ MERGE (resource)-[:RAG_V2_HAS_GROUP_ACL]->(acl)
 class Neo4jGraphAclWriter(GraphAclWriter):
     """维护 v2 ResourceNode 的 ACL 属性和 group ACL 关系。"""
 
-    def __init__(self, *, driver: AsyncDriver, database: str) -> None:
+    def __init__(
+        self,
+        *,
+        driver: AsyncDriver,
+        database: str,
+        subgraph_cache: GraphQuerySubgraphCache,
+    ) -> None:
         self._driver = driver
         self._database = database
+        self._subgraph_cache = subgraph_cache
 
     async def initialize(self) -> None:
         for query in _SCHEMA_QUERIES:
@@ -69,3 +79,4 @@ class Neo4jGraphAclWriter(GraphAclWriter):
             ],
             database_=self._database,
         )
+        await self._subgraph_cache.bump_epoch()

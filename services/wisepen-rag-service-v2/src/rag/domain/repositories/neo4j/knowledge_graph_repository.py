@@ -52,6 +52,22 @@ class TraversedPath:
     edges: list[TraversedEdge] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class GraphQuerySubgraph:
+    """一次有界图查询的候选路径和批量节点提及。"""
+
+    paths: list[TraversedPath] = field(default_factory=list)
+    mentions: list[KnowledgeMention] = field(default_factory=list)
+    seed_node_ids: list[str] = field(default_factory=list)
+    relation_types: list[KnowledgeRelationType] = field(default_factory=list)
+    direction: TraversalDirection = TraversalDirection.BOTH
+    max_depth: int = 1
+    path_limit: int = 0
+    mention_limit_per_node: int = 0
+    graph_epoch: str = "0"
+    cache_schema_version: str = "graph-query-subgraph:v1"
+
+
 class KnowledgeGraphRepository(Protocol):
     """管理知识图谱发布生命周期并查询当前已发布图。"""
 
@@ -90,17 +106,7 @@ class KnowledgeGraphRepository(Protocol):
         limit: int,
     ) -> list[KnowledgeNode]: ...
 
-    async def find_mentions(
-        self,
-        *,
-        node_ids: Sequence[str],
-        resource_ids: Sequence[str],
-        preferred_reading_block_ids: Sequence[str],
-        permission_scope: PermissionScope,
-        limit_per_node: int,
-    ) -> list[KnowledgeMention]: ...
-
-    async def find_paths(
+    async def find_subgraph(
         self,
         *,
         seed_node_ids: Sequence[str],
@@ -108,5 +114,6 @@ class KnowledgeGraphRepository(Protocol):
         relation_types: Sequence[KnowledgeRelationType] = (),
         direction: TraversalDirection = TraversalDirection.BOTH,
         max_depth: int = 1,
-        limit: int = 40,
-    ) -> list[TraversedPath]: ...
+        path_limit: int = 40,
+        mention_limit_per_node: int = 3,
+    ) -> GraphQuerySubgraph: ...

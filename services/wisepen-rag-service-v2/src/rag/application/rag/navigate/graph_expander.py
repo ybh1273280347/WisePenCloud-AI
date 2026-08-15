@@ -164,14 +164,17 @@ class KnowledgeGraphExpander:
         if unknown_seed_ids:
             raise UnknownSeedNodeError(unknown_seed_ids[0])
 
-        paths = await self._knowledge_graph.find_paths(
+        requested_path_limit = min(max(request.max_results * 4, 1), 80)
+        subgraph = await self._knowledge_graph.find_subgraph(
             seed_node_ids=request.seed_node_ids,
             permission_scope=request.permission_scope,
             relation_types=request.relation_types,
             direction=request.direction,
             max_depth=request.max_depth,
-            limit=min(request.max_results * 4, 80),
+            path_limit=requested_path_limit,
+            mention_limit_per_node=3,
         )
+        paths = subgraph.paths
         paths = await self._filter_readable_paths(paths, request.permission_scope)
         paths = [
             path
@@ -216,13 +219,37 @@ class KnowledgeGraphExpander:
         paths = [paths[int(item.candidate_id)] for item in ranking.ranked]
         evidence_by_edge = await self._verify_path_evidence(paths)
 
+        # 子图查询已经一次性取得 mentions；这里按当前 ACL 复查后的路径裁剪，
+        # 再批量核验 authority Markdown，避免每条路径重复访问 Neo4j/Mongo。
+        path_node_ids = {
+            node.node_id
+            for path in paths
+            for node in path.nodes
+            if node.kind is not KnowledgeNodeKind.RESOURCE
+        }
+        path_resource_ids = {
+            resource_id for path in paths for resource_id in _path_resource_ids(path)
+        }
+        mentions = [
+            mention
+            for mention in subgraph.mentions
+            if mention.node_id in path_node_ids
+            and mention.evidence.resource_id in path_resource_ids
+        ]
+        verified_mentions = await self._evidence_verifier.verify(
+            [mention.evidence for mention in mentions]
+        )
+        mention_evidence_by_node: dict[str, list[PublishedGraphEvidence]] = {}
+        for mention, record in zip(mentions, verified_mentions, strict=True):
+            mention_evidence_by_node.setdefault(mention.node_id, []).append(record)
+
         eligible_paths: list[_EligiblePath] = []
         for path in paths:
             node_evidence = await self._resolve_new_node_evidence(
                 path,
                 evidence_by_edge,
                 known_node_ids,
-                request.permission_scope,
+                mention_evidence_by_node,
             )
             if node_evidence is not None:
                 eligible_paths.append(
@@ -324,38 +351,17 @@ class KnowledgeGraphExpander:
         path: TraversedPath,
         evidence_by_edge: dict[str, list[PublishedGraphEvidence]],
         known_node_ids: set[str],
-        permission_scope: PermissionScope,
+        mention_evidence_by_node: dict[str, list[PublishedGraphEvidence]],
     ) -> dict[str, list[PublishedGraphEvidence]] | None:
         new_nodes = [
             node for node in path.nodes if node.node_id not in known_node_ids
         ]
-        mention_node_ids = [
-            node.node_id
-            for node in new_nodes
-            if node.kind is not KnowledgeNodeKind.RESOURCE
-        ]
-        relation_records = [
-            record
-            for edge in path.edges
-            for record in evidence_by_edge[edge.edge_id]
-        ]
-        mentions = await self._knowledge_graph.find_mentions(
-            node_ids=mention_node_ids,
-            resource_ids=sorted(_path_resource_ids(path)),
-            preferred_reading_block_ids=list(
-                dict.fromkeys(
-                    record.evidence.reading_block_id for record in relation_records
-                )
-            ),
-            permission_scope=permission_scope,
-            limit_per_node=3,
-        )
-        mention_records = await self._evidence_verifier.verify(
-            [mention.evidence for mention in mentions]
-        )
         records_by_node: dict[str, list[PublishedGraphEvidence]] = {}
-        for mention, record in zip(mentions, mention_records, strict=True):
-            records_by_node.setdefault(mention.node_id, []).append(record)
+        for node in new_nodes:
+            if node.kind is not KnowledgeNodeKind.RESOURCE:
+                records_by_node[node.node_id] = list(
+                    mention_evidence_by_node.get(node.node_id, [])
+                )
 
         for node in new_nodes:
             if node.kind is KnowledgeNodeKind.RESOURCE:

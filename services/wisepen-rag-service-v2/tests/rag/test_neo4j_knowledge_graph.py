@@ -16,7 +16,7 @@ from rag.domain.models.graph import (
     TraversalDirection,
 )
 from rag.domain.repositories import KnowledgeGraphRevisionSupersededError
-from rag.domain.repositories.neo4j import GraphSeedBlock
+from rag.domain.repositories.neo4j import GraphQuerySubgraph, GraphSeedBlock
 from rag.utils.chunkers import SourceSpan
 
 
@@ -31,13 +31,17 @@ class _Driver:
         records: list[dict] | None = None,
         *,
         cas_succeeds: bool = True,
+        mention_records: list[dict] | None = None,
     ) -> None:
         self.records = records or []
         self.cas_succeeds = cas_succeeds
+        self.mention_records = mention_records
         self.calls: list[tuple[str, dict]] = []
 
     async def execute_query(self, query: str, **parameters):
         self.calls.append((query, parameters))
+        if "RAG_V2_MENTION" in query and self.mention_records is not None:
+            return _Result(self.mention_records)
         if "graph_status = 'published'" in query and not self.cas_succeeds:
             return _Result(records=[])
         if "RETURN resource.resource_id AS resource_id" in query:
@@ -45,10 +49,28 @@ class _Driver:
         return _Result(self.records)
 
 
+class _Cache:
+    canonical_path_limit = 80
+
+    async def get_or_load(self, **kwargs):
+        return await kwargs["loader"]()
+
+    async def bump_epoch(self):
+        return "1"
+
+
+def _repository(driver):
+    return Neo4jKnowledgeGraphRepository(
+        driver=driver,
+        database="rag-v2",
+        subgraph_cache=_Cache(),
+    )
+
+
 @pytest.mark.asyncio
 async def test_repository_initializes_v2_schema() -> None:
     driver = _Driver()
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    repository = _repository(driver)
 
     await repository.initialize()
 
@@ -63,7 +85,7 @@ async def test_repository_initializes_v2_schema() -> None:
 @pytest.mark.asyncio
 async def test_repository_uses_v2_namespace_and_publishes_last() -> None:
     driver = _Driver()
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    repository = _repository(driver)
 
     await repository.begin_build(
         resource_id="resource-1",
@@ -100,7 +122,7 @@ async def test_repository_uses_v2_namespace_and_publishes_last() -> None:
 @pytest.mark.asyncio
 async def test_repository_rejects_superseded_publish() -> None:
     driver = _Driver(cas_succeeds=False)
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    repository = _repository(driver)
 
     with pytest.raises(KnowledgeGraphRevisionSupersededError):
         await repository.publish(graph=_graph(), document_version=3)
@@ -109,7 +131,7 @@ async def test_repository_rejects_superseded_publish() -> None:
 @pytest.mark.asyncio
 async def test_repository_skips_revision_after_clearing_old_graph() -> None:
     driver = _Driver()
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    repository = _repository(driver)
 
     await repository.skip(
         resource_id="resource-1",
@@ -132,7 +154,7 @@ async def test_repository_skips_revision_after_clearing_old_graph() -> None:
 @pytest.mark.asyncio
 async def test_repository_deletes_resource_group_acl_orphans() -> None:
     driver = _Driver()
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    repository = _repository(driver)
 
     await repository.delete_resources(["resource-1"])
 
@@ -154,7 +176,7 @@ async def test_find_nodes_filters_published_revision_and_deduplicates() -> None:
             }
         ]
     )
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    repository = _repository(driver)
     block = _seed_block()
 
     nodes = await repository.find_nodes(
@@ -188,7 +210,7 @@ async def test_find_nodes_filters_published_revision_and_deduplicates() -> None:
 @pytest.mark.asyncio
 async def test_find_nodes_does_not_query_when_limit_is_zero() -> None:
     driver = _Driver()
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    repository = _repository(driver)
 
     nodes = await repository.find_nodes(
         reading_blocks=[_seed_block()],
@@ -201,9 +223,7 @@ async def test_find_nodes_does_not_query_when_limit_is_zero() -> None:
 
 
 @pytest.mark.asyncio
-async def test_find_mentions_scopes_resources_prefers_blocks_and_limits_per_node() -> (
-    None
-):
+async def test_find_subgraph_batches_mentions_after_path_query() -> None:
     driver = _Driver(
         records=[
             {
@@ -219,36 +239,36 @@ async def test_find_mentions_scopes_resources_prefers_blocks_and_limits_per_node
             }
         ]
     )
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    driver.records = [_path_record()]
+    driver.mention_records = []
+    repository = _repository(driver)
 
-    mentions = await repository.find_mentions(
-        node_ids=["node-1"],
-        resource_ids=["resource-1"],
-        preferred_reading_block_ids=["block-1"],
+    subgraph = await repository.find_subgraph(
+        seed_node_ids=["node-a"],
         permission_scope=PermissionScope(user_id="user-1"),
-        limit_per_node=3,
+        path_limit=3,
+        mention_limit_per_node=3,
     )
 
-    query, parameters = driver.calls[0]
-    assert "RAG_V2_MENTION" in query
-    assert "collect(mention)[..$limit_per_node]" in query
-    assert parameters["preferred_reading_block_ids"] == ["block-1"]
-    assert parameters["limit_per_node"] == 3
-    assert mentions[0].evidence == _graph_evidence()
+    assert isinstance(subgraph, GraphQuerySubgraph)
+    assert len(driver.calls) == 2
+    assert "RAG_V2_MENTION" in driver.calls[1][0]
+    assert driver.calls[1][1]["limit_per_node"] == 3
 
 
 @pytest.mark.asyncio
-async def test_find_paths_uses_bounded_direction_revision_and_cycle_filter() -> None:
+async def test_find_subgraph_uses_bounded_direction_revision_and_cycle_filter() -> None:
     driver = _Driver(records=[_path_record()])
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    driver.mention_records = []
+    repository = _repository(driver)
 
-    paths = await repository.find_paths(
+    subgraph = await repository.find_subgraph(
         seed_node_ids=["node-a"],
         permission_scope=PermissionScope(user_id="user-1"),
         relation_types=[KnowledgeRelationType.DEPENDS_ON],
         direction=TraversalDirection.OUT,
         max_depth=2,
-        limit=5,
+        path_limit=5,
     )
 
     query, parameters = driver.calls[0]
@@ -258,34 +278,35 @@ async def test_find_paths_uses_bounded_direction_revision_and_cycle_filter() -> 
     assert "evidence.graph_status = 'published'" in query
     assert "evidence.graph_revision = relation.graph_revision" in query
     assert parameters["relation_types"] == ["DEPENDS_ON"]
-    assert paths[0].edges[0].edge_id == "edge-1"
+    assert subgraph.paths[0].edges[0].edge_id == "edge-1"
 
 
 @pytest.mark.asyncio
-async def test_find_paths_does_not_query_without_seed_nodes() -> None:
+async def test_find_subgraph_does_not_query_without_seed_nodes() -> None:
     driver = _Driver(records=[_path_record()])
-    repository = Neo4jKnowledgeGraphRepository(driver=driver, database="rag-v2")
+    repository = _repository(driver)
 
-    paths = await repository.find_paths(
+    subgraph = await repository.find_subgraph(
         seed_node_ids=[],
         permission_scope=PermissionScope(user_id="user-1"),
     )
 
-    assert paths == []
+    assert subgraph.paths == []
     assert driver.calls == []
 
 
 @pytest.mark.asyncio
-async def test_find_paths_rejects_misaligned_persisted_evidence_arrays() -> None:
+async def test_find_subgraph_rejects_misaligned_persisted_evidence_arrays() -> None:
     record = _path_record()
     record["edges"][0]["evidence_end_offsets"] = []
     repository = Neo4jKnowledgeGraphRepository(
         driver=_Driver(records=[record]),
         database="rag-v2",
+        subgraph_cache=_Cache(),
     )
 
     with pytest.raises(ValueError, match="misaligned"):
-        await repository.find_paths(
+        await repository.find_subgraph(
             seed_node_ids=["node-a"],
             permission_scope=PermissionScope(user_id="user-1"),
         )

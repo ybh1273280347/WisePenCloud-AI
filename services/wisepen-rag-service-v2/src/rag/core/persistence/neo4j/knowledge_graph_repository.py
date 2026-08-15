@@ -1,8 +1,11 @@
 """Neo4j v2 知识图谱发布与查询的统一 adapter。"""
 
 from collections.abc import Sequence
+from dataclasses import replace
 from enum import StrEnum
+from time import perf_counter
 
+from common.logger import debug
 from neo4j import AsyncDriver, RoutingControl
 
 from rag.application.rag.index.constructor.graph_merge import resource_node_id
@@ -18,11 +21,15 @@ from rag.domain.models.graph import (
     TraversalDirection,
 )
 from rag.domain.repositories.neo4j.knowledge_graph_repository import (
+    GraphQuerySubgraph,
     GraphSeedBlock,
     KnowledgeGraphRepository,
     KnowledgeGraphRevisionSupersededError,
     TraversedEdge,
     TraversedPath,
+)
+from rag.domain.repositories.redis.graph_query_subgraph_cache import (
+    GraphQuerySubgraphCache,
 )
 from rag.utils.chunkers import SourceSpan
 
@@ -271,11 +278,18 @@ _PATH_PATTERNS = {
 class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
     """管理 v2 Neo4j 知识图谱的发布生命周期和查询。"""
 
-    def __init__(self, *, driver: AsyncDriver, database: str) -> None:
+    def __init__(
+        self,
+        *,
+        driver: AsyncDriver,
+        database: str,
+        subgraph_cache: GraphQuerySubgraphCache,
+    ) -> None:
         if not database.strip():
             raise ValueError("database must not be empty")
         self._driver = driver
         self._database = database
+        self._subgraph_cache = subgraph_cache
 
     async def initialize(self) -> None:
         for query in _SCHEMA_QUERIES:
@@ -288,6 +302,8 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         content_revision: str,
         document_version: int,
     ) -> None:
+        # 构建开始即切换 epoch，避免构建窗口读到上一版候选子图。
+        await self._subgraph_cache.bump_epoch()
         result = await self._driver.execute_query(
             _BEGIN_BUILD,
             node_id=resource_node_id(resource_id),
@@ -405,6 +421,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
             _DELETE_ORPHAN_NODES,
             database_=self._database,
         )
+        await self._subgraph_cache.bump_epoch()
 
     async def skip(
         self,
@@ -443,6 +460,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
             _DELETE_ORPHAN_NODES,
             database_=self._database,
         )
+        await self._subgraph_cache.bump_epoch()
 
     async def delete_resources(self, resource_ids: Sequence[str]) -> None:
         ids = list(dict.fromkeys(resource_ids))
@@ -461,6 +479,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
             _DELETE_ORPHAN_GROUP_ACLS,
             database_=self._database,
         )
+        await self._subgraph_cache.bump_epoch()
 
     async def find_nodes(
         self,
@@ -526,7 +545,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         )
         return [_to_knowledge_node(record) for record in result.records]
 
-    async def find_mentions(
+    async def _find_mentions_uncached(
         self,
         *,
         node_ids: Sequence[str],
@@ -557,7 +576,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         )
         return [_to_mention(record) for record in result.records]
 
-    async def find_paths(
+    async def _find_paths_uncached(
         self,
         *,
         seed_node_ids: Sequence[str],
@@ -642,12 +661,114 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         )
         return [_to_path(record) for record in result.records]
 
+    async def find_subgraph(
+        self,
+        *,
+        seed_node_ids: Sequence[str],
+        permission_scope: PermissionScope,
+        relation_types: Sequence[KnowledgeRelationType] = (),
+        direction: TraversalDirection = TraversalDirection.BOTH,
+        max_depth: int = 1,
+        path_limit: int = 40,
+        mention_limit_per_node: int = 3,
+    ) -> GraphQuerySubgraph:
+        """一次查询路径并批量补齐所有路径所需的 mention。"""
+        canonical_limit = self._subgraph_cache.canonical_path_limit
+        query_limit = min(max(path_limit, canonical_limit), canonical_limit)
+
+        async def load() -> GraphQuerySubgraph:
+            started = perf_counter()
+            paths = await self._find_paths_uncached(
+                seed_node_ids=seed_node_ids,
+                permission_scope=permission_scope,
+                relation_types=relation_types,
+                direction=direction,
+                max_depth=max_depth,
+                limit=query_limit,
+            )
+            debug(
+                "neo4j_find_subgraph_latency",
+                duration_seconds=perf_counter() - started,
+            )
+            node_ids = list(
+                dict.fromkeys(
+                    node.node_id
+                    for path in paths
+                    for node in path.nodes
+                    if node.kind is not KnowledgeNodeKind.RESOURCE
+                )
+            )
+            resource_ids = sorted(
+                {
+                    resource_id
+                    for path in paths
+                    for resource_id in _path_resource_ids(path)
+                }
+            )
+            preferred_blocks = list(
+                dict.fromkeys(
+                    evidence.reading_block_id
+                    for path in paths
+                    for edge in path.edges
+                    for evidence in edge.evidence
+                )
+            )
+            mention_started = perf_counter()
+            mentions = await self._find_mentions_uncached(
+                node_ids=node_ids,
+                resource_ids=resource_ids,
+                preferred_reading_block_ids=preferred_blocks,
+                permission_scope=permission_scope,
+                limit_per_node=mention_limit_per_node,
+            )
+            debug(
+                "neo4j_find_mentions_latency",
+                duration_seconds=perf_counter() - mention_started,
+            )
+            return GraphQuerySubgraph(
+                paths=paths,
+                mentions=mentions,
+                seed_node_ids=list(dict.fromkeys(seed_node_ids)),
+                relation_types=list(dict.fromkeys(relation_types)),
+                direction=direction,
+                max_depth=max_depth,
+                path_limit=query_limit,
+                mention_limit_per_node=mention_limit_per_node,
+            )
+
+        subgraph = await self._subgraph_cache.get_or_load(
+            seed_node_ids=seed_node_ids,
+            permission_scope=permission_scope,
+            relation_types=relation_types,
+            direction=direction,
+            max_depth=max_depth,
+            path_limit=path_limit,
+            mention_limit_per_node=mention_limit_per_node,
+            loader=load,
+        )
+        return replace(
+            subgraph,
+            paths=subgraph.paths[:path_limit],
+            path_limit=min(path_limit, len(subgraph.paths)),
+        )
+
 
 def _to_path(record) -> TraversedPath:
     return TraversedPath(
         nodes=[_to_knowledge_node(item) for item in record["nodes"]],
         edges=[_to_edge(item) for item in record["edges"]],
     )
+
+
+def _path_resource_ids(path: TraversedPath) -> set[str]:
+    return {
+        *(
+            evidence.resource_id
+            for edge in path.edges
+            for evidence in edge.evidence
+        ),
+        *(node.resource_id for node in path.nodes if node.resource_id is not None),
+    }
 
 
 def _to_knowledge_node(item) -> KnowledgeNode:

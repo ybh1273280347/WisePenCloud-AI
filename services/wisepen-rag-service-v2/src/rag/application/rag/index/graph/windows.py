@@ -16,9 +16,9 @@ from rag.utils.xml_markup import xml_attr, xml_cdata
 # 邻接 ReadingBlock 提供给模型作为上下文的字符数（仅用于消歧，不可作为证据来源）。
 _ADJACENT_CONTEXT_CHARACTERS = 800
 # 单个抽取窗口的最大字符数。
-_WINDOW_CHARACTERS = 6_000
+_WINDOW_CHARACTERS = 4_000
 # 相邻窗口之间的字符重叠量，避免跨窗口边界的关系/实体被切断。
-_WINDOW_OVERLAP_CHARACTERS = 2_400
+_WINDOW_OVERLAP_CHARACTERS = 600
 
 
 @dataclass(slots=True)
@@ -64,7 +64,7 @@ def build_extraction_windows(
 
     流程：
     1. 对每个非空 ReadingBlock 计算其完整 source_mappings（局部坐标 → 原文坐标）。
-    2. 按 6000 字符 + 2400 重叠切分窗口；若 ReadingBlock 本身不超过 6000 字符，
+    2. 按 4000 字符 + 600 重叠切分窗口；若 ReadingBlock 本身不超过 4000 字符，
        则整块作为一个窗口，window_id 直接复用 block_id 以保持稳定身份。
     3. 仅在窗口起点（start == 0）注入 previous_context，仅在窗口终点
        （end == len(raw_text)）注入 next_context，避免上下文重复。
@@ -193,7 +193,7 @@ def _source_mappings(
 
 
 def _window_ranges(text_length: int) -> list[tuple[int, int]]:
-    """按 6000 字符 + 2400 重叠切分 ReadingBlock，返回 (start, end) 区间列表。
+    """按 4000 字符 + 600 重叠切分 ReadingBlock，返回 (start, end) 区间列表。
 
     若文本不超过窗口大小，则返回单个覆盖全量的区间；
     否则按 ``step = window - overlap`` 推进起点，最后一个区间终点固定为 text_length。

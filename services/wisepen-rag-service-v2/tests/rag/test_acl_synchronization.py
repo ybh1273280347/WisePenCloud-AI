@@ -153,10 +153,19 @@ class _Neo4jDriver:
         return _Result([])
 
 
+class _Cache:
+    async def bump_epoch(self):
+        return "1"
+
+
 @pytest.mark.asyncio
 async def test_neo4j_writer_persists_group_acl_and_revision_guard() -> None:
     driver = _Neo4jDriver()
-    writer = Neo4jGraphAclWriter(driver=driver, database="rag-v2")
+    writer = Neo4jGraphAclWriter(
+        driver=driver,
+        database="rag-v2",
+        subgraph_cache=_Cache(),
+    )
 
     await writer.synchronize(_acl())
 

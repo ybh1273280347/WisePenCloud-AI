@@ -48,7 +48,10 @@ from rag.core.persistence.qdrant import (
     QdrantRetrievalAclWriter,
     QdrantRetrievalIndexWriter,
 )
-from rag.core.persistence.redis import RedisNavigationStateStore
+from rag.core.persistence.redis import (
+    RedisGraphQuerySubgraphCache,
+    RedisNavigationStateStore,
+)
 from rag.utils.llm_clients import EmbeddingClient, QueryClient
 from rag.utils.ranking import RankingPipeline
 from rag.utils.ranking.diversifiers import MmrDiversifier, MmrDiversifierConfig
@@ -228,11 +231,6 @@ class Container(containers.DeclarativeContainer):
         uri=settings.NEO4J_URI,
         auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
     )
-    knowledge_graph_repository = providers.Singleton(
-        Neo4jKnowledgeGraphRepository,
-        driver=neo4j_driver,
-        database=settings.NEO4J_DATABASE,
-    )
     qdrant_client = providers.Singleton(
         _build_qdrant_client,
         host=settings.QDRANT_HOST,
@@ -273,6 +271,21 @@ class Container(containers.DeclarativeContainer):
         settings.REDIS_URL,
         decode_responses=True,
     )
+    graph_query_subgraph_cache = providers.Singleton(
+        RedisGraphQuerySubgraphCache,
+        redis_client=redis_client,
+        enabled=settings.RAG_GRAPH_QUERY_CACHE_ENABLED,
+        ttl_seconds=settings.RAG_GRAPH_QUERY_CACHE_TTL_SECONDS,
+        max_paths=settings.RAG_GRAPH_QUERY_CACHE_MAX_PATHS,
+        max_bytes=settings.RAG_GRAPH_QUERY_CACHE_MAX_BYTES,
+        lock_seconds=settings.RAG_GRAPH_QUERY_CACHE_LOCK_SECONDS,
+    )
+    knowledge_graph_repository = providers.Singleton(
+        Neo4jKnowledgeGraphRepository,
+        driver=neo4j_driver,
+        database=settings.NEO4J_DATABASE,
+        subgraph_cache=graph_query_subgraph_cache,
+    )
     navigation_state_store = providers.Singleton(
         RedisNavigationStateStore,
         redis_client=redis_client,
@@ -296,6 +309,7 @@ class Container(containers.DeclarativeContainer):
         Neo4jGraphAclWriter,
         driver=neo4j_driver,
         database=settings.NEO4J_DATABASE,
+        subgraph_cache=graph_query_subgraph_cache,
     )
     resource_acl_refresher = providers.Singleton(
         ResourceAclRefresher,
