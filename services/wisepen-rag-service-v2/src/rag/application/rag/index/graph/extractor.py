@@ -60,14 +60,16 @@ from .windows import (
 _ARTIFACT_VERSION = "graph-candidates:v1"
 
 
-@dataclass(slots=True)
-class KnowledgeWindowExtraction:
-    """一个抽取窗口经过确定性校验后的节点和关系候选。"""
 
-    resource_id: str
-    content_revision: str
-    nodes: list[ExtractedKnowledgeNode] = field(default_factory=list)
-    relations: list[ExtractedKnowledgeRelation] = field(default_factory=list)
+
+@dataclass(slots=True)
+class ExtractedKnowledgeRelation:
+    source_local_id: str
+    target_local_id: str
+    relation_type: KnowledgeRelationType
+    evidence: GraphEvidence
+    predicate: str | None = None
+
 
 
 @dataclass(slots=True)
@@ -80,12 +82,13 @@ class ExtractedKnowledgeNode:
 
 
 @dataclass(slots=True)
-class ExtractedKnowledgeRelation:
-    source_local_id: str
-    target_local_id: str
-    relation_type: KnowledgeRelationType
-    evidence: GraphEvidence
-    predicate: str | None = None
+class KnowledgeWindowExtraction:
+    """一个抽取窗口经过确定性校验后的节点和关系候选。"""
+
+    resource_id: str
+    content_revision: str
+    nodes: list[ExtractedKnowledgeNode] = field(default_factory=list)
+    relations: list[ExtractedKnowledgeRelation] = field(default_factory=list)
 
 
 class KnowledgeGraphExtractor:
