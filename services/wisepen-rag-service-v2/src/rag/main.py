@@ -62,7 +62,9 @@ async def lifespan(app: FastAPI):
     await container.retrieval_index_writer().ensure_collection()
     await container.knowledge_graph_repository().initialize()
     await container.graph_acl_writer().initialize()
-    await container.neo4j_driver().verify_connectivity()
+
+    if settings.RAG_KNOWLEDGE_GRAPH_ENABLED:
+        await container.neo4j_driver().verify_connectivity()
 
     consumers = (
         container.document_ready_consumer(),

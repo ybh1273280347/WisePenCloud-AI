@@ -274,11 +274,9 @@ class Container(containers.DeclarativeContainer):
     graph_query_subgraph_cache = providers.Singleton(
         RedisGraphQuerySubgraphCache,
         redis_client=redis_client,
-        enabled=settings.RAG_GRAPH_QUERY_CACHE_ENABLED,
         ttl_seconds=settings.RAG_GRAPH_QUERY_CACHE_TTL_SECONDS,
         max_paths=settings.RAG_GRAPH_QUERY_CACHE_MAX_PATHS,
         max_bytes=settings.RAG_GRAPH_QUERY_CACHE_MAX_BYTES,
-        lock_seconds=settings.RAG_GRAPH_QUERY_CACHE_LOCK_SECONDS,
     )
     knowledge_graph_repository = providers.Singleton(
         Neo4jKnowledgeGraphRepository,
