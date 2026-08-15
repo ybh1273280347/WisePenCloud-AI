@@ -1,7 +1,7 @@
 """从 navigation state 的已知节点扩展有 ReadingBlock 证据的知识路径。"""
 
-import json
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
@@ -63,9 +63,16 @@ class GraphExpandRequest:
     max_results: int = 10
 
 
+class GraphNodeRole(StrEnum):
+    """公开路径节点的导航角色。"""
+
+    SEED = "seed"
+    DISCOVERED = "discovered"
+
+
 @dataclass(slots=True)
 class GraphEvidenceRangeView:
-    """相对于证据 ReadingBlock 文本的 Python 字符半开区间。"""
+    """证据在 ReadingBlock 文本中的 Python 字符半开区间。"""
 
     start_offset: int
     end_offset: int
@@ -73,13 +80,23 @@ class GraphEvidenceRangeView:
 
 @dataclass(slots=True)
 class GraphEvidenceRefView:
-    """图事实或节点提及到完整 ReadingBlock 的公开交叉引用。"""
+    """关系或节点提及到完整 ReadingBlock 的公开证据。"""
 
-    evidence_id: str
     resource_id: str
     reading_block_id: str
     quote: str
-    range: GraphEvidenceRangeView
+    reading_block_range: GraphEvidenceRangeView
+
+
+@dataclass(slots=True)
+class GraphNodeView:
+    """公开节点字段；role 只标记 seed 或本次 discovered 节点。"""
+
+    node_id: str
+    label: str
+    kind: KnowledgeNodeKind
+    entity_type: KnowledgeEntityType | None = None
+    role: GraphNodeRole | None = None
 
 
 @dataclass(slots=True)
@@ -90,29 +107,41 @@ class DiscoveredKnowledgeNodeView:
     label: str
     kind: KnowledgeNodeKind
     entity_type: KnowledgeEntityType | None = None
-    evidence: list[GraphEvidenceRefView] = field(default_factory=list)
+    role: GraphNodeRole = GraphNodeRole.DISCOVERED
+    mention_evidence: list[GraphEvidenceRefView] = field(default_factory=list)
 
 
 @dataclass(slots=True)
-class GraphPathStepView:
-    """按关系语义方向表达的单步路径及其关系证据。"""
+class GraphRelationEndpointView:
+    """路径关系端点；已有 state 节点也只在关系中出现，不单独公开集合。"""
 
-    relation: str
-    evidence: list[GraphEvidenceRefView] = field(default_factory=list)
+    node_id: str
+    label: str
+
+
+@dataclass(slots=True)
+class GraphRelationView:
+    """按知识事实方向表达的关系及其证据。"""
+
+    source: GraphRelationEndpointView
+    predicate: str
+    target: GraphRelationEndpointView
+    relation_evidence: list[GraphEvidenceRefView] = field(default_factory=list)
 
 
 @dataclass(slots=True)
 class GraphPathView:
-    """模型可直接阅读的有向路径，node IDs 只保留作后续导航锚点。"""
+    """按实际遍历顺序渲染的自然路径和精确关系记录。"""
 
-    text: str
-    node_ids: list[str] = field(default_factory=list)
-    steps: list[GraphPathStepView] = field(default_factory=list)
+    path: str
+    relations: list[GraphRelationView] = field(default_factory=list)
 
 
 @dataclass(slots=True)
 class GraphExpandResult:
     state_id: str
+    traversal_direction: TraversalDirection = TraversalDirection.BOTH
+    seed_nodes: list[GraphNodeView] = field(default_factory=list)
     discovered_nodes: list[DiscoveredKnowledgeNodeView] = field(default_factory=list)
     paths: list[GraphPathView] = field(default_factory=list)
     evidence_sections: list[GraphEvidenceSectionView] = field(default_factory=list)
@@ -176,13 +205,28 @@ class KnowledgeGraphExpander:
         )
         paths = subgraph.paths
         paths = await self._filter_readable_paths(paths, request.permission_scope)
+        seed_nodes_by_id = {
+            node.node_id: node
+            for path in paths
+            for node in path.nodes
+            if node.node_id in request.seed_node_ids
+        }
+        seed_nodes = [
+            _to_seed_node_view(seed_nodes_by_id[node_id])
+            for node_id in request.seed_node_ids
+            if node_id in seed_nodes_by_id
+        ]
         paths = [
             path
             for path in paths
             if any(node.node_id not in known_node_ids for node in path.nodes)
         ]
         if not paths:
-            return GraphExpandResult(state_id=state.state_id)
+            return GraphExpandResult(
+                state_id=state.state_id,
+                traversal_direction=request.direction,
+                seed_nodes=seed_nodes,
+            )
 
         effective_query = request.query.strip()
         if not effective_query:
@@ -256,7 +300,11 @@ class KnowledgeGraphExpander:
                     _EligiblePath(path=path, node_evidence=node_evidence)
                 )
         if not eligible_paths:
-            return GraphExpandResult(state_id=state.state_id)
+            return GraphExpandResult(
+                state_id=state.state_id,
+                traversal_direction=request.direction,
+                seed_nodes=seed_nodes,
+            )
 
         # 所有外部读取和 ACL 复查必须在 state 写入前完成；一旦节点进入 state，
         # 本次调用不应再因证据读取失败而留下无响应的半完成结果。
@@ -295,7 +343,11 @@ class KnowledgeGraphExpander:
             )
         ]
         if not eligible_paths:
-            return GraphExpandResult(state_id=state.state_id)
+            return GraphExpandResult(
+                state_id=state.state_id,
+                traversal_direction=request.direction,
+                seed_nodes=seed_nodes,
+            )
 
         nodes_by_id = {
             node.node_id: node
@@ -325,6 +377,8 @@ class KnowledgeGraphExpander:
         )
         return GraphExpandResult(
             state_id=state.state_id,
+            traversal_direction=request.direction,
+            seed_nodes=seed_nodes,
             discovered_nodes=[
                 _to_discovered_node_view(
                     nodes_by_id[node_id],
@@ -434,28 +488,45 @@ def _to_path_view(
     path: TraversedPath,
     evidence_by_edge: dict[str, list[PublishedGraphEvidence]],
 ) -> tuple[GraphPathView, list[PublishedGraphEvidence]]:
-    """把已核验领域路径投影为关系证据与 ReadingBlock 的交叉引用。"""
-    text, relations = _render_path(path)
+    """把领域路径投影为自然路径和按事实方向排列的关系证据。"""
+    text, _ = _render_path(path)
     retained_records: list[PublishedGraphEvidence] = []
-    steps: list[GraphPathStepView] = []
+    relation_views: list[GraphRelationView] = []
 
-    for edge, relation in zip(path.edges, relations, strict=True):
+    for edge in path.edges:
         records = evidence_by_edge[edge.edge_id]
         retained_records.extend(records)
-        steps.append(
-            GraphPathStepView(
-                relation=relation,
-                evidence=[_to_evidence_view(record) for record in records],
+        relation_views.append(
+            GraphRelationView(
+                source=GraphRelationEndpointView(
+                    node_id=edge.source_node_id,
+                    label=_node_label(path.nodes, edge.source_node_id),
+                ),
+                predicate=_relation_predicate(edge),
+                target=GraphRelationEndpointView(
+                    node_id=edge.target_node_id,
+                    label=_node_label(path.nodes, edge.target_node_id),
+                ),
+                relation_evidence=[_to_evidence_view(record) for record in records],
             )
         )
 
     return (
         GraphPathView(
-            text=text,
-            node_ids=[node.node_id for node in path.nodes],
-            steps=steps,
+            path=text,
+            relations=relation_views,
         ),
         retained_records,
+    )
+
+
+def _to_seed_node_view(node: KnowledgeNode) -> GraphNodeView:
+    return GraphNodeView(
+        node_id=node.node_id,
+        label=node.label,
+        kind=node.kind,
+        entity_type=node.entity_type,
+        role=GraphNodeRole.SEED,
     )
 
 
@@ -468,17 +539,16 @@ def _to_discovered_node_view(
         label=node.label,
         kind=node.kind,
         entity_type=node.entity_type,
-        evidence=[_to_evidence_view(record) for record in evidence],
+        mention_evidence=[_to_evidence_view(record) for record in evidence],
     )
 
 
 def _to_evidence_view(record: PublishedGraphEvidence) -> GraphEvidenceRefView:
     return GraphEvidenceRefView(
-        evidence_id=record.evidence.evidence_id,
         resource_id=record.evidence.resource_id,
         reading_block_id=record.evidence.reading_block_id,
         quote=record.evidence.quote,
-        range=GraphEvidenceRangeView(
+        reading_block_range=GraphEvidenceRangeView(
             start_offset=record.block_range.start_offset,
             end_offset=record.block_range.end_offset,
         ),
@@ -505,11 +575,11 @@ def _deduplicate_evidence(
 
 
 def _render_path(path: TraversedPath) -> tuple[str, list[str]]:
-    """按遍历顺序排列节点，同时让箭头始终指向关系事实的 target。"""
+    """按遍历顺序生成 section path 风格文本，同时保留事实方向。"""
     if not path.nodes or len(path.edges) != len(path.nodes) - 1:
         raise RuntimeError("graph path must contain one edge between adjacent nodes")
 
-    parts = [_render_node(path.nodes[0].label)]
+    parts = [path.nodes[0].label]
     relations: list[str] = []
     for current, following, edge in zip(
         path.nodes[:-1],
@@ -522,35 +592,47 @@ def _render_path(path: TraversedPath) -> tuple[str, list[str]]:
             edge.source_node_id == current.node_id
             and edge.target_node_id == following.node_id
         ):
-            parts.extend((f"-{relation}->", _render_node(following.label)))
+            parts.extend((f" -[{relation}]-> ", following.label))
             source, target = current, following
         elif (
             edge.source_node_id == following.node_id
             and edge.target_node_id == current.node_id
         ):
-            parts.extend((f"<-{relation}-", _render_node(following.label)))
+            parts.extend((f" <-[{relation}]- ", following.label))
             source, target = following, current
         else:
             raise RuntimeError(
                 f"graph edge {edge.edge_id} does not connect adjacent path nodes"
             )
         relations.append(
-            f"{_render_node(source.label)}-{relation}->{_render_node(target.label)}"
+            f"{source.label} -[{relation}]-> "
+            f"{target.label}"
         )
     return "".join(parts), relations
 
 
 def _render_relation_type(edge: TraversedEdge) -> str:
     if edge.relation_type is not KnowledgeRelationType.RELATED_TO:
-        return f"[:{edge.relation_type.value}]"
+        return edge.relation_type.value
     if not edge.predicate:
         raise RuntimeError(f"RELATED_TO edge {edge.edge_id} is missing predicate")
-    predicate = json.dumps(edge.predicate, ensure_ascii=False)
-    return f"[:{edge.relation_type.value} {{predicate: {predicate}}}]"
+    return edge.predicate
 
 
-def _render_node(label: str) -> str:
-    return f"({json.dumps(label, ensure_ascii=False)})"
+
+def _node_label(nodes: list[KnowledgeNode], node_id: str) -> str:
+    for node in nodes:
+        if node.node_id == node_id:
+            return node.label
+    raise RuntimeError(f"path does not contain relation endpoint {node_id}")
+
+
+def _relation_predicate(edge: TraversedEdge) -> str:
+    return (
+        edge.predicate
+        if edge.relation_type is KnowledgeRelationType.RELATED_TO
+        else edge.relation_type.value
+    )
 
 
 def _path_resource_ids(path: TraversedPath) -> set[str]:

@@ -52,19 +52,10 @@ locateCandidate
   "retrieval_status": "relevant",
   "nodes": [
     {
-      "node_id": "kn_demo_soil_compaction",
-      "label": "土壤板结",
+      "node_id": "kn_demo_wisepen_rag",
+      "label": "WisePen RAG",
       "kind": "Entity",
-      "entity_type": "concept",
-      "evidence": [
-        {
-          "evidence_id": "knev_demo_soil_compaction_mention",
-          "resource_id": "resource_demo_1",
-          "reading_block_id": "block_demo_mention",
-          "quote": "复核记录中的土壤板结样点",
-          "range": {"start_offset": 0, "end_offset": 12}
-        }
-      ]
+      "entity_type": "product"
     }
   ],
   "sections": [
@@ -210,12 +201,12 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
 {
   "session_id": "session_demo_1",
   "state_id": "nav_demo_1",
-  "seed_node_ids": ["kn_demo_surface_water"],
+  "seed_node_ids": ["kn_demo_wisepen_rag"],
   "relation_types": [],
   "direction": "both",
   "max_depth": 2,
   "max_results": 10,
-  "query": "哪些因素会延长积水消退时间？"
+  "query": "WisePen RAG 如何通过图谱继续读取知识？"
 }
 ```
 
@@ -226,28 +217,53 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
 ```json
 {
   "state_id": "nav_demo_1",
+  "traversal_direction": "both",
+  "seed_nodes": [
+    {
+      "node_id": "kn_demo_wisepen_rag",
+      "label": "WisePen RAG",
+      "kind": "Entity",
+      "entity_type": "product",
+      "role": "seed"
+    }
+  ],
   "discovered_nodes": [
     {
-      "node_id": "kn_demo_soil_compaction",
-      "label": "土壤板结",
+      "node_id": "kn_demo_graphrag",
+      "label": "GraphRAG",
       "kind": "Entity",
-      "entity_type": "concept"
+      "entity_type": "technology",
+      "role": "discovered",
+      "mention_evidence": [
+        {
+          "resource_id": "demo-wisepen-rag",
+          "reading_block_id": "block_graph_navigation",
+          "quote": "GraphRAG 技术",
+          "reading_block_range": {"start_offset": 15, "end_offset": 26}
+        }
+      ]
     }
   ],
   "paths": [
     {
-      "text": "(\"表层积水\")<-[:CAUSES]-(\"土壤板结\")",
-      "node_ids": ["kn_demo_surface_water", "kn_demo_soil_compaction"],
-      "steps": [
+      "path": "WisePen RAG -[USES]-> GraphRAG",
+      "relations": [
         {
-          "relation": "(\"土壤板结\")-[:CAUSES]->(\"表层积水\")",
-          "evidence": [
+          "source": {
+            "node_id": "kn_demo_wisepen_rag",
+            "label": "WisePen RAG"
+          },
+          "predicate": "USES",
+          "target": {
+            "node_id": "kn_demo_graphrag",
+            "label": "GraphRAG"
+          },
+          "relation_evidence": [
             {
-              "evidence_id": "knev_demo_compaction_relation",
-              "resource_id": "resource_demo_1",
-              "reading_block_id": "block_demo_relation",
-              "quote": "土壤板结会降低入渗速度，并使表层积水消退时间延长。",
-              "range": {"start_offset": 0, "end_offset": 25}
+              "resource_id": "demo-wisepen-rag",
+              "reading_block_id": "block_graph_navigation",
+              "quote": "WisePen RAG 使用 GraphRAG 技术补充实体关系导航",
+              "reading_block_range": {"start_offset": 0, "end_offset": 34}
             }
           ]
         }
@@ -256,14 +272,14 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
   ],
   "evidence_sections": [
     {
-      "resource_id": "resource_demo_1",
-      "section_id": "section_demo_surface",
-      "title": "土壤表层",
-      "section_path": "入渗与排水检查 > 土壤表层",
+      "resource_id": "demo-wisepen-rag",
+      "section_id": "section_graph_navigation",
+      "title": "二、图谱导航",
+      "section_path": "WisePen RAG 导航架构说明 > 二、图谱导航",
       "reading_blocks": [
         {
-          "reading_block_id": "block_demo_relation",
-          "text": "土壤板结会降低入渗速度，并使表层积水消退时间延长。",
+          "reading_block_id": "block_graph_navigation",
+          "text": "WisePen RAG 使用 GraphRAG 技术补充实体关系导航，使模型能够沿文档中的知识关系继续读取材料。",
           "page_range": "1",
           "anchor_labels": []
         }
@@ -275,12 +291,11 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
 
 契约重点：
 
-- `discovered_nodes` 只包含本次原子写入 state 的新节点；每个非 Resource 节点携带路径资源内最多三条 mention 证据，并优先关系证据所在 ReadingBlock。
-- `paths[].text` 是按遍历顺序渲染的 Cypher 风格路线；节点标签经过 JSON 字符串转义。
-- `paths[].node_ids` 与路线中的节点位置对应，用于处理同名节点和后续导航。
-- `steps[].relation` 始终按关系事实的 `source -> target` 方向表达，不随遍历方向反转。
-- `RELATED_TO` 才会渲染 predicate；其他关系不输出 predicate。
-- `steps[].evidence` 直接给出关系 quote、ReadingBlock ID 和块内 Python 字符半开区间。
+- `seed_nodes` 和 `discovered_nodes` 分别标记本次输入节点与本次原子写入 state 的新节点，节点 role 只取 `seed` 或 `discovered`。
+- `paths[].path` 按实际遍历顺序渲染为 section path 风格文本；`A -[P]-> B` 表示顺着关系方向遍历，`A <-[P]- B` 表示反向遍历。
+- `paths[].relations` 保留精确的 `source -> predicate -> target` 事实方向，不随遍历方向反转；路径中已有 state 节点只在关系端点中出现。
+- `relation_evidence` 直接证明对应关系；`mention_evidence` 证明 discovered 节点在当前可读正文中出现。
+- `reading_block_range` 是 quote 在 ReadingBlock 文本中的 Python 字符半开区间。
 - `evidence_sections` 是关系证据块与新节点 mention 证据块的去重并集，不包含 LOCATE 专属的 `chunk_id`、`source_ref_id` 或 `matches`。
 - MENTION 是节点到资源正文的内部来源边，只用于 LOCATE seed 和节点证据查询，不参与路径遍历。
 - 没有新增路径时固定返回 `discovered_nodes: []`、`paths: []`、`evidence_sections: []`，但保留 `state_id`。

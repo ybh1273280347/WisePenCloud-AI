@@ -69,6 +69,7 @@ async def test_refresher_retries_backends_even_when_local_revision_exists() -> N
         local_store=local,
         retrieval_writer=retrieval,
         graph_writer=graph,
+        graph_enabled=True,
     )
 
     await refresher.refresh("resource-1")
@@ -85,6 +86,7 @@ async def test_refresher_propagates_partial_backend_failure() -> None:
         local_store=_LocalStore(),
         retrieval_writer=_BackendWriter(fail=True),
         graph_writer=_BackendWriter(),
+        graph_enabled=True,
     )
 
     with pytest.raises(ExceptionGroup):
@@ -102,12 +104,31 @@ async def test_refresher_pushes_current_acl_when_event_is_older_than_local() -> 
         local_store=_LocalStore(current=newer),
         retrieval_writer=retrieval,
         graph_writer=graph,
+        graph_enabled=True,
     )
 
     await refresher.refresh("resource-1")
 
     assert retrieval.calls == [newer]
     assert graph.calls == [newer]
+
+
+@pytest.mark.asyncio
+async def test_refresher_skips_graph_acl_when_graph_is_disabled() -> None:
+    retrieval = _BackendWriter()
+    graph = _BackendWriter()
+    refresher = ResourceAclRefresher(
+        authoritative_reader=_AuthoritativeReader(),
+        local_store=_LocalStore(),
+        retrieval_writer=retrieval,
+        graph_writer=graph,
+        graph_enabled=False,
+    )
+
+    await refresher.refresh("resource-1")
+
+    assert retrieval.calls == [_acl()]
+    assert graph.calls == []
 
 
 class _Qdrant:

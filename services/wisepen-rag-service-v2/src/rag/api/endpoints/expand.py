@@ -68,6 +68,8 @@ async def expand_graph(
     return R.success(
         GraphExpandResponse(
             state_id=result.state_id,
+            traversal_direction=result.traversal_direction,
+            seed_nodes=result.seed_nodes,
             discovered_nodes=result.discovered_nodes,
             paths=result.paths,
             evidence_sections=result.evidence_sections,

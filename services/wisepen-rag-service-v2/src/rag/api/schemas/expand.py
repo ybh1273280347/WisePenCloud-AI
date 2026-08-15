@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from rag.application.rag.navigate import (
     DiscoveredKnowledgeNodeView,
     GraphEvidenceSectionView,
+    GraphNodeView,
     GraphPathView,
     TraversalDirection,
 )
@@ -38,6 +39,8 @@ class GraphExpandResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     state_id: str
+    traversal_direction: TraversalDirection
+    seed_nodes: list[GraphNodeView]
     discovered_nodes: list[DiscoveredKnowledgeNodeView]
     paths: list[GraphPathView]
     evidence_sections: list[GraphEvidenceSectionView]

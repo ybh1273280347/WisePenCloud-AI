@@ -36,7 +36,7 @@ from rag.domain.models.retrieval import RetrievalCandidate
 from rag.domain.repositories.mongo.published_resource_reader import (
     PublishedGraphEvidence,
 )
-from rag.domain.repositories.neo4j import TraversedEdge, TraversedPath
+from rag.domain.repositories.neo4j import GraphQuerySubgraph, TraversedEdge, TraversedPath
 from rag.domain.repositories.redis import NavigationState
 from rag.utils.chunkers import SourceSpan
 from rag.utils.ranking import RankingPipeline
@@ -186,16 +186,16 @@ class _MentionGraph:
 
     async def find_nodes(self, *, reading_blocks, permission_scope, limit):
         if not any(
-            block.resource_id == "demo-rain-garden"
+            block.resource_id == "demo-wisepen-rag"
             for block in reading_blocks
         ):
             return []
         return [
             KnowledgeNode(
-                node_id="kn_demo_surface_water",
-                label="表层积水",
+                node_id="kn_demo_wisepen_rag",
+                label="WisePen RAG",
                 kind=KnowledgeNodeKind.ENTITY,
-                entity_type=KnowledgeEntityType.CONCEPT,
+                entity_type=KnowledgeEntityType.PRODUCT,
             )
         ][:limit]
 
@@ -233,27 +233,25 @@ class _TraversalGraph:
         self._path = path
         self._mentions = mentions
 
-    async def find_paths(self, *, seed_node_ids, **kwargs):
-        return [self._path] if "kn_demo_surface_water" in seed_node_ids else []
-
-    async def find_mentions(self, *, node_ids, **kwargs):
-        return [
-            mention
-            for mention in self._mentions
-            if mention.node_id in node_ids
-        ]
+    async def find_subgraph(self, *, seed_node_ids, **kwargs):
+        return GraphQuerySubgraph(
+            paths=[self._path]
+            if "kn_demo_wisepen_rag" in seed_node_ids
+            else [],
+            mentions=self._mentions,
+        )
 
 
 async def main() -> None:
     sectioned = build_demo_document(
-        resource_id="demo-rain-garden",
+        resource_id="demo-wisepen-rag",
         markdown=sectioned_markdown(),
     )
     flat_text = build_demo_document(
         resource_id="demo-orchard-frost-log",
         markdown=flat_text_markdown(),
     )
-    sectioned_phrase = "若四十八小时后仍有连续积水"
+    sectioned_phrase = "向量检索召回相关 ReadingBlock"
     flat_phrase = "日出前后最容易出现当夜最低温"
     sectioned_candidate = _candidate_containing(sectioned, sectioned_phrase, 0.93)
     flat_candidate = _candidate_containing(flat_text, flat_phrase, 0.89)
@@ -286,7 +284,7 @@ async def main() -> None:
     sectioned_result = await locator.locate(
         LocateRequest(
             session_id="demo-session",
-            semantic_query="连续降雨后积水迟迟不退，应先检查什么？",
+            semantic_query="向量检索如何召回 ReadingBlock？",
             permission_scope=scope,
             max_results=1,
         )
@@ -300,8 +298,8 @@ async def main() -> None:
         )
     )
 
-    graph_quote = "土壤板结会降低入渗速度，并使表层积水消退时间延长。"
-    graph_related_quote = "检查时可比较高频踩踏区与封闭区的入渗差异"
+    graph_quote = "WisePen RAG 使用 GraphRAG 技术补充实体关系导航"
+    graph_related_quote = "GraphRAG 使用知识图谱表示实体之间的关系"
     graph_result = await KnowledgeGraphExpander(
         knowledge_graph=_TraversalGraph(
             _graph_path(
@@ -323,8 +321,8 @@ async def main() -> None:
             state_id=sectioned_result.state_id,
             session_id="demo-session",
             permission_scope=scope,
-            seed_node_ids=["kn_demo_surface_water"],
-            query="哪些因素会延长积水消退时间？",
+                seed_node_ids=["kn_demo_wisepen_rag"],
+                query="WisePen RAG 如何通过图谱继续读取知识？",
         )
     )
 
@@ -424,38 +422,37 @@ def _graph_path(
     return TraversedPath(
         nodes=[
             KnowledgeNode(
-                node_id="kn_demo_surface_water",
-                label="表层积水",
+                node_id="kn_demo_wisepen_rag",
+                label="WisePen RAG",
                 kind=KnowledgeNodeKind.ENTITY,
-                entity_type=KnowledgeEntityType.CONCEPT,
+                entity_type=KnowledgeEntityType.PRODUCT,
             ),
             KnowledgeNode(
-                node_id="kn_demo_soil_compaction",
-                label="土壤板结",
+                node_id="kn_demo_graphrag",
+                label="GraphRAG",
                 kind=KnowledgeNodeKind.ENTITY,
-                entity_type=KnowledgeEntityType.CONCEPT,
+                entity_type=KnowledgeEntityType.TECHNOLOGY,
             ),
             KnowledgeNode(
-                node_id="kn_demo_high_traffic_area",
-                label="高频踩踏区",
+                node_id="kn_demo_knowledge_graph",
+                label="知识图谱",
                 kind=KnowledgeNodeKind.ENTITY,
                 entity_type=KnowledgeEntityType.CONCEPT,
             ),
         ],
         edges=[
             TraversedEdge(
-                edge_id="ke_demo_compaction_delays_infiltration",
-                source_node_id="kn_demo_soil_compaction",
-                target_node_id="kn_demo_surface_water",
-                relation_type=KnowledgeRelationType.CAUSES,
+                edge_id="ke_demo_wisepen_uses_graphrag",
+                source_node_id="kn_demo_wisepen_rag",
+                target_node_id="kn_demo_graphrag",
+                relation_type=KnowledgeRelationType.USES,
                 evidence=[relation_evidence],
             ),
             TraversedEdge(
-                edge_id="ke_demo_compaction_common_in_traffic_area",
-                source_node_id="kn_demo_soil_compaction",
-                target_node_id="kn_demo_high_traffic_area",
-                relation_type=KnowledgeRelationType.RELATED_TO,
-                predicate="常见于",
+                edge_id="ke_demo_graphrag_uses_knowledge_graph",
+                source_node_id="kn_demo_graphrag",
+                target_node_id="kn_demo_knowledge_graph",
+                relation_type=KnowledgeRelationType.USES,
                 evidence=[related_evidence],
             ),
         ],
@@ -465,21 +462,21 @@ def _graph_path(
 def _graph_mentions(document: DemoDocument) -> list[KnowledgeMention]:
     return [
         KnowledgeMention(
-            mention_id="knm_demo_soil_compaction",
-            node_id="kn_demo_soil_compaction",
+            mention_id="knm_demo_graphrag",
+            node_id="kn_demo_graphrag",
             evidence=_graph_evidence(
                 document,
-                "knev_demo_soil_compaction_mention",
-                "复核记录中的土壤板结样点",
+                "knev_demo_graphrag_mention",
+                "GraphRAG 技术",
             ),
         ),
         KnowledgeMention(
-            mention_id="knm_demo_high_traffic_area",
-            node_id="kn_demo_high_traffic_area",
+            mention_id="knm_demo_knowledge_graph",
+            node_id="kn_demo_knowledge_graph",
             evidence=_graph_evidence(
                 document,
-                "knev_demo_high_traffic_area_mention",
-                "复核记录中的高频踩踏区",
+                "knev_demo_knowledge_graph_mention",
+                "知识图谱",
             ),
         ),
     ]
@@ -541,30 +538,37 @@ def _assert_contracts(
         "section_path",
         "reading_blocks",
     }
+    assert graph_payload["traversal_direction"] == "both"
+    assert graph_payload["seed_nodes"][0]["role"] == "seed"
     assert [node["node_id"] for node in graph_payload["discovered_nodes"]] == [
-        "kn_demo_soil_compaction",
-        "kn_demo_high_traffic_area",
+        "kn_demo_graphrag",
+        "kn_demo_knowledge_graph",
     ]
-    assert all(node["evidence"] for node in graph_payload["discovered_nodes"])
-    assert graph_payload["paths"][0]["text"] == (
-        '("表层积水")<-[:CAUSES]-("土壤板结")'
-        '-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")'
+    assert all(
+        node["role"] == "discovered"
+        and node["mention_evidence"]
+        for node in graph_payload["discovered_nodes"]
     )
-    assert graph_payload["paths"][0]["node_ids"] == [
-        "kn_demo_surface_water",
-        "kn_demo_soil_compaction",
-        "kn_demo_high_traffic_area",
-    ]
+    assert graph_payload["paths"][0]["path"] == (
+        "WisePen RAG -[USES]-> GraphRAG -[USES]-> 知识图谱"
+    )
     assert [
-        step["relation"] for step in graph_payload["paths"][0]["steps"]
+        (relation["source"]["node_id"], relation["predicate"], relation["target"]["node_id"])
+        for relation in graph_payload["paths"][0]["relations"]
     ] == [
-        '("土壤板结")-[:CAUSES]->("表层积水")',
-        '("土壤板结")-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")',
+        ("kn_demo_wisepen_rag", "USES", "kn_demo_graphrag"),
+        ("kn_demo_graphrag", "USES", "kn_demo_knowledge_graph"),
     ]
     assert [
-        step["evidence"][0]["quote"]
-        for step in graph_payload["paths"][0]["steps"]
+        relation["relation_evidence"][0]["quote"]
+        for relation in graph_payload["paths"][0]["relations"]
     ] == [graph_quote, graph_related_quote]
+    assert all(
+        "reading_block_range" in evidence
+        and "range" not in evidence
+        for node in graph_payload["discovered_nodes"]
+        for evidence in node["mention_evidence"]
+    )
     locate_block_id = sectioned_payload["sections"][0]["reading_blocks"][0][
         "reading_block_id"
     ]
@@ -582,6 +586,10 @@ def _assert_contracts(
     assert "nodes" not in graph_payload
     assert "edges" not in graph_payload
     assert "sources" not in graph_payload
+    assert "existing_nodes" not in graph_payload
+    assert "node_ids" not in serialized_graph
+    assert "steps" not in serialized_graph
+    assert "page_labels" not in serialized_graph
 
 
 def _write_outputs(
@@ -617,7 +625,7 @@ def _write_outputs(
     graph_output = "\n".join(
         [
             "=== Review notes ===",
-            "- Neo4j traversal 和 LLM 图谱抽取结果用固定 demo ID/type 表示。",
+            "- Neo4j traversal 和 LLM 图谱抽取结果用项目预定义实体类型表示。",
             "- seed 校验、BM25/WeightedRRF 路径排序、GraphEvidenceVerifier、状态扩展和 ReadingBlock 回补使用生产实现。",
             "- LOCATE、关系证据和新节点 mention 分别来自不同 ReadingBlock，EXPAND 不复述检索命中字段。",
             "- flat text 在生产索引阶段跳过图谱抽取，因此没有伪造 expandGraph 结果。",
@@ -625,10 +633,10 @@ def _write_outputs(
             "=== Simulated extracted graph fact ===",
             f"quote: {graph_quote}",
             f"quote: {graph_related_quote}",
-            "entity anchors: kn_demo_surface_water, kn_demo_soil_compaction, kn_demo_high_traffic_area",
+            "entity anchors: kn_demo_wisepen_rag(product), kn_demo_graphrag(technology), kn_demo_knowledge_graph(concept)",
             "relations:",
-            '  ("土壤板结")-[:CAUSES]->("表层积水")',
-            '  ("土壤板结")-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")',
+            "  WisePen RAG -[USES]-> GraphRAG",
+            "  GraphRAG -[USES]-> 知识图谱",
             "",
             "=== SECTIONED expandGraph ===",
             json.dumps(graph_payload, ensure_ascii=False, indent=2),

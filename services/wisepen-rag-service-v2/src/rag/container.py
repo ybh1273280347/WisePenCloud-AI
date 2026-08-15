@@ -317,6 +317,7 @@ class Container(containers.DeclarativeContainer):
         local_store=resource_acl_store,
         retrieval_writer=retrieval_acl_writer,
         graph_writer=graph_acl_writer,
+        graph_enabled=settings.RAG_KNOWLEDGE_GRAPH_ENABLED,
     )
     embedding_client = providers.Singleton(
         EmbeddingClient,
@@ -335,6 +336,7 @@ class Container(containers.DeclarativeContainer):
         retrieval_writer=retrieval_index_writer,
         graph_extractor=knowledge_graph_extractor,
         graph_repository=knowledge_graph_repository,
+        graph_enabled=settings.RAG_KNOWLEDGE_GRAPH_ENABLED,
     )
     resource_deleter = providers.Singleton(
         ResourceDeleter,

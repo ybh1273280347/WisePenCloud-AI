@@ -1,53 +1,63 @@
 === Review notes ===
-- Neo4j traversal 和 LLM 图谱抽取结果用固定 demo ID/type 表示。
+- Neo4j traversal 和 LLM 图谱抽取结果用项目预定义实体类型表示。
 - seed 校验、BM25/WeightedRRF 路径排序、GraphEvidenceVerifier、状态扩展和 ReadingBlock 回补使用生产实现。
 - LOCATE、关系证据和新节点 mention 分别来自不同 ReadingBlock，EXPAND 不复述检索命中字段。
 - flat text 在生产索引阶段跳过图谱抽取，因此没有伪造 expandGraph 结果。
 
 === Simulated extracted graph fact ===
-quote: 土壤板结会降低入渗速度，并使表层积水消退时间延长。
-quote: 检查时可比较高频踩踏区与封闭区的入渗差异
-entity anchors: kn_demo_surface_water, kn_demo_soil_compaction, kn_demo_high_traffic_area
+quote: WisePen RAG 使用 GraphRAG 技术补充实体关系导航
+quote: GraphRAG 使用知识图谱表示实体之间的关系
+entity anchors: kn_demo_wisepen_rag(product), kn_demo_graphrag(technology), kn_demo_knowledge_graph(concept)
 relations:
-  ("土壤板结")-[:CAUSES]->("表层积水")
-  ("土壤板结")-[:RELATED_TO {predicate: "常见于"}]->("高频踩踏区")
+  WisePen RAG -[USES]-> GraphRAG
+  GraphRAG -[USES]-> 知识图谱
 
 === SECTIONED expandGraph ===
 {
   "state_id": "nav_demo_1",
+  "traversal_direction": "both",
+  "seed_nodes": [
+    {
+      "node_id": "kn_demo_wisepen_rag",
+      "label": "WisePen RAG",
+      "kind": "Entity",
+      "entity_type": "product",
+      "role": "seed"
+    }
+  ],
   "discovered_nodes": [
     {
-      "node_id": "kn_demo_soil_compaction",
-      "label": "土壤板结",
+      "node_id": "kn_demo_graphrag",
+      "label": "GraphRAG",
       "kind": "Entity",
-      "entity_type": "concept",
-      "evidence": [
+      "entity_type": "technology",
+      "role": "discovered",
+      "mention_evidence": [
         {
-          "evidence_id": "knev_demo_soil_compaction_mention",
-          "resource_id": "demo-rain-garden",
-          "reading_block_id": "rsb_88c1ecd62d3350e192bf86e087e75d4d",
-          "quote": "复核记录中的土壤板结样点",
-          "range": {
-            "start_offset": 0,
-            "end_offset": 12
+          "resource_id": "demo-wisepen-rag",
+          "reading_block_id": "rsb_bfd7365c1c79db1526386dfd46b6be32",
+          "quote": "GraphRAG 技术",
+          "reading_block_range": {
+            "start_offset": 15,
+            "end_offset": 26
           }
         }
       ]
     },
     {
-      "node_id": "kn_demo_high_traffic_area",
-      "label": "高频踩踏区",
+      "node_id": "kn_demo_knowledge_graph",
+      "label": "知识图谱",
       "kind": "Entity",
       "entity_type": "concept",
-      "evidence": [
+      "role": "discovered",
+      "mention_evidence": [
         {
-          "evidence_id": "knev_demo_high_traffic_area_mention",
-          "resource_id": "demo-rain-garden",
-          "reading_block_id": "rsb_88c1ecd62d3350e192bf86e087e75d4d",
-          "quote": "复核记录中的高频踩踏区",
-          "range": {
-            "start_offset": 21,
-            "end_offset": 32
+          "resource_id": "demo-wisepen-rag",
+          "reading_block_id": "rsb_adc222dc3284814c73121e6fc6e7cfb7",
+          "quote": "知识图谱",
+          "reading_block_range": {
+            "start_offset": 11,
+            "end_offset": 15
           }
         }
       ]
@@ -55,39 +65,48 @@ relations:
   ],
   "paths": [
     {
-      "text": "(\"表层积水\")<-[:CAUSES]-(\"土壤板结\")-[:RELATED_TO {predicate: \"常见于\"}]->(\"高频踩踏区\")",
-      "node_ids": [
-        "kn_demo_surface_water",
-        "kn_demo_soil_compaction",
-        "kn_demo_high_traffic_area"
-      ],
-      "steps": [
+      "path": "WisePen RAG -[USES]-> GraphRAG -[USES]-> 知识图谱",
+      "relations": [
         {
-          "relation": "(\"土壤板结\")-[:CAUSES]->(\"表层积水\")",
-          "evidence": [
+          "source": {
+            "node_id": "kn_demo_wisepen_rag",
+            "label": "WisePen RAG"
+          },
+          "predicate": "USES",
+          "target": {
+            "node_id": "kn_demo_graphrag",
+            "label": "GraphRAG"
+          },
+          "relation_evidence": [
             {
-              "evidence_id": "knev_demo_compaction_delays_infiltration",
-              "resource_id": "demo-rain-garden",
-              "reading_block_id": "rsb_f0214036c073f0b7b88938f4f009d3c4",
-              "quote": "土壤板结会降低入渗速度，并使表层积水消退时间延长。",
-              "range": {
+              "resource_id": "demo-wisepen-rag",
+              "reading_block_id": "rsb_bfd7365c1c79db1526386dfd46b6be32",
+              "quote": "WisePen RAG 使用 GraphRAG 技术补充实体关系导航",
+              "reading_block_range": {
                 "start_offset": 0,
-                "end_offset": 25
+                "end_offset": 34
               }
             }
           ]
         },
         {
-          "relation": "(\"土壤板结\")-[:RELATED_TO {predicate: \"常见于\"}]->(\"高频踩踏区\")",
-          "evidence": [
+          "source": {
+            "node_id": "kn_demo_graphrag",
+            "label": "GraphRAG"
+          },
+          "predicate": "USES",
+          "target": {
+            "node_id": "kn_demo_knowledge_graph",
+            "label": "知识图谱"
+          },
+          "relation_evidence": [
             {
-              "evidence_id": "knev_demo_compaction_common_in_traffic_area",
-              "resource_id": "demo-rain-garden",
-              "reading_block_id": "rsb_f0214036c073f0b7b88938f4f009d3c4",
-              "quote": "检查时可比较高频踩踏区与封闭区的入渗差异",
-              "range": {
-                "start_offset": 25,
-                "end_offset": 45
+              "resource_id": "demo-wisepen-rag",
+              "reading_block_id": "rsb_adc222dc3284814c73121e6fc6e7cfb7",
+              "quote": "GraphRAG 使用知识图谱表示实体之间的关系",
+              "reading_block_range": {
+                "start_offset": 0,
+                "end_offset": 24
               }
             }
           ]
@@ -97,29 +116,29 @@ relations:
   ],
   "evidence_sections": [
     {
-      "resource_id": "demo-rain-garden",
-      "section_id": "rsec_1d77c73129eae9ce5e43767af91d672b",
-      "title": "二.1 土壤表层",
-      "section_path": "城市雨水花园巡检手册 > 二、入渗与排水检查 > 二.1 土壤表层",
+      "resource_id": "demo-wisepen-rag",
+      "section_id": "rsec_48efe4a74e6b43f0e3c891dcbe4b25a4",
+      "title": "二、图谱导航",
+      "section_path": "WisePen RAG 导航架构说明 > 二、图谱导航",
       "reading_blocks": [
         {
-          "reading_block_id": "rsb_f0214036c073f0b7b88938f4f009d3c4",
-          "text": "土壤板结会降低入渗速度，并使表层积水消退时间延长。检查时可比较高频踩踏区与封闭区的入渗差异，不宜仅凭一次局部积水判断设施失效。\n",
+          "reading_block_id": "rsb_bfd7365c1c79db1526386dfd46b6be32",
+          "text": "WisePen RAG 使用 GraphRAG 技术补充实体关系导航，使模型能够沿文档中的知识关系继续读取材料。\n",
           "page_range": "1",
           "anchor_labels": []
         }
       ]
     },
     {
-      "resource_id": "demo-rain-garden",
-      "section_id": "rsec_0ec56b90842277f5eb536ab5d173c009",
-      "title": "二.3 复核记录",
-      "section_path": "城市雨水花园巡检手册 > 二、入渗与排水检查 > 二.3 复核记录",
+      "resource_id": "demo-wisepen-rag",
+      "section_id": "rsec_6e4bf36453ca9667006f0c35d02debe2",
+      "title": "二.1 关系抽取",
+      "section_path": "WisePen RAG 导航架构说明 > 二、图谱导航 > 二.1 关系抽取",
       "reading_blocks": [
         {
-          "reading_block_id": "rsb_88c1ecd62d3350e192bf86e087e75d4d",
-          "text": "复核记录中的土壤板结样点应附带位置和照片。复核记录中的高频踩踏区还应标注人流方向，便于后续比较治理前后的入渗变化。\n",
-          "page_range": "2",
+          "reading_block_id": "rsb_adc222dc3284814c73121e6fc6e7cfb7",
+          "text": "GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应的原文证据。\n",
+          "page_range": "1",
           "anchor_labels": []
         }
       ]

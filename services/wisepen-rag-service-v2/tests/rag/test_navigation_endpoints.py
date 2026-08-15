@@ -13,8 +13,11 @@ from rag.application.rag.navigate import (
     GraphEvidenceRangeView,
     GraphEvidenceRefView,
     GraphEvidenceSectionView,
+    GraphNodeRole,
+    GraphNodeView,
+    GraphRelationEndpointView,
+    GraphRelationView,
     GraphExpandResult,
-    GraphPathStepView,
     GraphPathView,
     GraphReadingBlockView,
     KnowledgeNodeView,
@@ -145,31 +148,38 @@ async def test_graph_endpoint_returns_llm_readable_paths_and_evidence_sections()
                     "node-2",
                     "Beta",
                     KnowledgeNodeKind.ENTITY,
-                    evidence=[
+                    mention_evidence=[
                         GraphEvidenceRefView(
-                            evidence_id="node-evidence-1",
                             resource_id="resource-1",
                             reading_block_id="block-1",
                             quote="正文",
-                            range=GraphEvidenceRangeView(2, 4),
+                            reading_block_range=GraphEvidenceRangeView(2, 4),
                         )
                     ],
                 ),
             ],
+            seed_nodes=[
+                GraphNodeView(
+                    "node-1",
+                    "Alpha",
+                    KnowledgeNodeKind.ENTITY,
+                    role=GraphNodeRole.SEED,
+                )
+            ],
             paths=[
                 GraphPathView(
-                    text='("Alpha")-[:DEPENDS_ON]->("Beta")',
-                    node_ids=["node-1", "node-2"],
-                    steps=[
-                        GraphPathStepView(
-                            relation='("Alpha")-[:DEPENDS_ON]->("Beta")',
-                            evidence=[
+                    path="Alpha -[DEPENDS_ON]-> Beta",
+                    relations=[
+                        GraphRelationView(
+                            source=GraphRelationEndpointView("node-1", "Alpha"),
+                            predicate="DEPENDS_ON",
+                            target=GraphRelationEndpointView("node-2", "Beta"),
+                            relation_evidence=[
                                 GraphEvidenceRefView(
-                                    evidence_id="relation-evidence-1",
                                     resource_id="resource-1",
                                     reading_block_id="block-1",
                                     quote="正文",
-                                    range=GraphEvidenceRangeView(2, 4),
+                                    reading_block_range=GraphEvidenceRangeView(2, 4),
                                 )
                             ],
                         )
@@ -192,17 +202,18 @@ async def test_graph_endpoint_returns_llm_readable_paths_and_evidence_sections()
     )
 
     payload = response.data.model_dump(mode="json")
-    assert payload["paths"][0]["text"] == '("Alpha")-[:DEPENDS_ON]->("Beta")'
-    assert payload["paths"][0]["steps"][0]["evidence"] == [
+    assert payload["paths"][0]["path"] == "Alpha -[DEPENDS_ON]-> Beta"
+    assert payload["paths"][0]["relations"][0]["relation_evidence"] == [
         {
-            "evidence_id": "relation-evidence-1",
             "resource_id": "resource-1",
             "reading_block_id": "block-1",
             "quote": "正文",
-            "range": {"start_offset": 2, "end_offset": 4},
+            "reading_block_range": {"start_offset": 2, "end_offset": 4},
         }
     ]
-    assert payload["discovered_nodes"][0]["evidence"][0]["reading_block_id"] == (
+    assert payload["seed_nodes"][0]["role"] == "seed"
+    assert payload["discovered_nodes"][0]["role"] == "discovered"
+    assert payload["discovered_nodes"][0]["mention_evidence"][0]["reading_block_id"] == (
         "block-1"
     )
     graph_block = payload["evidence_sections"][0]["reading_blocks"][0]
@@ -216,6 +227,10 @@ async def test_graph_endpoint_returns_llm_readable_paths_and_evidence_sections()
     assert "edges" not in payload
     assert "sources" not in payload
     assert "edge_ids" not in payload["paths"][0]
+    assert "text" not in payload["paths"][0]
+    assert "steps" not in payload["paths"][0]
+    assert "node_ids" not in payload["paths"][0]
+    assert "page_labels" not in serialized
 
 
 @pytest.mark.asyncio

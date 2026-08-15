@@ -124,10 +124,22 @@ async def test_expand_returns_relation_and_discovered_node_reading_blocks() -> N
     assert knowledge_graph.subgraph_request["mention_limit_per_node"] == 3
     assert state_store.calls[0]["node_ids"] == ["node-b"]
     assert [node.node_id for node in result.discovered_nodes] == ["node-b"]
-    assert result.discovered_nodes[0].evidence[0].reading_block_id == "block-node"
-    assert result.paths[0].text == '("Alpha")-[:DEPENDS_ON]->("Beta")'
-    assert result.paths[0].steps[0].evidence[0].reading_block_id == "block-relation"
-    assert result.paths[0].steps[0].evidence[0].range.start_offset == 0
+    assert result.seed_nodes[0].role.value == "seed"
+    assert result.discovered_nodes[0].role.value == "discovered"
+    assert (
+        result.discovered_nodes[0].mention_evidence[0].reading_block_id
+        == "block-node"
+    )
+    assert result.paths[0].path == "Alpha -[DEPENDS_ON]-> Beta"
+    assert (
+        result.paths[0].relations[0].relation_evidence[0].reading_block_id
+        == "block-relation"
+    )
+    assert (
+        result.paths[0].relations[0].relation_evidence[0]
+        .reading_block_range.start_offset
+        == 0
+    )
     blocks = [
         block
         for section in result.evidence_sections
@@ -218,8 +230,8 @@ def test_render_path_preserves_fact_direction_for_reverse_traversal() -> None:
 
     text, relations = _render_path(path)
 
-    assert text == '("Beta")<-[:DEPENDS_ON]-("Alpha")'
-    assert relations == ['("Alpha")-[:DEPENDS_ON]->("Beta")']
+    assert text == "Beta <-[DEPENDS_ON]- Alpha"
+    assert relations == ["Alpha -[DEPENDS_ON]-> Beta"]
 
 
 def test_render_path_handles_mixed_directions_and_keeps_step_order() -> None:
@@ -242,14 +254,14 @@ def test_render_path_handles_mixed_directions_and_keeps_step_order() -> None:
 
     text, relations = _render_path(path)
 
-    assert text == '("Beta")<-[:DEPENDS_ON]-("Alpha")-[:CAUSES]->("Gamma")'
+    assert text == "Beta <-[DEPENDS_ON]- Alpha -[CAUSES]-> Gamma"
     assert relations == [
-        '("Alpha")-[:DEPENDS_ON]->("Beta")',
-        '("Alpha")-[:CAUSES]->("Gamma")',
+        "Alpha -[DEPENDS_ON]-> Beta",
+        "Alpha -[CAUSES]-> Gamma",
     ]
 
 
-def test_render_path_only_adds_predicate_for_related_to_and_escapes_json() -> None:
+def test_render_path_uses_related_to_predicate_and_ignores_other_predicates() -> None:
     related_path = TraversedPath(
         nodes=[_node("node-a", 'A ("quoted")\nlabel'), _node("node-b", "B")],
         edges=[
@@ -272,11 +284,8 @@ def test_render_path_only_adds_predicate_for_related_to_and_escapes_json() -> No
     related_text, _ = _render_path(related_path)
     ordinary_text, _ = _render_path(ordinary_path)
 
-    assert related_text == (
-        '("A (\\"quoted\\")\\nlabel")-[:RELATED_TO '
-        '{predicate: "because \\"x\\"\\nline"}]->("B")'
-    )
-    assert ordinary_text == '("A")-[:CAUSES]->("B")'
+    assert related_text == 'A ("quoted")\nlabel -[because "x"\nline]-> B'
+    assert ordinary_text == "A -[CAUSES]-> B"
 
 
 def test_render_path_rejects_an_edge_that_does_not_join_adjacent_nodes() -> None:
@@ -304,11 +313,7 @@ def test_path_view_preserves_each_graph_evidence_identity() -> None:
 
     view, retained = _to_path_view(path, {edge.edge_id: [first, second]})
 
-    assert [item.evidence_id for item in view.steps[0].evidence] == [
-        "evidence-1",
-        "evidence-2",
-    ]
-    assert [item.reading_block_id for item in view.steps[0].evidence] == [
+    assert [item.reading_block_id for item in view.relations[0].relation_evidence] == [
         "block-1",
         "block-2",
     ]

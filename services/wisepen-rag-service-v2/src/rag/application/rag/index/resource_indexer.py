@@ -1,8 +1,7 @@
 """编排一个资源 revision 的构建与跨后端发布。
 
-``ResourceIndexer`` 是 INDEX 流水线的顶层入口：把一份权威 Markdown 同时落库到
-三个后端（资源元数据 / 检索索引 / 知识图谱），并保证它们属于同一个 ``content_revision``，
-从而支持检索命中后回源、回章节、回图谱。
+``ResourceIndexer`` 是 INDEX 流水线的顶层入口：把一份权威 Markdown 落库到资源元数据
+和检索后端；知识图谱是否生成和写入由显式 settings 开关决定。
 """
 
 from __future__ import annotations
@@ -57,6 +56,7 @@ class ResourceIndexer:
         retrieval_writer: RetrievalIndexWriter,
         graph_extractor: KnowledgeGraphExtractor,
         graph_repository: KnowledgeGraphRepository,
+        graph_enabled: bool = False,
     ) -> None:
         self._contextual_text = contextual_text
         self._embedding_client = embedding_client
@@ -66,6 +66,7 @@ class ResourceIndexer:
         self._retrieval_writer = retrieval_writer
         self._graph_extractor = graph_extractor
         self._graph_repository = graph_repository
+        self._graph_enabled = graph_enabled
 
     async def index_resource(
         self,
@@ -83,7 +84,8 @@ class ResourceIndexer:
            - ``STALE`` 表示该 revision 已存在且未变化，可直接跳过昂贵步骤；
            - ``APPLIED`` 表示新建或覆盖，需要继续后续发布流程。
         3. 上下文增强 + ACL 同步 + 向量计算 + 检索索引发布（activate）。
-        4. 仅对 SECTIONED 文档抽取并发布知识图谱；其它模式调用 ``skip`` 释放锁。
+        4. 开启图谱旁路时，仅对 SECTIONED 文档抽取并发布知识图谱；关闭时不调用
+           图谱抽取器，也不向 Neo4j 写入 ``skip`` 或其它状态。
         5. 清理旧 revision，使线上只保留最新版本。
         """
         # 1. 派生身份与结构
@@ -221,32 +223,33 @@ class ResourceIndexer:
             keep_content_revision=content_revision,
         )
 
-        # 7. 知识图谱发布
-        # 仅 SECTIONED 文档具备抽取图谱所需的章节上下文；其它模式显式 skip 以释放占用。
-        if structure.mode is StructureMode.SECTIONED:
-            await self._graph_repository.begin_build(
-                resource_id=resource_id,
-                content_revision=content_revision,
-                document_version=document_version,
-            )
-            graph = merge_candidate_graph(
-                resource_id=resource_id,
-                content_revision=content_revision,
-                extractions=await self._graph_extractor.extract(
+        # 7. 知识图谱旁路
+        # 该开关只控制索引生成/写入，不影响 graph expand 的接口装配；关闭时保留已有图数据。
+        if self._graph_enabled:
+            if structure.mode is StructureMode.SECTIONED:
+                await self._graph_repository.begin_build(
                     resource_id=resource_id,
                     content_revision=content_revision,
-                ),
-            )
-            await self._graph_repository.publish(
-                graph=graph,
-                document_version=document_version,
-            )
-        else:
-            await self._graph_repository.skip(
-                resource_id=resource_id,
-                content_revision=content_revision,
-                document_version=document_version,
-            )
+                    document_version=document_version,
+                )
+                graph = merge_candidate_graph(
+                    resource_id=resource_id,
+                    content_revision=content_revision,
+                    extractions=await self._graph_extractor.extract(
+                        resource_id=resource_id,
+                        content_revision=content_revision,
+                    ),
+                )
+                await self._graph_repository.publish(
+                    graph=graph,
+                    document_version=document_version,
+                )
+            else:
+                await self._graph_repository.skip(
+                    resource_id=resource_id,
+                    content_revision=content_revision,
+                    document_version=document_version,
+                )
 
         # 8. 资源元数据清理
         # 资源后端也清理旧 revision，使线上资源元数据只保留最新版本。

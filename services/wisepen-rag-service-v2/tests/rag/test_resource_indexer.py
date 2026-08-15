@@ -139,6 +139,7 @@ def _indexer(
     failure: _Failure,
     *,
     stale: bool = False,
+    graph_enabled: bool = True,
 ) -> tuple[ResourceIndexer, _ResourceWriter, _GraphWriter]:
     resource_writer = _ResourceWriter(failure, stale=stale)
     graph_writer = _GraphWriter(failure)
@@ -152,6 +153,7 @@ def _indexer(
             retrieval_writer=_RetrievalWriter(failure),
             graph_extractor=_GraphExtractor(failure),
             graph_repository=graph_writer,
+            graph_enabled=graph_enabled,
         ),
         resource_writer,
         graph_writer,
@@ -226,6 +228,27 @@ async def test_unsectioned_indexing_publishes_content_and_skips_graph(
     assert graph_writer.skipped == 1
     assert "graph_extract" not in failure.calls
     assert expected_mode in {"flat_text", "empty"}
+
+
+@pytest.mark.asyncio
+async def test_graph_disabled_skips_generation_and_all_graph_writes() -> None:
+    failure = _Failure()
+    indexer, resource_writer, graph_writer = _indexer(
+        failure,
+        graph_enabled=False,
+    )
+
+    action = await indexer.index_resource(
+        resource_id="resource-1",
+        document_version=1,
+        markdown="# Title\n\nBody text.",
+    )
+
+    assert action is StageAction.STAGED
+    assert resource_writer.applied is True
+    assert graph_writer.published == 0
+    assert graph_writer.skipped == 0
+    assert not any(step.startswith("graph_") for step in failure.calls)
 
 
 @pytest.mark.asyncio
