@@ -429,8 +429,8 @@ class KnowledgeGraphExpander:
             for edge in edges.values()
         }
 
+    @staticmethod
     async def _resolve_new_node_evidence(
-        self,
         path: TraversedPath,
         evidence_by_edge: dict[str, list[PublishedGraphEvidence]],
         known_node_ids: set[str],
@@ -531,7 +531,7 @@ def _to_path_view(
                     node_id=edge.source_node_id,
                     label=_node_label(path.nodes, edge.source_node_id),
                 ),
-                predicate=_relation_predicate(edge),
+                predicate=_edge_predicate(edge),
                 target=GraphRelationEndpointView(
                     node_id=edge.target_node_id,
                     label=_node_label(path.nodes, edge.target_node_id),
@@ -616,7 +616,7 @@ def _render_path(path: TraversedPath) -> tuple[str, list[str]]:
         path.edges,
         strict=True,
     ):
-        relation = _render_relation_type(edge)
+        relation = _edge_predicate(edge)
         if (
             edge.source_node_id == current.node_id
             and edge.target_node_id == following.node_id
@@ -640,7 +640,12 @@ def _render_path(path: TraversedPath) -> tuple[str, list[str]]:
     return "".join(parts), relations
 
 
-def _render_relation_type(edge: TraversedEdge) -> str:
+def _edge_predicate(edge: TraversedEdge) -> str:
+    """把边投影为公开谓词协议（GraphRelationView.predicate: str）。
+
+    RELATED_TO 用具体 predicate，其余类型用 relation_type 值；
+    RELATED_TO 缺 predicate 属于权威图数据损坏，在边界直接抛错。
+    """
     if edge.relation_type is not KnowledgeRelationType.RELATED_TO:
         return edge.relation_type.value
     if not edge.predicate:
@@ -648,20 +653,11 @@ def _render_relation_type(edge: TraversedEdge) -> str:
     return edge.predicate
 
 
-
 def _node_label(nodes: list[KnowledgeNode], node_id: str) -> str:
     for node in nodes:
         if node.node_id == node_id:
             return node.label
     raise RuntimeError(f"path does not contain relation endpoint {node_id}")
-
-
-def _relation_predicate(edge: TraversedEdge) -> str:
-    return (
-        edge.predicate
-        if edge.relation_type is KnowledgeRelationType.RELATED_TO
-        else edge.relation_type.value
-    )
 
 
 def _path_resource_ids(path: TraversedPath) -> set[str]:
