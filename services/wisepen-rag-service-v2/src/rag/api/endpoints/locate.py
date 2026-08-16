@@ -12,7 +12,6 @@ from rag.api.schemas import CandidateLocateRequest as LocateHttpRequest
 from rag.api.schemas import CandidateLocateResponse
 from rag.application.rag.navigate import (
     LocateError,
-    LocateRequest,
     ReadingCandidateLocator,
 )
 from rag.domain.error_codes import RagErrorCode
@@ -36,13 +35,11 @@ async def locate_candidate(
 ) -> R[CandidateLocateResponse]:
     try:
         result = await locator.locate(
-            LocateRequest(
-                session_id=request.session_id,
-                semantic_query=request.semantic_query,
-                lexical_query=request.lexical_query,
-                max_results=request.max_results,
-                permission_scope=_permission_scope(user_id),
-            )
+            session_id=request.session_id,
+            semantic_query=request.semantic_query,
+            lexical_query=request.lexical_query,
+            max_results=request.max_results,
+            permission_scope=_permission_scope(user_id),
         )
     except (LocateError, ValueError) as e:
         raise ServiceException(RagErrorCode.NAVIGATION_INVALID) from e

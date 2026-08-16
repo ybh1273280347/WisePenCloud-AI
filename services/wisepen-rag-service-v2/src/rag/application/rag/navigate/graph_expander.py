@@ -47,19 +47,6 @@ class NavigationStateNotFoundError(RuntimeError):
     """导航状态不存在，或不属于当前用户与会话。"""
 
 
-@dataclass(slots=True)
-class GraphExpandRequest:
-    state_id: str
-    session_id: str
-    permission_scope: PermissionScope
-    seed_node_ids: list[str]
-    query: str
-    relation_types: list[KnowledgeRelationType] = field(default_factory=list)
-    direction: TraversalDirection = TraversalDirection.BOTH
-    max_depth: int = 1
-    max_results: int = 10
-
-
 class GraphNodeRole(StrEnum):
     """公开路径节点的导航角色。"""
 
@@ -193,54 +180,66 @@ class KnowledgeGraphExpander:
         self._authorizer = authorizer
         self._state_store = state_store
 
-    async def expand(self, request: GraphExpandRequest) -> GraphExpandResult:
-        effective_query = request.query.strip()
+    async def expand(
+        self,
+        *,
+        state_id: str,
+        session_id: str,
+        permission_scope: PermissionScope,
+        seed_node_ids: list[str],
+        query: str,
+        relation_types: list[KnowledgeRelationType] | None = None,
+        direction: TraversalDirection = TraversalDirection.BOTH,
+        max_depth: int = 1,
+        max_results: int = 10,
+    ) -> GraphExpandResult:
+        effective_query = query.strip()
         if not effective_query:
             raise ValueError("expand query must not be empty")
 
         # 加载导航状态，校验用户和会话归属
-        state = await self._state_store.get(request.state_id)
+        state = await self._state_store.get(state_id)
         if (
             state is None
-            or state.user_id != request.permission_scope.user_id
-            or state.session_id != request.session_id
+            or state.user_id != permission_scope.user_id
+            or state.session_id != session_id
         ):
-            raise NavigationStateNotFoundError(request.state_id)
+            raise NavigationStateNotFoundError(state_id)
 
         # 校验 seed 节点必须已在 state 中（LOCATE 阶段已发现）
         known_node_ids = set(state.known_node_ids)
         unknown_seed_ids = [
             node_id
-            for node_id in request.seed_node_ids
+            for node_id in seed_node_ids
             if node_id not in known_node_ids
         ]
         if unknown_seed_ids:
             raise UnknownSeedNodeError(unknown_seed_ids[0])
 
         # 子图查询：从 seed 节点出发按方向/深度遍历图谱，返回路径和节点 mentions
-        requested_path_limit = min(max(request.max_results * 4, 1), 80)
+        requested_path_limit = min(max(max_results * 4, 1), 80)
         subgraph = await self._knowledge_graph.find_subgraph(
-            seed_node_ids=request.seed_node_ids,
-            permission_scope=request.permission_scope,
-            relation_types=request.relation_types,
-            direction=request.direction,
-            max_depth=request.max_depth,
+            seed_node_ids=seed_node_ids,
+            permission_scope=permission_scope,
+            relation_types=relation_types or [],
+            direction=direction,
+            max_depth=max_depth,
             path_limit=requested_path_limit,
             mention_limit_per_node=3,
         )
         paths = subgraph.paths
         # ACL 复查：过滤掉涉及无权限资源的路径
-        paths = await self._filter_readable_paths(paths, request.permission_scope)
+        paths = await self._filter_readable_paths(paths, permission_scope)
         # 收集 seed 节点视图（按请求顺序排列）
         seed_nodes_by_id = {
             node.node_id: node
             for path in paths
             for node in path.nodes
-            if node.node_id in request.seed_node_ids
+            if node.node_id in seed_node_ids
         }
         seed_nodes = [
             _to_seed_node_view(seed_nodes_by_id[node_id])
-            for node_id in request.seed_node_ids
+            for node_id in seed_node_ids
             if node_id in seed_nodes_by_id
         ]
         # 只保留包含新节点（不在 known 中的）的路径
@@ -252,7 +251,7 @@ class KnowledgeGraphExpander:
         if not paths:
             return GraphExpandResult(
                 state_id=state.state_id,
-                traversal_direction=request.direction,
+                traversal_direction=direction,
                 seed_nodes=seed_nodes,
             )
 
@@ -268,7 +267,7 @@ class KnowledgeGraphExpander:
                             "nodes": "\n".join(node.label for node in path.nodes),
                             "relations": "\n".join(
                                 " ".join(
-                                    value for value in 
+                                    value for value in
                                     (edge.relation_type.value, edge.predicate) if value
                                 )
                                 for edge in path.edges
@@ -278,7 +277,7 @@ class KnowledgeGraphExpander:
                     )
                     for index, path in enumerate(paths)
                 ),
-                top_k=request.max_results,
+                top_k=max_results,
                 candidate_limit=len(paths),
             )
         )
@@ -328,7 +327,7 @@ class KnowledgeGraphExpander:
         if not eligible_paths:
             return GraphExpandResult(
                 state_id=state.state_id,
-                traversal_direction=request.direction,
+                traversal_direction=direction,
                 seed_nodes=seed_nodes,
             )
 
@@ -342,7 +341,7 @@ class KnowledgeGraphExpander:
                 candidate_evidence.extend(records)
         await self._ensure_sources_readable(
             candidate_evidence,
-            request.permission_scope,
+            permission_scope,
         )
 
         # 原子写入 state：将新节点加入 known_nodes，冲突则整体回滚
@@ -373,7 +372,7 @@ class KnowledgeGraphExpander:
         if not eligible_paths:
             return GraphExpandResult(
                 state_id=state.state_id,
-                traversal_direction=request.direction,
+                traversal_direction=direction,
                 seed_nodes=seed_nodes,
             )
 
@@ -407,7 +406,7 @@ class KnowledgeGraphExpander:
   
         return GraphExpandResult(
             state_id=state.state_id,
-            traversal_direction=request.direction,
+            traversal_direction=direction,
             seed_nodes=seed_nodes,
             discovered_nodes=[
                 _to_discovered_node_view(

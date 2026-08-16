@@ -1,7 +1,6 @@
 import pytest
 
 from rag.application.rag.navigate import (
-    GraphExpandRequest,
     KnowledgeGraphExpander,
     UnknownSeedNodeError,
 )
@@ -117,7 +116,7 @@ async def test_expand_returns_relation_and_discovered_node_reading_blocks() -> N
         state_store=state_store,
     )
 
-    result = await expander.expand(_request())
+    result = await expander.expand(**_request())
 
     assert ranking.request.query.text == "扩展问题"
     assert knowledge_graph.subgraph_request["seed_node_ids"] == ["node-a"]
@@ -163,7 +162,7 @@ async def test_expand_drops_path_when_new_node_has_no_mention_evidence() -> None
         state_store=state_store,
     )
 
-    result = await expander.expand(_request())
+    result = await expander.expand(**_request())
 
     assert result.paths == []
     assert result.discovered_nodes == []
@@ -181,9 +180,9 @@ async def test_expand_rejects_unknown_seed() -> None:
     )
 
     request = _request()
-    request.seed_node_ids = ["unknown"]
+    request["seed_node_ids"] = ["unknown"]
     with pytest.raises(UnknownSeedNodeError):
-        await expander.expand(request)
+        await expander.expand(**request)
 
 
 @pytest.mark.asyncio
@@ -198,7 +197,7 @@ async def test_expand_returns_nothing_when_concurrent_call_added_nodes_first() -
         state_store=_StateStore(added=[]),
     )
 
-    result = await expander.expand(_request())
+    result = await expander.expand(**_request())
 
     assert result.paths == []
     assert result.discovered_nodes == []
@@ -216,7 +215,7 @@ async def test_expand_filters_paths_revoked_by_local_acl_after_neo4j_query() -> 
         state_store=_StateStore(),
     )
 
-    result = await expander.expand(_request())
+    result = await expander.expand(**_request())
 
     assert result.paths == []
     assert verifier.calls == []
@@ -320,8 +319,8 @@ def test_path_view_preserves_each_graph_evidence_identity() -> None:
     assert retained == [first, second]
 
 
-def _request() -> GraphExpandRequest:
-    return GraphExpandRequest(
+def _request() -> dict:
+    return dict(
         state_id="nav-1",
         session_id="session-1",
         permission_scope=PermissionScope(user_id="user-1"),

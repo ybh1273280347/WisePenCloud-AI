@@ -33,10 +33,10 @@ def build_source_refs(
             chunk_id=chunk.chunk_id,
             reading_block_id=chunk.reading_block_id,
             section_id=chunk.section_id,
-            section_path=list(chunk.section_path),
-            source_spans=list(chunk.source_spans),
-            page_labels=list(chunk.page_labels),
-            anchor_labels=list(chunk.anchor_labels),
+            section_path=chunk.section_path,
+            source_spans=chunk.source_spans,
+            page_labels=chunk.page_labels,
+            anchor_labels=chunk.anchor_labels,
         )
         for chunk in retrieval_chunks
     ]

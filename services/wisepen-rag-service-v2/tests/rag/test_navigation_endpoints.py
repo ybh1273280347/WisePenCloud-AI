@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 from common.core.domain import GroupRoleType
@@ -42,8 +43,8 @@ class _Locator:
         self.error = error
         self.request = None
 
-    async def locate(self, request):
-        self.request = request
+    async def locate(self, **kwargs):
+        self.request = SimpleNamespace(**kwargs)
         if self.error is not None:
             raise self.error
         return self.result
@@ -55,8 +56,8 @@ class _Expander:
         self.error = error
         self.request = None
 
-    async def expand(self, request):
-        self.request = request
+    async def expand(self, **kwargs):
+        self.request = SimpleNamespace(**kwargs)
         if self.error is not None:
             raise self.error
         return self.result

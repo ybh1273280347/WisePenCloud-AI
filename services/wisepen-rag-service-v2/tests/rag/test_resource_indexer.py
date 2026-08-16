@@ -139,6 +139,7 @@ def _indexer(
     failure: _Failure,
     *,
     stale: bool = False,
+    contextual_enabled: bool = True,
     graph_enabled: bool = True,
 ) -> tuple[ResourceIndexer, _ResourceWriter, _GraphWriter]:
     resource_writer = _ResourceWriter(failure, stale=stale)
@@ -153,6 +154,7 @@ def _indexer(
             retrieval_writer=_RetrievalWriter(failure),
             graph_extractor=_GraphExtractor(failure),
             graph_repository=graph_writer,
+            contextual_enabled=contextual_enabled,
             graph_enabled=graph_enabled,
         ),
         resource_writer,
@@ -204,7 +206,6 @@ async def test_sectioned_indexing_retry_completes_after_each_step_failure(
     assert graph_writer.published == (2 if failed_step == "mongo_cleanup" else 1)
     assert "mongo_cleanup" in failure.calls
 
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("markdown", "expected_mode"),
@@ -249,6 +250,24 @@ async def test_graph_disabled_skips_generation_and_all_graph_writes() -> None:
     assert graph_writer.published == 0
     assert graph_writer.skipped == 0
     assert not any(step.startswith("graph_") for step in failure.calls)
+
+
+@pytest.mark.asyncio
+async def test_contextual_disabled_skips_contextual_call() -> None:
+    failure = _Failure()
+    indexer, resource_writer, graph_writer = _indexer(
+        failure,
+        contextual_enabled=False,
+    )
+
+    action = await indexer.index_resource(
+        resource_id="resource-1",
+        document_version=1,
+        markdown="# Title\n\nBody text.",
+    )
+
+    assert action is StageAction.STAGED
+    assert "contextual" not in failure.calls
 
 
 @pytest.mark.asyncio

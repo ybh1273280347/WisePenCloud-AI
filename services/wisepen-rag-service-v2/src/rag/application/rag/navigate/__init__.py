@@ -4,7 +4,6 @@ from rag.domain.models.graph import (
 
 from .candidate_locator import (
     LocateError,
-    LocateRequest,
     LocateResult,
     MatchRangeView,
     ReadingCandidateLocator,
@@ -21,7 +20,6 @@ from .graph_expander import (
     GraphEvidenceRangeView,
     GraphEvidenceRefView,
     GraphEvidenceSectionView,
-    GraphExpandRequest,
     GraphExpandResult,
     GraphReadingBlockView,
     GraphRelationEndpointView,
@@ -50,7 +48,6 @@ __all__ = [
     "GraphEvidenceRefView",
     "GraphEvidenceSectionView",
     "GraphEvidenceVerifier",
-    "GraphExpandRequest",
     "GraphExpandResult",
     "GraphRelationEndpointView",
     "GraphRelationView",
@@ -58,7 +55,6 @@ __all__ = [
     "GraphReadingBlockView",
     "KnowledgeGraphExpander",
     "LocateError",
-    "LocateRequest",
     "LocateResult",
     "MatchRangeView",
     "NavigationStateNotFoundError",

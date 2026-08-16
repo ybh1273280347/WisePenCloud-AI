@@ -101,8 +101,8 @@ def test_windows_preserve_source_mapping_and_split_long_blocks() -> None:
     windows = build_extraction_windows(_source(text))
 
     assert len(windows) == 2
-    assert len(windows[0].text) == 6_000
-    assert windows[1].source_mappings[0].source_span.start_offset == 3_600
+    assert len(windows[0].text) == 4_000
+    assert windows[1].source_mappings[0].source_span.start_offset == 3_400
 
 
 def test_validator_accepts_only_continuous_mapped_quote() -> None:

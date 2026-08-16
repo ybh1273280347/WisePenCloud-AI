@@ -4,11 +4,10 @@ import pytest
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.navigate import (
-    LocateRequest,
     ReadingCandidateLocator,
     SourceEvidenceVerifier,
-    build_retrieved_section_views,
 )
+from rag.application.rag.navigate.candidate_locator import _build_retrieved_section_views
 from rag.domain.models.acl import PermissionScope, ResourceAcl
 from rag.domain.models.content import ReadingBlock
 from rag.domain.models.graph import KnowledgeNode, KnowledgeNodeKind
@@ -236,12 +235,10 @@ async def test_locate_promotes_chunks_to_one_block_with_minimal_match_anchors() 
     )
 
     result = await locator.locate(
-        LocateRequest(
-            session_id="session-1",
-            semantic_query="问题",
-            permission_scope=PermissionScope(user_id="user-1"),
-            max_results=1,
-        )
+        session_id="session-1",
+        semantic_query="问题",
+        permission_scope=PermissionScope(user_id="user-1"),
+        max_results=1,
     )
 
     assert result.retrieval_status is RankDecision.RELEVANT
@@ -250,16 +247,16 @@ async def test_locate_promotes_chunks_to_one_block_with_minimal_match_anchors() 
     block = result.sections[0].reading_blocks[0]
     assert block.text == "abcdefghij"
     assert block.page_labels == ["1"]
-    assert [match.chunk_id for match in block.matches] == ["chunk-1", "chunk-2"]
+    assert [match.chunk_id for match in block.matched_chunks] == ["chunk-1", "chunk-2"]
     assert (
         block.text[
-            block.matches[0].ranges[0].start_offset : block.matches[0]
+            block.matched_chunks[0].ranges[0].start_offset : block.matched_chunks[0]
             .ranges[0]
             .end_offset
         ]
         == "bcd"
     )
-    assert not hasattr(block.matches[0], "text")
+    assert not hasattr(block.matched_chunks[0], "text")
     assert not hasattr(result.sections[0], "level")
     assert result.nodes[0].resource_id is None
     assert state_store.created["known_node_ids"] == ["node-1"]
@@ -278,12 +275,10 @@ async def test_locate_seeds_graph_from_full_promoted_block() -> None:
     )
 
     await locator.locate(
-        LocateRequest(
-            session_id="session-1",
-            semantic_query="问题",
-            permission_scope=PermissionScope(user_id="user-1"),
-            max_results=1,
-        )
+        session_id="session-1",
+        semantic_query="问题",
+        permission_scope=PermissionScope(user_id="user-1"),
+        max_results=1,
     )
 
     blocks = graph.request["reading_blocks"]
@@ -301,7 +296,7 @@ def test_flat_text_retrieval_view_keeps_synthetic_section_context() -> None:
     record.section.title = "全文片段 1"
     record.section.section_path = ["全文片段 1"]
 
-    section = build_retrieved_section_views([record])[0]
+    section = _build_retrieved_section_views([record])[0]
 
     assert section.title == "全文片段 1"
     assert section.section_path == "全文片段 1"
@@ -323,12 +318,10 @@ async def test_locate_max_results_counts_blocks_not_chunks() -> None:
     )
 
     result = await locator.locate(
-        LocateRequest(
-            session_id="session-1",
-            semantic_query="问题",
-            permission_scope=PermissionScope(user_id="user-1"),
-            max_results=1,
-        )
+        session_id="session-1",
+        semantic_query="问题",
+        permission_scope=PermissionScope(user_id="user-1"),
+        max_results=1,
     )
 
     assert [block.reading_block_id for block in result.sections[0].reading_blocks] == [
@@ -347,11 +340,9 @@ async def test_locate_irrelevant_result_still_creates_graph_state() -> None:
     )
 
     result = await locator.locate(
-        LocateRequest(
-            session_id="session-1",
-            semantic_query="不相关",
-            permission_scope=PermissionScope(user_id="user-1"),
-        )
+        session_id="session-1",
+        semantic_query="不相关",
+        permission_scope=PermissionScope(user_id="user-1"),
     )
 
     assert result.retrieval_status is RankDecision.IRRELEVANT
@@ -381,11 +372,9 @@ async def test_locate_filters_resource_node_revoked_after_neo4j_query() -> None:
     )
 
     result = await locator.locate(
-        LocateRequest(
-            session_id="session-1",
-            semantic_query="问题",
-            permission_scope=PermissionScope(user_id="user-1"),
-        )
+        session_id="session-1",
+        semantic_query="问题",
+        permission_scope=PermissionScope(user_id="user-1"),
     )
 
     assert result.nodes == []
@@ -403,11 +392,9 @@ async def test_locate_drops_evidence_revoked_after_authoritative_read() -> None:
     )
 
     result = await locator.locate(
-        LocateRequest(
-            session_id="session-1",
-            semantic_query="问题",
-            permission_scope=PermissionScope(user_id="user-1"),
-        )
+        session_id="session-1",
+        semantic_query="问题",
+        permission_scope=PermissionScope(user_id="user-1"),
     )
 
     assert result.sections == []

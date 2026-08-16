@@ -27,14 +27,12 @@ def build_retrieval_chunks(
     sections: list[Section],
     reading_blocks: list[ReadingBlock],
 ) -> list[RetrievalChunk]:
-    """从上游刚构造的 ReadingBlock 生成用于评分的确定性子块。
-
-    输入永远是 markdown（FLAT_TEXT 只是"无标题结构"，并非纯文本），统一用
-    MarkdownChunker 切分（800 字符、100 重叠）；chunk 在渲染文本上的 rendered span
-    映射回原文 source_spans，并附带 page_labels / anchor_labels 结构上下文。
-    """
+    """从上游刚构造的 ReadingBlock 生成用于评分的确定性子块。"""
     sections_by_id = {section.section_id: section for section in sections}
 
+    # MarkdownChunker 将 ReadingBlock 中解析出的block按照字符预算装箱，
+    # 由于保留了完整的markdown block结构，所以每个chunk本身语义没有被切断，
+    # 只有超长block的递归切分过程中需要设置字符重叠，避免语义损失。
     chunker = MarkdownChunker(
         max_characters=_RETRIEVAL_CHUNK_MAX_CHARACTERS,
         chunk_overlap=_RETRIEVAL_CHUNK_OVERLAP,

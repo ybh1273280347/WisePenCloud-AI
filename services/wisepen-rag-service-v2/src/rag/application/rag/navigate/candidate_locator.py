@@ -32,18 +32,6 @@ if TYPE_CHECKING:
 
 
 @dataclass(slots=True)
-class LocateRequest:
-    """LOCATE 的可信请求事实，调用方已完成公开入口和字符串边界校验。"""
-
-    session_id: str
-    semantic_query: str
-    permission_scope: PermissionScope
-    lexical_query: str | None = None
-    max_results: int = 10
-    candidate_limit: int = 80
-
-
-@dataclass(slots=True)
 class LocateResult:
     """一次 LOCATE 的排序结论、已核验入口与后续 navigation state。"""
 
@@ -131,12 +119,20 @@ class ReadingCandidateLocator:
         self._published_resources = published_resources
         self._state_store = state_store
 
-    async def locate(self, request: LocateRequest) -> LocateResult:
+    async def locate(
+        self,
+        *,
+        session_id: str,
+        semantic_query: str,
+        permission_scope: PermissionScope,
+        lexical_query: str | None = None,
+        max_results: int = 10,
+        candidate_limit: int = 80,
+    ) -> LocateResult:
         """只将已发布且仍可读的候选提升为后续 READ 可用的入口。"""
         # 分流语义查询和词法查询
-        semantic_query = request.semantic_query
         lexical_query = (
-            semantic_query if request.lexical_query is None else request.lexical_query
+            semantic_query if lexical_query is None else lexical_query
         )
 
         embedding = await self._embedding_client.aembed([semantic_query])
@@ -147,18 +143,18 @@ class ReadingCandidateLocator:
         candidates = await self._candidate_search.search(
             lexical_query=lexical_query,
             semantic_vector=embedding.embeddings[0],
-            permission_scope=request.permission_scope,
-            limit=request.candidate_limit,
+            permission_scope=permission_scope,
+            limit=candidate_limit,
         )
         # 按 acl 权限过滤可读候选，淘汰用户无权访问的资源
         candidates = await self._filter_readable_candidates(
             candidates,
-            request.permission_scope,
+            permission_scope,
         )
         # 确保候选对应数据已发布的最新版本，避免召回时命中旧数据或未发布数据
         candidates = await self._filter_published_candidates(candidates)
         if not candidates:
-            return await self._create_empty_result(request)
+            return await self._create_empty_result(session_id, permission_scope)
 
         ranking = await self._ranking_pipeline.arank(
             RankRequest(
@@ -166,6 +162,7 @@ class ReadingCandidateLocator:
                 candidates=tuple(
                     RankCandidate(
                         candidate_id=_candidate_key(candidate),
+                        # 将标题路径拼接到候选文本开头，有利于rerank
                         text=(
                             " > ".join(candidate.section_path)
                             + "\n"
@@ -190,8 +187,8 @@ class ReadingCandidateLocator:
                     )
                     for index, candidate in enumerate(candidates, start=1)
                 ),
-                top_k=request.candidate_limit,
-                candidate_limit=request.candidate_limit,
+                top_k=candidate_limit,
+                candidate_limit=candidate_limit,
             )
         )
         # 对候选去重，并按照排名截断 max_results 
@@ -210,7 +207,7 @@ class ReadingCandidateLocator:
             block_key = (candidate.resource_id, candidate.reading_block_id)
             if (
                 block_key not in selected_block_keys
-                and len(selected_block_keys) < request.max_results
+                and len(selected_block_keys) < max_results
             ):
                 selected_block_keys.add(block_key)
 
@@ -221,14 +218,14 @@ class ReadingCandidateLocator:
             in selected_block_keys
         ]
         if not selected:
-            return await self._create_empty_result(request)
+            return await self._create_empty_result(session_id, permission_scope)
 
         # 将召回的轻量候选回源到权威数据
         records = await self._verify_selected(selected)
         # 证据 acl 复查，避免“召回-回源”时间窗口内的权限变化问题
         readable_records = await self._filter_readable_evidence(
             records,
-            request.permission_scope,
+            permission_scope,
         )
         # 构建最终展示的section视图
         sections = _build_retrieved_section_views(readable_records)
@@ -259,16 +256,16 @@ class ReadingCandidateLocator:
         # 禁用图谱旁路时，这里找不到任何节点，最终不会展示任何图谱入口，section路径不受影响
         nodes = await self._knowledge_graph.find_nodes(
             reading_blocks=list(seed_blocks.values()),
-            permission_scope=request.permission_scope,
-            limit=request.max_results,
+            permission_scope=permission_scope,
+            limit=max_results,
         )
         # 对图谱中 RESOURCE 类型的节点做 acl 校验
-        nodes = await self._filter_readable_nodes(nodes, request.permission_scope)
-        
+        nodes = await self._filter_readable_nodes(nodes, permission_scope)
+
         # 创建会话级导航状态缓存
         state = await self._state_store.create(
-            user_id=request.permission_scope.user_id,
-            session_id=request.session_id,
+            user_id=permission_scope.user_id,
+            session_id=session_id,
             known_node_ids=[node.node_id for node in nodes],
         )
         return LocateResult(
@@ -383,11 +380,12 @@ class ReadingCandidateLocator:
 
     async def _create_empty_result(
         self,
-        request: LocateRequest,
+        session_id: str,
+        permission_scope: PermissionScope,
     ) -> LocateResult:
         state = await self._state_store.create(
-            user_id=request.permission_scope.user_id,
-            session_id=request.session_id,
+            user_id=permission_scope.user_id,
+            session_id=session_id,
             known_node_ids=[],
         )
         return LocateResult(

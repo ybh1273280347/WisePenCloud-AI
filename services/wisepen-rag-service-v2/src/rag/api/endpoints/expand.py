@@ -17,7 +17,6 @@ from rag.api.schemas import (
 from rag.application.rag.navigate import (
     EvidenceRevisionError,
     GraphAccessRevokedError,
-    GraphExpandRequest,
     KnowledgeGraphExpander,
     NavigationStateNotFoundError,
     UnknownSeedNodeError,
@@ -43,17 +42,15 @@ async def expand_graph(
 ) -> R[GraphExpandResponse]:
     try:
         result = await expander.expand(
-            GraphExpandRequest(
-                state_id=request.state_id,
-                session_id=request.session_id,
-                permission_scope=_permission_scope(user_id),
-                seed_node_ids=request.seed_node_ids,
-                relation_types=request.relation_types,
-                direction=request.direction,
-                max_depth=request.max_depth,
-                max_results=request.max_results,
-                query=request.query,
-            )
+            state_id=request.state_id,
+            session_id=request.session_id,
+            permission_scope=_permission_scope(user_id),
+            seed_node_ids=request.seed_node_ids,
+            relation_types=request.relation_types,
+            direction=request.direction,
+            max_depth=request.max_depth,
+            max_results=request.max_results,
+            query=request.query,
         )
     except NavigationStateNotFoundError as error:
         raise ServiceException(RagErrorCode.NAVIGATION_STATE_NOT_FOUND) from error

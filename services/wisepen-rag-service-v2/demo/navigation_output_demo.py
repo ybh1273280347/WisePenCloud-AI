@@ -16,9 +16,7 @@ from rag.api.schemas import CandidateLocateResponse, GraphExpandResponse
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.application.rag.navigate import (
     GraphEvidenceVerifier,
-    GraphExpandRequest,
     KnowledgeGraphExpander,
-    LocateRequest,
     ReadingCandidateLocator,
     SourceEvidenceVerifier,
 )
@@ -282,20 +280,16 @@ async def main() -> None:
     )
     scope = PermissionScope(user_id="demo-reviewer")
     sectioned_result = await locator.locate(
-        LocateRequest(
-            session_id="demo-session",
-            semantic_query="向量检索如何召回 ReadingBlock？",
-            permission_scope=scope,
-            max_results=1,
-        )
+        session_id="demo-session",
+        semantic_query="向量检索如何召回 ReadingBlock？",
+        permission_scope=scope,
+        max_results=1,
     )
     flat_result = await locator.locate(
-        LocateRequest(
-            session_id="demo-session",
-            semantic_query="果园为什么在日出前仍要持续监测温度？",
-            permission_scope=scope,
-            max_results=1,
-        )
+        session_id="demo-session",
+        semantic_query="果园为什么在日出前仍要持续监测温度？",
+        permission_scope=scope,
+        max_results=1,
     )
 
     graph_quote = "WisePen RAG 使用 GraphRAG 技术补充实体关系导航"
@@ -317,13 +311,11 @@ async def main() -> None:
         authorizer=authorizer,
         state_store=state_store,
     ).expand(
-        GraphExpandRequest(
-            state_id=sectioned_result.state_id,
-            session_id="demo-session",
-            permission_scope=scope,
-                seed_node_ids=["kn_demo_wisepen_rag"],
-                query="WisePen RAG 如何通过图谱继续读取知识？",
-        )
+        state_id=sectioned_result.state_id,
+        session_id="demo-session",
+        permission_scope=scope,
+        seed_node_ids=["kn_demo_wisepen_rag"],
+        query="WisePen RAG 如何通过图谱继续读取知识？",
     )
 
     sectioned_payload = CandidateLocateResponse.model_validate(

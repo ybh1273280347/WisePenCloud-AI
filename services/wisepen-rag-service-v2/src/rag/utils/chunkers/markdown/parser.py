@@ -101,9 +101,9 @@ class MarkdownParser:
             for index, block in enumerate(blocks)
         )
 
+    @staticmethod
     def _parse_tokens(
-        self,
-        tokens: list[Token],
+            tokens: list[Token],
         lines: list[str],
         line_offsets: list[int],
     ) -> list[TextBlock]:

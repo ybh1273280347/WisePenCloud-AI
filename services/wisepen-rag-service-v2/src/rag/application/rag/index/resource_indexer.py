@@ -54,7 +54,7 @@ class ResourceIndexer:
         retrieval_writer: RetrievalIndexWriter,
         graph_extractor: KnowledgeGraphExtractor,
         graph_repository: KnowledgeGraphRepository,
-        contextual_enabled: bool = True,
+        contextual_enabled: bool = False,
         graph_enabled: bool = False,
     ) -> None:
         self._contextual_text = contextual_text
@@ -75,29 +75,17 @@ class ResourceIndexer:
         document_version: int,
         markdown: str,
     ) -> StageAction:
-        """对一份权威 Markdown 执行完整的索引构建与发布。
-
-        流程：
-        1. 派生 revision / structure / sections / reading_blocks / chunks / source_refs，
-           全部基于权威 markdown 计算，身份确定。
-        2. ``stage_revision`` 把派生产物落库到“暂存区”，返回 ``StageAction``：
-           - ``STALE`` 表示该 revision 已存在且未变化，可直接跳过昂贵步骤；
-           - ``APPLIED`` 表示新建或覆盖，需要继续后续发布流程。
-        3. 上下文增强 + ACL 同步 + 向量计算 + 检索索引发布（activate）。
-        4. 开启图谱旁路时，仅对 SECTIONED 文档抽取并发布知识图谱；关闭时不调用
-           图谱抽取器，也不向 Neo4j 写入 ``skip`` 或其它状态。
-        5. 清理旧 revision，使线上只保留最新版本。
-        """
-        # 1. 派生身份与结构
-        # 先用 markdown 计算 content_revision（不依赖 structure），供后续派生 ID 使用。
-        content_revision = build_content_revision_id(
+        """对一份权威 Markdown 执行完整的索引构建与发布。"""
+        # 派生身份与结构
+        # 先用 markdown 计算 content_revision_id（不依赖 structure），供后续派生 ID 使用。
+        content_revision_id = build_content_revision_id(
             resource_id=resource_id,
             document_version=document_version,
             markdown=markdown,
         )
         structure = parse_document_structure(
             resource_id=resource_id,
-            content_revision=content_revision,
+            content_revision=content_revision_id,
             markdown=markdown,
         )
         revision = create_content_revision(
@@ -109,7 +97,7 @@ class ResourceIndexer:
         sections = structure.sections
         reading_blocks = build_reading_blocks(
             resource_id=resource_id,
-            content_revision=content_revision,
+            content_revision=content_revision_id,
             markdown=markdown,
             structure=structure,
             sections=sections,
@@ -122,12 +110,12 @@ class ResourceIndexer:
         )
         source_refs = build_source_refs(
             resource_id=resource_id,
-            content_revision=content_revision,
+            content_revision=content_revision_id,
             retrieval_chunks=chunks,
         )
 
-        # 2. 资源元数据暂存
-        # STALE 表示该 revision 与已上线版本完全一致，跳过昂贵的下游步骤。
+        # 资源元数据暂存
+        # STALE 表示该 revision 与已上线版本完全一致，跳过下游步骤。
         action = await self._resource_writer.stage_revision(
             revision=revision,
             markdown=markdown,
@@ -138,7 +126,7 @@ class ResourceIndexer:
         if action is StageAction.STALE:
             return action
 
-        # 3. 上下文增强（可关闭的昂贵 LLM 旁路）
+        # 上下文增强（可关闭的 LLM 旁路）
         # 为每个 chunk 生成检索上下文，提升 dense/BM25 召回；已缓存的内容不会重复调用模型。
         # 关闭时不重写 index_text，沿用构造时的 index_text=raw_text。
         if self._contextual_enabled:
@@ -149,7 +137,7 @@ class ResourceIndexer:
                 chunks=chunks,
             )
 
-        # 4. 向量计算
+        # 向量计算
         # 先尝试复用已存储的向量（chunk_id 一致即可复用），缺失部分才调用 embedding 模型。
         dense_vectors = dict(
             await self._retrieval_writer.load_reusable_vectors(
@@ -180,19 +168,20 @@ class ResourceIndexer:
                 }
             )
 
-        # 5. ACL 同步
-        # 检索结果必须按 ACL 过滤；若资源尚无 ACL 则视为配置错误，直接报错。
+        # ACL 同步
+
         # 显式刷新 ACL，避免在索引期间资源 ACL 发生变更导致检索结果不一致。
         await self._acl_refresher.refresh(resource_id)
         resource_acl = await self._acl_reader.get_resource_acl(resource_id)
+        # 检索结果必须按 ACL 过滤；若资源尚无 ACL 则视为配置错误，直接报错。
         if resource_acl is None:
             raise RuntimeError(f"resource {resource_id} has no synchronized ACL")
 
-        # 6. 检索索引发布
+        # 检索索引发布
         # write_staged_revision 写入暂存；apply_revision + activate_revision 才让线上可见。
         await self._retrieval_writer.write_staged_revision(
             resource_id=resource_id,
-            content_revision=content_revision,
+            content_revision=content_revision_id,
             chunks=chunks,
             source_refs=source_refs,
             dense_vectors=dense_vectors,
@@ -201,29 +190,29 @@ class ResourceIndexer:
         await self._resource_writer.apply_revision(revision)
         await self._retrieval_writer.activate_revision(
             resource_id=resource_id,
-            content_revision=content_revision,
+            content_revision=content_revision_id,
         )
         # 清理检索后端的旧 revision，避免历史版本累积。
         await self._retrieval_writer.delete_other_revisions(
             resource_id=resource_id,
-            keep_content_revision=content_revision,
+            keep_content_revision=content_revision_id,
         )
 
-        # 7. 知识图谱旁路
+        # 知识图谱旁路
         # 该开关只控制索引生成/写入，不影响 graph expand 的接口装配；关闭时保留已有图数据。
         if self._graph_enabled:
             if structure.mode is StructureMode.SECTIONED:
                 await self._graph_repository.begin_build(
                     resource_id=resource_id,
-                    content_revision=content_revision,
+                    content_revision=content_revision_id,
                     document_version=document_version,
                 )
                 graph = merge_candidate_graph(
                     resource_id=resource_id,
-                    content_revision=content_revision,
+                    content_revision=content_revision_id,
                     extractions=await self._graph_extractor.extract(
                         resource_id=resource_id,
-                        content_revision=content_revision,
+                        content_revision=content_revision_id,
                     ),
                 )
                 await self._graph_repository.publish(
@@ -233,14 +222,14 @@ class ResourceIndexer:
             else:
                 await self._graph_repository.skip(
                     resource_id=resource_id,
-                    content_revision=content_revision,
+                    content_revision=content_revision_id,
                     document_version=document_version,
                 )
 
-        # 8. 资源元数据清理
+        # 资源元数据清理
         # 资源后端也清理旧 revision，使线上资源元数据只保留最新版本。
         await self._resource_writer.delete_other_revisions(
             resource_id=resource_id,
-            keep_content_revision=content_revision,
+            keep_content_revision=content_revision_id,
         )
         return action
