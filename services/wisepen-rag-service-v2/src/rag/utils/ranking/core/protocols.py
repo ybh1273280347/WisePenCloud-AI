@@ -12,11 +12,7 @@ from .models import (
 
 
 class Prefilter(Protocol):
-    """优先过滤协议，负责在任何打分计算前执行硬约束筛选。
-
-    典型实现：
-    - KeywordPrefilter
-    """
+    """优先过滤协议，负责在任何打分计算前执行硬约束筛选。"""
 
     def prefilter(
             self,
@@ -29,12 +25,7 @@ class Prefilter(Protocol):
 
 
 class Scorer(Protocol):
-    """打分插件协议，只负责把候选转换成一组 ScoreSignal。
-
-    典型实现：
-    - BM25Scorer
-    - FieldedBM25Scorer
-    """
+    """打分插件协议，只负责把候选转换成一组 ScoreSignal。"""
 
     def score(
             self,
@@ -47,11 +38,7 @@ class Scorer(Protocol):
 
 
 class Fusion(Protocol):
-    """融合插件协议，负责把多路 ScoreSignal 合成初始 RankedCandidate。
-
-    典型实现：
-    - WeightedRrfFusion
-    """
+    """融合插件协议，负责把多路 ScoreSignal 合成初始 RankedCandidate。"""
 
     def fuse(
             self,
@@ -64,11 +51,7 @@ class Fusion(Protocol):
 
 
 class Reranker(Protocol):
-    """重排插件协议，负责基于查询和已有排序做二次排序。
-
-    典型实现：
-    - ZeroEntropyReranker
-    """
+    """重排插件协议，负责基于查询和已有排序做二次排序。"""
 
     async def rerank(
             self,
@@ -93,12 +76,7 @@ class RankGate(Protocol):
 
 
 class Diversifier(Protocol):
-    """多样性控制插件协议，负责抑制重复来源或同组候选霸榜。
-
-    典型实现：
-    - MmrDiversifier
-    当前模块只提供 MmrDiversifier。
-    """
+    """多样性控制插件协议，负责抑制重复来源或同组候选霸榜。"""
 
     def diversify(
             self,

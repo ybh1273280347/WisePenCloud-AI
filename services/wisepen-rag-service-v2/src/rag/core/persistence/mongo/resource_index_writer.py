@@ -25,7 +25,7 @@ from rag.domain.repositories.mongo.resource_index_writer import (
 )
 from rag.utils.chunkers import SourceSpan
 
-from .source_parts import SourcePart, split_source_parts
+from ._source_parts import SourcePart, split_source_parts
 
 
 @dataclass(slots=True)

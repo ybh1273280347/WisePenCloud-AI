@@ -16,7 +16,7 @@ class AuthoritativeAclError(ValueError):
     """上游资源 ACL 数据不满足 RAG 所需契约。"""
 
 
-class AuthoritativeAclProjector:
+class _AuthoritativeAclProjector:
     """将上游资源记录投影为 RAG 本地授权所需的 ACL 事实。"""
 
     def project(self, record: dict[str, Any], resource_id: str) -> ResourceAcl:
@@ -106,7 +106,7 @@ class MongoAuthoritativeAclReader(AuthoritativeAclReader):
 
     def __init__(self, *, collection: AsyncCollection[dict[str, Any]]) -> None:
         self._collection = collection
-        self._projector = AuthoritativeAclProjector()
+        self._projector = _AuthoritativeAclProjector()
 
     async def get_resource_acl(self, resource_id: str) -> ResourceAcl | None:
         if not ObjectId.is_valid(resource_id):

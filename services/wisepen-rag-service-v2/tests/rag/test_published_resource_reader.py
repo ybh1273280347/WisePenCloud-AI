@@ -7,7 +7,7 @@ from rag.core.persistence.mongo import (
     MongoPublishedResourceReader,
     published_resource_reader,
 )
-from rag.core.persistence.mongo.source_parts import SourcePart, assemble_source_text
+from rag.core.persistence.mongo._source_parts import SourcePart, assemble_source_text
 from rag.domain.models.graph import GraphEvidence
 from rag.domain.repositories.mongo import (
     PublishedResourceCorruptError,

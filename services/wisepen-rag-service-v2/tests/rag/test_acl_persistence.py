@@ -7,7 +7,7 @@ from pymongo.errors import DuplicateKeyError
 
 from rag.core.persistence.mongo.authoritative_acl_reader import (
     AuthoritativeAclError,
-    AuthoritativeAclProjector,
+    _AuthoritativeAclProjector,
     MongoAuthoritativeAclReader,
 )
 from rag.core.persistence.mongo.resource_acl_store import MongoResourceAclStore
@@ -95,7 +95,7 @@ async def test_authoritative_acl_reader_rejects_invalid_resource_id() -> None:
 
 
 def test_authoritative_acl_projector_projects_record_without_reader_io() -> None:
-    projector = AuthoritativeAclProjector()
+    projector = _AuthoritativeAclProjector()
 
     acl = projector.project(
         {

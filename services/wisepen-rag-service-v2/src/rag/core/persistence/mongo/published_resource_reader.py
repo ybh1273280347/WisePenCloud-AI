@@ -36,7 +36,7 @@ from rag.domain.repositories.mongo.published_resource_reader import (
 )
 from rag.utils.chunkers import SourceSpan
 
-from .source_parts import SourcePart, assemble_source_text
+from ._source_parts import SourcePart, assemble_source_text
 
 
 @dataclass(slots=True)

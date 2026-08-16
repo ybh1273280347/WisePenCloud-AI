@@ -6,8 +6,6 @@
 
 `retrieval is an entry point · reading is deterministic · graph is navigable · evidence is verifiable`
 
-[接口说明](docs/API.md) · [架构基线](docs/dev/Architecture.md) · [开发文档](docs/dev/) · [运行手册](docs/dev/Runbook.md)
-
 </div>
 
 WisePen RAG v2 是 WisePen 的文档知识服务。它不把 RAG 简化成“召回几段文本”，而是把一次回答需要的知识路径拆成四种可以独立验证的能力：先找到值得看的入口，再按结构读取原文，必要时沿知识图谱继续探索，最后回到当前 applied revision 的权威证据。
@@ -128,8 +126,6 @@ GET /docs
 ## 文档导航
 
 - [API 接口说明](docs/API.md)：面向调用方的请求、响应、导航关系和错误码。
-- [开发文档目录](docs/dev/)：架构基线、仓储设计、迁移 checkpoint、运行手册、shadow 对照和内部交接资料。
-- [文档结构解析说明](src/rag/utils/chunkers/README.md)：原文坐标和 Markdown 结构边界。
 
 ## 范围边界
 
