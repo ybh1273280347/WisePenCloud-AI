@@ -39,17 +39,10 @@ class SourceEvidenceVerifier:
         if not candidates:
             return []
 
-        # 校验所有候选必须属于同一资源和同一 revision
-        resource_ids = {candidate.resource_id for candidate in candidates}
-        revisions = {candidate.content_revision for candidate in candidates}
-        if len(resource_ids) != 1 or len(revisions) != 1:
-            raise EvidenceRevisionError(
-                "evidence candidates must share one resource revision"
-            )
-
-        resource_id = next(iter(resource_ids))
-        content_revision = next(iter(revisions))
-        # 按 source_ref_id 去重后批量回源到权威存储
+        # 候选已由调用方按 (resource_id, content_revision) 分组后逐组调用，
+        # 直接取组内身份回源到权威存储。
+        resource_id = candidates[0].resource_id
+        content_revision = candidates[0].content_revision
         try:
             records = await self._reader.get_source_evidence(
                 resource_id,
