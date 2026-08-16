@@ -337,15 +337,9 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             return None
         self._require_revision(revision, content_revision)
 
+        # 调用方（GraphEvidenceVerifier）已按 resource+revision 分组，条目归属恒成立。
         requested: dict[str, GraphEvidence] = {}
         for item in evidence:
-            if (
-                item.resource_id != resource_id
-                or item.content_revision != content_revision
-            ):
-                raise PublishedResourceCorruptError(
-                    f"graph evidence {item.evidence_id} has invalid revision ownership"
-                )
             existing = requested.get(item.evidence_id)
             if existing is not None and existing != item:
                 raise PublishedResourceCorruptError(

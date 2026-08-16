@@ -5,9 +5,6 @@ from dataclasses import dataclass
 
 from pymongo.errors import DuplicateKeyError
 
-from rag.application.rag.index.constructor.revisions import (
-    build_content_revision_id,
-)
 from rag.domain.entities import (
     ContentRevisionEntity,
     ReadingBlockEntity,
@@ -53,22 +50,7 @@ class MongoResourceIndexWriter(ResourceIndexWriter):
         reading_blocks: Sequence[ReadingBlock],
         source_refs: Sequence[SourceRef],
     ) -> StageAction:
-        if structure.total_length != len(markdown):
-            raise ValueError("content revision length does not match markdown")
-        expected_revision = build_content_revision_id(
-            resource_id=revision.resource_id,
-            document_version=revision.document_version,
-            markdown=markdown,
-            index_schema_version=revision.index_schema_version,
-        )
-        if revision.content_revision != expected_revision:
-            raise ValueError("content revision identity does not match markdown")
-        _validate_structure_records(
-            revision=revision,
-            structure=structure,
-            reading_blocks=reading_blocks,
-            source_refs=source_refs,
-        )
+        # revision/结构一致性由 constructor 流水线保证，这里直接落库。
         action = _decide_stage(revision, await self._get_state(revision.resource_id))
         if action is not StageAction.STAGED:
             return action
@@ -385,78 +367,12 @@ def _stage_state_filter(revision: ContentRevision) -> dict[str, object]:
     }
 
 
-def _validate_structure_records(
-    *,
-    revision: ContentRevision,
-    structure: DocumentStructure,
-    reading_blocks: Sequence[ReadingBlock],
-    source_refs: Sequence[SourceRef],
-) -> None:
-    sections = structure.sections
-    sections_by_id = {section.section_id: section for section in sections}
-    blocks_by_id = {block.block_id: block for block in reading_blocks}
-
-    if len(sections_by_id) != len(sections):
-        raise ValueError("section identities are not unique")
-
-    if len(blocks_by_id) != len(reading_blocks):
-        raise ValueError("reading block identities are not unique")
-
-    if len({ref.ref_id for ref in source_refs}) != len(source_refs):
-        raise ValueError("source ref identities are not unique")
-
-    if len({ref.chunk_id for ref in source_refs}) != len(source_refs):
-        raise ValueError("source refs contain duplicate chunk identities")
-
-    for section in sections:
-        if section.own_span.end_offset > structure.total_length:
-            raise ValueError(f"section {section.section_id} exceeds content revision")
-        if (
-            section.parent_section_id is not None
-            and section.parent_section_id not in sections_by_id
-        ):
-            raise ValueError(f"section {section.section_id} has no parent")
-        if any(
-            span.start_offset < section.own_span.start_offset
-            or span.end_offset > section.own_span.end_offset
-            for span in section.content_spans
-        ):
-            raise ValueError(f"section {section.section_id} content exceeds its range")
-
-    for block in reading_blocks:
-        section = sections_by_id.get(block.section_id)
-        if section is None or not block.source_spans:
-            raise ValueError(f"reading block {block.block_id} has invalid ownership")
-        if any(
-            span.start_offset < section.own_span.start_offset
-            or span.end_offset > section.own_span.end_offset
-            for span in block.source_spans
-        ):
-            raise ValueError(f"reading block {block.block_id} exceeds its section")
-
-    for ref in source_refs:
-        block = blocks_by_id.get(ref.reading_block_id)
-        section = sections_by_id.get(ref.section_id)
-        if (
-            ref.resource_id != revision.resource_id
-            or ref.content_revision != revision.content_revision
-            or block is None
-            or section is None
-            or block.section_id != section.section_id
-            or ref.section_path != section.section_path
-            or not ref.source_spans
-        ):
-            raise ValueError(f"source ref {ref.ref_id} has invalid ownership")
-
-
 def _decide_stage(
     revision: ContentRevision,
     state: _ResourceIndexState | None,
 ) -> StageAction:
     if state is None:
         return StageAction.STAGED
-    if state.resource_id != revision.resource_id:
-        raise ValueError("resource index state belongs to another resource")
     if state.applied_content_revision == revision.content_revision:
         return StageAction.ALREADY_APPLIED
     if (

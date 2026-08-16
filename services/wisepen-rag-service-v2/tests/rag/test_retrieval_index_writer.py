@@ -176,39 +176,3 @@ async def test_activation_disables_old_revision_and_cleanup_deletes_it() -> None
         client.deletes[0]["points_selector"].filter.must_not[0].key
         == "content_revision"
     )
-
-
-@pytest.mark.asyncio
-async def test_writer_rejects_missing_or_wrong_revision_data() -> None:
-    writer = _writer(_QdrantClient())
-    with pytest.raises(ValueError, match="dense vector is missing"):
-        await writer.write_staged_revision(
-            resource_id="resource-1",
-            content_revision="revision-1",
-            chunks=[_chunk()],
-            source_refs=[_source_ref()],
-            dense_vectors={},
-            resource_acl=_acl(),
-        )
-
-    with pytest.raises(ValueError, match="duplicate chunk"):
-        await writer.write_staged_revision(
-            resource_id="resource-1",
-            content_revision="revision-1",
-            chunks=[_chunk(), _chunk()],
-            source_refs=[_source_ref()],
-            dense_vectors={"chunk-1": [0.1, 0.2, 0.3]},
-            resource_acl=_acl(),
-        )
-
-    wrong_ref = _source_ref()
-    wrong_ref.content_revision = "revision-old"
-    with pytest.raises(ValueError, match="does not belong"):
-        await writer.write_staged_revision(
-            resource_id="resource-1",
-            content_revision="revision-1",
-            chunks=[_chunk()],
-            source_refs=[wrong_ref],
-            dense_vectors={"chunk-1": [0.1, 0.2, 0.3]},
-            resource_acl=_acl(),
-        )

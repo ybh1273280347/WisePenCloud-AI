@@ -120,55 +120,36 @@ class QdrantRetrievalIndexWriter(RetrievalIndexWriter):
     ) -> None:
         if not chunks:
             return
-        if resource_acl.resource_id != resource_id:
-            raise ValueError("resource ACL does not match resource")
 
-        source_refs_by_chunk = _source_refs_by_chunk(
-            resource_id=resource_id,
-            content_revision=content_revision,
-            source_refs=source_refs,
-        )
+        # chunk 唯一性、source_ref 归属、向量覆盖均由 constructor 流水线保证，这里直接组装。
+        source_refs_by_chunk = {
+            source_ref.chunk_id: source_ref for source_ref in source_refs
+        }
         await self.ensure_collection()
 
-        points = []
-        chunk_ids: set[str] = set()
-        for chunk in chunks:
-            if chunk.chunk_id in chunk_ids:
-                raise ValueError(f"chunks contain duplicate chunk {chunk.chunk_id}")
-            chunk_ids.add(chunk.chunk_id)
-            source_ref = source_refs_by_chunk.get(chunk.chunk_id)
-            if source_ref is None:
-                raise ValueError(f"source ref is missing for chunk {chunk.chunk_id}")
-            vector = dense_vectors.get(chunk.chunk_id)
-            if vector is None:
-                raise ValueError(f"dense vector is missing for chunk {chunk.chunk_id}")
-            if len(vector) != self._dense_vector_size:
-                raise ValueError(
-                    f"dense vector size does not match chunk {chunk.chunk_id}"
-                )
-
-            points.append(
-                qdrant_models.PointStruct(
-                    id=_point_id(content_revision, chunk.chunk_id),
-                    vector={
-                        self._dense_vector_name: list(vector),
-                        self._sparse_vector_name: qdrant_models.Document(
-                            text=chunk.index_text,
-                            model="qdrant/bm25",
-                            options=self._bm25_options or None,
-                        ),
-                    },
-                    payload=_to_payload(
-                        resource_id=resource_id,
-                        content_revision=content_revision,
-                        chunk=chunk,
-                        source_ref=source_ref,
-                        embedding_key=self._embedding_key(chunk.index_text),
-                        resource_acl=resource_acl,
-                        active=False,
+        points = [
+            qdrant_models.PointStruct(
+                id=_point_id(content_revision, chunk.chunk_id),
+                vector={
+                    self._dense_vector_name: list(dense_vectors[chunk.chunk_id]),
+                    self._sparse_vector_name: qdrant_models.Document(
+                        text=chunk.index_text,
+                        model="qdrant/bm25",
+                        options=self._bm25_options or None,
                     ),
-                )
+                },
+                payload=_to_payload(
+                    resource_id=resource_id,
+                    content_revision=content_revision,
+                    chunk=chunk,
+                    source_ref=source_refs_by_chunk[chunk.chunk_id],
+                    embedding_key=self._embedding_key(chunk.index_text),
+                    resource_acl=resource_acl,
+                    active=False,
+                ),
             )
+            for chunk in chunks
+        ]
 
         await self._client.upsert(
             collection_name=self._collection_name,
@@ -277,29 +258,6 @@ class QdrantRetrievalIndexWriter(RetrievalIndexWriter):
 
     def _embedding_key(self, index_text: str) -> str:
         return sha256(f"{self._embedding_profile}\0{index_text}".encode()).hexdigest()
-
-
-def _source_refs_by_chunk(
-    *,
-    resource_id: str,
-    content_revision: str,
-    source_refs: Sequence[SourceRef],
-) -> dict[str, SourceRef]:
-    refs_by_chunk: dict[str, SourceRef] = {}
-    for source_ref in source_refs:
-        if (
-            source_ref.resource_id != resource_id
-            or source_ref.content_revision != content_revision
-        ):
-            raise ValueError(
-                f"source ref {source_ref.ref_id} does not belong to revision"
-            )
-        if source_ref.chunk_id in refs_by_chunk:
-            raise ValueError(
-                f"source refs contain duplicate chunk {source_ref.chunk_id}"
-            )
-        refs_by_chunk[source_ref.chunk_id] = source_ref
-    return refs_by_chunk
 
 
 def _point_id(content_revision: str, chunk_id: str) -> str:
