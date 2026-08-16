@@ -2,7 +2,7 @@
 
 抽取窗口是知识图谱抽取的最小上下文单元：
 - 以 ReadingBlock 为归属边界，每个窗口属于且仅属于一个 ReadingBlock。
-- 窗口文本可能比 ReadingBlock 短（ReadingBlock 太长时按 6000 字符 + 2400 重叠切分），
+- 窗口文本可能比 ReadingBlock 短（ReadingBlock 太长时按 4000 字符 + 600 重叠切分），
   但每个窗口都保留完整的 source_mappings，能将窗口内任意字符偏移映射回原文坐标。
 - 邻接 ReadingBlock 的尾部/头部作为“上下文”提供（不参与证据定位），帮助模型消歧。
 """
@@ -25,8 +25,8 @@ _WINDOW_OVERLAP_CHARACTERS = 600
 class ExtractionSourceMapping:
     """抽取窗口字符区间到权威 Markdown 字符区间的映射。
 
-    ``window_start`` / ``window_end`` 是窗口局部坐标（从 0 开始）；
-    ``source_span`` 是对应的权威 Markdown 字符偏移，可直接用于切片。
+    window_start / window_end 是窗口局部坐标（从 0 开始）；
+    source_span 是对应的权威 Markdown 字符偏移，可直接用于切片。
     """
 
     window_start: int
@@ -39,9 +39,9 @@ class KnowledgeExtractionWindow:
     """一个 ReadingBlock 内可独立抽取并精确回源的窗口。
 
     字段说明：
-    - ``text``：窗口主文本（必属当前 ReadingBlock）。
-    - ``source_mappings``：窗口局部坐标到原文坐标的映射表。
-    - ``previous_context`` / ``next_context``：邻接 ReadingBlock 的上下文，仅作消歧，
+    - text：窗口主文本（必属当前 ReadingBlock）。
+    - source_mappings：窗口局部坐标到原文坐标的映射表。
+    - previous_context / next_context：邻接 ReadingBlock 的上下文，仅作消歧，
       不可作为 evidence 来源。
     """
 
@@ -95,7 +95,7 @@ def build_extraction_windows(
             _window_ranges(len(block.raw_text))
         ):
             # 整块作为一个窗口时直接复用 block_id 作为 window_id，简化身份；
-            # 切分时使用 ``block_id:window:N`` 保持稳定且不冲突。
+            # 切分时使用 block_id:window:N 保持稳定且不冲突。
             whole_block = start == 0 and end == len(block.raw_text)
             windows.append(
                 KnowledgeExtractionWindow(
@@ -137,9 +137,9 @@ def render_extraction_window(window: KnowledgeExtractionWindow) -> str:
     """渲染 GraphRAG 输入，并明确 evidence 只能来自当前窗口。
 
     渲染规则：
-    - 用 XML 标签包裹各部分内容，``xml_attr`` / ``xml_cdata`` 转义特殊字符。
-    - ``EXTRACTION_RULES`` 明确告诉模型：evidence_quote 必须是
-      ``<current_reading_block>`` 的连续子串；previous/next 仅供消歧。
+    - 用 XML 标签包裹各部分内容，xml_attr / xml_cdata 转义特殊字符。
+    - EXTRACTION_RULES 明确告诉模型：evidence_quote 必须是
+      <current_reading_block> 的连续子串；previous/next 仅供消歧。
     - 资源 ID 必须原样复制，避免模型臆造。
     """
     section_path = " > ".join(window.section_path) or "(document root)"
@@ -166,11 +166,11 @@ def _source_mappings(
 ) -> list[ExtractionSourceMapping]:
     """计算 ReadingBlock 全量文本的局部坐标 → 原文坐标映射表。
 
-    利用 raw_text 是 source_spans 用 ``\\n\\n`` 拼接而成的事实：
+    利用 raw_text 是 source_spans 用 \\n\\n 拼接而成的事实：
     按 source_spans 顺序在 raw_text 中查找每个 span 对应的原文子串，
     记录其在 raw_text 中的局部起止位置。
 
-    ``cursor`` 用于避免同一子串在 raw_text 中多次出现时被错误地映射到第一次出现的位置。
+    cursor 用于避免同一子串在 raw_text 中多次出现时被错误地映射到第一次出现的位置。
     """
     mappings: list[ExtractionSourceMapping] = []
     cursor = 0
@@ -196,7 +196,7 @@ def _window_ranges(text_length: int) -> list[tuple[int, int]]:
     """按 4000 字符 + 600 重叠切分 ReadingBlock，返回 (start, end) 区间列表。
 
     若文本不超过窗口大小，则返回单个覆盖全量的区间；
-    否则按 ``step = window - overlap`` 推进起点，最后一个区间终点固定为 text_length。
+    否则按 step = window - overlap 推进起点，最后一个区间终点固定为 text_length。
     """
     if text_length <= _WINDOW_CHARACTERS:
         return [(0, text_length)]
@@ -224,7 +224,7 @@ def _clip_mappings(
     处理细节：
     - 与窗口不相交的 mapping 直接跳过。
     - 部分相交的 mapping 会被裁剪到交集范围，原文坐标同步调整。
-    - 输出的 ``window_start`` / ``window_end`` 已减去 ``window_start`` 偏移，
+    - 输出的 window_start / window_end 已减去 window_start 偏移，
       使其从 0 开始，便于窗口内文本直接索引。
     """
     clipped: list[ExtractionSourceMapping] = []

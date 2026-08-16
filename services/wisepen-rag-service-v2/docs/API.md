@@ -14,7 +14,7 @@
 
 ## 推荐调用顺序
 
-```text
+`text
 locateCandidate
       │
       ├── sections[].section_id ──> getSectionContent
@@ -23,7 +23,7 @@ locateCandidate
                                       │
                                       └── evidence_sections[].section_id
                                           └──> getSectionContent
-```
+`
 
 `section_id` 是确定性 READ 地址；`node_id` 是图导航锚点。不要用 Section 的标题替代 ID，也不要把 node ID 当作正文地址。
 
@@ -33,20 +33,20 @@ locateCandidate
 
 ### Request
 
-```json
+`json
 {
   "session_id": "session_demo_1",
   "semantic_query": "连续降雨后积水迟迟不退，应先检查什么？",
   "lexical_query": "积水 入渗",
   "max_results": 5
 }
-```
+`
 
 `lexical_query` 可省略；`max_results` 默认为 10，范围为 1-20。LOCATE 始终在当前身份全部可读且已发布的资源中检索。
 
 ### Response
 
-```json
+`json
 {
   "state_id": "nav_demo_1",
   "retrieval_status": "relevant",
@@ -82,7 +82,7 @@ locateCandidate
     }
   ]
 }
-```
+`
 
 `sections` 是检索视图，不是确定性 Section 正文。它返回完整 ReadingBlock，并保留 `section_id`、`title`、`section_path` 供后续 READ。
 
@@ -94,13 +94,13 @@ locateCandidate
 
 ### Request
 
-```json
+`json
 {"resource_id": "resource_demo_1"}
-```
+`
 
 ### Response
 
-```json
+`json
 {
   "resource_id": "resource_demo_1",
   "document_version": 3,
@@ -116,7 +116,7 @@ locateCandidate
     }
   ]
 }
-```
+`
 
 目录节点没有 `level`。调用方可通过 `children` 表达层级，并使用 `title` 作为短锚点、`section_path` 作为完整定位信息。
 
@@ -126,16 +126,16 @@ locateCandidate
 
 ### Request
 
-```json
+`json
 {
   "resource_id": "resource_demo_1",
   "page_labels": ["1", "2"]
 }
-```
+`
 
 ### Response
 
-```json
+`json
 {
   "1": {
     "text": "这一页的权威正文……",
@@ -150,7 +150,7 @@ locateCandidate
     "anchor_labels": []
   }
 }
-```
+`
 
 Page 视图中的 Section 只有导航锚点，不包含 Section preview，避免和页正文重复。
 
@@ -162,16 +162,16 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
 
 ### Request
 
-```json
+`json
 {
   "resource_id": "resource_demo_1",
   "section_ids": ["section_demo_1"]
 }
-```
+`
 
 ### Response
 
-```json
+`json
 {
   "section_demo_1": {
     "title": "入渗与排水检查",
@@ -185,7 +185,7 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
     }
   }
 }
-```
+`
 
 `navigation` 里的对象是 Section 锚点，不是正文。`text` 为空字符串是合法结果，表示该 Section 没有直属正文。
 
@@ -197,7 +197,7 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
 
 ### Request
 
-```json
+`json
 {
   "session_id": "session_demo_1",
   "state_id": "nav_demo_1",
@@ -208,13 +208,13 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
   "max_results": 10,
   "query": "WisePen RAG 如何通过图谱继续读取知识？"
 }
-```
+`
 
 `seed_node_ids` 必须已经存在于该 state；`query` 是本次图路径排序使用的显式意图；`max_depth` 支持 1-2。
 
 ### Response
 
-```json
+`json
 {
   "state_id": "nav_demo_1",
   "traversal_direction": "both",
@@ -287,7 +287,7 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
     }
   ]
 }
-```
+`
 
 契约重点：
 
@@ -302,13 +302,13 @@ Page 视图中的 Section 只有导航锚点，不包含 Section preview，避�
 
 `relation_types` 支持：
 
-```text
+`text
 ABOUT, RELATED_TO, PART_OF, USES, PRODUCES, DEPENDS_ON,
 DERIVED_FROM, IMPLEMENTS, APPLIES_TO, CAUSES, COMPARES_WITH,
 CONTRADICTS, EXTENDS, SUPERSEDES, LOCATED_IN, AUTHORED_BY, DEFINES,
 EXPLAINS, EXAMPLE_OF, REQUIRES, CITES, PUBLISHED_IN, USES_DATASET,
 USES_METHOD, SUPPLEMENTS, RETRACTS
-```
+`
 
 ## Kafka 事实输入
 

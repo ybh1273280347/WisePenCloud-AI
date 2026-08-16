@@ -1,18 +1,4 @@
-"""编排 GraphRAG 候选抽取、派生产物复用和确定性校验。
-
-``KnowledgeGraphExtractor`` 是图谱抽取的对外入口，职责是：
-1. 从 ``PublishedResourceReader`` 加载已发布的 ReadingBlock、Section、SourceRef 等素材。
-2. 调用 ``build_extraction_windows`` 切分窗口。
-3. 复用 ``GenerationArtifactStore`` 中已持久化的 SDK 原始候选图（按 artifact_key 命中）；
-   缺失的窗口才调用 LLM 重新抽取。
-4. 对每个窗口的候选图执行 ``KnowledgeCandidateValidator.validate``，输出收紧后的
-   ``KnowledgeWindowExtraction``。
-5. 不负责合并/发布图谱——合并由 ``merge_candidate_graph`` 完成，发布由
-   ``KnowledgeGraphRepository`` 完成。
-
-注意：派生产物只保存 SDK 原始候选图（``encode_candidate_graph``），不保存校验后的
-``KnowledgeWindowExtraction``。这样在 schema/校验规则变化时仍可重新校验，无需重新调用 LLM。
-"""
+"""编排 GraphRAG 候选抽取、派生产物复用和确定性校验。。"""
 from dataclasses import dataclass, field
 from hashlib import sha256
 
@@ -26,6 +12,7 @@ from neo4j_graphrag.experimental.components.schema import (
     PropertyType,
     RelationshipType,
 )
+from neo4j_graphrag.experimental.components.types import Neo4jGraph
 
 from rag.domain.models.graph import (
     KnowledgeEntityType,
@@ -38,11 +25,6 @@ from rag.domain.repositories.mongo.generation_artifact_store import (
     GenerationArtifactStore,
 )
 
-from .candidate_codec import (
-    decode_candidate_graph,
-    encode_candidate_graph,
-    slice_candidate_graph,
-)
 # 注意：KnowledgeCandidateValidator 不能在模块级导入——candidate_validator 反向
 # 依赖本模块的数据类，模块级互相导入会形成循环；在 __init__ 内延迟导入。
 from .llm import GraphRagCandidateExtractor, QueryClientGraphRagLLM
@@ -105,7 +87,7 @@ class KnowledgeGraphExtractor:
         # 默认启用所有 profile；调用方可传入子集以限制抽取范围。
         profiles = profiles or frozenset(KnowledgeRelationProfile)
         # 根据 profile 构建 GraphRAG schema，决定允许的关系类型与端点组合。
-        self._schema = _build_schema(profiles)
+        self._schema = self._build_schema(profiles)
         # 从 schema 中提取实际启用的关系类型，作为 validator 的白名单。
         active_relations = frozenset(
             KnowledgeRelationType(item.label)
@@ -122,8 +104,8 @@ class KnowledgeGraphExtractor:
         )
         self._generation_artifact_store = generation_artifact_store
         self._source_reader = source_reader
-        # store_contract 是派生产物缓存的“契约哈希”，涵盖 artifact 版本、SDK 版本、
-        # LLM 生成画像、schema 内容；任一变化都会让旧缓存失效，强制重新抽取。
+
+        # 派生产物缓存的“契约哈希”
         self._store_contract = sha256(
             (
                 f"{_ARTIFACT_VERSION}\0{graph_rag_version}\0{llm.artifact_profile}\0"
@@ -137,7 +119,7 @@ class KnowledgeGraphExtractor:
         resource_id: str,
         content_revision: str,
     ) -> list[KnowledgeWindowExtraction]:
-        """加载素材、构建窗口、抽取并校验候选，返回每个窗口的 ``KnowledgeWindowExtraction``。
+        """加载素材、构建窗口、抽取并校验候选，返回每个窗口的 KnowledgeWindowExtraction。
 
         非 SECTIONED 文档直接返回空列表（无章节上下文，不抽取图谱）。
         """
@@ -149,19 +131,12 @@ class KnowledgeGraphExtractor:
             return []
         return await self._extract_windows(build_extraction_windows(source))
 
+
     async def _extract_windows(
         self,
         windows: list[KnowledgeExtractionWindow],
     ) -> list[KnowledgeWindowExtraction]:
-        """对所有窗口执行抽取，命中缓存的窗口复用 SDK 原始候选，缺失的窗口重新抽取。
-
-        关键设计：
-        - 缓存命中时，仍会执行 ``KnowledgeCandidateValidator.validate``，因为校验规则
-          可能随版本更新而变化，必须保证当前版本规则下产出的结果一致。
-        - 缺失的窗口批量调用 ``GraphRagCandidateExtractor.extract``，一次 LLM 调用处理
-          多个窗口（SDK 内部并发）；再用 ``slice_candidate_graph`` 切出每个窗口的子图。
-        - 新生成的候选图通过 ``encode_candidate_graph`` 写回 artifact store。
-        """
+        """对所有窗口执行抽取，命中缓存的窗口复用 SDK 原始候选，缺失的窗口重新抽取。"""
         if not windows:
             return []
         # 防御：所有窗口必须属于同一资源同一 revision，否则缓存键会错乱。
@@ -182,7 +157,7 @@ class KnowledgeGraphExtractor:
         missing: list[tuple[int, str, KnowledgeExtractionWindow]] = []
         for index, (key, window) in enumerate(zip(artifact_keys, windows, strict=True)):
             graph = (
-                decode_candidate_graph(stored_artifacts[key], window.window_id)
+                _decode_candidate_graph(stored_artifacts[key], window.window_id)
                 if key in stored_artifacts
                 else None
             )
@@ -201,10 +176,10 @@ class KnowledgeGraphExtractor:
             generated_artifacts: dict[str, str] = {}
             for index, key, window in missing:
                 # SDK 返回的是合并图，按 window_id 切出当前窗口子图。
-                window_graph = slice_candidate_graph(graph, window.window_id)
+                window_graph = _slice_candidate_graph(graph, window.window_id)
                 results[index] = self._validator.validate(window_graph, window)
                 # 把切出的子图编码为 JSON 持久化，下次重复索引时复用。
-                generated_artifacts[key] = encode_candidate_graph(
+                generated_artifacts[key] = _encode_candidate_graph(
                     window_graph,
                     window.window_id,
                 )
@@ -216,134 +191,224 @@ class KnowledgeGraphExtractor:
         # 按窗口原始顺序返回，保证下游合并结果稳定。
         return [results[index] for index in range(len(windows))]
 
-    def _artifact_key(self, window: KnowledgeExtractionWindow) -> str:
-        """计算窗口的派生产物缓存键。
 
-        把 store_contract（包含版本/schema/LLM 画像）与窗口渲染文本拼接后哈希，
-        保证：
-        - 不同窗口文本 → 不同 key（同一窗口重复抽取 → 同一 key，命中缓存）。
-        - schema/LLM/版本变化 → 全部 key 失效（强制重新抽取）。
-        """
+    def _artifact_key(self, window: KnowledgeExtractionWindow) -> str:
+        """计算窗口的派生产物缓存键"""
         value = f"{self._store_contract}\0{render_extraction_window(window)}"
         return sha256(value.encode("utf-8")).hexdigest()
 
 
-def _build_schema(
-    profiles: frozenset[KnowledgeRelationProfile],
-) -> GraphSchema:
-    """根据启用的 profile 构建 GraphRAG SDK 使用的 ``GraphSchema``。
-
-    schema 是发给 LLM 的“抽取契约”，包含：
-    - 节点类型（ENTITY / RESOURCE / EXTERNAL_SOURCE）及其属性、必填字段。
-    - 关系类型（按 profile 启用）及其属性（evidence_quote / assertion / predicate）。
-    - 允许的端点组合 pattern（由 ``relation_pattern_allowed`` 决定）。
-    - 存在性约束（必填属性必须出现）。
-
-    schema 严格关闭 ``additional_*``，禁止模型输出 schema 外的字段。
-    """
-    descriptions = relation_descriptions(profiles)
-    # 关系共有的“证据属性”：evidence_quote（原文引用）、assertion（断言）、
-    # predicate（RELATED_TO 的具体谓词）。
-    evidence_properties = [
-        PropertyType(
-            name="evidence_quote",
-            type="STRING",
-            description="current_reading_block 中支持关系的连续原文",
-        ),
-        PropertyType(
-            name="assertion",
-            type="STRING",
-            description="affirmed、negated、conditional 或 uncertain",
-        ),
-        PropertyType(
-            name="predicate",
-            type="STRING",
-            description="RELATED_TO 的具体谓词",
-        ),
-    ]
-    relationship_types = tuple(
-        RelationshipType(
-            label=relation.value,
-            description=description,
-            properties=evidence_properties,
-            additional_properties=False,
-        )
-        for relation, description in descriptions.items()
-    )
-    # 枚举所有合法 (source, relation, target) 三元组，作为 SDK 的 pattern。
-    patterns = tuple(
-        Pattern(
-            source=source.value,
-            relationship=relation.value,
-            target=target.value,
-        )
-        for source in KnowledgeNodeKind
-        for relation in descriptions
-        for target in KnowledgeNodeKind
-        if relation_pattern_allowed(source, relation, target)
-    )
-    # 不同节点类型有不同的属性集合；ENTITY 必须有 entity_type，
-    # RESOURCE 必须有 resource_id，EXTERNAL_SOURCE 与 ENTITY 必须有 evidence_quote。
-    node_properties = {
-        KnowledgeNodeKind.ENTITY: [
-            PropertyType(name="name", type="STRING"),
+    @staticmethod
+    def _build_schema(
+        profiles: frozenset[KnowledgeRelationProfile],
+    ) -> GraphSchema:
+        """根据启用的 profile 构建 GraphRAG SDK 使用的 GraphSchema。"""
+        descriptions = relation_descriptions(profiles)
+        # 关系共有的“证据属性”：evidence_quote（原文引用）、assertion（断言）、
+        # predicate（RELATED_TO 的具体谓词）。
+        evidence_properties = [
             PropertyType(
-                name="entity_type",
+                name="evidence_quote",
                 type="STRING",
-                description=", ".join(item.value for item in KnowledgeEntityType),
+                description="current_reading_block 中支持关系的连续原文",
             ),
-            PropertyType(name="evidence_quote", type="STRING"),
-        ],
-        KnowledgeNodeKind.RESOURCE: [
-            PropertyType(name="name", type="STRING"),
-            PropertyType(name="resource_id", type="STRING"),
-        ],
-        KnowledgeNodeKind.EXTERNAL_SOURCE: [
-            PropertyType(name="name", type="STRING"),
-            PropertyType(name="evidence_quote", type="STRING"),
-        ],
-    }
-    required_node_properties = {
-        KnowledgeNodeKind.ENTITY: ("name", "entity_type", "evidence_quote"),
-        KnowledgeNodeKind.RESOURCE: ("name", "resource_id"),
-        KnowledgeNodeKind.EXTERNAL_SOURCE: ("name", "evidence_quote"),
-    }
-    return GraphSchema(
-        node_types=tuple(
-            NodeType(
-                label=kind.value,
-                description=kind.value,
-                properties=properties,
+            PropertyType(
+                name="assertion",
+                type="STRING",
+                description="affirmed、negated、conditional 或 uncertain",
+            ),
+            PropertyType(
+                name="predicate",
+                type="STRING",
+                description="RELATED_TO 的具体谓词",
+            ),
+        ]
+        relationship_types = tuple(
+            RelationshipType(
+                label=relation.value,
+                description=description,
+                properties=evidence_properties,
                 additional_properties=False,
             )
-            for kind, properties in node_properties.items()
-        ),
-        relationship_types=relationship_types,
-        patterns=patterns,
-        # 存在性约束：必填字段必须出现，否则 SDK 校验失败。
-        constraints=(
-            *(
-                ConstraintType(
-                    type=GraphConstraintType.EXISTENCE,
-                    property_names=(property_name,),
-                    node_type=kind.value,
+            for relation, description in descriptions.items()
+        )
+        # 枚举所有合法 (source, relation, target) 三元组，作为 SDK 的 pattern。
+        patterns = tuple(
+            Pattern(
+                source=source.value,
+                relationship=relation.value,
+                target=target.value,
+            )
+            for source in KnowledgeNodeKind
+            for relation in descriptions
+            for target in KnowledgeNodeKind
+            if relation_pattern_allowed(source, relation, target)
+        )
+        # 不同节点类型有不同的属性集合；ENTITY 必须有 entity_type，
+        # RESOURCE 必须有 resource_id，EXTERNAL_SOURCE 与 ENTITY 必须有 evidence_quote。
+        node_properties = {
+            KnowledgeNodeKind.ENTITY: [
+                PropertyType(name="name", type="STRING"),
+                PropertyType(
+                    name="entity_type",
+                    type="STRING",
+                    description=", ".join(item.value for item in KnowledgeEntityType),
+                ),
+                PropertyType(name="evidence_quote", type="STRING"),
+            ],
+            KnowledgeNodeKind.RESOURCE: [
+                PropertyType(name="name", type="STRING"),
+                PropertyType(name="resource_id", type="STRING"),
+            ],
+            KnowledgeNodeKind.EXTERNAL_SOURCE: [
+                PropertyType(name="name", type="STRING"),
+                PropertyType(name="evidence_quote", type="STRING"),
+            ],
+        }
+        required_node_properties = {
+            KnowledgeNodeKind.ENTITY: ("name", "entity_type", "evidence_quote"),
+            KnowledgeNodeKind.RESOURCE: ("name", "resource_id"),
+            KnowledgeNodeKind.EXTERNAL_SOURCE: ("name", "evidence_quote"),
+        }
+        return GraphSchema(
+            node_types=tuple(
+                NodeType(
+                    label=kind.value,
+                    description=kind.value,
+                    properties=properties,
+                    additional_properties=False,
                 )
-                for kind, property_names in required_node_properties.items()
-                for property_name in property_names
+                for kind, properties in node_properties.items()
             ),
-            *(
-                ConstraintType(
-                    type=GraphConstraintType.EXISTENCE,
-                    property_names=(property_name,),
-                    relationship_type=relation.value,
+            relationship_types=relationship_types,
+            patterns=patterns,
+            # 存在性约束：必填字段必须出现，否则 SDK 校验失败。
+            constraints=(
+                *(
+                    ConstraintType(
+                        type=GraphConstraintType.EXISTENCE,
+                        property_names=(property_name,),
+                        node_type=kind.value,
+                    )
+                    for kind, property_names in required_node_properties.items()
+                    for property_name in property_names
+                ),
+                *(
+                    ConstraintType(
+                        type=GraphConstraintType.EXISTENCE,
+                        property_names=(property_name,),
+                        relationship_type=relation.value,
+                    )
+                    for relation in descriptions
+                    for property_name in ("evidence_quote", "assertion")
+                ),
+            ),
+            additional_node_types=False,
+            additional_relationship_types=False,
+            additional_patterns=False,
+        )
+
+
+def _encode_candidate_graph(graph: Neo4jGraph, window_id: str) -> str:
+    """把候选图的节点/关系 ID 前缀从 window_id: 转换为 stored:，序列化为 JSON。
+
+    转换前缀后，存储的图不再绑定具体窗口身份，仅记录拓扑结构；
+    后续读取时再按当前 window_id 还原前缀，便于校验。
+    """
+    prefix = f"{window_id}:"
+    normalized = Neo4jGraph(
+        nodes=[
+            node.model_copy(
+                update={"id": _replace_prefix(node.id, prefix, "stored:")}
+            )
+            for node in graph.nodes
+        ],
+        relationships=[
+            relation.model_copy(
+                update={
+                    "start_node_id": _replace_prefix(
+                        relation.start_node_id,
+                        prefix,
+                        "stored:",
+                    ),
+                    "end_node_id": _replace_prefix(
+                        relation.end_node_id,
+                        prefix,
+                        "stored:",
+                    ),
+                }
+            )
+            for relation in graph.relationships
+        ],
+    )
+    return normalized.model_dump_json()
+
+
+def _decode_candidate_graph(payload: str, window_id: str) -> Neo4jGraph | None:
+    """把 stored: 前缀还原为 window_id: 前缀，恢复节点 ID 的窗口归属。
+
+    返回 None 表示 payload 不是合法的候选图 JSON（比如旧版本格式），
+    调用方应据此重新触发抽取。
+    """
+    try:
+        graph = Neo4jGraph.model_validate_json(payload)
+        prefix = f"{window_id}:"
+        return Neo4jGraph(
+            nodes=[
+                node.model_copy(
+                    update={
+                        "id": _replace_prefix(
+                            node.id,
+                            "stored:",
+                            prefix,
+                        )
+                    }
                 )
-                for relation in descriptions
-                for property_name in ("evidence_quote", "assertion")
-            ),
-        ),
-        additional_node_types=False,
-        additional_relationship_types=False,
-        additional_patterns=False,
+                for node in graph.nodes
+            ],
+            relationships=[
+                relation.model_copy(
+                    update={
+                        "start_node_id": _replace_prefix(
+                            relation.start_node_id,
+                            "stored:",
+                            prefix,
+                        ),
+                        "end_node_id": _replace_prefix(
+                            relation.end_node_id,
+                            "stored:",
+                            prefix,
+                        ),
+                    }
+                )
+                for relation in graph.relationships
+            ],
+        )
+    except ValueError:
+        return None
+
+
+def _slice_candidate_graph(graph: Neo4jGraph, window_id: str) -> Neo4jGraph:
+    """从一次批量抽取的合并图中按 window_id 切出该窗口对应的子图。
+
+    GraphRAG SDK 一次会处理多个窗口，输出合并图；本函数按 window_id: 前缀
+    过滤节点，并保留两端节点都属于本窗口的关系，丢弃跨窗口关系（不合法）。
+    """
+    prefix = f"{window_id}:"
+    nodes = [node for node in graph.nodes if node.id.startswith(prefix)]
+    node_ids = {node.id for node in nodes}
+    return Neo4jGraph(
+        nodes=nodes,
+        relationships=[
+            relation
+            for relation in graph.relationships
+            if relation.start_node_id in node_ids
+            and relation.end_node_id in node_ids
+        ],
     )
 
 
+def _replace_prefix(value: str, old: str, new: str) -> str:
+    if not value.startswith(old):
+        raise ValueError("graph node id does not match extraction window")
+    return f"{new}{value[len(old):]}"

@@ -1,6 +1,6 @@
 """编排一个资源 revision 的构建与跨后端发布。
 
-``ResourceIndexer`` 是 INDEX 流水线的顶层入口：把一份权威 Markdown 落库到资源元数据
+ResourceIndexer 是 INDEX 流水线的顶层入口：把一份权威 Markdown 落库到资源元数据
 和检索后端；知识图谱是否生成和写入由显式 settings 开关决定。
 """
 
@@ -37,7 +37,7 @@ class ResourceIndexer:
     """把权威 Markdown 发布为可读、可检索、可探索的同一 revision。
 
     设计要点：
-    - 派生身份全部由 ``content_revision`` 派生，重复索引同一内容会得到完全一致的 ID，
+    - 派生身份全部由 content_revision 派生，重复索引同一内容会得到完全一致的 ID，
       支持增量复用与缓存命中。
     - 写入流程分阶段（stage → apply → activate → cleanup），中途失败不会污染线上版本。
     - 检索索引与知识图谱解耦：FLAT_TEXT/EMPTY 不抽取图谱，但仍会发布检索索引。

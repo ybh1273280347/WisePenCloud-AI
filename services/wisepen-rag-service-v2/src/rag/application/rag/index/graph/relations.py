@@ -1,13 +1,4 @@
-"""知识关系 profile 和合法端点组合。
-
-本模块定义知识图谱中允许的关系类型与端点组合规则：
-
-1. **关系 profile**：把关系按语义分组（CORE / LEARNING / SCHOLARLY），允许按需启用
-   不同子集。``relation_descriptions`` 把启用的 profile 合并为
-   ``{关系类型: 描述文本}`` 字典，供 GraphRAG schema 使用。
-2. **合法端点组合**：``relation_pattern_allowed`` 限制 (source_kind, relation, target_kind)
-   三元组，避免模型输出语义错误的关系（如 ENTITY→RESOURCE 没有意义）。
-"""
+"""知识关系 profile 和合法端点组合。"""
 
 from enum import StrEnum
 
@@ -96,20 +87,14 @@ def relation_pattern_allowed(
     relation: KnowledgeRelationType,
     target: KnowledgeNodeKind,
 ) -> bool:
-    """判断 (source, relation, target) 端点组合是否合法。
-
-    合法组合规则：
-    1. ENTITY → ENTITY：允许所有关系（实体间是图谱的主体）。
-    2. RESOURCE → ENTITY：仅允许 ``_RESOURCE_RELATIONS`` 中的关系
-       （资源到实体的关系受限，避免资源节点被滥用）。
-    3. * → EXTERNAL_SOURCE：仅允许 CITES / DERIVED_FROM
-       （外部源只能作为引用或来源，不能参与其它语义关系）。
-    4. 其它组合（如 ENTITY → RESOURCE）一律不允许。
-    """
+    """判断 (source, relation, target) 端点组合是否合法。"""
+    # ENTITY → ENTITY：允许所有关系（实体间是图谱的主体）
     if source is KnowledgeNodeKind.ENTITY and target is KnowledgeNodeKind.ENTITY:
         return True
+    # RESOURCE → ENTITY：仅允许 _RESOURCE_RELATIONS 中的关系
     if source is KnowledgeNodeKind.RESOURCE and target is KnowledgeNodeKind.ENTITY:
         return relation in _RESOURCE_RELATIONS
+    # * → EXTERNAL_SOURCE：仅允许 CITES / DERIVED_FROM (外部源只能作为引用或来源)
     if target is KnowledgeNodeKind.EXTERNAL_SOURCE:
         return source in (KnowledgeNodeKind.RESOURCE, KnowledgeNodeKind.ENTITY) and (
             relation

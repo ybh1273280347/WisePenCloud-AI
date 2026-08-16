@@ -32,8 +32,8 @@ def parse_document_structure(
     """解析标题、页标记和锚点，并保留原始 Python 字符坐标。
 
     sections 按模式构建：SECTIONED 构建标题树，FLAT_TEXT 生成按
-    ``_FLAT_TEXT_SECTION_MAX_CHARACTERS`` 切分的合成 Section，EMPTY 为空列表。
-    调用方直接消费 ``structure.sections``，无需感知模式差异。
+    _FLAT_TEXT_SECTION_MAX_CHARACTERS 切分的合成 Section，EMPTY 为空列表。
+    调用方直接消费 structure.sections，无需感知模式差异。
     """
     blocks = MarkdownParser().parse(markdown)
     mode = _structure_mode(blocks)
@@ -257,7 +257,7 @@ def _build_flat_text_sections(
     content_revision: str,
     markdown: str,
 ) -> list[Section]:
-    """把无标题正文按 ``_FLAT_TEXT_SECTION_MAX_CHARACTERS`` 拆成无重叠导航 Section。
+    """把无标题正文按 _FLAT_TEXT_SECTION_MAX_CHARACTERS 拆成无重叠导航 Section。
 
     无标题文档在 MarkdownChunker 中退化为“TextBlock 按字符预算装箱 +
     超长 block 递归切分”，直接使用其输出。

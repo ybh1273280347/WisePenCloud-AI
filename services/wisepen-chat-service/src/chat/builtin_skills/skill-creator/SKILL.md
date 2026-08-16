@@ -53,7 +53,7 @@ Prefer raw artifacts such as example prompts, outputs, diffs, logs, or traces. G
 
 Every skill consists of a required SKILL.md file and optional bundled resources:
 
-```
+`
 skill-name/
 ├── SKILL.md (required)
 │   ├── YAML frontmatter metadata (required)
@@ -64,7 +64,7 @@ skill-name/
     ├── scripts/          - Executable code (Python/Bash/etc.)
     ├── references/       - Documentation intended to be loaded into context as needed
     └── assets/           - Files used in output (templates, icons, fonts, etc.)
-```
+`
 
 #### SKILL.md (required)
 
@@ -142,7 +142,7 @@ Keep SKILL.md body to the essentials and under 500 lines to minimize context blo
 
 **Pattern 1: High-level guide with references**
 
-```markdown
+`markdown
 # PDF Processing
 
 ## Quick start
@@ -155,7 +155,7 @@ Extract text with pdfplumber:
 - **Form filling**: See [FORMS.md](FORMS.md) for complete guide
 - **API reference**: See [REFERENCE.md](REFERENCE.md) for all methods
 - **Examples**: See [EXAMPLES.md](EXAMPLES.md) for common patterns
-```
+`
 
 Wisepen loads FORMS.md, REFERENCE.md, or EXAMPLES.md only when needed.
 
@@ -163,7 +163,7 @@ Wisepen loads FORMS.md, REFERENCE.md, or EXAMPLES.md only when needed.
 
 For Skills with multiple domains, organize content by domain to avoid loading irrelevant context:
 
-```
+`
 bigquery-skill/
 ├── SKILL.md (overview and navigation)
 └── reference/
@@ -171,20 +171,20 @@ bigquery-skill/
     ├── sales.md (opportunities, pipeline)
     ├── product.md (API usage, features)
     └── marketing.md (campaigns, attribution)
-```
+`
 
 When a user asks about sales metrics, Wisepen only reads sales.md.
 
 Similarly, for skills supporting multiple frameworks or variants, organize by variant:
 
-```
+`
 cloud-deploy/
 ├── SKILL.md (workflow + provider selection)
 └── references/
     ├── aws.md (AWS deployment patterns)
     ├── gcp.md (GCP deployment patterns)
     └── azure.md (Azure deployment patterns)
-```
+`
 
 When the user chooses AWS, Wisepen only reads aws.md.
 
@@ -192,7 +192,7 @@ When the user chooses AWS, Wisepen only reads aws.md.
 
 Show basic content, link to advanced content:
 
-```markdown
+`markdown
 # DOCX Processing
 
 ## Creating documents
@@ -205,7 +205,7 @@ For simple edits, modify the XML directly.
 
 **For tracked changes**: See [REDLINING.md](REDLINING.md)
 **For OOXML details**: See [OOXML.md](OOXML.md)
-```
+`
 
 Wisepen reads REDLINING.md or OOXML.md only when the user needs those features.
 

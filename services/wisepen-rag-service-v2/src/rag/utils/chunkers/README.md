@@ -4,14 +4,14 @@
 
 ## 公开入口
 
-```python
+`python
 from rag.utils.chunkers import ChunkDocument, MarkdownChunker, PlainTextChunker
 
 markdown_result = MarkdownChunker(max_characters=6000).chunk(
     document=ChunkDocument(text=markdown, content_type="text/markdown")
 )
 plain_result = PlainTextChunker().chunk(document=ChunkDocument(text=text))
-```
+`
 
 `ChunkingResult` 包含：
 
@@ -23,7 +23,7 @@ plain_result = PlainTextChunker().chunk(document=ChunkDocument(text=text))
 
 ## 数据流
 
-```text
+`text
 原始正文
   -> MarkdownParser / plain text splitter
   -> TextBlock
@@ -32,7 +32,7 @@ plain_result = PlainTextChunker().chunk(document=ChunkDocument(text=text))
 
 Markdown TextBlock
   -> TextLocator（直接回源）
-```
+`
 
 `TextBlock` 是解析阶段的结构单元。`Chunk` 可以包含多个 block；只有语义单元超过 `max_characters` 时才继续按完整 block 装箱，单个超长 block 才使用递归 splitter 兜底。
 
@@ -40,12 +40,12 @@ Markdown TextBlock
 
 每个 chunk 的 `source_spans` 是权威证据范围，使用左闭右开的原文字符区间。chunk 文本按以下方式物化：
 
-```python
+`python
 source_text = "\n\n".join(
     document.text[span.start_offset:span.end_offset].strip()
     for span in chunk.source_spans
 )
-```
+`
 
 `start_offset/end_offset` 只是 chunk 覆盖的最外层范围；精确回读必须使用 `source_spans`。`ToolContentStore` 不重复持久化 chunk 文本，读取时从权威原文按 spans 物化。
 
@@ -83,10 +83,10 @@ locator 只保存 `name`、`kind`、`start_offset` 和 `end_offset`，不引用 
 
 `ToolContentStore` 根据 `content_type` 路由：
 
-```text
+`text
 text/markdown -> MarkdownChunker
 其他文本      -> PlainTextChunker
-```
+`
 
 消费契约是：
 

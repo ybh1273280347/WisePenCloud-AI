@@ -5,14 +5,11 @@ from neo4j_graphrag.experimental.components.types import (
     Neo4jRelationship,
 )
 
-from rag.application.rag.index.graph.candidate_codec import (
-    encode_candidate_graph,
-)
 from rag.application.rag.index.graph.candidate_validator import (
     KnowledgeCandidateValidator,
 )
 from rag.application.rag.index.graph.extractor import (
-    KnowledgeGraphExtractor,
+    KnowledgeGraphExtractor, _encode_candidate_graph,
 )
 from rag.application.rag.index.graph.llm import QueryClientGraphRagLLM
 from rag.application.rag.index.graph.windows import (
@@ -173,7 +170,7 @@ class _SourceReader:
 async def test_stored_candidate_artifacts_are_revalidated() -> None:
     window = build_extraction_windows(_source("方法甲"))[0]
     artifact_store = _ArtifactStore(
-        encode_candidate_graph(
+        _encode_candidate_graph(
             _candidate_graph(window.window_id, assertion="negated"),
             window.window_id,
         )

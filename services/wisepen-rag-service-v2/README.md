@@ -14,7 +14,7 @@ WisePen RAG v2 是 WisePen 的文档知识服务。它不把 RAG 简化成“召
 
 ## 设计主张
 
-```text
+`text
                          ┌────────────────────┐
                          │  applied revision  │
                          │ Markdown + ACL     │
@@ -29,7 +29,7 @@ WisePen RAG v2 是 WisePen 的文档知识服务。它不把 RAG 简化成“召
                             │                     │
                        navigation state      VERIFY
                                       SourceRef / GraphEvidence -> 原文
-```
+`
 
 - **检索结果是阅读入口。** Qdrant 命中的 RetrievalChunk 会先经过核验，再提升成完整 ReadingBlock；模型得到的是可读正文和 Section 锚点，而不是孤立的内部 chunk。
 - **确定性阅读不依赖检索。** `getPageContent` 和 `getSectionContent` 直接读取 applied revision。Section 是稳定地址，`flat_text` 也通过 synthetic Section 保留这条路径。
@@ -51,7 +51,7 @@ WisePen RAG v2 是 WisePen 的文档知识服务。它不把 RAG 简化成“召
 
 ## 一个完整的阅读循环
 
-```text
+`text
 locateCandidate
       │ state_id + section_id / node_id
       ├──> getSectionContent       直接读取权威正文
@@ -59,7 +59,7 @@ locateCandidate
       └──> expandGraph             沿新节点探索
               │ relation / node evidence ReadingBlocks
               └──> getSectionContent
-```
+`
 
 这条循环有意保留两种不同的入口：Section ID 用于确定性阅读，node ID 用于图谱导航。它们互相协作，但不互相冒充。
 
@@ -67,13 +67,13 @@ locateCandidate
 
 所有接口都是需要登录的内部 HTTP POST endpoint，统一使用平台响应包装 `R`。接口层负责身份、参数和错误码映射；application 层不依赖该包装。
 
-```text
+`text
 POST /internal/rag/locateCandidate
 POST /internal/rag/getDocumentOutline
 POST /internal/rag/getPageContent
 POST /internal/rag/getSectionContent
 POST /internal/rag/expandGraph
-```
+`
 
 模型可见视图遵循几个稳定约定：页归属统一为 `page_range`；目录同时保留 `title` 和 `section_path`；确定性 Section READ 不返回检索用 ReadingBlock；图路径使用 Cypher 风格箭头，并把证据挂在逐关系 step 上。
 
@@ -102,28 +102,28 @@ POST /internal/rag/expandGraph
 
 ## 开发
 
-```powershell
+`powershell
 uv sync
 uv run python -m rag.main
 uv run pytest -q
 uv run ruff check src tests
 uv run python -m compileall -q src tests
-```
+`
 
 Demo 会用生产 application 算法生成可审阅的文本输出：
 
-```powershell
+`powershell
 uv run python demo/navigation_output_demo.py
-```
+`
 
 输出位于 `demo/*_output.txt`，适合直接附带 review 注释。
 
 服务启动后可访问：
 
-```text
+`text
 GET /health
 GET /docs
-```
+`
 
 ## 文档导航
 

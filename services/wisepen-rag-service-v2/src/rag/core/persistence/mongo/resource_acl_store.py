@@ -13,7 +13,7 @@ class MongoResourceAclStore(ResourceAclStore):
     """按资源 ID 查询并按 ACL revision 单调写入本地 ACL。"""
 
     async def get_resource_acl(self, resource_id: str) -> ResourceAcl | None:
-        """直接读取单个本地 ACL；资源不存在时返回 ``None``。"""
+        """直接读取单个本地 ACL；资源不存在时返回 None。"""
         entity = await ResourceAclEntity.find_one({"resource_id": resource_id})
         return None if entity is None else _to_domain(entity)
 

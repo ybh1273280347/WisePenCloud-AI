@@ -1,13 +1,13 @@
 """QueryClient 与 Neo4j GraphRAG SDK 的适配。
 
-GraphRAG SDK 提供了一套基于 ``LLMInterfaceV2`` 的抽取流水线，但项目自己的
-``QueryClient`` 接口与其不完全一致；本模块负责两层适配：
+GraphRAG SDK 提供了一套基于 LLMInterfaceV2 的抽取流水线，但项目自己的
+QueryClient 接口与其不完全一致；本模块负责两层适配：
 
-1. ``QueryClientGraphRagLLM``：把 ``QueryClient`` 适配为 ``LLMInterfaceV2``，
-   让 SDK 的 ``LLMEntityRelationExtractor`` 能直接调用项目模型。
-2. ``GraphRagCandidateExtractor``：包装 SDK 的 ``LLMEntityRelationExtractor``，
-   把一组 ``KnowledgeExtractionWindow`` 渲染为 SDK 接受的 ``TextChunks`` 输入，
-   并返回合并后的 ``Neo4jGraph``（包含全部窗口的节点与关系）。
+1. QueryClientGraphRagLLM：把 QueryClient 适配为 LLMInterfaceV2，
+   让 SDK 的 LLMEntityRelationExtractor 能直接调用项目模型。
+2. GraphRagCandidateExtractor：包装 SDK 的 LLMEntityRelationExtractor，
+   把一组 KnowledgeExtractionWindow 渲染为 SDK 接受的 TextChunks 输入，
+   并返回合并后的 Neo4jGraph（包含全部窗口的节点与关系）。
 """
 
 from __future__ import annotations
@@ -38,12 +38,7 @@ if TYPE_CHECKING:
 class QueryClientGraphRagLLM(LLMInterfaceV2):
     """将项目 QueryClient 适配为 GraphRAG 的结构化输出接口。
 
-    实现 ``invoke`` / ``ainvoke`` 两个方法（同步 + 异步），供 SDK 内部按需调用；
-    适配过程主要做两件事：
-    - 把 SDK 传入的 ``LLMMessage`` 列表拆分为 (prompt, messages) 两部分，
-      以匹配 ``QueryClient.query`` 的签名。
-    - 把 SDK 传入的 ``response_format``（可能是 pydantic 模型或 dict）转换为
-      OpenAI 兼容的 ``json_schema`` 响应格式描述。
+    实现 invoke / ainvoke 两个方法（同步 + 异步），供 SDK 内部按需调用；
     """
 
     supports_structured_output = True
@@ -54,11 +49,7 @@ class QueryClientGraphRagLLM(LLMInterfaceV2):
 
     @property
     def artifact_profile(self) -> str:
-        """返回 LLM 的“生成画像”标识，参与 artifact 缓存键计算。
-
-        把 model + thinking 配置拼接成短字符串；任一变化都会让缓存键失效，
-        强制重新抽取。
-        """
+        """返回 LLM 的生成画像标识，参与 artifact 缓存键计算。"""
         return f"{self._client.model}:{self._client.thinking or 'default'}"
 
     def invoke(
@@ -101,17 +92,12 @@ class GraphRagCandidateExtractor:
     __slots__ = ("_extractor",)
 
     def __init__(self, *, llm: LLMInterfaceV2, max_concurrency: int) -> None:
-        # ``LLMEntityRelationExtractor`` 是 SDK 的核心抽取器：
-        # - create_lexical_graph=False：不生成额外的词汇图（项目不需要）。
-        # - on_error=RAISE：抽取出错时直接抛出，便于上层感知。
-        # - use_structured_output=True：要求模型以 JSON schema 返回，便于解析。
-        
         self._extractor = LLMEntityRelationExtractor(
             llm=llm,  # type: ignore[arg-type]
-            create_lexical_graph=False,
-            on_error=OnError.RAISE,
+            create_lexical_graph=False,     # 不生成额外的词汇图
+            on_error=OnError.RAISE,     # 抽取出错时直接抛出，便于上层感知
             max_concurrency=max_concurrency,
-            use_structured_output=True,
+            use_structured_output=True,     # 要求模型以 JSON schema 返回，便于解析。
         )
 
     async def extract(
@@ -120,10 +106,6 @@ class GraphRagCandidateExtractor:
         schema: GraphSchema,
     ) -> Neo4jGraph:
         """渲染所有窗口并调用 SDK 抽取，返回包含全部窗口的合并候选图。
-
-        每个 ``KnowledgeExtractionWindow`` 被渲染为一段 XML 风格的 prompt 文本，
-        通过 ``TextChunk`` 传给 SDK；``uid`` 设为 ``window_id``，
-        SDK 会把节点 ID 自动加上 ``window_id:`` 前缀，便于后续按窗口切分。
         """
         return await self._extractor.run(
             chunks=TextChunks(
@@ -145,12 +127,7 @@ class GraphRagCandidateExtractor:
 
 
 def _query_messages(input: list[LLMMessage]) -> tuple[str, list[dict[str, Any]]]:
-    """把 SDK 的 ``LLMMessage`` 列表转换为 ``QueryClient`` 接受的 (prompt, messages)。
-
-    SDK 通常以“最后一条 user message 作为主 prompt，其余作为历史 messages”的形式
-    组织对话；本函数把最后一条消息的内容提取为 prompt，前面的消息保留为 messages
-    列表（dict 形式）。
-    """
+    """把 SDK 的 LLMMessage 列表转换为 QueryClient 接受的 (prompt, messages)。 """
     if not input:
         raise ValueError("GraphRAG LLM input must contain at least one message")
     messages = [
@@ -167,7 +144,7 @@ def _query_messages(input: list[LLMMessage]) -> tuple[str, list[dict[str, Any]]]
 def _response_format(
     value: type[BaseModel] | dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    """把 SDK 传入的 ``response_format`` 转换为 OpenAI 兼容的描述字典。"""
+    """把 SDK 传入的 response_format 转换为 OpenAI 兼容的描述字典。"""
     if value is None or isinstance(value, dict):
         return value
     return {

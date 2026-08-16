@@ -3,7 +3,7 @@
 ReadingBlock 是介于 Section 和 RetrivalChunk 之间的中等粒度文本单元：
 - 每个 ReadingBlock 属于且仅属于一个 Section。
 - 每个 ReadingBlock 持有原文 span 列表，可严格回源到权威 Markdown。
-- ReadingBlock 内文本不超过 ``_READING_BLOCK_MAX_CHARACTERS``，便于下游抽取窗口复用。
+- ReadingBlock 内文本不超过 _READING_BLOCK_MAX_CHARACTERS，便于下游抽取窗口复用。
 """
 
 from collections.abc import Sequence
@@ -124,8 +124,8 @@ def _build_flat_text_reading_blocks(
 ) -> list[ReadingBlock]:
     """FLAT_TEXT 模式下生成 ReadingBlock。
 
-    FLAT_TEXT 的合成 Section 已在 ``parse_document_structure`` 中按同一组
-    span_groups 切好，``section.content_spans`` 就是当初的切分结果，直接复用。
+    FLAT_TEXT 的合成 Section 已在 parse_document_structure 中按同一组
+    span_groups 切好，section.content_spans 就是当初的切分结果，直接复用。
     """
     return [
         _reading_block(
@@ -168,7 +168,7 @@ def _reading_block(
     source_spans: list[SourceSpan],
     structure: DocumentStructure,
 ) -> ReadingBlock:
-    """组装单个 ``ReadingBlock`` 实例。"""
+    """组装单个 ReadingBlock 实例。"""
     return ReadingBlock(
         block_id=_build_reading_block_id(
             resource_id=resource_id,

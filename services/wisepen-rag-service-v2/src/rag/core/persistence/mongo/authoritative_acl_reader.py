@@ -100,7 +100,7 @@ class AuthoritativeAclProjector:
 
 
 class MongoAuthoritativeAclReader(AuthoritativeAclReader):
-    """只读上游 ``wisepen_resource_items``，不保存或读取本地 ACL。"""
+    """只读上游 wisepen_resource_items，不保存或读取本地 ACL。"""
 
     __slots__ = ("_collection", "_projector")
 

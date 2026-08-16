@@ -1,8 +1,8 @@
 """constructor 内部使用的原文 span 渲染和映射规则。
 
 本模块处理两类坐标之间的转换：
-- ``markdown`` 原文坐标：直接对应权威 Markdown 字符串的 Python 字符偏移。
-- ``rendered`` 渲染坐标：把若干 ``SourceSpan`` 切片用 ``\\n\\n`` 拼接后形成的
+- markdown 原文坐标：直接对应权威 Markdown 字符串的 Python 字符偏移。
+- rendered 渲染坐标：把若干 SourceSpan 切片用 \\n\\n 拼接后形成的
   “虚拟文本”中的偏移；用于把 chunker 在拼接文本上切出来的子块重新映射回原文。
 """
 
@@ -27,7 +27,7 @@ def _map_rendered_spans_to_source(
         source_spans: 渲染文本对应的原文片段列表（按渲染顺序排列）。
 
     Returns:
-        去重后的原文 ``SourceSpan`` 列表；当某个 rendered_span 跨越多个 source 片段时，
+        去重后的原文 SourceSpan 列表；当某个 rendered_span 跨越多个 source 片段时，
         会被拆成多段分别映射。
     """
     mapped: list[SourceSpan] = []
@@ -58,7 +58,7 @@ def _map_rendered_spans_to_source(
             # 同一个 span 可能被多个 source 片段命中（跨片段 rendered_span），去重。
             if mapped_span not in mapped:
                 mapped.append(mapped_span)
-        # 推进游标：当前片段长度 + 2 个换行符字符（与 ``\n\n`` 对应）。
+        # 推进游标：当前片段长度 + 2 个换行符字符（与 \n\n 对应）。
         rendered_cursor = rendered_end + 2
 
     return mapped

@@ -47,7 +47,7 @@ class LocateError(RuntimeError):
 
 @dataclass(slots=True)
 class MatchRangeView:
-    """相对于 ``RetrievalReadingBlockView.text`` 的 Python 字符半开区间。"""
+    """相对于 RetrievalReadingBlockView.text 的 Python 字符半开区间。"""
 
     start_offset: int
     end_offset: int
