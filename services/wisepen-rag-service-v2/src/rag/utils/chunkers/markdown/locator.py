@@ -27,9 +27,7 @@ def _section_locators(
     headings = [
         block
         for block in blocks
-        if block.block_kind == BlockKind.HEADING
-        and block.section_path
-        and block.start_offset is not None
+        if block.block_kind == BlockKind.HEADING and block.section_path
     ]
     locators: list[TextLocator] = []
     for index, heading in enumerate(headings):
@@ -61,8 +59,6 @@ def _page_locators(
         block
         for block in blocks
         if block.block_kind == BlockKind.PAGE_MARKER
-        and block.start_offset is not None
-        and block.end_offset is not None
         and block.metadata.get("page_label") is not None
     ]
     locators: list[TextLocator] = []
@@ -90,8 +86,6 @@ def _anchor_locators(
     for block in blocks:
         anchor_label = block.metadata.get("anchor_label")
         if not isinstance(anchor_label, str) or not anchor_label:
-            continue
-        if block.start_offset is None or block.end_offset is None:
             continue
         locators.append(
             TextLocator(

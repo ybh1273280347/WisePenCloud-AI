@@ -41,21 +41,10 @@ from rag.utils.chunkers import SourceSpan
 
 
 def _revision(markdown: str = "# 标题\n\n正文🙂。"):
-    content_revision = build_content_revision_id(
-        resource_id="resource-1",
-        document_version=1,
-        markdown=markdown,
-    )
-    structure = parse_document_structure(
-        resource_id="resource-1",
-        content_revision=content_revision,
-        markdown=markdown,
-    )
     return create_content_revision(
         resource_id="resource-1",
         document_version=1,
         markdown=markdown,
-        structure=structure,
     )
 
 
@@ -217,8 +206,6 @@ def _evidence_facts() -> tuple[
         sections=structure.sections,
     )
     chunks = build_retrieval_chunks(
-        resource_id="resource-1",
-        content_revision=revision_id,
         markdown=markdown,
         structure=structure,
         sections=structure.sections,
@@ -227,17 +214,12 @@ def _evidence_facts() -> tuple[
     refs = build_source_refs(
         resource_id="resource-1",
         content_revision=revision_id,
-        markdown=markdown,
-        structure=structure,
-        sections=structure.sections,
-        reading_blocks=blocks,
         retrieval_chunks=chunks,
     )
     revision = create_content_revision(
         resource_id="resource-1",
         document_version=1,
         markdown=markdown,
-        structure=structure,
     )
     return markdown, structure, blocks, chunks, refs, revision
 

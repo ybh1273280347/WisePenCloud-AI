@@ -94,15 +94,11 @@ def _to_outline(
         return []
 
     children_by_parent: dict[str | None, list[Section]] = defaultdict(list)
+    # SECTIONED 有且仅有一个虚拟根 (level == 0)；FLAT_TEXT 顶层全是 level 1 的合成 Section。
     root_section: Section | None = None
-    # 查找虚拟根节点 (level == 0)；标题可能为空（无前言）或为合成标题（有前言）。
     for section in sections:
         children_by_parent[section.parent_section_id].append(section)
-        if (
-            root_section is None
-            and section.parent_section_id is None
-            and section.level == 0
-        ):
+        if section.parent_section_id is None and section.level == 0:
             root_section = section
 
     # 按出现顺序排列子节点
@@ -111,36 +107,36 @@ def _to_outline(
             key=lambda section: (section.ordinal, section.own_span.start_offset)
         )
 
-    # 虚拟根带合成标题（第一个标题之前存在前言正文）时，前言作为独立大纲节点
-    # 置顶展示，其子标题平级排在其后；无名 root 直接从其子标题展开。
+    # FLAT_TEXT：无虚拟根，顶层合成 Section 直接逐个投影为大纲节点。
     if root_section is None:
-        root_sections = [
-            section for section in children_by_parent.get(None, []) if section.title
+        return [
+            _to_outline_node(
+                section=section,
+                children_by_parent=children_by_parent,
+                pages=pages,
+            )
+            for section in children_by_parent[None]
         ]
-        preamble_node = None
-    else:
-        root_sections = children_by_parent.get(root_section.section_id, [])
-        preamble_node = (
+
+    # SECTIONED：root 的直接子标题作为大纲根；root 带合成标题（存在前言）时，
+    # 前言作为独立叶子节点置顶展示，避免"前言包含整篇文档"的树形误导。
+    nodes: list[DocumentOutlineNode] = []
+    if root_section.title:
+        nodes.append(
             _to_outline_node(
                 section=root_section,
                 children_by_parent=children_by_parent,
                 pages=pages,
                 expand_children=False,
             )
-            if root_section.title
-            else None
         )
-
-    nodes: list[DocumentOutlineNode] = []
-    if preamble_node is not None:
-        nodes.append(preamble_node)
     nodes.extend(
         _to_outline_node(
             section=section,
             children_by_parent=children_by_parent,
             pages=pages,
         )
-        for section in root_sections
+        for section in children_by_parent[root_section.section_id]
     )
     return nodes
 

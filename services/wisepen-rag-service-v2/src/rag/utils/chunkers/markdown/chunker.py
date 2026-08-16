@@ -20,12 +20,21 @@ from .parser import MarkdownParser
 class MarkdownChunker:
     """按标题语义把 Markdown 结构块投影为检索块。"""
 
-    __slots__ = ("_parser", "max_characters")
+    __slots__ = ("_parser", "max_characters", "chunk_overlap")
 
-    def __init__(self, *, max_characters: int = 6000) -> None:
+    def __init__(
+        self,
+        *,
+        max_characters: int = 6000,
+        chunk_overlap: int = 0,
+    ) -> None:
         if max_characters <= 0:
             raise ValueError("max_characters must be positive")
+        if chunk_overlap < 0:
+            raise ValueError("chunk_overlap must be non-negative")
         self.max_characters = max_characters
+        # 超长 block 递归切分时相邻 part 之间的字符重叠量，缓解硬切割造成的语义损失。
+        self.chunk_overlap = chunk_overlap
         self._parser = MarkdownParser()
 
     def chunk(self, *, document: ChunkDocument) -> ChunkingResult:
@@ -136,7 +145,7 @@ class MarkdownChunker:
         parts = split_markdown_text(
             ChunkDocument(text=block.text),
             chunk_size=self.max_characters,
-            chunk_overlap=0,
+            chunk_overlap=self.chunk_overlap,
         )
         # splitter 返回的 offset 是相对于 block.text 的局部坐标，
         # 需要加上 block.start_offset 才能映射回整篇原文的绝对坐标
@@ -145,16 +154,8 @@ class MarkdownChunker:
                 block,
                 block_id=f"{block.block_id}:part:{index}",
                 text=part.text,
-                start_offset=(
-                    block.start_offset + part.start_offset
-                    if block.start_offset is not None and part.start_offset is not None
-                    else None
-                ),
-                end_offset=(
-                    block.start_offset + part.end_offset
-                    if block.start_offset is not None and part.end_offset is not None
-                    else None
-                ),
+                start_offset=block.start_offset + part.start_offset,
+                end_offset=block.start_offset + part.end_offset,
             )
             for index, part in enumerate(parts)
         )
@@ -185,9 +186,7 @@ class MarkdownChunker:
             if (title := block.metadata.get("title")) is not None
         )
         source_spans = tuple(
-            SourceSpan(block.start_offset, block.end_offset)
-            for block in selected
-            if block.start_offset is not None and block.end_offset is not None
+            SourceSpan(block.start_offset, block.end_offset) for block in selected
         )
         anchor_labels = tuple(
             dict.fromkeys(
@@ -200,8 +199,8 @@ class MarkdownChunker:
             chunk_id="pending",
             text="\n".join(block.text for block in selected if block.text).strip(),
             chunk_index=0,
-            start_offset=source_spans[0].start_offset if source_spans else None,
-            end_offset=source_spans[-1].end_offset if source_spans else None,
+            start_offset=source_spans[0].start_offset,
+            end_offset=source_spans[-1].end_offset,
             source_spans=source_spans,
             start_block=selected[0].block_index,
             end_block=selected[-1].block_index,

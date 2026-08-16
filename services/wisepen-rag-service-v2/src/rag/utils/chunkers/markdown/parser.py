@@ -246,8 +246,6 @@ def _associate_numbered_labels(
                 anchor is not None
                 and target.block_kind is anchor[0]
                 # 两个 block 之间不能有非空白内容，防止误合并无关段落
-                and first.end_offset is not None
-                and second.start_offset is not None
                 and not text[first.end_offset : second.start_offset].strip()
             ):
                 start_offset = first.start_offset
@@ -255,11 +253,7 @@ def _associate_numbered_labels(
                 associated.append(
                     replace(
                         target,
-                        text=(
-                            text[start_offset:end_offset]
-                            if start_offset is not None and end_offset is not None
-                            else f"{first.text}\n\n{second.text}"
-                        ),
+                        text=text[start_offset:end_offset],
                         start_offset=start_offset,
                         end_offset=end_offset,
                         section_path=target.section_path or caption.section_path,

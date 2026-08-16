@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from rag.application.rag.index.constructor import (
     build_content_revision_id,
-    build_flat_text_sections,
     build_reading_blocks,
     build_retrieval_chunks,
     build_source_refs,
@@ -47,18 +46,9 @@ def build_demo_document(*, resource_id: str, markdown: str) -> DemoDocument:
         resource_id=resource_id,
         document_version=1,
         markdown=markdown,
-        structure=structure,
     )
-    sections = (
-        build_flat_text_sections(
-            resource_id=resource_id,
-            content_revision=content_revision,
-            markdown=markdown,
-        )
-        if structure.mode is StructureMode.FLAT_TEXT
-        else structure.sections
-    )
-    structure.sections = sections
+    # sections 已按模式在 parse_document_structure 中构建完成。
+    sections = structure.sections
     reading_blocks = build_reading_blocks(
         resource_id=resource_id,
         content_revision=content_revision,
@@ -67,8 +57,6 @@ def build_demo_document(*, resource_id: str, markdown: str) -> DemoDocument:
         sections=sections,
     )
     retrieval_chunks = build_retrieval_chunks(
-        resource_id=resource_id,
-        content_revision=content_revision,
         markdown=markdown,
         structure=structure,
         sections=sections,
@@ -77,10 +65,6 @@ def build_demo_document(*, resource_id: str, markdown: str) -> DemoDocument:
     source_refs = build_source_refs(
         resource_id=resource_id,
         content_revision=content_revision,
-        markdown=markdown,
-        structure=structure,
-        sections=sections,
-        reading_blocks=reading_blocks,
         retrieval_chunks=retrieval_chunks,
     )
     return DemoDocument(

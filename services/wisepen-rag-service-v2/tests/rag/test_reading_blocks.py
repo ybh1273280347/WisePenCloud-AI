@@ -1,9 +1,6 @@
 from itertools import pairwise
 
-import pytest
-
 from rag.application.rag.index.constructor import (
-    build_flat_text_sections,
     build_reading_blocks,
     parse_document_structure,
 )
@@ -50,11 +47,7 @@ def test_flat_text_builds_non_overlapping_sections_and_parent_blocks() -> None:
         content_revision="revision-1",
         markdown=markdown,
     )
-    sections = build_flat_text_sections(
-        resource_id="resource-1",
-        content_revision="revision-1",
-        markdown=markdown,
-    )
+    sections = structure.sections
     blocks = build_reading_blocks(
         resource_id="resource-1",
         content_revision="revision-1",
@@ -143,25 +136,3 @@ def test_empty_document_builds_no_reading_blocks() -> None:
         == []
     )
 
-
-def test_flat_text_rejects_sections_from_another_revision() -> None:
-    markdown = "无标题正文。"
-    structure = parse_document_structure(
-        resource_id="resource-1",
-        content_revision="revision-1",
-        markdown=markdown,
-    )
-    sections = build_flat_text_sections(
-        resource_id="resource-1",
-        content_revision="revision-2",
-        markdown=markdown,
-    )
-
-    with pytest.raises(ValueError, match="identity"):
-        build_reading_blocks(
-            resource_id="resource-1",
-            content_revision="revision-1",
-            markdown=markdown,
-            structure=structure,
-            sections=sections,
-        )

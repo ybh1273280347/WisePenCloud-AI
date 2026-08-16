@@ -78,7 +78,9 @@ def test_document_without_headings_is_flat_text() -> None:
     )
 
     assert structure.mode is StructureMode.FLAT_TEXT
-    assert structure.sections == []
+    # FLAT_TEXT 的合成 Section 由 parse_document_structure 直接构建。
+    assert [section.title for section in structure.sections] == ["全文片段 1"]
+    assert structure.sections[0].own_span == SourceSpan(0, len("只有正文，没有标题。"))
 
 
 def test_section_ids_are_stable_and_revision_scoped() -> None:

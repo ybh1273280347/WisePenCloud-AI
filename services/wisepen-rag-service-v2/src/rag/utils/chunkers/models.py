@@ -53,10 +53,10 @@ class TextBlock:
 
     block_id: str  # 当前文档内的块标识
     text: str  # 保留原格式的块文本
+    start_offset: int  # 原文起始位置，左闭
+    end_offset: int  # 原文结束位置，右开
     block_kind: BlockKind = BlockKind.PARAGRAPH  # 结构语义
     block_index: int = 0  # 当前文档内的顺序索引
-    start_offset: int | None = None  # 原文起始位置，左闭
-    end_offset: int | None = None  # 原文结束位置，右开
     section_path: tuple[str, ...] = ()  # 从一级标题到当前标题的完整路径
     metadata: Metadata = field(default_factory=dict)  # 解析器补充的结构信息
 
@@ -85,8 +85,8 @@ class Chunk:
     chunk_id: str  # 归一化前为临时 ID，归一化后为稳定 ID
     text: str  # 分块正文
     chunk_index: int  # 最终结果中的连续顺序索引
-    start_offset: int | None = None  # 原文起始位置，左闭
-    end_offset: int | None = None  # 原文结束位置，右开
+    start_offset: int  # 原文起始位置，左闭
+    end_offset: int  # 原文结束位置，右开
     source_spans: tuple[SourceSpan, ...] = ()  # 实际参与该 chunk 的原文范围
     start_block: int | None = None  # 覆盖的首个结构块索引
     end_block: int | None = None  # 覆盖的末个结构块索引

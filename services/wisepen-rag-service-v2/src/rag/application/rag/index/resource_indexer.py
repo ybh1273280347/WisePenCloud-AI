@@ -20,7 +20,6 @@ from rag.domain.repositories import (
 
 from .constructor import (
     build_content_revision_id,
-    build_flat_text_sections,
     build_reading_blocks,
     build_retrieval_chunks,
     build_source_refs,
@@ -103,19 +102,9 @@ class ResourceIndexer:
             resource_id=resource_id,
             document_version=document_version,
             markdown=markdown,
-            structure=structure,
         )
-        # FLAT_TEXT 模式没有 Section 树，需要单独按 4000 字符切分；其它模式直接复用 structure。
-        sections = (
-            build_flat_text_sections(
-                resource_id=resource_id,
-                content_revision=content_revision,
-                markdown=markdown,
-            )
-            if structure.mode is StructureMode.FLAT_TEXT
-            else structure.sections
-        )
-        structure.sections = sections
+        # sections 已按模式在 parse_document_structure 中构建完成。
+        sections = structure.sections
         reading_blocks = build_reading_blocks(
             resource_id=resource_id,
             content_revision=content_revision,
@@ -124,8 +113,6 @@ class ResourceIndexer:
             sections=sections,
         )
         chunks = build_retrieval_chunks(
-            resource_id=resource_id,
-            content_revision=content_revision,
             markdown=markdown,
             structure=structure,
             sections=sections,
@@ -134,10 +121,6 @@ class ResourceIndexer:
         source_refs = build_source_refs(
             resource_id=resource_id,
             content_revision=content_revision,
-            markdown=markdown,
-            structure=structure,
-            sections=sections,
-            reading_blocks=reading_blocks,
             retrieval_chunks=chunks,
         )
 
