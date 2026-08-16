@@ -334,6 +334,7 @@ class Container(containers.DeclarativeContainer):
         retrieval_writer=retrieval_index_writer,
         graph_extractor=knowledge_graph_extractor,
         graph_repository=knowledge_graph_repository,
+        contextual_enabled=settings.RAG_CONTEXTUAL_INDEX_ENABLED,
         graph_enabled=settings.RAG_KNOWLEDGE_GRAPH_ENABLED,
     )
     resource_deleter = providers.Singleton(

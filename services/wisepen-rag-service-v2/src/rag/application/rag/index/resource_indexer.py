@@ -54,6 +54,7 @@ class ResourceIndexer:
         retrieval_writer: RetrievalIndexWriter,
         graph_extractor: KnowledgeGraphExtractor,
         graph_repository: KnowledgeGraphRepository,
+        contextual_enabled: bool = True,
         graph_enabled: bool = False,
     ) -> None:
         self._contextual_text = contextual_text
@@ -64,6 +65,7 @@ class ResourceIndexer:
         self._retrieval_writer = retrieval_writer
         self._graph_extractor = graph_extractor
         self._graph_repository = graph_repository
+        self._contextual_enabled = contextual_enabled
         self._graph_enabled = graph_enabled
 
     async def index_resource(
@@ -136,14 +138,16 @@ class ResourceIndexer:
         if action is StageAction.STALE:
             return action
 
-        # 3. 上下文增强
+        # 3. 上下文增强（可关闭的昂贵 LLM 旁路）
         # 为每个 chunk 生成检索上下文，提升 dense/BM25 召回；已缓存的内容不会重复调用模型。
-        chunks = await self._contextual_text.contextualize(
-            resource_id=resource_id,
-            structure=structure,
-            reading_blocks=reading_blocks,
-            chunks=chunks,
-        )
+        # 关闭时不重写 index_text，沿用构造时的 index_text=raw_text。
+        if self._contextual_enabled:
+            chunks = await self._contextual_text.contextualize(
+                resource_id=resource_id,
+                structure=structure,
+                reading_blocks=reading_blocks,
+                chunks=chunks,
+            )
 
         # 4. 向量计算
         # 先尝试复用已存储的向量（chunk_id 一致即可复用），缺失部分才调用 embedding 模型。

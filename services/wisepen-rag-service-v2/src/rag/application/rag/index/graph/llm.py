@@ -167,12 +167,7 @@ def _query_messages(input: list[LLMMessage]) -> tuple[str, list[dict[str, Any]]]
 def _response_format(
     value: type[BaseModel] | dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    """把 SDK 传入的 ``response_format`` 转换为 OpenAI 兼容的描述字典。
-
-    - ``None``：直接返回 ``None``，表示不限制响应格式。
-    - ``dict``：已经是 OpenAI 兼容格式（如 ``{"type": "json_object"}``），原样返回。
-    - ``BaseModel`` 子类：转换为 ``json_schema`` 描述，让模型按 schema 返回 JSON。
-    """
+    """把 SDK 传入的 ``response_format`` 转换为 OpenAI 兼容的描述字典。"""
     if value is None or isinstance(value, dict):
         return value
     return {

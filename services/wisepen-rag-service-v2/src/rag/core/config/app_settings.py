@@ -62,6 +62,9 @@ class AppSettings(BaseModel):
     # 图谱旁路默认关闭。
     RAG_KNOWLEDGE_GRAPH_ENABLED: bool = False
 
+    # 上下文增强（Contextual Retrieval）是昂贵的 LLM 旁路，调用方默认开启，此处可关闭。
+    RAG_CONTEXTUAL_INDEX_ENABLED: bool = False
+
     # 会话导航状态缓存
     RAG_NAVIGATION_STATE_TTL_SECONDS: int = 24 * 3600
 
