@@ -113,6 +113,8 @@ async def get_section_content(
             resource_id=request.resource_id,
             section_ids=request.section_ids,
             permission_scope=_permission_scope(user_id),
+            include_body=request.include_body,
+            exclude_directions=request.exclude_directions,
         )
     except ContentNotFoundError as error:
         raise ServiceException(RagErrorCode.RESOURCE_CONTENT_NOT_FOUND) from error

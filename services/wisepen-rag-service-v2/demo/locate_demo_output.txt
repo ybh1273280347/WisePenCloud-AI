@@ -61,7 +61,7 @@ GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应�
           "text": "WisePen RAG 使用向量检索召回相关 ReadingBlock，并按照标题树补充结构上相邻的阅读材料。\n",
           "page_range": "1",
           "anchor_labels": [],
-          "matches": [
+          "matched_chunks": [
             {
               "chunk_id": "rrc_a1cfa6d244792ba3bf8ef813b0cc2575",
               "source_ref_id": "rsrc_3b7b63223f57fc61a482271ea41837f3",

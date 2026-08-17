@@ -301,6 +301,40 @@ def test_flat_text_retrieval_view_keeps_synthetic_section_context() -> None:
     assert section.title == "全文片段 1"
     assert section.section_path == "全文片段 1"
     assert section.reading_blocks[0].page_labels == ["1"]
+    # 合成节单 block 即全集，命中即完整。
+    assert section.is_complete is True
+
+
+def test_section_completeness_follows_span_coverage() -> None:
+    # 部分覆盖：block 只覆盖直属正文前半段。
+    partial = _record(_candidate("chunk-1", SourceSpan(0, 4)))
+    partial.section.content_spans = [SourceSpan(0, 10)]
+    partial.reading_block.source_spans = [SourceSpan(0, 5)]
+
+    section = _build_retrieved_section_views([partial])[0]
+
+    assert section.is_complete is False
+
+    # 多 block 区间合并后完整覆盖。
+    first = _record(_candidate("chunk-1", SourceSpan(0, 4)))
+    first.section.content_spans = [SourceSpan(0, 10)]
+    first.reading_block.source_spans = [SourceSpan(0, 5)]
+    second = _record(_candidate("chunk-2", SourceSpan(6, 9), block_id="block-2"))
+    second.section = first.section
+    second.reading_block.source_spans = [SourceSpan(5, 10)]
+
+    merged_section = _build_retrieved_section_views([first, second])[0]
+
+    assert merged_section.is_complete is True
+
+    # 纯标题节（无直属正文）视为已完整。
+    heading_only = _record(_candidate("chunk-1", SourceSpan(0, 4)))
+    heading_only.section.content_spans = []
+    heading_only.reading_block.source_spans = [SourceSpan(0, 5)]
+
+    heading_section = _build_retrieved_section_views([heading_only])[0]
+
+    assert heading_section.is_complete is True
 
 
 @pytest.mark.asyncio

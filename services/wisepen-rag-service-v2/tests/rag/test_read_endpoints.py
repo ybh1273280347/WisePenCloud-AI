@@ -361,6 +361,104 @@ def test_outline_skips_nameless_root_without_preamble() -> None:
     assert outline[0].children == []
 
 
+@pytest.mark.asyncio
+async def test_section_read_without_body_keeps_navigation() -> None:
+    reader = DocumentContentReader(
+        reader=_NavPublishedResourceReader(),
+        authorizer=_AllowAuthorizer(),
+    )
+    sections = await reader.get_sections(
+        resource_id="resource-1",
+        section_ids=["section-1"],
+        permission_scope=PermissionScope(user_id="user-1"),
+        include_body=False,
+    )
+
+    view = sections["section-1"]
+    payload = TypeAdapter(SectionContentView).dump_python(
+        view,
+        mode="json",
+        exclude_none=True,
+    )
+    # 正文被彻底省略，导航结构完整保留（轻量级目录漫游契约）。
+    assert view.text is None
+    assert "text" not in payload
+    assert view.navigation.parent.title == "父标题"
+    assert view.navigation.previous.title == "上一节"
+    assert view.navigation.next.title == "下一节"
+    assert view.navigation.children[0].title == "子标题"
+
+
+@pytest.mark.asyncio
+async def test_section_read_excludes_directions_and_ignores_unknown() -> None:
+    reader = DocumentContentReader(
+        reader=_NavPublishedResourceReader(),
+        authorizer=_AllowAuthorizer(),
+    )
+    sections = await reader.get_sections(
+        resource_id="resource-1",
+        section_ids=["section-1"],
+        permission_scope=PermissionScope(user_id="user-1"),
+        exclude_directions=["previous", "children", "invalid-direction"],
+    )
+
+    navigation = sections["section-1"].navigation
+    # 黑名单方向被屏蔽，未知输入静默忽略，其余方向不受影响。
+    assert navigation.previous is None
+    assert navigation.children == []
+    assert navigation.parent.title == "父标题"
+    assert navigation.next.title == "下一节"
+    assert sections["section-1"].text == "正文"
+
+
+def test_section_content_request_accepts_loose_directions() -> None:
+    request = SectionContentRequest(
+        resource_id="resource-1",
+        section_ids=["section-1"],
+        include_body=False,
+        exclude_directions=["previous", "anything"],
+    )
+    assert request.include_body is False
+    assert request.exclude_directions == ["previous", "anything"]
+    with pytest.raises(ValidationError):
+        SectionContentRequest(
+            resource_id="resource-1",
+            section_ids=["section-1"],
+            exclude_directions=["a", "b", "c", "d", "e"],
+        )
+
+
+class _NavPublishedResourceReader:
+    """提供带完整导航事实（父/前/后/子）的 Section 内容。"""
+
+    async def get_sections(self, resource_id, section_ids):
+        return {
+            "section-1": PublishedSectionContent(
+                section=_section(),
+                text="正文",
+                page_labels=["1"],
+                parent=_nav_section("section-parent", "父标题"),
+                previous=_nav_section("section-prev", "上一节"),
+                next=_nav_section("section-next", "下一节"),
+                children=[_child_section()],
+            )
+        }
+
+
+def _nav_section(section_id: str, title: str) -> Section:
+    return Section(
+        section_id=section_id,
+        title=title,
+        level=1,
+        parent_section_id=None,
+        ordinal=0,
+        section_path=[title],
+        own_span=SourceSpan(0, 4),
+        subtree_span=SourceSpan(0, 4),
+        content_spans=[SourceSpan(0, 4)],
+    )
+
+
 class _FlatPublishedResourceReader:
     async def get_pages(self, resource_id, page_labels):
         return {

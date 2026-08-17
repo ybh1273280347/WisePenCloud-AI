@@ -25,6 +25,10 @@ class PageContentRequest(ResourceRequest):
 
 class SectionContentRequest(ResourceRequest):
     section_ids: list[NonEmptyText] = Field(min_length=1, max_length=20)
+    # False 时响应保留完整 navigation 但省略 text，用于轻量级目录漫游。
+    include_body: bool = True
+    # 导航方向黑名单（parent/previous/next/children）；未知方向静默忽略。
+    exclude_directions: list[str] = Field(default_factory=list, max_length=4)
 
 
 PageContentResponse = dict[str, PageContentView]

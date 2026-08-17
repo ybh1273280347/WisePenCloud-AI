@@ -82,6 +82,9 @@ class RetrievedSectionView:
     title: str
     section_path: str
     reading_blocks: list[RetrievalReadingBlockView] = field(default_factory=list)
+    # 已提升 block 的原文区间是否完整覆盖 Section 直属正文；
+    # False 时模型才需要调用 getSectionContent 补读，避免盲目重载。
+    is_complete: bool = True
 
 
 class ReadingCandidateLocator:
@@ -407,6 +410,9 @@ def _build_retrieved_section_views(
     """按首次命中顺序把核验证据提升并归组为完整 ReadingBlock。"""
     sections: dict[tuple[str, str], RetrievedSectionView] = {}
     blocks: dict[tuple[str, str], RetrievalReadingBlockView] = {}
+    # 按 section 聚合已提升 block 的原文区间与直属正文区间，供完整性判定。
+    block_spans_by_section: dict[tuple[str, str], list[SourceSpan]] = {}
+    content_spans_by_section: dict[tuple[str, str], list[SourceSpan]] = {}
 
     for record in records:
         section_key = (record.source_ref.resource_id, record.section.section_id)
@@ -430,6 +436,12 @@ def _build_retrieved_section_views(
             )
             blocks[block_key] = block_view
             section_view.reading_blocks.append(block_view)
+            block_spans_by_section.setdefault(section_key, []).extend(
+                record.reading_block.source_spans
+            )
+        content_spans_by_section.setdefault(
+            section_key, list(record.section.content_spans)
+        )
         block_view.matched_chunks.append(
             RetrievalMatchView(
                 chunk_id=record.source_ref.chunk_id,
@@ -438,7 +450,37 @@ def _build_retrieved_section_views(
             )
         )
 
+    # 完整性判定：提升 block 的原文区间联合覆盖 Section 全部直属正文区间。
+    for section_key, section_view in sections.items():
+        section_view.is_complete = _spans_cover(
+            block_spans_by_section.get(section_key, []),
+            content_spans_by_section.get(section_key, []),
+        )
     return list(sections.values())
+
+
+def _spans_cover(covered: list[SourceSpan], target: list[SourceSpan]) -> bool:
+    """判断 target 的每个区间是否都被 covered 的合并区间完整包含。
+
+    纯标题节（target 为空）无正文可读，视为已完整。
+    """
+    if not target:
+        return True
+    # 合并 covered 为有序不相交区间，再做包含判定。
+    merged: list[list[int]] = []
+    for span in sorted(covered, key=lambda item: item.start_offset):
+        if merged and span.start_offset <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], span.end_offset)
+        else:
+            merged.append([span.start_offset, span.end_offset])
+    for span in target:
+        covered_any = any(
+            start <= span.start_offset and span.end_offset <= end
+            for start, end in merged
+        )
+        if not covered_any:
+            return False
+    return True
 
 
 def _relative_match_ranges(record: SourceEvidence) -> list[MatchRangeView]:

@@ -57,7 +57,8 @@ class SectionContentView:
 
     title: str
     section_path: str
-    text: str
+    # include_body=False 时为 None，配合端点 exclude_none 从响应中彻底省略。
+    text: str | None = None
     page_range: str | None = None
     anchor_labels: list[str] = field(default_factory=list)
     navigation: SectionNavigationView = field(default_factory=SectionNavigationView)
@@ -108,7 +109,10 @@ class DocumentContentReader:
         resource_id: str,
         section_ids: Sequence[str],
         permission_scope: PermissionScope,
+        include_body: bool = True,
+        exclude_directions: Sequence[str] = (),
     ) -> dict[str, SectionContentView]:
+        """读取 Section 视图；include_body=False 裁剪正文，exclude_directions 过滤导航方向。"""
         if not await self._authorizer.authorize_resource(
             resource_id=resource_id,
             scope=permission_scope,
@@ -122,8 +126,16 @@ class DocumentContentReader:
             scope=permission_scope,
         ):
             raise ContentAccessRevokedError(resource_id)
+        # 宽松黑名单：只取有效方向名做过滤，未知输入静默忽略。
+        excluded = frozenset(exclude_directions) & frozenset(
+            ("parent", "previous", "next", "children")
+        )
         return {
-            section_id: _to_section_content_view(content)
+            section_id: _to_section_content_view(
+                content,
+                include_body=include_body,
+                excluded_directions=excluded,
+            )
             for section_id, content in sections.items()
         }
 
@@ -153,18 +165,31 @@ def _to_page_content_view(
     )
 
 
-def _to_section_content_view(content: PublishedSectionContent) -> SectionContentView:
+def _to_section_content_view(
+    content: PublishedSectionContent,
+    *,
+    include_body: bool = True,
+    excluded_directions: frozenset[str] = frozenset(),
+) -> SectionContentView:
     return SectionContentView(
         title=content.section.title,
         section_path=" > ".join(content.section.section_path),
-        text=content.text,
+        text=content.text if include_body else None,
         page_range=format_page_range(content.page_labels),
         anchor_labels=list(content.anchor_labels),
         navigation=SectionNavigationView(
-            parent=_optional_section_anchor_view(content.parent),
-            previous=_optional_section_anchor_view(content.previous),
-            next=_optional_section_anchor_view(content.next),
-            children=[_to_section_anchor_view(child) for child in content.children],
+            parent=None
+            if "parent" in excluded_directions
+            else _optional_section_anchor_view(content.parent),
+            previous=None
+            if "previous" in excluded_directions
+            else _optional_section_anchor_view(content.previous),
+            next=None
+            if "next" in excluded_directions
+            else _optional_section_anchor_view(content.next),
+            children=[]
+            if "children" in excluded_directions
+            else [_to_section_anchor_view(child) for child in content.children],
         ),
     )
 
