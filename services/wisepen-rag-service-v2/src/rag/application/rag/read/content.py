@@ -32,16 +32,6 @@ class SectionAnchorView:
 
 
 @dataclass(slots=True)
-class PageContentView:
-    """按页返回的模型可读正文和有语义的 Section 入口。"""
-
-    text: str
-    page_range: str | None = None
-    sections: list[SectionAnchorView] = field(default_factory=list)
-    anchor_labels: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True)
 class SectionNavigationView:
     """Section 的轻量导航入口。"""
 
@@ -59,8 +49,6 @@ class SectionContentView:
     section_path: str
     # include_body=False 时为 None，配合端点 exclude_none 从响应中彻底省略。
     text: str | None = None
-    page_range: str | None = None
-    anchor_labels: list[str] = field(default_factory=list)
     navigation: SectionNavigationView = field(default_factory=SectionNavigationView)
 
 
@@ -84,7 +72,7 @@ class DocumentContentReader:
         resource_id: str,
         page_labels: Sequence[str],
         permission_scope: PermissionScope,
-    ) -> dict[str, PageContentView]:
+    ) -> dict[str, str]:
         if not await self._authorizer.authorize_resource(
             resource_id=resource_id,
             scope=permission_scope,
@@ -98,10 +86,7 @@ class DocumentContentReader:
             scope=permission_scope,
         ):
             raise ContentAccessRevokedError(resource_id)
-        return {
-            page_label: _to_page_content_view(page_label, content)
-            for page_label, content in pages.items()
-        }
+        return {page_label: content.text for page_label, content in pages.items()}
 
     async def get_sections(
         self,
@@ -150,21 +135,6 @@ def format_page_range(page_labels: Sequence[str]) -> str | None:
     return f"{labels[0]} - {labels[-1]}"
 
 
-def _to_page_content_view(
-    page_label: str,
-    content: PublishedPageContent,
-) -> PageContentView:
-    return PageContentView(
-        text=content.text,
-        page_range=page_label,
-        sections=[
-            _to_section_anchor_view(section, include_preview=False)
-            for section in content.sections
-        ],
-        anchor_labels=list(content.anchor_labels),
-    )
-
-
 def _to_section_content_view(
     content: PublishedSectionContent,
     *,
@@ -175,8 +145,6 @@ def _to_section_content_view(
         title=content.section.title,
         section_path=" > ".join(content.section.section_path),
         text=content.text if include_body else None,
-        page_range=format_page_range(content.page_labels),
-        anchor_labels=list(content.anchor_labels),
         navigation=SectionNavigationView(
             parent=None
             if "parent" in excluded_directions
@@ -194,16 +162,12 @@ def _to_section_content_view(
     )
 
 
-def _to_section_anchor_view(
-    section: Section,
-    *,
-    include_preview: bool = True,
-) -> SectionAnchorView:
+def _to_section_anchor_view(section: Section) -> SectionAnchorView:
     return SectionAnchorView(
         section_id=section.section_id,
         title=section.title,
         section_path=" > ".join(section.section_path),
-        preview=section.preview if include_preview and section.preview else None,
+        preview=section.preview if section.preview else None,
     )
 
 

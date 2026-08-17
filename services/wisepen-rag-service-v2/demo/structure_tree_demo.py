@@ -57,6 +57,7 @@ class _DemoStructureReader:
             total_length=document.structure.total_length,
             pages=document.structure.pages,
             sections=document.sections,
+            anchors=document.structure.anchors,
         )
 
 

@@ -247,16 +247,6 @@ async def test_locate_promotes_chunks_to_one_block_with_minimal_match_anchors() 
     block = result.sections[0].reading_blocks[0]
     assert block.text == "abcdefghij"
     assert block.page_labels == ["1"]
-    assert [match.chunk_id for match in block.matched_chunks] == ["chunk-1", "chunk-2"]
-    assert (
-        block.text[
-            block.matched_chunks[0].ranges[0].start_offset : block.matched_chunks[0]
-            .ranges[0]
-            .end_offset
-        ]
-        == "bcd"
-    )
-    assert not hasattr(block.matched_chunks[0], "text")
     assert not hasattr(result.sections[0], "level")
     assert result.nodes[0].resource_id is None
     assert state_store.created["known_node_ids"] == ["node-1"]

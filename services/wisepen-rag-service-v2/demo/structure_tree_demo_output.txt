@@ -56,6 +56,7 @@ GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应�
       "section_id": "rsec_3041da2c74b903455e6020b5df5ad616",
       "title": "文档开头",
       "section_path": "文档开头",
+      "anchor_labels": [],
       "children": []
     },
     {
@@ -63,12 +64,14 @@ GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应�
       "title": "WisePen RAG 导航架构说明",
       "section_path": "WisePen RAG 导航架构说明",
       "page_range": "1 - 2",
+      "anchor_labels": [],
       "children": [
         {
           "section_id": "rsec_009ea0472ec7bec0e872851fd25a2593",
           "title": "一、主检索流程",
           "section_path": "WisePen RAG 导航架构说明 > 一、主检索流程",
           "page_range": "1",
+          "anchor_labels": [],
           "children": []
         },
         {
@@ -76,12 +79,14 @@ GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应�
           "title": "二、图谱导航",
           "section_path": "WisePen RAG 导航架构说明 > 二、图谱导航",
           "page_range": "1 - 2",
+          "anchor_labels": [],
           "children": [
             {
               "section_id": "rsec_eaaf9b7fa78e369e4621d690db039f27",
               "title": "二.1 关系抽取",
               "section_path": "WisePen RAG 导航架构说明 > 二、图谱导航 > 二.1 关系抽取",
               "page_range": "1 - 2",
+              "anchor_labels": [],
               "children": []
             },
             {
@@ -89,6 +94,7 @@ GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应�
               "title": "二.2 证据回源",
               "section_path": "WisePen RAG 导航架构说明 > 二、图谱导航 > 二.2 证据回源",
               "page_range": "2",
+              "anchor_labels": [],
               "children": []
             },
             {
@@ -96,6 +102,7 @@ GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应�
               "title": "二.3 查询边界",
               "section_path": "WisePen RAG 导航架构说明 > 二、图谱导航 > 二.3 查询边界",
               "page_range": "2",
+              "anchor_labels": [],
               "children": []
             }
           ]
@@ -105,6 +112,7 @@ GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应�
           "title": "三、响应编排",
           "section_path": "WisePen RAG 导航架构说明 > 三、响应编排",
           "page_range": "2",
+          "anchor_labels": [],
           "children": []
         }
       ]
@@ -133,9 +141,10 @@ GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应�
   "total_length": 389,
   "outline": [
     {
-      "section_id": "rsec_1eeca363e7df14e0465cde5d00820c66",
+      "section_id": "rsec_d3ae11012880fdb5a55670160e6f53a5",
       "title": "全文片段 1",
       "section_path": "全文片段 1",
+      "anchor_labels": [],
       "children": []
     }
   ]

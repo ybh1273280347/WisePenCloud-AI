@@ -35,7 +35,7 @@ relations:
       "mention_evidence": [
         {
           "resource_id": "demo-wisepen-rag",
-          "reading_block_id": "rsb_bfd7365c1c79db1526386dfd46b6be32",
+          "reading_block_id": "rsb_210e06807453bbb5985e093b46efc524",
           "quote": "GraphRAG 技术",
           "reading_block_range": {
             "start_offset": 15,
@@ -53,7 +53,7 @@ relations:
       "mention_evidence": [
         {
           "resource_id": "demo-wisepen-rag",
-          "reading_block_id": "rsb_adc222dc3284814c73121e6fc6e7cfb7",
+          "reading_block_id": "rsb_ebdeb9a47bce8107230e696742a65c67",
           "quote": "知识图谱",
           "reading_block_range": {
             "start_offset": 11,
@@ -80,7 +80,7 @@ relations:
           "relation_evidence": [
             {
               "resource_id": "demo-wisepen-rag",
-              "reading_block_id": "rsb_bfd7365c1c79db1526386dfd46b6be32",
+              "reading_block_id": "rsb_210e06807453bbb5985e093b46efc524",
               "quote": "WisePen RAG 使用 GraphRAG 技术补充实体关系导航",
               "reading_block_range": {
                 "start_offset": 0,
@@ -102,7 +102,7 @@ relations:
           "relation_evidence": [
             {
               "resource_id": "demo-wisepen-rag",
-              "reading_block_id": "rsb_adc222dc3284814c73121e6fc6e7cfb7",
+              "reading_block_id": "rsb_ebdeb9a47bce8107230e696742a65c67",
               "quote": "GraphRAG 使用知识图谱表示实体之间的关系",
               "reading_block_range": {
                 "start_offset": 0,
@@ -117,28 +117,32 @@ relations:
   "evidence_sections": [
     {
       "resource_id": "demo-wisepen-rag",
-      "section_id": "rsec_48efe4a74e6b43f0e3c891dcbe4b25a4",
+      "section_id": "rsec_b450cb00a7228a206a0164d9f691eca3",
       "title": "二、图谱导航",
       "section_path": "WisePen RAG 导航架构说明 > 二、图谱导航",
       "reading_blocks": [
         {
-          "reading_block_id": "rsb_bfd7365c1c79db1526386dfd46b6be32",
+          "reading_block_id": "rsb_210e06807453bbb5985e093b46efc524",
           "text": "WisePen RAG 使用 GraphRAG 技术补充实体关系导航，使模型能够沿文档中的知识关系继续读取材料。\n",
-          "page_range": "1",
+          "page_labels": [
+            "1"
+          ],
           "anchor_labels": []
         }
       ]
     },
     {
       "resource_id": "demo-wisepen-rag",
-      "section_id": "rsec_6e4bf36453ca9667006f0c35d02debe2",
+      "section_id": "rsec_758a75a7a0c2daa3e726bd7a07ab8dc4",
       "title": "二.1 关系抽取",
       "section_path": "WisePen RAG 导航架构说明 > 二、图谱导航 > 二.1 关系抽取",
       "reading_blocks": [
         {
-          "reading_block_id": "rsb_adc222dc3284814c73121e6fc6e7cfb7",
+          "reading_block_id": "rsb_ebdeb9a47bce8107230e696742a65c67",
           "text": "GraphRAG 使用知识图谱表示实体之间的关系，并保留关系对应的原文证据。\n",
-          "page_range": "1",
+          "page_labels": [
+            "1"
+          ],
           "anchor_labels": []
         }
       ]

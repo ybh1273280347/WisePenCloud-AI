@@ -46,23 +46,6 @@ class LocateError(RuntimeError):
 
 
 @dataclass(slots=True)
-class MatchRangeView:
-    """相对于 RetrievalReadingBlockView.text 的 Python 字符半开区间。"""
-
-    start_offset: int
-    end_offset: int
-
-
-@dataclass(slots=True)
-class RetrievalMatchView:
-    """触发 ReadingBlock 提升的检索 chunk 锚点，不重复返回 chunk 文本。"""
-
-    chunk_id: str
-    source_ref_id: str
-    ranges: list[MatchRangeView] = field(default_factory=list)
-
-
-@dataclass(slots=True)
 class RetrievalReadingBlockView:
     """检索命中后提升出的完整 ReadingBlock 正文及紧凑页范围。"""
 
@@ -70,7 +53,6 @@ class RetrievalReadingBlockView:
     text: str
     page_labels: list[str] = field(default_factory=list)
     anchor_labels: list[str] = field(default_factory=list)
-    matched_chunks: list[RetrievalMatchView] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -442,13 +424,6 @@ def _build_retrieved_section_views(
         content_spans_by_section.setdefault(
             section_key, list(record.section.content_spans)
         )
-        block_view.matched_chunks.append(
-            RetrievalMatchView(
-                chunk_id=record.source_ref.chunk_id,
-                source_ref_id=record.source_ref.ref_id,
-                ranges=_relative_match_ranges(record),
-            )
-        )
 
     # 完整性判定：提升 block 的原文区间联合覆盖 Section 全部直属正文区间。
     for section_key, section_view in sections.items():
@@ -481,28 +456,3 @@ def _spans_cover(covered: list[SourceSpan], target: list[SourceSpan]) -> bool:
         if not covered_any:
             return False
     return True
-
-
-def _relative_match_ranges(record: SourceEvidence) -> list[MatchRangeView]:
-    """把权威 source spans 映射到 ReadingBlock 拼接文本的相对字符坐标。"""
-    ranges: list[MatchRangeView] = []
-    block_offset = 0
-    for index, block_span in enumerate(record.reading_block.source_spans):
-        for match_span in record.source_ref.source_spans:
-            start = max(block_span.start_offset, match_span.start_offset)
-            end = min(block_span.end_offset, match_span.end_offset)
-            if start < end:
-                ranges.append(
-                    MatchRangeView(
-                        start_offset=block_offset + start - block_span.start_offset,
-                        end_offset=block_offset + end - block_span.start_offset,
-                    )
-                )
-        block_offset += block_span.end_offset - block_span.start_offset
-        if index + 1 < len(record.reading_block.source_spans):
-            block_offset += 2
-    if not ranges:
-        raise ValueError(
-            f"source ref {record.source_ref.ref_id} is outside its ReadingBlock"
-        )
-    return ranges

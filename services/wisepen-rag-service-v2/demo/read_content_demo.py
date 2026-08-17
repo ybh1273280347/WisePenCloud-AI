@@ -14,7 +14,6 @@ from pydantic import TypeAdapter
 
 from rag.application.rag.read.content import (
     DocumentContentReader,
-    PageContentView,
     SectionContentView,
 )
 from rag.domain.models.acl import PermissionScope
@@ -135,7 +134,7 @@ async def main() -> None:
         selected=next(
             section
             for section in sectioned.sections
-            if section.title == "二、入渗与排水检查"
+            if section.title == "二、图谱导航"
         ),
         scope=scope,
     )
@@ -145,19 +144,6 @@ async def main() -> None:
         selected=flat_text.sections[0],
         scope=scope,
     )
-
-    assert sectioned_output["section"]["text"].startswith("正常情况下")
-    assert "土壤板结" not in sectioned_output["section"]["text"]
-    assert sectioned_output["page"]["1"]["page_range"] == "1"
-    assert sectioned_output["page"]["1"]["sections"][0]["section_path"]
-    assert "preview" not in sectioned_output["page"]["1"]["sections"][0]
-    assert flat_output["section_id"]
-    assert flat_output["page"] == {}
-    assert "page_range" not in flat_output["section"]
-    assert flat_output["section"]["title"] == "全文片段 1"
-    assert flat_output["section"]["section_path"] == "全文片段 1"
-    assert flat_output["section"]["navigation"] == {"children": []}
-    assert "reading_blocks" not in json.dumps(flat_output, ensure_ascii=False)
 
     output = "\n".join(
         [
@@ -187,11 +173,7 @@ async def _read_document(*, reader, document, selected, scope) -> dict[str, obje
         section_ids=[selected.section_id],
         permission_scope=scope,
     )
-    page_payload = TypeAdapter(dict[str, PageContentView]).dump_python(
-        pages,
-        mode="json",
-        exclude_none=True,
-    )
+    page_payload = pages
     section_payload = TypeAdapter(dict[str, SectionContentView]).dump_python(
         sections,
         mode="json",

@@ -5,9 +5,7 @@ from rag.domain.models.graph import (
 from .candidate_locator import (
     LocateError,
     LocateResult,
-    MatchRangeView,
     ReadingCandidateLocator,
-    RetrievalMatchView,
     RetrievalReadingBlockView,
     RetrievedSectionView,
 )
@@ -56,10 +54,8 @@ __all__ = [
     "KnowledgeGraphExpander",
     "LocateError",
     "LocateResult",
-    "MatchRangeView",
     "NavigationStateNotFoundError",
     "ReadingCandidateLocator",
-    "RetrievalMatchView",
     "RetrievalReadingBlockView",
     "RetrievedSectionView",
     "SourceEvidenceVerifier",

@@ -60,10 +60,8 @@ class MongoPublishedResourceReader(PublishedResourceReader):
         revision = await self._get_published_revision(resource_id)
         return revision.content_revision if revision is not None else None
 
-    async def _get_published_revision(
-        self,
-        resource_id: str,
-    ) -> _PublishedRevision | None:
+    @staticmethod
+    async def _get_published_revision(resource_id: str,) -> _PublishedRevision | None:
         state = await ResourceIndexStateEntity.find_one({"resource_id": resource_id})
         if state is None or state.applied_content_revision is None:
             return None
@@ -105,6 +103,7 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             total_length=revision.total_length,
             pages=list(revision.pages),
             sections=[_to_section(entity) for entity in entities],
+            anchors=list(revision.anchors),
         )
 
     async def get_pages(
@@ -425,8 +424,8 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             )
         return resolved
 
+    @staticmethod
     async def _get_sections_for_revision(
-        self,
         resource_id: str,
         content_revision: str,
     ) -> list[Section]:

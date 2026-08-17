@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from rag.application.rag.read.content import PageContentView, SectionContentView
+from rag.application.rag.read.content import SectionContentView
 from rag.application.rag.read.outline import DocumentOutlineNode
 
 NonEmptyText = Annotated[
@@ -31,7 +31,7 @@ class SectionContentRequest(ResourceRequest):
     exclude_directions: list[str] = Field(default_factory=list, max_length=4)
 
 
-PageContentResponse = dict[str, PageContentView]
+PageContentResponse = dict[str, str]
 SectionContentResponse = dict[str, SectionContentView]
 
 

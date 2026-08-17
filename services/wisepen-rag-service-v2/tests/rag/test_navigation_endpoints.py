@@ -23,8 +23,6 @@ from rag.application.rag.navigate import (
     GraphReadingBlockView,
     LocateError,
     LocateResult,
-    MatchRangeView,
-    RetrievalMatchView,
     RetrievalReadingBlockView,
     RetrievedSectionView,
     UnknownSeedNodeError,
@@ -74,13 +72,6 @@ def _source() -> RetrievedSectionView:
                 reading_block_id="block-1",
                 text="完整正文",
                 page_labels=["1", "2"],
-                matched_chunks=[
-                    RetrievalMatchView(
-                        chunk_id="chunk-1",
-                        source_ref_id="ref-1",
-                        ranges=[MatchRangeView(0, 2)],
-                    )
-                ],
             )
         ],
     )

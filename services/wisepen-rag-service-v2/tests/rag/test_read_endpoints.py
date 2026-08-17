@@ -11,8 +11,6 @@ from rag.api.router import api_router
 from rag.api.schemas import PageContentRequest, ResourceRequest, SectionContentRequest
 from rag.application.rag.read.content import (
     DocumentContentReader,
-    PageContentView,
-    SectionAnchorView,
     SectionContentView,
 )
 from rag.application.rag.read.outline import (
@@ -21,7 +19,7 @@ from rag.application.rag.read.outline import (
     _to_outline,
 )
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.structure import PageRange, Section
+from rag.domain.models.structure import DocumentAnchor, PageRange, Section
 from rag.domain.repositories.mongo.published_resource_reader import (
     PublishedPageContent,
     PublishedSectionContent,
@@ -58,19 +56,7 @@ class _PublishedResourceReader:
 
 class _ContentReader:
     async def get_pages(self, **kwargs):
-        return {
-            "1": PageContentView(
-                text="正文",
-                page_range="1",
-                sections=[
-                    SectionAnchorView(
-                        section_id="section-1",
-                        title="标题",
-                        section_path="标题",
-                    )
-                ],
-            )
-        }
+        return {"1": "正文"}
 
     async def get_sections(self, **kwargs):
         return {
@@ -78,7 +64,6 @@ class _ContentReader:
                 title="标题",
                 section_path="标题",
                 text="正文",
-                page_range="1",
             )
         }
 
@@ -173,23 +158,15 @@ async def test_outline_keeps_title_and_path_and_removes_level() -> None:
 
 
 @pytest.mark.asyncio
-async def test_page_key_is_not_repeated_and_has_no_preview() -> None:
+async def test_page_view_returns_text_only() -> None:
     response = await get_page_content(
         PageContentRequest(resource_id="resource-1", page_labels=["1"]),
         user_id="user-1",
         reader=_ContentReader(),
     )
 
-    page = response.data["1"]
-    payload = TypeAdapter(PageContentView).dump_python(
-        page,
-        mode="json",
-        exclude_none=True,
-    )
-    assert page.sections[0].title == "标题"
-    assert "page_label" not in payload
-    assert "preview" not in payload["sections"][0]
-    assert "level" not in payload["sections"][0]
+    # 页标签是请求参数，正文已含锚点；页视图直接返回文本。
+    assert response.data["1"] == "正文"
 
 
 @pytest.mark.asyncio
@@ -212,9 +189,13 @@ async def test_section_read_returns_authoritative_text_without_blocks() -> None:
     )
     assert view.title == "标题"
     assert view.text == "正文"
-    assert view.page_range == "1"
     assert view.navigation.children[0].title == "子标题"
     assert view.navigation.children[0].preview == "子正文"
+    # 页码与锚点信息已从 Section 视图移除（正文可见、目录可查）。
+    assert not hasattr(view, "page_range")
+    assert not hasattr(view, "anchor_labels")
+    assert "page_range" not in payload
+    assert "anchor_labels" not in payload
     assert "section_id" not in payload
     assert "section" not in payload
     assert "reading_blocks" not in payload
@@ -238,26 +219,15 @@ async def test_flat_text_read_keeps_synthetic_section_context() -> None:
         permission_scope=PermissionScope(user_id="user-1"),
     )
 
-    page_payload = TypeAdapter(PageContentView).dump_python(
-        pages["1"], mode="json", exclude_none=True
-    )
+    page_payload = pages["1"]
     section_payload = TypeAdapter(SectionContentView).dump_python(
         sections["flat-section"], mode="json", exclude_none=True
     )
-    assert page_payload["page_range"] == "1"
-    assert page_payload["sections"] == [
-        {
-            "section_id": "flat-section",
-            "title": "全文片段 1",
-            "section_path": "全文片段 1",
-        }
-    ]
+    assert page_payload == "平铺正文"
     assert section_payload == {
         "title": "全文片段 1",
         "section_path": "全文片段 1",
         "text": "平铺正文",
-        "page_range": "1",
-        "anchor_labels": [],
         "navigation": {"children": []},
     }
 
@@ -269,6 +239,7 @@ def test_outline_uses_human_page_range() -> None:
             PageRange(0, "1", SourceSpan(0, 6)),
             PageRange(1, "3", SourceSpan(6, 12)),
         ],
+        [],
     )
 
     assert outline[0].page_range == "1 - 3"
@@ -276,11 +247,26 @@ def test_outline_uses_human_page_range() -> None:
     assert outline[0].children[0].page_range == "3"
     assert outline[0].children[0].section_path == "标题 > 子标题"
 
-    flat_outline = _to_outline([_flat_section()], [])
+    flat_outline = _to_outline([_flat_section()], [], [])
     assert flat_outline[0].page_range is None
     assert flat_outline[0].title == "全文片段 1"
     assert flat_outline[0].section_path == "全文片段 1"
     assert flat_outline[0].children == []
+
+
+def test_outline_nodes_carry_anchor_labels() -> None:
+    # 锚点定位归目录：正文响应不再携带，目录按 span 重叠标注各节包含的锚点。
+    outline = _to_outline(
+        [_section(), _child_section()],
+        [],
+        [
+            DocumentAnchor("Table 1", SourceSpan(4, 6)),
+            DocumentAnchor("Figure 2", SourceSpan(9, 11)),
+        ],
+    )
+
+    assert outline[0].anchor_labels == ["Table 1", "Figure 2"]
+    assert outline[0].children[0].anchor_labels == ["Figure 2"]
 
 
 def test_outline_exposes_titled_root_as_preamble_entry() -> None:
@@ -317,6 +303,7 @@ def test_outline_exposes_titled_root_as_preamble_entry() -> None:
             PageRange(0, "1", SourceSpan(0, 6)),
             PageRange(1, "3", SourceSpan(6, 12)),
         ],
+        [],
     )
 
     assert outline[0].title == "文档开头"
@@ -355,7 +342,7 @@ def test_outline_skips_nameless_root_without_preamble() -> None:
         preview="正文",
     )
 
-    outline = _to_outline([root, heading], [])
+    outline = _to_outline([root, heading], [], [])
 
     assert [node.title for node in outline] == ["标题"]
     assert outline[0].children == []

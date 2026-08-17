@@ -7,7 +7,7 @@ from typing import Protocol
 from rag.domain.models.content import ReadingBlock
 from rag.domain.models.graph import GraphEvidence
 from rag.domain.models.provenance import SourceEvidence
-from rag.domain.models.structure import DocumentStructure, PageRange, Section
+from rag.domain.models.structure import DocumentAnchor, DocumentStructure, PageRange, Section
 from rag.utils.chunkers import SourceSpan
 
 
@@ -21,6 +21,7 @@ class PublishedDocumentStructure:
     total_length: int
     pages: list[PageRange] = field(default_factory=list)
     sections: list[Section] = field(default_factory=list)
+    anchors: list[DocumentAnchor] = field(default_factory=list)
 
 
 @dataclass(slots=True)

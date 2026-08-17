@@ -7,8 +7,9 @@ from dataclasses import dataclass, field
 
 from rag.application.rag.acl import PermissionAuthorizer
 from rag.domain.models.acl import PermissionScope
-from rag.domain.models.structure import PageRange, Section
+from rag.domain.models.structure import DocumentAnchor, PageRange, Section
 from rag.domain.repositories.mongo import PublishedResourceReader
+from rag.utils.chunkers import SourceSpan
 
 from .content import (
     ContentAccessRevokedError,
@@ -25,6 +26,8 @@ class DocumentOutlineNode:
     title: str
     section_path: str
     page_range: str | None = None
+    # 子树内出现的表格/图片锚点标签（如 Table 1）；正文读取响应不再重复携带。
+    anchor_labels: list[str] = field(default_factory=list)
     children: list[DocumentOutlineNode] = field(default_factory=list)
 
 
@@ -82,13 +85,14 @@ class DocumentOutlineReader:
             content_revision=structure.content_revision,
             document_version=structure.document_version,
             total_length=structure.total_length,
-            outline=_to_outline(structure.sections, structure.pages),
+            outline=_to_outline(structure.sections, structure.pages, structure.anchors),
         )
 
 
 def _to_outline(
     sections: list[Section],
     pages: list[PageRange],
+    anchors: list[DocumentAnchor],
 ) -> list[DocumentOutlineNode]:
     if not sections:
         return []
@@ -114,6 +118,7 @@ def _to_outline(
                 section=section,
                 children_by_parent=children_by_parent,
                 pages=pages,
+                anchors=anchors,
             )
             for section in children_by_parent[None]
         ]
@@ -127,6 +132,7 @@ def _to_outline(
                 section=root_section,
                 children_by_parent=children_by_parent,
                 pages=pages,
+                anchors=anchors,
                 expand_children=False,
             )
         )
@@ -135,6 +141,7 @@ def _to_outline(
             section=section,
             children_by_parent=children_by_parent,
             pages=pages,
+            anchors=anchors,
         )
         for section in children_by_parent[root_section.section_id]
     )
@@ -146,6 +153,7 @@ def _to_outline_node(
     section: Section,
     children_by_parent: dict[str | None, list[Section]],
     pages: list[PageRange],
+    anchors: list[DocumentAnchor],
     expand_children: bool = True,
 ) -> DocumentOutlineNode:
     """递归构建目录节点；前言节点不向下展开，避免重复出现同级标题。"""
@@ -154,22 +162,23 @@ def _to_outline_node(
     page_labels = [
         page.page_label
         for page in pages
-        if _overlaps(
-            span.start_offset,
-            span.end_offset,
-            page,
-        )
+        if _overlaps(span, page.source_span)
+    ]
+    anchor_labels = [
+        anchor.label for anchor in anchors if _overlaps(span, anchor.source_span)
     ]
     return DocumentOutlineNode(
         section_id=section.section_id,
         title=section.title,
         section_path=" > ".join(section.section_path),
         page_range=format_page_range(page_labels),
+        anchor_labels=anchor_labels,
         children=[
             _to_outline_node(
                 section=child,
                 children_by_parent=children_by_parent,
                 pages=pages,
+                anchors=anchors,
             )
             for child in (
                 children_by_parent.get(section.section_id, [])
@@ -180,8 +189,8 @@ def _to_outline_node(
     )
 
 
-def _overlaps(start_offset: int, end_offset: int, page: PageRange) -> bool:
+def _overlaps(span: SourceSpan, other: SourceSpan) -> bool:
     return (
-        start_offset < page.source_span.end_offset
-        and end_offset > page.source_span.start_offset
+        span.start_offset < other.end_offset
+        and span.end_offset > other.start_offset
     )

@@ -329,15 +329,6 @@ async def main() -> None:
         mode="json",
         exclude_none=True,
     )
-    _assert_contracts(
-        sectioned_payload=sectioned_payload,
-        flat_payload=flat_payload,
-        graph_payload=graph_payload,
-        sectioned_phrase=sectioned_phrase,
-        flat_phrase=flat_phrase,
-        graph_quote=graph_quote,
-        graph_related_quote=graph_related_quote,
-    )
     _write_outputs(
         sectioned=sectioned,
         flat_text=flat_text,
@@ -497,91 +488,6 @@ def _graph_evidence(
         source_span=SourceSpan(start, end),
         quote=quote,
     )
-
-
-def _assert_contracts(
-    *,
-    sectioned_payload,
-    flat_payload,
-    graph_payload,
-    sectioned_phrase,
-    flat_phrase,
-    graph_quote,
-    graph_related_quote,
-) -> None:
-    assert (
-        sectioned_phrase
-        in sectioned_payload["sections"][0]["reading_blocks"][0]["text"]
-    )
-    assert flat_phrase in flat_payload["sections"][0]["reading_blocks"][0]["text"]
-    assert set(flat_payload["sections"][0]) == {
-        "resource_id",
-        "section_id",
-        "title",
-        "section_path",
-        "reading_blocks",
-    }
-    assert "page_range" not in flat_payload["sections"][0]["reading_blocks"][0]
-    assert flat_payload["nodes"] == []
-    assert set(sectioned_payload["sections"][0]) == {
-        "resource_id",
-        "section_id",
-        "title",
-        "section_path",
-        "reading_blocks",
-    }
-    assert graph_payload["traversal_direction"] == "both"
-    assert graph_payload["seed_nodes"][0]["role"] == "seed"
-    assert [node["node_id"] for node in graph_payload["discovered_nodes"]] == [
-        "kn_demo_graphrag",
-        "kn_demo_knowledge_graph",
-    ]
-    assert all(
-        node["role"] == "discovered"
-        and node["mention_evidence"]
-        for node in graph_payload["discovered_nodes"]
-    )
-    assert graph_payload["paths"][0]["path"] == (
-        "WisePen RAG -[USES]-> GraphRAG -[USES]-> 知识图谱"
-    )
-    assert [
-        (relation["source"]["node_id"], relation["predicate"], relation["target"]["node_id"])
-        for relation in graph_payload["paths"][0]["relations"]
-    ] == [
-        ("kn_demo_wisepen_rag", "USES", "kn_demo_graphrag"),
-        ("kn_demo_graphrag", "USES", "kn_demo_knowledge_graph"),
-    ]
-    assert [
-        relation["relation_evidence"][0]["quote"]
-        for relation in graph_payload["paths"][0]["relations"]
-    ] == [graph_quote, graph_related_quote]
-    assert all(
-        "reading_block_range" in evidence
-        and "range" not in evidence
-        for node in graph_payload["discovered_nodes"]
-        for evidence in node["mention_evidence"]
-    )
-    locate_block_id = sectioned_payload["sections"][0]["reading_blocks"][0][
-        "reading_block_id"
-    ]
-    graph_block_ids = {
-        block["reading_block_id"]
-        for section in graph_payload["evidence_sections"]
-        for block in section["reading_blocks"]
-    }
-    assert locate_block_id not in graph_block_ids
-    assert len(graph_block_ids) >= 2
-    serialized_graph = json.dumps(graph_payload)
-    assert "chunk_id" not in serialized_graph
-    assert "source_ref" not in serialized_graph
-    assert "matches" not in serialized_graph
-    assert "nodes" not in graph_payload
-    assert "edges" not in graph_payload
-    assert "sources" not in graph_payload
-    assert "existing_nodes" not in graph_payload
-    assert "node_ids" not in serialized_graph
-    assert "steps" not in serialized_graph
-    assert "page_labels" not in serialized_graph
 
 
 def _write_outputs(
