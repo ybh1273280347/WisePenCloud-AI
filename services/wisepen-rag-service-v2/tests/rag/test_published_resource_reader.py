@@ -244,7 +244,7 @@ async def test_reader_projects_structure_content_evidence_and_graph_source(
         "section-1",
         "section-2",
     ]
-    assert pages is not None and pages["1"].text == "TitleBodyTail"
+    assert pages is not None and pages["1"] == "TitleBodyTail"
     assert sections is not None and sections["section-1"].text == "Body"
     assert sections["section-1"].next is not None
     assert sections["section-1"].next.section_id == "section-2"

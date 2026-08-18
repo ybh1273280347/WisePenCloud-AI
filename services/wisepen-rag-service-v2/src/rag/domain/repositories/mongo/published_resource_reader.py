@@ -25,22 +25,11 @@ class PublishedDocumentStructure:
 
 
 @dataclass(slots=True)
-class PublishedPageContent:
-    """一个已发布页面的正文及其结构入口。"""
-
-    text: str
-    sections: list[Section] = field(default_factory=list)
-    anchor_labels: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True)
 class PublishedSectionContent:
     """一个 Section 的直属正文和标题树导航事实。"""
 
     section: Section
     text: str = ""
-    page_labels: list[str] = field(default_factory=list)
-    anchor_labels: list[str] = field(default_factory=list)
     parent: Section | None = None
     previous: Section | None = None
     next: Section | None = None
@@ -91,7 +80,7 @@ class PublishedResourceReader(Protocol):
         self,
         resource_id: str,
         page_labels: Sequence[str],
-    ) -> dict[str, PublishedPageContent] | None: ...
+    ) -> dict[str, str] | None: ...
 
     async def get_sections(
         self,

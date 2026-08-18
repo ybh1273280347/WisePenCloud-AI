@@ -18,7 +18,6 @@ from rag.application.rag.read.content import (
 )
 from rag.domain.models.acl import PermissionScope
 from rag.domain.repositories.mongo.published_resource_reader import (
-    PublishedPageContent,
     PublishedSectionContent,
 )
 
@@ -44,27 +43,9 @@ class _DemoPublishedResourceReader:
             page = pages_by_label.get(label)
             if page is None:
                 continue
-            result[label] = PublishedPageContent(
-                text=document.markdown[
-                    page.source_span.start_offset : page.source_span.end_offset
-                ],
-                sections=[
-                    section
-                    for section in document.sections
-                    if page.source_span.start_offset
-                    <= section.own_span.start_offset
-                    < page.source_span.end_offset
-                    or any(
-                        _overlaps(span, page.source_span)
-                        for span in section.content_spans
-                    )
-                ],
-                anchor_labels=[
-                    anchor.label
-                    for anchor in document.structure.anchors
-                    if _overlaps(anchor.source_span, page.source_span)
-                ],
-            )
+            result[label] = document.markdown[
+                page.source_span.start_offset : page.source_span.end_offset
+            ]
         return result
 
     async def get_sections(self, resource_id, section_ids):
@@ -89,22 +70,6 @@ class _DemoPublishedResourceReader:
                     document.markdown[span.start_offset : span.end_offset]
                     for span in section.content_spans
                 ),
-                page_labels=[
-                    page.page_label
-                    for page in document.structure.pages
-                    if any(
-                        _overlaps(span, page.source_span)
-                        for span in section.content_spans
-                    )
-                ],
-                anchor_labels=[
-                    anchor.label
-                    for anchor in document.structure.anchors
-                    if any(
-                        _overlaps(span, anchor.source_span)
-                        for span in section.content_spans
-                    )
-                ],
                 parent=sections_by_id.get(section.parent_section_id),
                 previous=siblings[index - 1] if index else None,
                 next=(siblings[index + 1] if index + 1 < len(siblings) else None),
@@ -199,10 +164,6 @@ def _read_output(
         f"=== {label} getSectionContent ({result['section_id']}) ===",
         json.dumps(result["section"], ensure_ascii=False, indent=2),
     ]
-
-
-def _overlaps(left, right) -> bool:
-    return left.start_offset < right.end_offset and right.start_offset < left.end_offset
 
 
 if __name__ == "__main__":

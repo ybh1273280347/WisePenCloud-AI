@@ -21,7 +21,6 @@ from rag.application.rag.read.outline import (
 from rag.domain.models.acl import PermissionScope
 from rag.domain.models.structure import DocumentAnchor, PageRange, Section
 from rag.domain.repositories.mongo.published_resource_reader import (
-    PublishedPageContent,
     PublishedSectionContent,
 )
 from rag.utils.chunkers import SourceSpan
@@ -34,21 +33,13 @@ class _AllowAuthorizer:
 
 class _PublishedResourceReader:
     async def get_pages(self, resource_id, page_labels):
-        return {
-            "1": PublishedPageContent(
-                text="<!-- page 1 -->\n正文",
-                sections=[_section()],
-                anchor_labels=["Table 1"],
-            )
-        }
+        return {"1": "<!-- page 1 -->\n正文"}
 
     async def get_sections(self, resource_id, section_ids):
         return {
             "section-1": PublishedSectionContent(
                 section=_section(),
                 text="正文",
-                page_labels=["1"],
-                anchor_labels=["Table 1"],
                 children=[_child_section()],
             )
         }
@@ -423,7 +414,6 @@ class _NavPublishedResourceReader:
             "section-1": PublishedSectionContent(
                 section=_section(),
                 text="正文",
-                page_labels=["1"],
                 parent=_nav_section("section-parent", "父标题"),
                 previous=_nav_section("section-prev", "上一节"),
                 next=_nav_section("section-next", "下一节"),
@@ -448,19 +438,13 @@ def _nav_section(section_id: str, title: str) -> Section:
 
 class _FlatPublishedResourceReader:
     async def get_pages(self, resource_id, page_labels):
-        return {
-            "1": PublishedPageContent(
-                text="平铺正文",
-                sections=[_flat_section()],
-            )
-        }
+        return {"1": "平铺正文"}
 
     async def get_sections(self, resource_id, section_ids):
         return {
             "flat-section": PublishedSectionContent(
                 section=_flat_section(),
                 text="平铺正文",
-                page_labels=["1"],
             )
         }
 

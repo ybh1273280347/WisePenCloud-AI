@@ -8,7 +8,6 @@ from rag.domain.models.acl import PermissionScope
 from rag.domain.models.structure import Section
 from rag.domain.repositories.mongo import PublishedResourceReader
 from rag.domain.repositories.mongo.published_resource_reader import (
-    PublishedPageContent,
     PublishedSectionContent,
 )
 
@@ -86,7 +85,7 @@ class DocumentContentReader:
             scope=permission_scope,
         ):
             raise ContentAccessRevokedError(resource_id)
-        return {page_label: content.text for page_label, content in pages.items()}
+        return pages
 
     async def get_sections(
         self,

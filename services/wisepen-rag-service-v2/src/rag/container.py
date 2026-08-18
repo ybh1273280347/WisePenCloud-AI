@@ -79,10 +79,6 @@ def _build_authoritative_resource_collection(
     return mongo_client[database_name]["wisepen_resource_items"]
 
 
-def _build_qdrant_bm25_options(tokenizer: str) -> dict[str, str]:
-    return {"tokenizer": tokenizer}
-
-
 def _build_qdrant_client(
     *,
     host: str,
@@ -237,10 +233,6 @@ class Container(containers.DeclarativeContainer):
         port=settings.QDRANT_PORT,
         api_key=settings.QDRANT_PASSWORD,
     )
-    qdrant_bm25_options = providers.Factory(
-        _build_qdrant_bm25_options,
-        tokenizer=settings.QDRANT_RAG_BM25_TOKENIZER,
-    )
     retrieval_index_writer = providers.Singleton(
         QdrantRetrievalIndexWriter,
         client=qdrant_client,
@@ -249,7 +241,7 @@ class Container(containers.DeclarativeContainer):
         embedding_profile=settings.EMBEDDING_MODEL,
         dense_vector_name=settings.QDRANT_RAG_DENSE_VECTOR_NAME,
         sparse_vector_name=settings.QDRANT_RAG_SPARSE_VECTOR_NAME,
-        bm25_options=qdrant_bm25_options,
+        bm25_options={"tokenizer": settings.QDRANT_RAG_BM25_TOKENIZER},
     )
     resource_index_writer = providers.Singleton(MongoResourceIndexWriter)
     retrieval_acl_writer = providers.Singleton(
@@ -264,7 +256,7 @@ class Container(containers.DeclarativeContainer):
         dense_vector_size=settings.EMBEDDING_DIMENSIONS,
         dense_vector_name=settings.QDRANT_RAG_DENSE_VECTOR_NAME,
         sparse_vector_name=settings.QDRANT_RAG_SPARSE_VECTOR_NAME,
-        bm25_options=qdrant_bm25_options,
+        bm25_options={"tokenizer": settings.QDRANT_RAG_BM25_TOKENIZER},
     )
     redis_client = providers.Singleton(
         redis.from_url,

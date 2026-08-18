@@ -28,7 +28,6 @@ from rag.domain.repositories.mongo.published_resource_reader import (
     GraphBuildSource,
     PublishedDocumentStructure,
     PublishedGraphEvidence,
-    PublishedPageContent,
     PublishedResourceCorruptError,
     PublishedResourceReader,
     PublishedResourceRevisionError,
@@ -110,51 +109,25 @@ class MongoPublishedResourceReader(PublishedResourceReader):
         self,
         resource_id: str,
         page_labels: Sequence[str],
-    ) -> dict[str, PublishedPageContent] | None:
+    ) -> dict[str, str] | None:
         revision = await self._get_published_revision(resource_id)
         if revision is None:
             return None
 
         pages_by_label = {page.page_label: page for page in revision.pages}
-        selected_pages = [
+        selected = [
             pages_by_label[label]
             for label in dict.fromkeys(page_labels)
             if label in pages_by_label
         ]
-        all_sections = await self._get_sections_for_revision(
-            resource_id,
-            revision.content_revision,
-        )
-
-        windows: dict[str, PublishedPageContent] = {}
-        for page in selected_pages:
+        result: dict[str, str] = {}
+        for page in selected:
             parts = await self._get_parts(
                 revision.content_revision,
                 [page.source_span],
             )
-            # Page 入口来自标题或权威直属正文的交集，不借用检索分块推断结构。
-            sections = [
-                section
-                for section in all_sections
-                if page.source_span.start_offset
-                <= section.own_span.start_offset
-                < page.source_span.end_offset
-                or any(
-                    _overlaps(span, page.source_span) for span in section.content_spans
-                )
-            ]
-            windows[page.page_label] = PublishedPageContent(
-                text=assemble_source_text(parts, [page.source_span]),
-                sections=sections,
-                anchor_labels=list(
-                    dict.fromkeys(
-                        anchor.label
-                        for anchor in revision.anchors
-                        if _overlaps(anchor.source_span, page.source_span)
-                    )
-                ),
-            )
-        return windows
+            result[page.page_label] = assemble_source_text(parts, [page.source_span])
+        return result
 
     async def get_sections(
         self,
@@ -207,14 +180,6 @@ class MongoPublishedResourceReader(PublishedResourceReader):
             result[section.section_id] = PublishedSectionContent(
                 section=section,
                 text=assemble_source_text(parts, section.content_spans),
-                page_labels=_overlapping_labels(
-                    section.content_spans,
-                    revision.pages,
-                ),
-                anchor_labels=_overlapping_labels(
-                    section.content_spans,
-                    revision.anchors,
-                ),
                 parent=sections_by_id.get(section.parent_section_id),
                 previous=siblings[index - 1] if index else None,
                 next=siblings[index + 1] if index + 1 < len(siblings) else None,
@@ -441,8 +406,8 @@ class MongoPublishedResourceReader(PublishedResourceReader):
         )
         return [_to_section(entity) for entity in entities]
 
+    @staticmethod
     async def _get_parts(
-        self,
         content_revision: str,
         source_spans: Sequence[SourceSpan] | None = None,
     ) -> list[SourcePart]:
@@ -560,10 +525,6 @@ def _to_source_ref(record: SourceRefEntity) -> SourceRef:
     )
 
 
-def _overlaps(left: SourceSpan, right: SourceSpan) -> bool:
-    return left.start_offset < right.end_offset and right.start_offset < left.end_offset
-
-
 def _relative_graph_range(
     block: ReadingBlock,
     evidence: GraphEvidence,
@@ -586,18 +547,4 @@ def _relative_graph_range(
             block_offset += 2
     raise PublishedResourceCorruptError(
         f"graph evidence {evidence.evidence_id} is outside its ReadingBlock"
-    )
-
-
-def _overlapping_labels(
-    source_spans: Sequence[SourceSpan],
-    labeled_ranges: Sequence[PageRange | DocumentAnchor],
-) -> list[str]:
-    """按文档顺序投影页码或锚点标签，空正文不制造归属信息。"""
-    return list(
-        dict.fromkeys(
-            item.page_label if isinstance(item, PageRange) else item.label
-            for item in labeled_ranges
-            if any(_overlaps(span, item.source_span) for span in source_spans)
-        )
     )
