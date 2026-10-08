@@ -24,26 +24,23 @@ class DecisionClient:
         self,
         *,
         state: JSONContent,
-        question: Choice,
+        instructions: str,
+        choices: dict[str, str | None],
     ) -> ChoiceAnswer:
         """从多个候选选项中选择最符合条件的一项。
 
-        返回 ChoiceAnswer，包含：
-        - choice: 选中的选项名称
-        - confidence: 选择置信度
-        - probabilities: 各选项的概率分布
+        choices 的键为选项名称，值为选项描述，可设为 None。
+        返回 ChoiceAnswer，包含 choice、confidence 和 probabilities。
 
         示例：
             result = await decision.choose(
                 state={"query": "搜索最新的 AI 论文"},
-                question=Choice(
-                    instructions="选择最合适的工具",
-                    criteria={
-                        "web": "需要搜索互联网",
-                        "rag": "需要检索内部知识库",
-                        "direct": "不需要调用工具",
-                    },
-                ),
+                instructions="选择最合适的工具",
+                choices={
+                    "web": "需要搜索互联网",
+                    "rag": "需要检索内部知识库",
+                    "direct": "不需要调用工具",
+                },
             )
 
             selected = result.choice
@@ -51,7 +48,12 @@ class DecisionClient:
         """
         response = await self._client.system_one(
             state=state,
-            questions={"decision": question},
+            questions={
+                "decision": Choice(
+                    instructions=instructions,
+                    criteria=choices,
+                ),
+            },
         )
         return response.choices["decision"]
 
@@ -59,7 +61,7 @@ class DecisionClient:
         self,
         *,
         state: JSONContent,
-        question: Noul,
+        instructions: str,
         threshold: float = 0.5,
     ) -> bool:
         """判断条件是否成立，根据概率阈值返回布尔值。
@@ -72,9 +74,7 @@ class DecisionClient:
                 state={
                     "query": "2026 年最新的 Agent Memory 研究"
                 },
-                question=Noul(
-                    instructions="回答该问题是否需要联网搜索？"
-                ),
+                instructions="回答该问题是否需要联网搜索？",
                 threshold=0.8,
             )
 
@@ -86,7 +86,9 @@ class DecisionClient:
 
         response = await self._client.system_one(
             state=state,
-            questions={"decision": question},
+            questions={
+                "decision": Noul(instructions=instructions),
+            },
         )
         return response.nouls["decision"].noul >= threshold
 
@@ -103,9 +105,7 @@ class DecisionClient:
 
         示例：
             response = await decision.decide(
-                state={
-                    "query": "帮我删除旧知识库中的所有文档"
-                },
+                state={"query": "删除旧知识库中的所有文档"},
                 questions={
                     "intent": Choice(
                         instructions="判断操作类型",

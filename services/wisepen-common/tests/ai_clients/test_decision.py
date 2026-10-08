@@ -17,16 +17,24 @@ async def test_choose_returns_choice_answer_and_forwards_question():
     )
     system_one = AsyncMock(return_value=SimpleNamespace(choices={"decision": answer}))
     client = SimpleNamespace(system_one=system_one)
-    question = Choice(
-        instructions="选择合适的工具",
-        criteria={"web": "联网搜索", "rag": "内部检索"},
-    )
     state = {"query": "find current research"}
 
-    result = await DecisionClient(client).choose(state=state, question=question)
+    result = await DecisionClient(client).choose(
+        state=state,
+        instructions="选择合适的工具",
+        choices={"web": "联网搜索", "rag": "内部检索"},
+    )
 
     assert result is answer
-    system_one.assert_awaited_once_with(state=state, questions={"decision": question})
+    system_one.assert_awaited_once_with(
+        state=state,
+        questions={
+            "decision": Choice(
+                instructions="选择合适的工具",
+                criteria={"web": "联网搜索", "rag": "内部检索"},
+            )
+        },
+    )
 
 
 @pytest.mark.asyncio
@@ -37,15 +45,16 @@ async def test_judge_compares_noul_probability_with_threshold():
         )
     )
     client = SimpleNamespace(system_one=system_one)
-    question = Noul(instructions="是否需要联网")
-
     result = await DecisionClient(client).judge(
-        state={"query": "latest news"}, question=question, threshold=0.8
+        state={"query": "latest news"},
+        instructions="是否需要联网",
+        threshold=0.8,
     )
 
     assert result is True
     system_one.assert_awaited_once_with(
-        state={"query": "latest news"}, questions={"decision": question}
+        state={"query": "latest news"},
+        questions={"decision": Noul(instructions="是否需要联网")},
     )
 
 
@@ -57,7 +66,7 @@ async def test_judge_rejects_threshold_outside_probability_range(threshold):
 
     with pytest.raises(ValueError, match="between 0 and 1"):
         await DecisionClient(client).judge(
-            state={}, question=Noul(instructions="condition"), threshold=threshold
+            state={}, instructions="condition", threshold=threshold
         )
 
     system_one.assert_not_awaited()
