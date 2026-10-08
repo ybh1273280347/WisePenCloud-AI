@@ -5,14 +5,14 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ..parsing.parser import DocumentNode, SourceSpan
+from ..parsing.parser import MarkdownNode, SourceSpan
 
 if TYPE_CHECKING:
     from .chunker import ChunkingPolicy, Section
 
 
 @dataclass(frozen=True, slots=True)
-class DocumentChunk:
+class MarkdownChunk:
     """按结构顺序生成的 retrieval unit。
 
     Chunker 不依赖 source_spans 做尺寸或合法性判断。Chat cache 可以在
@@ -41,18 +41,18 @@ class ChunkPacker:
 
     def pack(
         self,
-        nodes: Iterable[DocumentNode],
+        nodes: Iterable[MarkdownNode],
         *,
         section: Section | None = None,
         start_index: int = 0,
-    ) -> tuple[DocumentChunk, ...]:
+    ) -> tuple[MarkdownChunk, ...]:
         """将正文节点按顺序打包为 Chunk；start_index 延续全局 Chunk 顺序。
 
         仅接收正文单元；若节点自身超过拆分阈值，则强制独立成块，
         避免因 BPE 非可加性导致与相邻节点混合后 token 数不可控。
         """
-        chunks: list[DocumentChunk] = []
-        selected: list[DocumentNode] = []
+        chunks: list[MarkdownChunk] = []
+        selected: list[MarkdownNode] = []
         current_text = ""
         current_tokens = 0
 
@@ -105,11 +105,11 @@ class ChunkPacker:
 
     def _build_chunk(
         self,
-        nodes: Sequence[DocumentNode],
+        nodes: Sequence[MarkdownNode],
         *,
         section: Section | None,
         chunk_index: int,
-    ) -> DocumentChunk:
+    ) -> MarkdownChunk:
         """根据节点序列构造最终 Chunk。
 
         最终文本的 token 数与 Overflow 状态以实际拼接结果为准
@@ -118,7 +118,7 @@ class ChunkPacker:
         content_token_count = self._policy.token_counter.count(text)
         content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-        return DocumentChunk(
+        return MarkdownChunk(
             chunk_id=f"chunk:{chunk_index}:{content_hash[:16]}",
             chunk_index=chunk_index,
             text=text,

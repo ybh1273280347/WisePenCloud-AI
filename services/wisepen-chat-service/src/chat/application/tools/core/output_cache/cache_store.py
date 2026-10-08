@@ -12,8 +12,8 @@ from functools import lru_cache
 
 from common.utils.markdown import (
     Anchor,
-    DocumentChunker,
-    DocumentChunkerConfig,
+    MarkdownChunker,
+    MarkdownChunkerConfig,
     Section,
     SourceSpan,
     TokenCounter,
@@ -21,7 +21,7 @@ from common.utils.markdown import (
 )
 
 _DEFAULT_MAX_CHARS = 20_000_000
-_CACHE_CHUNKER_CONFIG = DocumentChunkerConfig(
+_CACHE_CHUNKER_CONFIG = MarkdownChunkerConfig(
     target_chunk_tokens=800,
     split_threshold_tokens=1600,
 )
@@ -86,7 +86,7 @@ async def put_tool_content(
 
     # 缓存索引使用小子块提升命中精度；Chat 的原文 offset 在 adapter 层单独投影。
     token_counter = default_token_counter()
-    result = DocumentChunker(_CACHE_CHUNKER_CONFIG, token_counter=token_counter).chunk(
+    result = MarkdownChunker(_CACHE_CHUNKER_CONFIG, token_counter=token_counter).chunk(
         text
     )
     stored = StoredToolContent(

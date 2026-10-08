@@ -13,7 +13,7 @@ from rag.application.plugins.core.metadata import (
 from rag.application.plugins.core.plugin import ChunkMetadataBuilder, RagPlugin
 
 
-class DocumentChunkMetadataBuilder:
+class MarkdownChunkMetadataBuilder:
     """按 DocumentMetadata 类型路由垂类 Chunk metadata 生产器。"""
 
     def __init__(self, *, builders: list[ChunkMetadataBuilder] | None = None) -> None:
@@ -63,7 +63,7 @@ class RagPluginRegistry:
             for plugin in plugins
             if plugin.chunk_metadata_builder is not None
         ]
-        self.chunk_metadata_builder = DocumentChunkMetadataBuilder(builders=builders)
+        self.chunk_metadata_builder = MarkdownChunkMetadataBuilder(builders=builders)
         self.doc_chunk_metadata_codec = DocChunkMetadataCodec(
             self.chunk_metadata_builder.metadata_types
         )

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import semchunk
 
-from ..parsing.parser import DocumentNode, NodeKind
+from ..parsing.parser import MarkdownNode, MarkdownNodeKind
 
 if TYPE_CHECKING:
     from .chunker import ChunkingPolicy
@@ -20,28 +20,28 @@ class StructuralNodeSplitter:
         self._policy = policy
         self._counter = policy.token_counter
 
-    def split(self, node: DocumentNode) -> tuple[DocumentNode, ...]:
+    def split(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
         """按节点结构选择拆分策略；无需拆分或不安全时原样返回。"""
         # 未超过拆分阈值时保持节点原子性。
         if self._counter.count(node.text) <= self._policy.split_threshold_tokens:
             return (node,)
 
         # 段落和引用按语义文本拆分。
-        if node.kind in {NodeKind.PARAGRAPH, NodeKind.QUOTE}:
+        if node.kind in {MarkdownNodeKind.PARAGRAPH, MarkdownNodeKind.QUOTE}:
             return self._split_text(node)
 
         # 列表、表格、代码分别按结构边界拆分。
-        if node.kind is NodeKind.LIST:
+        if node.kind is MarkdownNodeKind.LIST:
             return self._split_list(node)
-        if node.kind is NodeKind.TABLE:
+        if node.kind is MarkdownNodeKind.TABLE:
             return self._split_table(node)
-        if node.kind is NodeKind.CODE:
+        if node.kind is MarkdownNodeKind.CODE:
             return self._split_code(node)
 
         # Formula、Figure 及未定义安全边界的结构保持原子性；最终由 Packer 判断 Overflow。
         return (node,)
 
-    def _split_text(self, node: DocumentNode) -> tuple[DocumentNode, ...]:
+    def _split_text(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
         """将文本节点按语义片段切分为多个 part 节点。"""
         return tuple(
             replace(
@@ -80,14 +80,14 @@ class StructuralNodeSplitter:
 
         return tuple(result)
 
-    def _split_list(self, node: DocumentNode) -> tuple[DocumentNode, ...]:
+    def _split_list(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
         """按列表项聚合分组，尽量保留列表结构；超阈值单项单独成组。"""
-        items = [child for child in node.children if child.kind is NodeKind.LIST_ITEM]
+        items = [child for child in node.children if child.kind is MarkdownNodeKind.LIST_ITEM]
         if not items:
             return (node,)
 
-        groups: list[list[DocumentNode]] = []
-        current: list[DocumentNode] = []
+        groups: list[list[MarkdownNode]] = []
+        current: list[MarkdownNode] = []
 
         for item in items:
             current_text = "\n".join(part.text for part in current)
@@ -138,13 +138,13 @@ class StructuralNodeSplitter:
             for index, group in enumerate(groups)
         )
 
-    def _split_table(self, node: DocumentNode) -> tuple[DocumentNode, ...]:
+    def _split_table(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
         """按表格行分组，保留表头和 caption；缺少可靠行边界时原样返回。"""
         header = next(
-            (child for child in node.children if child.kind is NodeKind.TABLE_HEADER),
+            (child for child in node.children if child.kind is MarkdownNodeKind.TABLE_HEADER),
             None,
         )
-        rows = [child for child in node.children if child.kind is NodeKind.TABLE_ROW]
+        rows = [child for child in node.children if child.kind is MarkdownNodeKind.TABLE_ROW]
         header_text = node.metadata.get("table_header_text")
 
         # HTML table 等没有可靠行边界的结构不能退回纯文本拆分。
@@ -152,7 +152,7 @@ class StructuralNodeSplitter:
             return (node,)
 
         caption = next(
-            (child for child in node.children if child.kind is NodeKind.PARAGRAPH),
+            (child for child in node.children if child.kind is MarkdownNodeKind.PARAGRAPH),
             None,
         )
         # 判断 caption 是否在表格上方
@@ -160,7 +160,7 @@ class StructuralNodeSplitter:
             caption and node.text.lstrip().startswith(caption.text.lstrip())
         )
 
-        def build_group(group: list[DocumentNode], index: int) -> DocumentNode:
+        def build_group(group: list[MarkdownNode], index: int) -> MarkdownNode:
             """构造包含表头、当前行组及可选 caption 的表格分块。"""
             # 首组始终含至少一行；caption 与首行整体超限时也不拆 caption。
             children = [header, *group]
@@ -197,8 +197,8 @@ class StructuralNodeSplitter:
                 },
             )
 
-        parts: list[DocumentNode] = []
-        current: list[DocumentNode] = []
+        parts: list[MarkdownNode] = []
+        current: list[MarkdownNode] = []
 
         for row in rows:
             candidate = build_group([*current, row], len(parts))
@@ -231,7 +231,7 @@ class StructuralNodeSplitter:
 
         return tuple(parts)
 
-    def _split_code(self, node: DocumentNode) -> tuple[DocumentNode, ...]:
+    def _split_code(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
         """按完整原文代码行分组，并为每个 fenced 片段重建完整围栏。"""
         # 只按 LF 分行，避免把 U+2028 或其他代码字符误认为 Markdown 换行。
         lines = node.text.split("\n")

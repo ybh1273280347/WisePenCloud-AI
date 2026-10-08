@@ -1,3 +1,3 @@
-from .parser import DocumentParser
+from .parser import MarkdownParser
 
-__all__ = ["DocumentParser"]
+__all__ = ["MarkdownParser"]

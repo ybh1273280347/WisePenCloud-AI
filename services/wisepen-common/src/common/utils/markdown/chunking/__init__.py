@@ -1,12 +1,12 @@
 from .chunker import (
     Anchor,
     ChunkingPolicy,
-    DocumentChunker,
-    DocumentChunkerConfig,
-    DocumentChunkingResult,
+    MarkdownChunker,
+    MarkdownChunkerConfig,
+    MarkdownChunkingResult,
     Section,
 )
-from .packer import ChunkPacker, DocumentChunk
+from .packer import ChunkPacker, MarkdownChunk
 from .splitter import StructuralNodeSplitter
 from .tokenizer import TiktokenTokenCounter, TokenCounter, default_token_counter
 
@@ -14,10 +14,10 @@ __all__ = [
     "Anchor",
     "ChunkPacker",
     "ChunkingPolicy",
-    "DocumentChunk",
-    "DocumentChunker",
-    "DocumentChunkerConfig",
-    "DocumentChunkingResult",
+    "MarkdownChunk",
+    "MarkdownChunker",
+    "MarkdownChunkerConfig",
+    "MarkdownChunkingResult",
     "Section",
     "StructuralNodeSplitter",
     "TiktokenTokenCounter",

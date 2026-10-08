@@ -12,10 +12,9 @@ from mdit_py_plugins.dollarmath import dollarmath_plugin
 from .plugins import standalone_figure_plugin
 
 
-class NodeKind(StrEnum):
-    """Markdown 语法树中会影响分块边界的结构类型。"""
+class MarkdownNodeKind(StrEnum):
+    """会影响 Markdown 分块边界的节点类型。"""
 
-    DOCUMENT = "document"
     SECTION = "section"
     PARAGRAPH = "paragraph"
     LIST = "list"
@@ -48,29 +47,26 @@ class SourceSpan:
 
 
 @dataclass(frozen=True, slots=True)
-class DocumentNode:
-    """解析器输出的结构事实；source_spans 是可选 provenance。"""
+class MarkdownNode:
+    """Markdown 结构节点；source_spans 为可选来源范围。"""
 
     node_id: str
-    kind: NodeKind
+    kind: MarkdownNodeKind
     text: str
     source_spans: tuple[SourceSpan, ...] = ()
-    children: tuple[DocumentNode, ...] = ()
+    children: tuple[MarkdownNode, ...] = ()
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     @property
     def source_node_ids(self) -> tuple[str, ...]:
-        """原始结构归属；派生片段可重复归属同一原始 Node，不代表精确文本覆盖。"""
+        """结构来源归属，不保证与派生片段的文本范围精确对应。"""
+
         identities = self.metadata.get("source_node_ids")
         if identities is not None:
             return tuple(identities)
         return (
             self.node_id,
-            *(
-                identity
-                for child in self.children
-                for identity in child.source_node_ids
-            ),
+            *(identity for child in self.children for identity in child.source_node_ids),
         )
 
     @property
@@ -80,6 +76,7 @@ class DocumentNode:
     @property
     def end(self) -> int | None:
         return max((span.end_offset for span in self.source_spans), default=None)
+
 
 NUMBERED_LABEL_RE = re.compile(
     r"^(?:[·•]\s*|[-*+]\s+)?[*_~\s]*"
@@ -93,25 +90,26 @@ FORMULA_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 
-_OPEN_KINDS: dict[str, NodeKind | None] = {
-    "heading_open": NodeKind.SECTION,
-    "paragraph_open": NodeKind.PARAGRAPH,
-    "blockquote_open": NodeKind.QUOTE,
-    "bullet_list_open": NodeKind.LIST,
-    "ordered_list_open": NodeKind.LIST,
-    "list_item_open": NodeKind.LIST_ITEM,
-    "table_open": NodeKind.TABLE,
-    "thead_open": NodeKind.TABLE_HEADER,
+# None 表示分组 token，只保留其内部节点。
+_OPEN_TOKEN_KINDS: dict[str, MarkdownNodeKind | None] = {
+    "heading_open": MarkdownNodeKind.SECTION,
+    "paragraph_open": MarkdownNodeKind.PARAGRAPH,
+    "blockquote_open": MarkdownNodeKind.QUOTE,
+    "bullet_list_open": MarkdownNodeKind.LIST,
+    "ordered_list_open": MarkdownNodeKind.LIST,
+    "list_item_open": MarkdownNodeKind.LIST_ITEM,
+    "table_open": MarkdownNodeKind.TABLE,
+    "thead_open": MarkdownNodeKind.TABLE_HEADER,
     "tbody_open": None,
-    "tr_open": NodeKind.TABLE_ROW,
-    "th_open": NodeKind.TABLE_CELL,
-    "td_open": NodeKind.TABLE_CELL,
-    "figure_open": NodeKind.FIGURE,
+    "tr_open": MarkdownNodeKind.TABLE_ROW,
+    "th_open": MarkdownNodeKind.TABLE_CELL,
+    "td_open": MarkdownNodeKind.TABLE_CELL,
+    "figure_open": MarkdownNodeKind.FIGURE,
 }
 
 
-class DocumentParser:
-    """将 markdown-it token tree 投影为保留嵌套结构和来源范围的 Node 树。"""
+class MarkdownParser:
+    """将 markdown-it token 转换为带来源范围的结构节点树。"""
 
     def __init__(self) -> None:
         self._parser = (
@@ -122,28 +120,28 @@ class DocumentParser:
             .use(dollarmath_plugin)
         )
 
-    def parse(self, text: str) -> tuple[DocumentNode, ...]:
+    def parse(self, text: str) -> tuple[MarkdownNode, ...]:
         if not text:
             return ()
 
-        line_offsets = _markdown_line_offsets(text)
-        nodes = _TokenTreeBuilder(
+        nodes = _MarkdownTokenTreeBuilder(
             tokens=self._parser.parse(text),
             text=text,
-            line_offsets=line_offsets,
+            line_offsets=_build_line_offsets(text),
         ).build()
-        nodes = _normalize_nodes(nodes, text)
-        if nodes:
+        normalized = _normalize_markdown_nodes(nodes, text)
+        if normalized:
+            # 在所有结构变换结束后统一分配路径 ID。
             return tuple(
-                _assign_structural_ids(node, f"node-{index}")
-                for index, node in enumerate(nodes)
+                _reassign_node_ids(node, f"node-{index}")
+                for index, node in enumerate(normalized)
             )
 
         if text.strip():
             return (
-                DocumentNode(
+                MarkdownNode(
                     node_id="node-0",
-                    kind=NodeKind.PARAGRAPH,
+                    kind=MarkdownNodeKind.PARAGRAPH,
                     text=text,
                     source_spans=(SourceSpan(0, len(text)),),
                     metadata={"source_format": "raw"},
@@ -152,19 +150,22 @@ class DocumentParser:
         return ()
 
 
-def _assign_structural_ids(node: DocumentNode, identity: str) -> DocumentNode:
-    """Normalization 后按结构路径编号，避免根与子节点 ID 冲突。"""
+def _reassign_node_ids(node: MarkdownNode, node_id: str) -> MarkdownNode:
+    """按树路径重新编号，包括归一化后重新挂接的子节点。"""
+
     return replace(
         node,
-        node_id=identity,
+        node_id=node_id,
         children=tuple(
-            _assign_structural_ids(child, f"{identity}:{index}")
+            _reassign_node_ids(child, f"{node_id}:{index}")
             for index, child in enumerate(node.children)
         ),
     )
 
 
-class _TokenTreeBuilder:
+class _MarkdownTokenTreeBuilder:
+    """递归还原 markdown-it 的扁平 token 序列。"""
+
     def __init__(
         self,
         *,
@@ -177,41 +178,43 @@ class _TokenTreeBuilder:
         self._line_offsets = line_offsets
         self._next_id = 0
 
-    def build(self) -> tuple[DocumentNode, ...]:
-        nodes, _ = self._parse_range(0, None)
+    def build(self) -> tuple[MarkdownNode, ...]:
+        nodes, _ = self._parse_until_close(0, None)
         return tuple(nodes)
 
-    def _parse_range(
+    def _parse_until_close(
         self,
         index: int,
         closing_type: str | None,
-    ) -> tuple[list[DocumentNode], int]:
-        nodes: list[DocumentNode] = []
+    ) -> tuple[list[MarkdownNode], int]:
+        """消费 token，直到遇到对应关闭 token 或序列结束。"""
+
+        nodes: list[MarkdownNode] = []
         while index < len(self._tokens):
             token = self._tokens[index]
             if closing_type is not None and token.type == closing_type:
                 return nodes, index + 1
 
             if token.nesting == 1:
-                kind = _OPEN_KINDS.get(token.type)
-                children, index = self._parse_range(
+                kind = _OPEN_TOKEN_KINDS.get(token.type)
+                children, index = self._parse_until_close(
                     index + 1,
                     token.type.replace("_open", "_close"),
                 )
                 if kind is None:
                     nodes.extend(children)
                     continue
-                spans = _token_spans(token, self._line_offsets, children)
-                node_text = _span_text(self._text, spans, children)
-                metadata = _token_metadata(token, kind)
-                if kind is NodeKind.TABLE:
-                    # markdown-it 没有 delimiter token；在 parser 边界保留原始
-                    # header 表达，splitter 不再需要字符位置来恢复它。
+
+                spans = _resolve_token_source_spans(token, self._line_offsets, children)
+                node_text = _resolve_node_text(self._text, spans, children)
+                metadata = _extract_node_metadata(token, kind)
+                if kind is MarkdownNodeKind.TABLE:
+                    # 表格分隔行不单独成 token，在此保留原始表头两行。
                     metadata["table_header_text"] = "\n".join(
                         node_text.split("\n")[:2]
                     ).strip()
                 nodes.append(
-                    self._make_node(
+                    self._new_node(
                         kind=kind,
                         text=node_text,
                         source_spans=spans,
@@ -222,18 +225,21 @@ class _TokenTreeBuilder:
                 continue
 
             if token.nesting == 0 and (
-                token.map is not None or token.type in {"fence", "math_block"}
+                token.map is not None
+                or token.type in {"fence", "math_block", "math_block_label"}
             ):
-                node = self._leaf_node(token)
+                node = self._build_leaf_node(token)
                 if node is not None:
                     nodes.append(node)
             index += 1
 
         return nodes, index
 
-    def _leaf_node(self, token: Token) -> DocumentNode | None:
+    def _build_leaf_node(self, token: Token) -> MarkdownNode | None:
+        """把可保留的叶子 token 转为节点。"""
+
         if token.type == "fence":
-            kind = NodeKind.CODE
+            kind = MarkdownNodeKind.CODE
             info = token.info.strip()
             metadata = {
                 "language": info.split(maxsplit=1)[0] if info else None,
@@ -242,33 +248,35 @@ class _TokenTreeBuilder:
                 "fenced": True,
             }
         elif token.type == "code_block":
-            kind = NodeKind.CODE
+            kind = MarkdownNodeKind.CODE
             metadata = {"language": None, "fenced": False}
         elif token.type in {"math_block", "math_block_label"}:
-            kind = NodeKind.FORMULA
+            kind = MarkdownNodeKind.FORMULA
             metadata = {}
         elif token.type == "html_block":
             if not token.content.lstrip().lower().startswith("<table"):
                 return None
-            kind = NodeKind.TABLE
+            kind = MarkdownNodeKind.TABLE
             metadata = {"source_format": "html"}
         elif token.type == "inline":
-            return self._inline_node(token)
+            return self._build_inline_node(token)
         else:
             return None
 
-        spans = _token_spans(token, self._line_offsets, ())
-        return self._make_node(
+        spans = _resolve_token_source_spans(token, self._line_offsets, ())
+        return self._new_node(
             kind=kind,
-            text=_span_text(self._text, spans, ()),
+            text=_resolve_node_text(self._text, spans, ()),
             source_spans=spans,
             metadata=metadata,
         )
 
-    def _inline_node(self, token: Token) -> DocumentNode:
+    def _build_inline_node(self, token: Token) -> MarkdownNode:
+        """父节点保留整段行内内容，子节点记录 inline token 类型。"""
+
         children = tuple(
-            self._make_node(
-                kind=NodeKind.INLINE,
+            self._new_node(
+                kind=MarkdownNodeKind.INLINE,
                 text=child.content,
                 source_spans=(),
                 metadata={
@@ -279,37 +287,37 @@ class _TokenTreeBuilder:
             )
             for child in token.children or ()
         )
-        return self._make_node(
-            kind=NodeKind.INLINE,
+        return self._new_node(
+            kind=MarkdownNodeKind.INLINE,
             text=token.content,
-            source_spans=_token_spans(token, self._line_offsets, ()),
+            source_spans=_resolve_token_source_spans(token, self._line_offsets, ()),
             children=children,
             metadata={"token_type": "inline"},
         )
 
-    def _make_node(
+    def _new_node(
         self,
         *,
-        kind: NodeKind,
+        kind: MarkdownNodeKind,
         text: str,
         source_spans: tuple[SourceSpan, ...],
-        children: tuple[DocumentNode, ...] = (),
+        children: tuple[MarkdownNode, ...] = (),
         metadata: dict[str, object] | None = None,
-    ) -> DocumentNode:
-        node = DocumentNode(
+    ) -> MarkdownNode:
+        node = MarkdownNode(
             node_id=f"node-{self._next_id}",
             kind=kind,
             text=text,
             source_spans=source_spans,
             children=children,
-            metadata=metadata or {},
+            metadata=metadata if metadata is not None else {},
         )
         self._next_id += 1
         return node
 
 
-def _markdown_line_offsets(text: str) -> list[int]:
-    """建立 markdown-it 使用的按 LF 分行表，保留 CRLF 和其他字符。"""
+def _build_line_offsets(text: str) -> list[int]:
+    """按 LF 建立行起始偏移表，保留原文中的 CRLF。"""
 
     offsets = [0]
     for index, character in enumerate(text):
@@ -320,17 +328,21 @@ def _markdown_line_offsets(text: str) -> list[int]:
     return offsets
 
 
-def _token_spans(
+def _resolve_token_source_spans(
     token: Token,
     line_offsets: list[int],
-    children: tuple[DocumentNode, ...] | list[DocumentNode],
+    children: tuple[MarkdownNode, ...] | list[MarkdownNode],
 ) -> tuple[SourceSpan, ...]:
-    # markdown-it 只给 tr/inline 行范围；把整行复制给 cell 会伪造精确引用。
+    """优先使用 token 行映射，否则使用子节点范围包络。"""
+
+    # 单元格的行映射可能覆盖整行，不能当作单元格的精确来源。
     if token.type in {"th_open", "td_open"}:
         return ()
+
     if token.map is not None:
         start_line, end_line = token.map
         return (SourceSpan(line_offsets[start_line], line_offsets[end_line]),)
+
     child_spans = tuple(
         span for child in children for span in child.source_spans if span.length
     )
@@ -344,43 +356,54 @@ def _token_spans(
     )
 
 
-def _span_text(
+def _resolve_node_text(
     source: str,
     spans: tuple[SourceSpan, ...],
-    children: tuple[DocumentNode, ...] | list[DocumentNode],
+    children: tuple[MarkdownNode, ...] | list[MarkdownNode],
 ) -> str:
+    """优先切取原文；无来源范围时拼接子节点文本。"""
+
     if spans:
         return source[spans[0].start_offset : spans[-1].end_offset]
     return "\n".join(child.text for child in children if child.text)
 
 
-def _token_metadata(token: Token, kind: NodeKind) -> dict[str, object]:
+def _extract_node_metadata(token: Token, kind: MarkdownNodeKind) -> dict[str, object]:
+    """提取列表、标题及表格单元格所需的 token 属性。"""
+
     metadata: dict[str, object] = {}
-    if kind is NodeKind.LIST:
+    if kind is MarkdownNodeKind.LIST:
         metadata["ordered"] = token.type == "ordered_list_open"
         if token.attrs and "start" in token.attrs:
             metadata["start"] = token.attrs["start"]
-    if kind is NodeKind.SECTION:
+    if kind is MarkdownNodeKind.SECTION:
         metadata["heading_level"] = int(token.tag[1])
-    if kind is NodeKind.TABLE_CELL:
+    if kind is MarkdownNodeKind.TABLE_CELL:
         metadata["alignment"] = dict(token.attrs or {}).get("style")
     return metadata
 
 
-def _normalize_nodes(
-    nodes: tuple[DocumentNode, ...],
+def _normalize_markdown_nodes(
+    nodes: tuple[MarkdownNode, ...],
     source: str,
-) -> list[DocumentNode]:
-    normalized: list[DocumentNode] = []
+) -> list[MarkdownNode]:
+    """处理章节路径、重复标题、编号题注和空标题。"""
+
+    normalized: list[MarkdownNode] = []
     headings: list[tuple[int, str]] = []
     previous_heading: tuple[int, tuple[str, ...], str] | None = None
 
     for node in nodes:
-        if node.kind is NodeKind.SECTION:
-            title = _inline_content(node)
+        if node.kind is MarkdownNodeKind.SECTION:
+            inline_heading = next(
+                (child for child in node.children if child.kind is MarkdownNodeKind.INLINE),
+                None,
+            )
+            title = (inline_heading.text if inline_heading else node.text).strip()
             if not title:
                 continue
             level = int(node.metadata["heading_level"])
+
             parent_index = next(
                 (
                     index
@@ -389,59 +412,54 @@ def _normalize_nodes(
                 ),
                 len(headings),
             )
-            parent_path = tuple(
-                heading_title for _, heading_title in headings[:parent_index]
-            )
-            # 相邻同层同父路径的完全重复标题视为解析噪声，跳过
-            if (
-                previous_heading is not None
-                and previous_heading[0] == level
-                and previous_heading[1] == parent_path
-                and previous_heading[2] == title
-            ):
+            parent_path = tuple(title for _, title in headings[:parent_index])
+
+            # 只跳过真正相邻、同层且同父路径的重复标题。
+            if previous_heading == (level, parent_path, title):
                 continue
+
             headings = headings[:parent_index]
             headings.append((level, title))
             previous_heading = (level, parent_path, title)
-            metadata = {
-                **node.metadata,
-                "title": title,
-                "section_path": tuple(title for _, title in headings),
-            }
-            normalized.append(replace(node, metadata=metadata))
+            normalized.append(
+                replace(
+                    node,
+                    metadata={
+                        **node.metadata,
+                        "title": title,
+                        "section_path": tuple(title for _, title in headings),
+                    },
+                )
+            )
             continue
 
+        previous_heading = None
         metadata = {
             **node.metadata,
             "section_path": tuple(title for _, title in headings),
         }
-        if node.kind is NodeKind.FORMULA:
+        if node.kind is MarkdownNodeKind.FORMULA:
             formula_match = FORMULA_LABEL_RE.search(node.text)
             if formula_match is not None:
                 metadata["anchor_label"] = f"Equation {formula_match.group('number')}"
         normalized.append(replace(node, metadata=metadata))
 
-    normalized = _associate_numbered_labels(normalized, source)
-    return _remove_empty_headings(normalized)
+    return _prune_empty_headings(_attach_numbered_captions(normalized, source))
 
 
-def _inline_content(node: DocumentNode) -> str:
-    for child in node.children:
-        if child.kind is NodeKind.INLINE:
-            return child.text.strip()
-    return node.text.strip()
+def _prune_empty_headings(nodes: list[MarkdownNode]) -> list[MarkdownNode]:
+    """删除没有正文和直接下级标题的空标题，随后重建章节路径。"""
 
-
-def _remove_empty_headings(nodes: list[DocumentNode]) -> list[DocumentNode]:
     headings_to_remove: set[int] = set()
     for index, node in enumerate(nodes):
-        if node.kind is not NodeKind.SECTION:
+        if node.kind is not MarkdownNodeKind.SECTION:
             continue
         level = int(node.metadata["heading_level"])
         has_content = False
         has_child = False
+
         for following in nodes[index + 1 :]:
-            if following.kind is NodeKind.SECTION:
+            if following.kind is MarkdownNodeKind.SECTION:
                 has_child = int(following.metadata["heading_level"]) > level
                 break
             if following.text.strip():
@@ -453,12 +471,12 @@ def _remove_empty_headings(nodes: list[DocumentNode]) -> list[DocumentNode]:
     if not headings_to_remove:
         return nodes
 
-    result: list[DocumentNode] = []
+    result: list[MarkdownNode] = []
     headings: list[tuple[int, str]] = []
     for index, node in enumerate(nodes):
         if index in headings_to_remove:
             continue
-        if node.kind is NodeKind.SECTION:
+        if node.kind is MarkdownNodeKind.SECTION:
             level = int(node.metadata["heading_level"])
             while headings and headings[-1][0] >= level:
                 headings.pop()
@@ -475,35 +493,39 @@ def _remove_empty_headings(nodes: list[DocumentNode]) -> list[DocumentNode]:
     return result
 
 
-def _associate_numbered_labels(
-    nodes: list[DocumentNode],
+def _attach_numbered_captions(
+    nodes: list[MarkdownNode],
     source: str,
-) -> list[DocumentNode]:
-    result: list[DocumentNode] = []
+) -> list[MarkdownNode]:
+    """把相邻的编号题注段落挂接到表格或图片节点。"""
+
+    result: list[MarkdownNode] = []
     index = 0
     while index < len(nodes):
         first = nodes[index]
         if index + 1 < len(nodes):
             second = nodes[index + 1]
-            caption, target = (
-                (first, second) if first.kind is NodeKind.PARAGRAPH else (second, first)
-            )
-            label_match = (
-                _numbered_anchor(caption.text)
-                if caption.kind is NodeKind.PARAGRAPH
+            if first.kind is MarkdownNodeKind.PARAGRAPH:
+                caption, target = first, second
+            else:
+                caption, target = second, first
+
+            label = (
+                _parse_numbered_caption(caption.text)
+                if caption.kind is MarkdownNodeKind.PARAGRAPH
                 else None
             )
             target_kind = (
-                NodeKind.TABLE
-                if label_match and label_match[0] == "table"
-                else NodeKind.FIGURE
-                if label_match
+                MarkdownNodeKind.TABLE
+                if label and label[0] == "table"
+                else MarkdownNodeKind.FIGURE
+                if label
                 else None
             )
             if (
-                label_match is not None
+                label is not None
                 and target.kind is target_kind
-                and _spans_are_adjacent(source, first, second)
+                and _has_only_whitespace_between(source, first, second)
             ):
                 start = min(span.start_offset for span in first.source_spans)
                 end = max(span.end_offset for span in second.source_spans)
@@ -515,7 +537,7 @@ def _associate_numbered_labels(
                         children=(*target.children, caption),
                         metadata={
                             **target.metadata,
-                            "anchor_label": label_match[1],
+                            "anchor_label": label[1],
                             "caption": caption.text,
                             "figure_text": target.text,
                         },
@@ -523,12 +545,15 @@ def _associate_numbered_labels(
                 )
                 index += 2
                 continue
+
         result.append(first)
         index += 1
     return result
 
 
-def _numbered_anchor(text: str) -> tuple[str, str] | None:
+def _parse_numbered_caption(text: str) -> tuple[str, str] | None:
+    """解析编号题注，返回 (table/figure, 规范化锚点)。"""
+
     match = NUMBERED_LABEL_RE.fullmatch(text.strip())
     if match is None:
         return None
@@ -538,13 +563,17 @@ def _numbered_anchor(text: str) -> tuple[str, str] | None:
     return "figure", f"Figure {number}"
 
 
-def _spans_are_adjacent(
+def _has_only_whitespace_between(
     source: str,
-    first: DocumentNode,
-    second: DocumentNode,
+    first: MarkdownNode,
+    second: MarkdownNode,
 ) -> bool:
+    """判断按文档顺序排列的两个节点之间是否仅有空白。"""
+
     if not first.source_spans or not second.source_spans:
         return False
     first_end = max(span.end_offset for span in first.source_spans)
     second_start = min(span.start_offset for span in second.source_spans)
+    if first_end > second_start:
+        return False
     return not source[first_end:second_start].strip()

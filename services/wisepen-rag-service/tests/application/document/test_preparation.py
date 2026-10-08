@@ -1,11 +1,11 @@
-from common.utils.markdown import DocumentChunker
+from common.utils.markdown import MarkdownChunker
 
 from rag.application.document.models import rag_section_id
 from rag.application.document.preparation import _to_doc_chunk
 
 
 def test_common_to_rag_uses_structural_identity_and_tokens():
-    result = DocumentChunker().chunk("# 章节\n\n正文 中文🙂\n")
+    result = MarkdownChunker().chunk("# 章节\n\n正文 中文🙂\n")
     section_ids = {
         section.section_id: rag_section_id(
             resource_id="r",

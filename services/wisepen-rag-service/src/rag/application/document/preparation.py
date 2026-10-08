@@ -3,9 +3,9 @@
 from dataclasses import replace
 
 from common.utils.markdown import (
-    DocumentChunk,
-    DocumentChunker,
-    DocumentChunkerConfig,
+    MarkdownChunk,
+    MarkdownChunker,
+    MarkdownChunkerConfig,
     Section,
 )
 
@@ -21,7 +21,7 @@ from rag.application.plugins.core.metadata import (
     DocumentMetadata,
     GeneralDocumentMetadata,
 )
-from rag.application.plugins.core.registry import DocumentChunkMetadataBuilder
+from rag.application.plugins.core.registry import MarkdownChunkMetadataBuilder
 from rag.application.publication import DocumentPublication
 from rag.domain.repositories.doc_chunks import DocChunkRepository
 from rag.domain.repositories.index_state import StageAction
@@ -35,12 +35,12 @@ class DocumentPreparer:
         *,
         publication: DocumentPublication,
         doc_chunks: DocChunkRepository,
-        chunker_config: DocumentChunkerConfig | None = None,
-        chunk_metadata_builder: DocumentChunkMetadataBuilder | None = None,
+        chunker_config: MarkdownChunkerConfig | None = None,
+        chunk_metadata_builder: MarkdownChunkMetadataBuilder | None = None,
     ) -> None:
         self._publication = publication
         self._doc_chunks = doc_chunks
-        self._chunker_config = chunker_config or DocumentChunkerConfig(
+        self._chunker_config = chunker_config or MarkdownChunkerConfig(
             target_chunk_tokens=800,
             split_threshold_tokens=1600,
         )
@@ -60,7 +60,7 @@ class DocumentPreparer:
             document_version=document_version,
             raw_content=markdown,
         )
-        chunking = DocumentChunker(self._chunker_config).chunk(markdown)
+        chunking = MarkdownChunker(self._chunker_config).chunk(markdown)
 
         section_ids = {
             section.section_id: rag_section_id(
@@ -125,7 +125,7 @@ class DocumentPreparer:
 
 
 def _to_doc_chunk(
-    chunk: DocumentChunk,
+    chunk: MarkdownChunk,
     *,
     resource_id: str,
     content_revision: str,

@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, replace
 
-from ..parsing.parser import DocumentNode, DocumentParser, NodeKind, SourceSpan
-from .packer import ChunkPacker, DocumentChunk
+from ..parsing.parser import MarkdownNode, MarkdownParser, MarkdownNodeKind, SourceSpan
+from .packer import ChunkPacker, MarkdownChunk
 from .splitter import StructuralNodeSplitter
 from .tokenizer import TokenCounter, default_token_counter
 
@@ -30,21 +30,21 @@ class Section:
     own_span: SourceSpan
     subtree_span: SourceSpan
     content_spans: tuple[SourceSpan, ...] = ()
-    summary: str = ""
+    summary: str = ""   # 可以接入llm summarize等
 
 
 @dataclass(frozen=True, slots=True)
-class DocumentChunkingResult:
+class MarkdownChunkingResult:
     """一次文档解析和分块产生的结构事实。"""
 
-    chunks: tuple[DocumentChunk, ...]
-    nodes: tuple[DocumentNode, ...]
+    chunks: tuple[MarkdownChunk, ...]
+    nodes: tuple[MarkdownNode, ...]
     sections: tuple[Section, ...]
     anchors: tuple[Anchor, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class DocumentChunkerConfig:
+class MarkdownChunkerConfig:
     """Chunking 目标尺寸与结构拆分触发阈值。"""
 
     target_chunk_tokens: int = 800
@@ -72,19 +72,19 @@ class ChunkingPolicy:
         ) <= abs(current_tokens - self.target_chunk_tokens)
 
 
-class DocumentChunker:
+class MarkdownChunker:
     """编排解析、章节组织、结构拆分和 Chunk 装箱，不参与预算取舍。"""
 
     __slots__ = ("_packer", "_parser", "_splitter", "config")
 
     def __init__(
         self,
-        config: DocumentChunkerConfig | None = None,
+        config: MarkdownChunkerConfig | None = None,
         *,
         token_counter: TokenCounter | None = None,
     ) -> None:
-        self.config = config or DocumentChunkerConfig()
-        self._parser = DocumentParser()
+        self.config = config or MarkdownChunkerConfig()
+        self._parser = MarkdownParser()
         policy = ChunkingPolicy(
             target_chunk_tokens=self.config.target_chunk_tokens,
             split_threshold_tokens=self.config.split_threshold_tokens,
@@ -93,15 +93,15 @@ class DocumentChunker:
         self._splitter = StructuralNodeSplitter(policy)
         self._packer = ChunkPacker(policy)
 
-    def chunk(self, text: str) -> DocumentChunkingResult:
+    def chunk(self, text: str) -> MarkdownChunkingResult:
         nodes = self._parser.parse(text)
         anchors = _build_anchors(nodes)
         sections = (
             _build_heading_sections(text=text, nodes=nodes)
-            if any(node.kind is NodeKind.SECTION for node in nodes)
+            if any(node.kind is MarkdownNodeKind.SECTION for node in nodes)
             else ()
         )
-        return DocumentChunkingResult(
+        return MarkdownChunkingResult(
             chunks=self._chunk_by_sections(nodes, sections),
             nodes=nodes,
             sections=sections,
@@ -110,12 +110,12 @@ class DocumentChunker:
 
     def _chunk_by_sections(
         self,
-        nodes: tuple[DocumentNode, ...],
+        nodes: tuple[MarkdownNode, ...],
         sections: tuple[Section, ...],
-    ) -> tuple[DocumentChunk, ...]:
+    ) -> tuple[MarkdownChunk, ...]:
         """标题只切换章节；正文依次经过 Splitter 与 Packer。"""
-        chunks: list[DocumentChunk] = []
-        section_nodes: list[DocumentNode] = []
+        chunks: list[MarkdownChunk] = []
+        section_nodes: list[MarkdownNode] = []
         section_index = 0
         current_section = None
         if sections and sections[0].level == 0:
@@ -137,7 +137,7 @@ class DocumentChunker:
                 section_nodes.clear()
 
         for node in nodes:
-            if node.kind is NodeKind.SECTION:
+            if node.kind is MarkdownNodeKind.SECTION:
                 flush()
                 current_section = sections[section_index]
                 section_index += 1
@@ -147,7 +147,7 @@ class DocumentChunker:
         return tuple(chunks)
 
 
-def _build_anchors(nodes: tuple[DocumentNode, ...]) -> tuple[Anchor, ...]:
+def _build_anchors(nodes: tuple[MarkdownNode, ...]) -> tuple[Anchor, ...]:
     """从带 anchor_label 的节点提取锚点，跨度取源文最小起点/最大终点。"""
     anchors: list[Anchor] = []
     for node in nodes:
@@ -169,10 +169,10 @@ def _build_anchors(nodes: tuple[DocumentNode, ...]) -> tuple[Anchor, ...]:
 def _build_heading_sections(
     *,
     text: str,
-    nodes: tuple[DocumentNode, ...],
+    nodes: tuple[MarkdownNode, ...],
 ) -> tuple[Section, ...]:
     """根据标题层级构建章节树，并计算各级 section 的 own_span / subtree_span。"""
-    headings = [node for node in nodes if node.kind is NodeKind.SECTION]
+    headings = [node for node in nodes if node.kind is MarkdownNodeKind.SECTION]
     first_heading_start = headings[0].start
 
     # 首个标题之前的内容归入"文档开头"根章节
@@ -243,7 +243,7 @@ def _build_heading_sections(
 
 
 def _content_spans(
-    nodes: tuple[DocumentNode, ...],
+    nodes: tuple[MarkdownNode, ...],
     start_offset: int,
     end_offset: int,
 ) -> tuple[SourceSpan, ...]:
@@ -251,7 +251,7 @@ def _content_spans(
     return tuple(
         SourceSpan(node.start, node.end)
         for node in nodes
-        if node.kind is not NodeKind.SECTION
+        if node.kind is not MarkdownNodeKind.SECTION
         and node.text.strip()
         and node.source_spans
         and start_offset <= node.start

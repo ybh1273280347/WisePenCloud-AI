@@ -2,11 +2,11 @@ from dataclasses import replace
 
 import pytest
 from common.utils.markdown import (
-    DocumentChunker,
-    DocumentChunkerConfig,
-    DocumentNode,
-    DocumentParser,
-    NodeKind,
+    MarkdownChunker,
+    MarkdownChunkerConfig,
+    MarkdownNode,
+    MarkdownParser,
+    MarkdownNodeKind,
 )
 from common.utils.markdown.chunking.chunker import ChunkingPolicy
 from common.utils.markdown.chunking.packer import ChunkPacker
@@ -23,8 +23,8 @@ class CharacterCounter:
 
 
 def _chunker(target=12, threshold=24):
-    return DocumentChunker(
-        DocumentChunkerConfig(target, threshold), token_counter=CharacterCounter()
+    return MarkdownChunker(
+        MarkdownChunkerConfig(target, threshold), token_counter=CharacterCounter()
     )
 
 
@@ -55,8 +55,8 @@ def test_packer_uses_target_distance(current, next_size, merge):
 
     packer = ChunkPacker(ChunkingPolicy(800, 1600, ContentCounter()))
     nodes = (
-        DocumentNode("a", NodeKind.PARAGRAPH, "a" * current),
-        DocumentNode("b", NodeKind.PARAGRAPH, "b" * next_size),
+        MarkdownNode("a", MarkdownNodeKind.PARAGRAPH, "a" * current),
+        MarkdownNode("b", MarkdownNodeKind.PARAGRAPH, "b" * next_size),
     )
     chunks = packer.pack(nodes)
     assert len(chunks) == (1 if merge else 2)
@@ -113,7 +113,7 @@ def test_duplicate_paragraphs_keep_different_identity():
 
 
 def test_packing_works_without_provenance_and_ignores_node_section_metadata():
-    nodes = DocumentParser().parse("paragraph one\n\nparagraph two\n")
+    nodes = MarkdownParser().parse("paragraph one\n\nparagraph two\n")
     packer = ChunkPacker(ChunkingPolicy(12, 24, CharacterCounter()))
     chunks = packer.pack(
         replace(node, source_spans=(), metadata={"section_path": ("ignored",)})
@@ -132,7 +132,7 @@ def test_token_budget_counts_joined_text_and_keeps_overflow_isolated():
 
     packer = ChunkPacker(ChunkingPolicy(12, 24, NonAdditiveCounter()))
     nodes = [
-        DocumentNode(str(i), NodeKind.PARAGRAPH, text)
+        MarkdownNode(str(i), MarkdownNodeKind.PARAGRAPH, text)
         for i, text in enumerate(["short", "x" * 30, "last"])
     ]
     chunks = packer.pack(nodes)
@@ -142,8 +142,8 @@ def test_token_budget_counts_joined_text_and_keeps_overflow_isolated():
     normal = ChunkPacker(ChunkingPolicy(12, 24, CharacterCounter()))
     combined = normal.pack(
         [
-            DocumentNode("a", NodeKind.PARAGRAPH, "a" * 10),
-            DocumentNode("b", NodeKind.PARAGRAPH, "b" * 3),
+            MarkdownNode("a", MarkdownNodeKind.PARAGRAPH, "a" * 10),
+            MarkdownNode("b", MarkdownNodeKind.PARAGRAPH, "b" * 3),
         ]
     )
     assert len(combined) == 1
@@ -153,8 +153,8 @@ def test_token_budget_counts_joined_text_and_keeps_overflow_isolated():
 def test_overflow_comes_from_final_text_instead_of_metadata():
     packer = ChunkPacker(ChunkingPolicy(12, 24, CharacterCounter()))
     nodes = [
-        DocumentNode("short", NodeKind.FORMULA, "short", metadata={"overflow": True}),
-        DocumentNode("long", NodeKind.FORMULA, "x" * 30),
+        MarkdownNode("short", MarkdownNodeKind.FORMULA, "short", metadata={"overflow": True}),
+        MarkdownNode("long", MarkdownNodeKind.FORMULA, "x" * 30),
     ]
     chunks = packer.pack(nodes)
     assert [chunk.overflow for chunk in chunks] == [False, True]
@@ -171,7 +171,7 @@ def test_tiny_tail_has_no_special_merge_and_can_join_later_content():
     packer = ChunkPacker(ChunkingPolicy(800, 1600, CharacterCounter()))
     chunks = packer.pack(
         [
-            DocumentNode(str(i), NodeKind.PARAGRAPH, "x" * size)
+            MarkdownNode(str(i), MarkdownNodeKind.PARAGRAPH, "x" * size)
             for i, size in enumerate([790, 30, 600])
         ]
     )

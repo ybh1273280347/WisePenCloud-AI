@@ -1,121 +1,129 @@
-from __future__ import annotations
+"""把 Markdown 章节和锚点格式化为全局或邻域导航目录。"""
 
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass, field
 
 from .chunking.chunker import Anchor, Section
-from .parsing.parser import SourceSpan
 
 
-@dataclass(slots=True)
-class OutlineNode:
-    """模型可见的精简目录节点，不暴露 offset 和内部节点树。"""
+class OutlineFormatter:
+    """共享目录格式和树遍历；索引属于当前文档，不负责可见性检查。"""
 
-    section_id: str
-    title: str
-    length: int
-    anchor_labels: list[str] = field(default_factory=list)
-    children: list[OutlineNode] = field(default_factory=list)
+    def __init__(
+        self, *, sections: Sequence[Section], anchors: Sequence[Anchor]
+    ) -> None:
+        self._sections_by_id = {section.section_id: section for section in sections}
 
-
-class OutlineAssembler:
-    """把内部文档结构投影为不含 offset/path 的模型可见目录。"""
-
-    @staticmethod
-    def assemble(
-        *,
-        sections: Sequence[Section],
-        anchors: Sequence[Anchor],
-    ) -> list[OutlineNode]:
-        if not sections:
-            return []
-
-        # 先按 parent_section_id 建索引，再统一按 ordinal/原文位置排序；
-        # outline 不依赖调用方传入顺序，也不使用 section_path 识别节点。
-        children_by_parent: dict[str | None, list[Section]] = defaultdict(list)
-        root_section: Section | None = None
+        # 按父节点分组，并按 ordinal 稳定排序，保证目录顺序一致
+        self._children_by_parent: dict[str | None, list[Section]] = defaultdict(list)
         for section in sections:
-            children_by_parent[section.parent_section_id].append(section)
-            if section.parent_section_id is None and section.level == 0:
-                root_section = section
+            self._children_by_parent[section.parent_section_id].append(section)
+        for children in self._children_by_parent.values():
+            children.sort(key=lambda section: section.ordinal)
 
-        for children in children_by_parent.values():
-            children.sort(
-                key=lambda section: (
-                    section.ordinal,
-                    section.own_span.start_offset,
-                )
-            )
+        self._anchors = anchors
 
-        if root_section is None:
-            # 没有前置无标题正文时，真实顶层 Section 直接挂在文档根下。
-            return [
-                _to_outline_node(
-                    section=section,
-                    children_by_parent=children_by_parent,
-                    anchors=anchors,
-                )
-                for section in children_by_parent[None]
-            ]
+    def global_outline(self, *, max_level: int = 0) -> str:
+        """生成全局目录；根深度为 1，max_level=0 表示展开全部。"""
 
-        nodes: list[OutlineNode] = []
-        if root_section.title:
-            # 前言 root 的 subtree 覆盖全文；只投影它自己的 anchor/page，
-            # 不展开子标题，避免把整棵文档树重复嵌入“文档开头”。
-            nodes.append(
-                _to_outline_node(
-                    section=root_section,
-                    children_by_parent=children_by_parent,
-                    anchors=anchors,
-                    expand_children=False,
-                )
-            )
-        nodes.extend(
-            _to_outline_node(
-                section=section,
-                children_by_parent=children_by_parent,
-                anchors=anchors,
-            )
-            for section in children_by_parent[root_section.section_id]
+        lines: list[str] = []
+
+        def visit(section: Section, indent: int, depth: int) -> None:
+            # 深度取决于 parent_section_id 树，而不是 Markdown 标题级别
+            if max_level > 0 and depth > max_level:
+                return
+            lines.append(self._node_line(section, indent=indent))
+            for child in self._children_by_parent.get(section.section_id, []):
+                visit(child, indent + 1, depth + 1)
+
+        for root in self._children_by_parent.get(None, []):
+            visit(root, 0, 1)
+        return "\n".join(lines)
+
+    def neighborhood(self, section_id: str, *, sibling_steps: int = 1) -> str:
+        """保留完整祖先链、当前层兄弟窗口及当前章节的直接子节点。"""
+
+        section = self._sections_by_id[section_id]
+        siblings = self._children_by_parent.get(section.parent_section_id, [])
+        index = next(
+            index
+            for index, sibling in enumerate(siblings)
+            if sibling.section_id == section_id
         )
-        return nodes
 
+        # 以当前章节为中心，向左右各取 sibling_steps 个兄弟
+        start = max(0, index - sibling_steps)
+        visible_siblings = siblings[start : index + sibling_steps + 1]
 
-def _to_outline_node(
-    *,
-    section: Section,
-    children_by_parent: dict[str | None, list[Section]],
-    anchors: Sequence[Anchor],
-    expand_children: bool = True,
-) -> OutlineNode:
-    # 真实章节覆盖子树，前言 root 只覆盖直属正文。
-    span = section.subtree_span if section.level > 0 else section.own_span
-    anchor_labels = [
-        anchor.label
-        for anchor in anchors
-        if _overlaps(section.own_span, anchor.source_span)
-    ]
-    # anchor 必须与 Section 的直属范围相交，不能因为落在子 Section 中而重复归属。
-    return OutlineNode(
-        section_id=section.section_id,
-        title=section.title,
-        length=span.end_offset - span.start_offset,
-        anchor_labels=anchor_labels,
-        children=[
-            _to_outline_node(
-                section=child,
-                children_by_parent=children_by_parent,
-                anchors=anchors,
-            )
-            for child in (
-                children_by_parent.get(section.section_id, [])
-                if expand_children
-                else []
-            )
-        ],
-    )
+        lines: list[str] = []
+        rendered_ids: set[str] = set()
 
+        def append_node(
+            section: Section,
+            *,
+            indent: int,
+            current: bool = False,
+        ) -> None:
+            # 去重：同一章节只输出一次
+            if section.section_id in rendered_ids:
+                return
+            rendered_ids.add(section.section_id)
+            lines.append(self._node_line(section, indent=indent, current=current))
 
-def _overlaps(span: SourceSpan, other: SourceSpan) -> bool:
-    return span.start_offset < other.end_offset and span.end_offset > other.start_offset
+        # 回溯父链后反转为根到父节点的顺序；遇到缺失父节点或环时停止
+        ancestors: list[Section] = []
+        parent_id = section.parent_section_id
+        visited_ids = {section_id}
+        while parent_id is not None and parent_id not in visited_ids:
+            parent = self._sections_by_id.get(parent_id)
+            if parent is None:
+                break
+            ancestors.append(parent)
+            visited_ids.add(parent.section_id)
+            parent_id = parent.parent_section_id
+        ancestors.reverse()
+        for indent, ancestor in enumerate(ancestors):
+            append_node(ancestor, indent=indent)
+
+        # 祖先不展开其他分支，兄弟不展开子树；只展开当前章节的直接子节点
+        current_indent = len(ancestors)
+        for sibling in visible_siblings:
+            is_current = sibling.section_id == section_id
+            append_node(sibling, indent=current_indent, current=is_current)
+            if is_current:
+                for child in self._children_by_parent.get(section_id, []):
+                    append_node(child, indent=current_indent + 1)
+        return "\n".join(lines)
+
+    def _node_line(
+        self,
+        section: Section,
+        *,
+        indent: int,
+        current: bool = False,
+    ) -> str:
+        """生成含 section ID、直属正文字符数、子节点数及锚点的条目。"""
+
+        children = self._children_by_parent.get(section.section_id, [])
+        suffix = f" [+{len(children)}]" if children else ""
+
+        # 标记当前章节 ID；current 表示邻域视角下的焦点章节
+        marker = f" {{#{section.section_id}}}"
+        if current:
+            marker += " [current]"
+
+        # 与 DIRECT 读取一致，只统计直属正文，不包含标题或子章节正文
+        char_count = sum(span.length for span in section.content_spans)
+        metadata = f" ({char_count} chars)"
+
+        # 只收集与本章节 own_span 相交的锚点，避免归入祖先子树
+        anchors = [
+            anchor.label
+            for anchor in self._anchors
+            if anchor.source_span.start_offset < section.own_span.end_offset
+            and section.own_span.start_offset < anchor.source_span.end_offset
+        ]
+        if anchors:
+            metadata += " [" + ", ".join(anchors) + "]"
+
+        return "  " * indent + f"- {section.title.strip()}{marker}{suffix}{metadata}"

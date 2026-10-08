@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-from common.utils.markdown import OutlineAssembler, OutlineNode
-from pydantic import TypeAdapter
+from common.utils.markdown import OutlineFormatter
 
 from chat.application.tools.core import (
     ToolDefinition,
@@ -42,10 +41,7 @@ class CachedToolOutputStructureResult:
 
     content_id: str
     total_length: int | None = None
-    outline: list[OutlineNode] = field(default_factory=list)
-
-
-_RESULT_ADAPTER = TypeAdapter(CachedToolOutputStructureResult)
+    outline: str = ""
 
 
 class CachedToolOutputInspectStructureTool:
@@ -60,11 +56,11 @@ class CachedToolOutputInspectStructureTool:
                     "table of contents. It may be incomplete, noisy, or have incorrect "
                     "hierarchy or labels. Anchor labels are approximate "
                     "navigation hints, not verified facts.\n\n"
-                    "Use outline[].section_id with read_cached_tool_output_by_section to "
-                    "read the actual content. Treat the outline as a soft prior for "
-                    "navigation only. Do not infer that a section is absent solely from "
-                    "this outline. If the outline conflicts with the retrieved body text, "
-                    "trust the body text."
+                    "Use a section ID from a {#section_id} marker with "
+                    "read_cached_tool_output_by_section to read the actual content. "
+                    "Treat the outline as a soft prior for navigation only. Do not infer "
+                    "that a section is absent solely from this outline. If the outline "
+                    "conflicts with the retrieved body text, trust the body text."
                 ),
                 parameters_schema=ToolParametersSchema(_PARAMETERS_SCHEMA),
             ),
@@ -91,7 +87,7 @@ class CachedToolOutputInspectStructureTool:
         context: dict[str, Any],
         config: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> dict[str, Any]:
+    ) -> CachedToolOutputStructureResult:
         del config
         try:
             content_id = kwargs["content_id"]
@@ -108,17 +104,13 @@ class CachedToolOutputInspectStructureTool:
             result = CachedToolOutputStructureResult(
                 content_id=content_id,
                 total_length=len(stored.text),
-                outline=OutlineAssembler.assemble(
+                outline=OutlineFormatter(
                     sections=stored.sections,
                     anchors=stored.anchors,
-                ),
+                ).global_outline(),
             )
 
-            return _RESULT_ADAPTER.dump_python(
-                result,
-                exclude_none=True,
-                exclude_defaults=True,
-            )
+            return result
         except Exception as exc:
             raise ToolExecutionError(
                 reason="inspect_cached_tool_output_structure_failed",

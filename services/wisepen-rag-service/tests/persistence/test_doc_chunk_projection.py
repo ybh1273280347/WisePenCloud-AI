@@ -1,4 +1,4 @@
-from common.utils.markdown import DocumentChunker
+from common.utils.markdown import MarkdownChunker
 from pydantic import TypeAdapter
 
 from rag.application.document.models import DocChunk
@@ -10,7 +10,7 @@ from rag.domain.entities.doc_chunks import DocChunkEntity
 
 
 def _chunk():
-    source = DocumentChunker().chunk("# A\n\n中文正文\n").chunks[0]
+    source = MarkdownChunker().chunk("# A\n\n中文正文\n").chunks[0]
     return DocChunk(
         chunk_id="chunk",
         resource_id="r",

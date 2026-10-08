@@ -1,10 +1,10 @@
 import pytest
 from common.utils.markdown import (
-    DocumentChunker,
-    DocumentChunkerConfig,
-    DocumentNode,
-    DocumentParser,
-    NodeKind,
+    MarkdownChunker,
+    MarkdownChunkerConfig,
+    MarkdownNode,
+    MarkdownParser,
+    MarkdownNodeKind,
     TiktokenTokenCounter,
 )
 from common.utils.markdown.chunking.chunker import ChunkingPolicy
@@ -26,7 +26,7 @@ def test_code_preserves_indentation_and_rebuilds_fences(fence, newline, final_ne
     closing = fence + (newline if final_newline else "")
     body = ("    value = '中文🙂'\u2028 # comment" + newline + newline) * 60
     source = opening + body + closing
-    node = DocumentParser().parse(source)[0]
+    node = MarkdownParser().parse(source)[0]
     policy = _policy()
     parts = StructuralNodeSplitter(policy).split(node)
     assert len(parts) > 1
@@ -47,7 +47,7 @@ def test_unclosed_code_gets_synthetic_closing_only_when_split():
     fence = chr(96) * 3
     opening = fence + "python\n"
     body = "    x = 1\n" * 30 + "    tail = 2"
-    node = DocumentParser().parse(opening + body)[0]
+    node = MarkdownParser().parse(opening + body)[0]
     parts = StructuralNodeSplitter(_policy()).split(node)
     assert len(parts) > 1
     assert all(
@@ -56,7 +56,7 @@ def test_unclosed_code_gets_synthetic_closing_only_when_split():
     )
     assert "".join(part.text[len(opening) : -4] for part in parts) == body + "\n"
 
-    small = DocumentParser().parse(opening + "    x = 1")[0]
+    small = MarkdownParser().parse(opening + "    x = 1")[0]
     assert StructuralNodeSplitter(_policy()).split(small) == (small,)
 
 
@@ -64,7 +64,7 @@ def test_code_long_line_is_preserved_and_becomes_overflow():
     fence = chr(96) * 3
     line = "    x = '" + "🙂" * 100 + "'\n"
     source = fence + "python\nshort = 1\n" + line + "last = 2\n" + fence + "\n"
-    result = DocumentChunker(DocumentChunkerConfig(32, 64)).chunk(source)
+    result = MarkdownChunker(MarkdownChunkerConfig(32, 64)).chunk(source)
     chunk = next(chunk for chunk in result.chunks if line in chunk.text)
     assert chunk.text == fence + "python\n" + line + fence + "\n"
     assert chunk.overflow
@@ -77,15 +77,15 @@ def test_code_long_line_is_preserved_and_becomes_overflow():
 
 def test_indented_code_preserves_exact_lines():
     source = "    x = 1\n    \n    y = 2\n" * 60
-    node = DocumentParser().parse(source)[0]
+    node = MarkdownParser().parse(source)[0]
     parts = StructuralNodeSplitter(_policy()).split(node)
     assert "".join(part.text for part in parts) == node.text
     assert all(part.metadata["fenced"] is False for part in parts)
 
 
-@pytest.mark.parametrize("kind", [NodeKind.FORMULA, NodeKind.FIGURE])
+@pytest.mark.parametrize("kind", [MarkdownNodeKind.FORMULA, MarkdownNodeKind.FIGURE])
 def test_formula_and_figure_are_atomic_and_overflow_is_final(kind):
-    node = DocumentNode("atomic", kind, "x=y\n" * 50)
+    node = MarkdownNode("atomic", kind, "x=y\n" * 50)
     policy = ChunkingPolicy(10, 24, CharacterCounter())
     assert StructuralNodeSplitter(policy).split(node) == (node,)
     chunks = ChunkPacker(policy).pack([node])
@@ -98,16 +98,16 @@ def test_table_repeats_header_without_splitting_rows():
     source = "| a | b |\n| - | - |\n" + "".join(
         f"| row{index} | value{index} |\n" for index in range(60)
     )
-    node = DocumentParser().parse(source)[0]
+    node = MarkdownParser().parse(source)[0]
     policy = _policy()
     parts = StructuralNodeSplitter(policy).split(node)
     assert len(parts) > 1
     assert all(part.text.startswith("| a | b |\n| - | - |") for part in parts)
     assert all(policy.token_counter.count(part.text) <= 64 for part in parts)
     assert sum("row0 " in part.text for part in parts) == 1
-    original_rows = [row for row in node.children if row.kind is NodeKind.TABLE_ROW]
+    original_rows = [row for row in node.children if row.kind is MarkdownNodeKind.TABLE_ROW]
     split_rows = [
-        row for part in parts for row in part.children if row.kind is NodeKind.TABLE_ROW
+        row for part in parts for row in part.children if row.kind is MarkdownNodeKind.TABLE_ROW
     ]
     assert split_rows == original_rows
     assert all(node.node_id in part.source_node_ids for part in parts)
@@ -118,7 +118,7 @@ def test_table_caption_stays_whole_with_first_row_and_keeps_position(before):
     table = "| a | b |\n| - | - |\n" + "| row | data |\n" * 20
     caption = "Table 1: " + "caption " * 100 + "\n"
     source = caption + "\n" + table if before else table + "\n" + caption
-    result = DocumentChunker(DocumentChunkerConfig(32, 64)).chunk(source)
+    result = MarkdownChunker(MarkdownChunkerConfig(32, 64)).chunk(source)
     first = result.chunks[0]
     assert first.overflow
     assert caption.rstrip("\n") in first.text and "| row | data |" in first.text
@@ -135,7 +135,7 @@ def test_table_caption_stays_whole_with_first_row_and_keeps_position(before):
 def test_wide_row_is_not_reconstructed_as_cell_fragments():
     row = "| " + "word " * 100 + " | " + "value " * 100 + " |\n"
     source = "| a | b |\n| - | - |\n| short | one |\n" + row + "| last | two |\n"
-    result = DocumentChunker(DocumentChunkerConfig(32, 64)).chunk(source)
+    result = MarkdownChunker(MarkdownChunkerConfig(32, 64)).chunk(source)
     wide = next(chunk for chunk in result.chunks if row.rstrip("\n") in chunk.text)
     assert wide.overflow
     assert "short" not in wide.text and "last" not in wide.text
@@ -148,21 +148,21 @@ def test_wide_row_is_not_reconstructed_as_cell_fragments():
 
 def test_html_table_without_row_structure_is_atomic():
     source = "<table><tr><td>" + "value " * 100 + "</td></tr></table>\n"
-    node = DocumentParser().parse(source)[0]
-    assert node.kind is NodeKind.TABLE and not node.children
+    node = MarkdownParser().parse(source)[0]
+    assert node.kind is MarkdownNodeKind.TABLE and not node.children
     assert StructuralNodeSplitter(_policy()).split(node) == (node,)
 
 
 def test_nested_ordered_list_preserves_oversized_item():
     source = "3. first\n   - nested " + "word " * 100 + "\n4. second\n"
-    node = DocumentParser().parse(source)[0]
+    node = MarkdownParser().parse(source)[0]
     parts = StructuralNodeSplitter(_policy()).split(node)
     items = [child for part in parts for child in part.children]
     assert items == list(node.children)
     assert all(
         part.metadata["ordered"] and part.metadata["start"] == 3 for part in parts
     )
-    result = DocumentChunker(DocumentChunkerConfig(32, 64)).chunk(source)
+    result = MarkdownChunker(MarkdownChunkerConfig(32, 64)).chunk(source)
     assert result.chunks[0].overflow
     assert "second" not in result.chunks[0].text
 
@@ -178,12 +178,12 @@ def test_structure_grouping_uses_the_same_distance_rule():
         ([700, 900, 200], [700, 900, 200]),
     ]:
         items = tuple(
-            DocumentNode(str(i), NodeKind.LIST_ITEM, "x" * n)
+            MarkdownNode(str(i), MarkdownNodeKind.LIST_ITEM, "x" * n)
             for i, n in enumerate(lengths)
         )
-        node = DocumentNode(
+        node = MarkdownNode(
             "list",
-            NodeKind.LIST,
+            MarkdownNodeKind.LIST,
             "\n".join(item.text for item in items),
             children=items,
         )

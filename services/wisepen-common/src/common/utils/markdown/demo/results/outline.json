@@ -1,0 +1,11 @@
+{
+  "source": "../sample.md",
+  "length_contract": "每行字符数统计 Section 的直属正文，不包含标题与子章节",
+  "global_max_level_2": "- 文档开头 {#sec_fb80a8bbf30eeae0} [+2] (42 chars)\n  - Markdown 结构演示 {#sec_6299c4c41cf5afaa} [+3] (0 chars)\n  - 总结 {#sec_976dd32327e04c55} (86 chars)",
+  "global_all_levels": "- 文档开头 {#sec_fb80a8bbf30eeae0} [+2] (42 chars)\n  - Markdown 结构演示 {#sec_6299c4c41cf5afaa} [+3] (0 chars)\n    - 嵌套列表与引用 {#sec_c00a38613685f5f7} (895 chars)\n    - 表格与图片 {#sec_08181aa4f8584d5d} [+1] (3707 chars) [Table 1, Table 2, Figure 1]\n      - 公式原子性 {#sec_e6353d70d1f5cda9} (400 chars)\n    - 代码与长正文 {#sec_a75bdb4e99183f28} (1892 chars)\n  - 总结 {#sec_976dd32327e04c55} (86 chars)",
+  "neighborhood": {
+    "current_section_id": "sec_08181aa4f8584d5d",
+    "sibling_steps": 1,
+    "markdown": "- 文档开头 {#sec_fb80a8bbf30eeae0} [+2] (42 chars)\n  - Markdown 结构演示 {#sec_6299c4c41cf5afaa} [+3] (0 chars)\n    - 嵌套列表与引用 {#sec_c00a38613685f5f7} (895 chars)\n    - 表格与图片 {#sec_08181aa4f8584d5d} [current] [+1] (3707 chars) [Table 1, Table 2, Figure 1]\n      - 公式原子性 {#sec_e6353d70d1f5cda9} (400 chars)\n    - 代码与长正文 {#sec_a75bdb4e99183f28} (1892 chars)"
+  }
+}

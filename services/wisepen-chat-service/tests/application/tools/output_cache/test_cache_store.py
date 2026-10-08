@@ -8,13 +8,13 @@ from chat.application.tools.session_tools.cached_tool_output_tools.read_by_secti
 from chat.application.tools.session_tools.cached_tool_output_tools.window import (
     CachedToolOutputWindowBuilder,
 )
-from common.utils.markdown import DocumentChunker, TiktokenTokenCounter
+from common.utils.markdown import MarkdownChunker, TiktokenTokenCounter
 from pydantic import TypeAdapter
 
 
 def test_cache_keeps_ignored_preamble_and_serializes_exact_spans():
     text = "<!-- ignored by parser -->\n\n# Heading\n\nbody\n"
-    result = DocumentChunker().chunk(text)
+    result = MarkdownChunker().chunk(text)
     chunks = _build_cache_chunks(
         text, result.sections, result.anchors, TiktokenTokenCounter()
     )
@@ -26,7 +26,7 @@ def test_cache_keeps_ignored_preamble_and_serializes_exact_spans():
 
 def test_section_read_retains_section_provenance():
     text = "# Heading\n\nbody🙂\n\n## Nested\n\nchild body\n"
-    result = DocumentChunker().chunk(text)
+    result = MarkdownChunker().chunk(text)
     stored = StoredToolContent("c", "s", text, sections=result.sections)
     section = result.sections[0]
     read = _read_by_section(

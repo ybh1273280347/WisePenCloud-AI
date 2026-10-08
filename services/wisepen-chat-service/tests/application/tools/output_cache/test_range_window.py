@@ -5,12 +5,12 @@ from chat.application.tools.core.output_cache.cache_store import (
 from chat.application.tools.session_tools.cached_tool_output_tools.window import (
     CachedToolOutputWindowBuilder,
 )
-from common.utils.markdown import DocumentChunker, TiktokenTokenCounter
+from common.utils.markdown import MarkdownChunker, TiktokenTokenCounter
 
 
 def test_chat_chunks_are_exact_nonoverlapping_source_windows():
     text = "# 标题\r\n\r\n" + "中文🙂 abc \u2028" * 1800 + "\r\n\r\n# End\nlast\n"
-    result = DocumentChunker().chunk(text)
+    result = MarkdownChunker().chunk(text)
     counter = TiktokenTokenCounter()
     chunks = _build_cache_chunks(text, result.sections, result.anchors, counter)
     assert "".join(chunk.text for chunk in chunks) == text
