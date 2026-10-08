@@ -22,7 +22,7 @@ class StructuralNodeSplitter:
 
     def split(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
         """按节点结构选择拆分策略；无需拆分或不安全时原样返回。"""
-        # 未超过拆分阈值时保持节点原子性。
+        # 硬阈值以内优先保留完整节点；只有超过硬阈值才按软目标尝试拆分。
         if self._counter.count(node.text) <= self._policy.split_threshold_tokens:
             return (node,)
 
@@ -82,7 +82,9 @@ class StructuralNodeSplitter:
 
     def _split_list(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
         """按列表项聚合分组，尽量保留列表结构；超阈值单项单独成组。"""
-        items = [child for child in node.children if child.kind is MarkdownNodeKind.LIST_ITEM]
+        items = [
+            child for child in node.children if child.kind is MarkdownNodeKind.LIST_ITEM
+        ]
         if not items:
             return (node,)
 
@@ -93,7 +95,7 @@ class StructuralNodeSplitter:
             current_text = "\n".join(part.text for part in current)
             candidate = "\n".join([*(part.text for part in current), item.text])
 
-            # 当前组非空，且追加会超限或策略不允许时，先封存当前组。
+            # 超硬阈值的单项独立保留；其余仅在追加后距软目标不增时合并。
             if current and (
                 self._counter.count(item.text) > self._policy.split_threshold_tokens
                 or not self._policy.should_append(
@@ -106,7 +108,7 @@ class StructuralNodeSplitter:
 
             current.append(item)
 
-            # 单项本身超阈值时，立即让它单独成组。
+            # 无法安全拆分的超硬阈值单项立即独立输出，最终由 Packer 标记 Overflow。
             if self._counter.count(item.text) > self._policy.split_threshold_tokens:
                 groups.append(current)
                 current = []
@@ -141,10 +143,16 @@ class StructuralNodeSplitter:
     def _split_table(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
         """按表格行分组，保留表头和 caption；缺少可靠行边界时原样返回。"""
         header = next(
-            (child for child in node.children if child.kind is MarkdownNodeKind.TABLE_HEADER),
+            (
+                child
+                for child in node.children
+                if child.kind is MarkdownNodeKind.TABLE_HEADER
+            ),
             None,
         )
-        rows = [child for child in node.children if child.kind is MarkdownNodeKind.TABLE_ROW]
+        rows = [
+            child for child in node.children if child.kind is MarkdownNodeKind.TABLE_ROW
+        ]
         header_text = node.metadata.get("table_header_text")
 
         # HTML table 等没有可靠行边界的结构不能退回纯文本拆分。
@@ -152,7 +160,11 @@ class StructuralNodeSplitter:
             return (node,)
 
         caption = next(
-            (child for child in node.children if child.kind is MarkdownNodeKind.PARAGRAPH),
+            (
+                child
+                for child in node.children
+                if child.kind is MarkdownNodeKind.PARAGRAPH
+            ),
             None,
         )
         # 判断 caption 是否在表格上方
@@ -203,7 +215,7 @@ class StructuralNodeSplitter:
         for row in rows:
             candidate = build_group([*current, row], len(parts))
 
-            # 当前组非空，且追加行会超限或策略不允许时，先封存当前组。
+            # 追加后的完整表格含重复表头和 caption；以实际文本距软目标的距离决策。
             if current and (
                 self._counter.count(row.text) > self._policy.split_threshold_tokens
                 or not self._policy.should_append(
@@ -218,7 +230,7 @@ class StructuralNodeSplitter:
 
             current.append(row)
 
-            # 当前组整体超阈值时立即封存。
+            # 表头、caption 与单行无法安全拆开；整体超硬阈值时独立输出。
             if (
                 self._counter.count(build_group(current, len(parts)).text)
                 > self._policy.split_threshold_tokens
@@ -286,7 +298,7 @@ class StructuralNodeSplitter:
         current: list[str] = []
 
         for line in lines:
-            # 当前组非空，且追加行会超限或策略不允许时，先封存当前组。
+            # 围栏计入预算；完整行的组合以距软目标不增为准，不以硬阈值填满。
             if current and (
                 self._counter.count(render([line]))
                 > self._policy.split_threshold_tokens
@@ -300,7 +312,7 @@ class StructuralNodeSplitter:
 
             current.append(line)
 
-            # 当前组整体超阈值时立即封存。
+            # 超硬阈值的代码行仍保持完整，独立输出后由 Packer 标记 Overflow。
             if (
                 self._counter.count(render(current))
                 > self._policy.split_threshold_tokens

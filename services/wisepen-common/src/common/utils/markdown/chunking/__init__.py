@@ -4,6 +4,7 @@ from .chunker import (
     MarkdownChunker,
     MarkdownChunkerConfig,
     MarkdownChunkingResult,
+    MarkdownDocument,
     Section,
 )
 from .packer import ChunkPacker, MarkdownChunk
@@ -18,6 +19,7 @@ __all__ = [
     "MarkdownChunker",
     "MarkdownChunkerConfig",
     "MarkdownChunkingResult",
+    "MarkdownDocument",
     "Section",
     "StructuralNodeSplitter",
     "TiktokenTokenCounter",

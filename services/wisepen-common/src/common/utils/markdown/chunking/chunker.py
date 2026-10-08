@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, replace
 
-from ..parsing.parser import MarkdownNode, MarkdownParser, MarkdownNodeKind, SourceSpan
+from ..parsing.parser import MarkdownNode, MarkdownNodeKind, MarkdownParser, SourceSpan
 from .packer import ChunkPacker, MarkdownChunk
 from .splitter import StructuralNodeSplitter
 from .tokenizer import TokenCounter, default_token_counter
@@ -30,7 +30,7 @@ class Section:
     own_span: SourceSpan
     subtree_span: SourceSpan
     content_spans: tuple[SourceSpan, ...] = ()
-    summary: str = ""   # 可以接入llm summarize等
+    summary: str = ""  # 可以接入llm summarize等
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +41,14 @@ class MarkdownChunkingResult:
     nodes: tuple[MarkdownNode, ...]
     sections: tuple[Section, ...]
     anchors: tuple[Anchor, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MarkdownDocument:
+    """Markdown 分块输入；title 是外部文档标题，不要求出现在正文中。"""
+
+    text: str
+    title: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,10 +74,14 @@ class ChunkingPolicy:
     token_counter: TokenCounter
 
     def should_append(self, *, current_tokens: int, candidate_tokens: int) -> bool:
-        """实际输出不超拆分阈值，且距目标不变或更近时允许组合。"""
-        return candidate_tokens <= self.split_threshold_tokens and abs(
-            candidate_tokens - self.target_chunk_tokens
-        ) <= abs(current_tokens - self.target_chunk_tokens)
+        """未达软目标时按距离组合；已达目标则封存，候选不能超过硬阈值。"""
+        # 即使 BPE 非可加性使追加后 token 数减少，也不再扩充已达软目标的结构。
+        return (
+            current_tokens < self.target_chunk_tokens
+            and candidate_tokens <= self.split_threshold_tokens
+            and abs(candidate_tokens - self.target_chunk_tokens)
+            <= abs(current_tokens - self.target_chunk_tokens)
+        )
 
 
 class MarkdownChunker:
@@ -93,11 +105,19 @@ class MarkdownChunker:
         self._splitter = StructuralNodeSplitter(policy)
         self._packer = ChunkPacker(policy)
 
-    def chunk(self, text: str) -> MarkdownChunkingResult:
-        nodes = self._parser.parse(text)
+    def chunk(self, document: str | MarkdownDocument) -> MarkdownChunkingResult:
+        """解析并分块文档；纯字符串输入保留旧接口，结构输入可提供标题。"""
+        if isinstance(document, str):
+            document = MarkdownDocument(document)
+
+        nodes = self._parser.parse(document.text)
         anchors = _build_anchors(nodes)
         sections = (
-            _build_heading_sections(text=text, nodes=nodes)
+            _build_heading_sections(
+                text=document.text,
+                nodes=nodes,
+                root_title=document.title,
+            )
             if any(node.kind is MarkdownNodeKind.SECTION for node in nodes)
             else ()
         )
@@ -170,21 +190,23 @@ def _build_heading_sections(
     *,
     text: str,
     nodes: tuple[MarkdownNode, ...],
+    root_title: str | None = None,
 ) -> tuple[Section, ...]:
     """根据标题层级构建章节树，并计算各级 section 的 own_span / subtree_span。"""
     headings = [node for node in nodes if node.kind is MarkdownNodeKind.SECTION]
     first_heading_start = headings[0].start
 
-    # 首个标题之前的内容归入"文档开头"根章节
+    # 首个标题之前的内容归入文档标题根章节；没有外部标题时使用兼容名称。
     root_content_spans = _content_spans(nodes, 0, first_heading_start)
+    root_name = root_title or "文档开头"
     root = (
         Section(
             section_id=_section_id("root", 0, first_heading_start),
-            title="文档开头",
+            title=root_name,
             level=0,
             parent_section_id=None,
             ordinal=0,
-            section_path=("文档开头",),
+            section_path=(root_name,),
             own_span=SourceSpan(0, first_heading_start),
             subtree_span=SourceSpan(0, len(text)),
             content_spans=root_content_spans,

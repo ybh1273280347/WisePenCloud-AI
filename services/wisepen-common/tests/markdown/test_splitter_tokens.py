@@ -1,10 +1,11 @@
 import pytest
+
 from common.utils.markdown import (
     MarkdownChunker,
     MarkdownChunkerConfig,
     MarkdownNode,
-    MarkdownParser,
     MarkdownNodeKind,
+    MarkdownParser,
     TiktokenTokenCounter,
 )
 from common.utils.markdown.chunking.chunker import ChunkingPolicy
@@ -105,9 +106,14 @@ def test_table_repeats_header_without_splitting_rows():
     assert all(part.text.startswith("| a | b |\n| - | - |") for part in parts)
     assert all(policy.token_counter.count(part.text) <= 64 for part in parts)
     assert sum("row0 " in part.text for part in parts) == 1
-    original_rows = [row for row in node.children if row.kind is MarkdownNodeKind.TABLE_ROW]
+    original_rows = [
+        row for row in node.children if row.kind is MarkdownNodeKind.TABLE_ROW
+    ]
     split_rows = [
-        row for part in parts for row in part.children if row.kind is MarkdownNodeKind.TABLE_ROW
+        row
+        for part in parts
+        for row in part.children
+        if row.kind is MarkdownNodeKind.TABLE_ROW
     ]
     assert split_rows == original_rows
     assert all(node.node_id in part.source_node_ids for part in parts)
@@ -172,10 +178,12 @@ def test_structure_grouping_uses_the_same_distance_rule():
         def count(self, text):
             return len(text.replace("\n", ""))
 
-    # 原 List 超阈值才触发拆分；完整 Item 的 700+200 可合并，700+900 不合并。
+    # 原列表超硬阈值才拆；拆后按软目标距离分组，完整 item 允许跨过软目标。
     for lengths, expected in [
         ([700, 200, 800], [901, 800]),
         ([700, 900, 200], [700, 900, 200]),
+        ([100, 1300, 300], [1401, 300]),
+        ([300, 500, 900], [801, 900]),
     ]:
         items = tuple(
             MarkdownNode(str(i), MarkdownNodeKind.LIST_ITEM, "x" * n)
@@ -191,3 +199,34 @@ def test_structure_grouping_uses_the_same_distance_rule():
             ChunkingPolicy(800, 1600, ContentCounter())
         ).split(node)
         assert [len(part.text) for part in parts] == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "word " * 15 + "\n",
+        "> " + "word " * 15 + "\n",
+        "- first item\n- second item\n- third item\n",
+        "| a | b |\n| - | - |\n| first | one |\n| second | two |\n",
+        "```python\nfirst = 1\nsecond = 2\nthird = 3\n```\n",
+    ],
+)
+@pytest.mark.parametrize("hard_margin", [0, 1])
+def test_nodes_between_soft_and_hard_limits_remain_intact(source, hard_margin):
+    node = MarkdownParser().parse(source)[0]
+    counter = CharacterCounter()
+    size = counter.count(node.text)
+    policy = ChunkingPolicy(size // 2, size + hard_margin, counter)
+    parts = StructuralNodeSplitter(policy).split(node)
+    # 等于硬阈值也保留原节点及其 provenance，不生成派生片段。
+    assert len(parts) == 1 and parts[0] is node
+
+
+def test_text_above_hard_limit_splits_to_soft_target():
+    node = MarkdownParser().parse("word " * 30 + "\n")[0]
+    policy = ChunkingPolicy(20, 40, CharacterCounter())
+    parts = StructuralNodeSplitter(policy).split(node)
+    assert len(parts) > 1
+    assert all(policy.token_counter.count(part.text) <= 20 for part in parts)
+    split_words = [word for part in parts for word in part.text.split()]
+    assert split_words == node.text.split()

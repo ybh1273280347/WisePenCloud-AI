@@ -1,12 +1,14 @@
 from dataclasses import replace
 
 import pytest
+
 from common.utils.markdown import (
     MarkdownChunker,
     MarkdownChunkerConfig,
+    MarkdownDocument,
     MarkdownNode,
-    MarkdownParser,
     MarkdownNodeKind,
+    MarkdownParser,
 )
 from common.utils.markdown.chunking.chunker import ChunkingPolicy
 from common.utils.markdown.chunking.packer import ChunkPacker
@@ -45,6 +47,10 @@ def _walk(nodes):
         (200, 1800, False),
         (700, 200, True),
         (700, 900, False),
+        (700, 100, True),
+        (800, 1, False),
+        (900, 100, False),
+        (1600, 1, False),
     ],
 )
 def test_packer_uses_target_distance(current, next_size, merge):
@@ -69,6 +75,20 @@ def test_between_target_and_threshold_is_atomic_and_sections_do_not_mix():
     assert result.chunks[0].text == "123456789012345\n"
     assert [chunk.section_path for chunk in result.chunks] == [("A",), ("B",)]
     assert len({chunk.section_id for chunk in result.chunks}) == 2
+
+
+def test_document_title_names_preface_root_section():
+    result = _chunker().chunk(
+        MarkdownDocument("前言内容\n\n# 正文\n\nbody\n", title="我的文档")
+    )
+    assert [section.title for section in result.sections] == ["我的文档", "正文"]
+    assert result.sections[0].section_path == ("我的文档",)
+    assert result.chunks[0].section_path == ("我的文档",)
+
+
+def test_string_input_keeps_default_preface_root_name():
+    result = _chunker().chunk("前言内容\n\n# 正文\n\nbody\n")
+    assert result.sections[0].title == "文档开头"
 
 
 def test_empty_sections_have_no_chunks_and_global_order_is_stable():
@@ -150,10 +170,28 @@ def test_token_budget_counts_joined_text_and_keeps_overflow_isolated():
     assert combined[0].content_token_count == 14
 
 
+def test_node_above_target_is_sealed_even_with_non_additive_tokens():
+    class NonAdditiveCounter(CharacterCounter):
+        def count(self, text):
+            return 12 if "\n" in text else len(text)
+
+    # 第一块处于软、硬阈值之间；不能因拼接后 BPE 数变小而继续追加。
+    packer = ChunkPacker(ChunkingPolicy(12, 24, NonAdditiveCounter()))
+    nodes = [
+        MarkdownNode("a", MarkdownNodeKind.PARAGRAPH, "a" * 16),
+        MarkdownNode("b", MarkdownNodeKind.PARAGRAPH, "b" * 3),
+    ]
+    chunks = packer.pack(nodes)
+    assert [chunk.text for chunk in chunks] == [node.text for node in nodes]
+    assert all(not chunk.overflow for chunk in chunks)
+
+
 def test_overflow_comes_from_final_text_instead_of_metadata():
     packer = ChunkPacker(ChunkingPolicy(12, 24, CharacterCounter()))
     nodes = [
-        MarkdownNode("short", MarkdownNodeKind.FORMULA, "short", metadata={"overflow": True}),
+        MarkdownNode(
+            "short", MarkdownNodeKind.FORMULA, "short", metadata={"overflow": True}
+        ),
         MarkdownNode("long", MarkdownNodeKind.FORMULA, "x" * 30),
     ]
     chunks = packer.pack(nodes)
