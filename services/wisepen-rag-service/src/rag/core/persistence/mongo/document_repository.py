@@ -88,7 +88,6 @@ def _to_document(document: Document, metadata: dict[str, object]) -> dict[str, o
         "raw_content": document.raw_content,
         "total_length": document.structure.total_length,
         "sections": document.structure.sections,
-        "pages": document.structure.pages,
         "anchors": document.structure.anchors,
         "metadata": metadata,
     }
@@ -106,7 +105,6 @@ def _to_domain(entity: DocumentRevisionEntity, metadata_codec: DocumentMetadataC
         structure=DocumentStructure(
             total_length=entity.total_length,
             sections=entity.sections,
-            pages=entity.pages,
             anchors=entity.anchors,
         ),
         metadata=metadata_codec.decode(entity.metadata),

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from common.utils.document import Section
+from common.utils.markdown import Section
 
 from chat.application.tools.core import (
     ToolDefinition,
@@ -73,7 +73,6 @@ class CachedToolOutputReadBySectionResult:
 
 
 class CachedToolOutputReadBySectionTool:
-
     def __init__(self) -> None:
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(

@@ -12,7 +12,7 @@ from common.logger import info, warn
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
-from rag.application.document.context import build_inline_document_context
+from rag.application.document.context import build_graph_extraction_context
 from rag.application.document.models import DocChunk, Document
 from rag.application.graph.models import (
     GraphChunkSource,
@@ -31,7 +31,6 @@ from rag.domain.repositories.documents import DocumentRepository
 from rag.domain.repositories.graph_fact import GraphFactRepository
 from rag.domain.repositories.index_state import ResourceIndexStateRepository
 
-
 # Extraction limits
 
 _MAX_NODES_PER_CHUNK = 12
@@ -47,7 +46,7 @@ _Keyword = Annotated[str, Field(max_length=_MAX_KEYWORD_LENGTH)]
 # LLM system prompt
 
 _SYSTEM_PROMPT = """Extract verifiable knowledge graph nodes and relations strictly grounded in <target_chunk>.
-The <context_chunk> elements provide context only; never extract facts that exist solely in them.
+The <section_path> provides background for disambiguation only; never extract facts solely from it.
 
 Rules:
 1. Extract only facts explicitly supported by <target_chunk>; return empty lists when none exist.
@@ -232,8 +231,6 @@ class GraphFactBuilder:
                     _extract_chunk(
                         self._instructor_client,
                         model=self._query_model,
-                        document=document,
-                        chunks=chunks,
                         chunk=chunk,
                         ontology=plugin.ontology,
                         semaphore=self._llm_semaphore,
@@ -307,7 +304,7 @@ class GraphFactBuilder:
             edge_count=len(edge_projections),
             source_count=len(sources),
         )
-        sources = list(dict((source.source_id, source) for source in sources).values())
+        sources = list({source.source_id: source for source in sources}.values())
         return node_projections, edge_projections, sources, dict(chunk_node_ids)
 
 
@@ -351,14 +348,12 @@ async def _extract_chunk(
     instructor_client,
     *,
     model: str,
-    document: Document,
-    chunks: list[DocChunk],
     chunk: DocChunk,
     ontology,
     semaphore: asyncio.Semaphore,
 ) -> _GraphExtraction:
     """对单个 chunk 发起 LLM 结构化抽取，受 semaphore 并发限流。"""
-    document_context = build_inline_document_context(document, chunks, chunk)
+    document_context = build_graph_extraction_context(chunk)
     async with semaphore:
         return await instructor_client.chat.completions.create(
             model=model,

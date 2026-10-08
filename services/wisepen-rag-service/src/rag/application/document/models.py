@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from hashlib import sha256
 
-from common.utils.document import Anchor, Page, Section, SourceSpan
+from common.utils.markdown import Anchor, Section
 
 from rag.application.plugins.core.metadata import (
     DocChunkMetadata,
@@ -15,6 +15,7 @@ from rag.application.plugins.core.metadata import (
 )
 
 # --- 资源可见性 ---
+
 
 @dataclass(frozen=True, slots=True)
 class ResourceIndexState:
@@ -27,6 +28,7 @@ class ResourceIndexState:
 
 
 # --- 文档身份标识 ---
+
 
 def rag_section_id(
     *,
@@ -74,13 +76,11 @@ class ContentRevision:
 
     @property
     def content_revision(self) -> str:
-        return (
-            f"{self.resource_id}@{self.document_version}"
-            f"#{self.content_sha256[:16]}"
-        )
+        return f"{self.resource_id}@{self.document_version}#{self.content_sha256[:16]}"
 
 
 # --- 文档结构与分块 ---
+
 
 @dataclass(frozen=True, slots=True)
 class Document:
@@ -99,27 +99,29 @@ class DocumentStructure:
 
     total_length: int
     sections: list[Section] = field(default_factory=list)
-    pages: list[Page] = field(default_factory=list)
     anchors: list[Anchor] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
 class DocChunk:
-    """RAG 的检索原子；正文与坐标来自 Common 的一次分块结果。"""
+    """RAG 的结构检索原子；不以 Markdown 字符坐标为合同。"""
+
     # 身份凭据
     chunk_id: str
     resource_id: str
     content_revision: str
-    section_id: str | None  # 直属 Section，仅在有真实 Section 时才有值；flat 文本保持 None
+    section_id: (
+        str | None
+    )  # 直属 Section，仅在有真实 Section 时才有值；flat 文本保持 None
 
     # 原文与坐标
-    chunk_index: int  # 块在原文中的全局顺序索引，用于滑动窗口构建
+    chunk_index: int  # 块在文档结构顺序中的索引，用于后续上下文扩展
     raw_text: str
-    source_spans: list[SourceSpan]  # 原文 Python 字符半开区间，允许一个 Chunk 覆盖多个完整 block
+    node_ids: list[str] = field(default_factory=list)
+    content_token_count: int = 0
 
     # 可选的语义标签
     section_path: list[str] = field(default_factory=list)
-    page_labels: list[str] = field(default_factory=list)
     anchor_labels: list[str] = field(default_factory=list)
 
     # 依赖 LLM 的可选语义增强
@@ -130,28 +132,10 @@ class DocChunk:
     metadata: DocChunkMetadata = field(default_factory=GeneralChunkMetadata)
 
     def __post_init__(self) -> None:
-        if not self.source_spans:
-            raise ValueError("DocChunk requires source_spans")
-        if any(
-            span.start_offset < 0 or span.start_offset >= span.end_offset
-            for span in self.source_spans
-        ):
-            raise ValueError("DocChunk source spans must be non-empty half-open ranges")
-
-    @property
-    def chunk_span(self) -> SourceSpan:
-        """返回所有来源片段的最小包络区间，不代表实际源覆盖。"""
-        return SourceSpan(
-            min(span.start_offset for span in self.source_spans),
-            max(span.end_offset for span in self.source_spans),
-        )
-
-    def is_valid_for(self, document: Document) -> bool:
-        """确认 Chunk 的所有坐标都落在给定权威 Markdown 内。"""
-        return all(
-            span.end_offset <= len(document.raw_content)
-            for span in self.source_spans
-        )
+        if self.chunk_index < 0:
+            raise ValueError("chunk_index must be non-negative")
+        if not self.raw_text.strip():
+            raise ValueError("DocChunk raw_text must not be empty")
 
     def get_full_text(self) -> str:
         """返回带标题路径的完整 Chunk 文本，供排序和阅读上下文使用。"""

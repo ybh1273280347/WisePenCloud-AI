@@ -15,9 +15,6 @@ from rag.api.schemas.reading import (
     GetNeighborhoodRequest,
     GetNeighborhoodResponse,
     NeighborhoodResponse,
-    ReadPageResponse,
-    ReadPagesRequest,
-    ReadPagesResponse,
     ReadSectionResponse,
     ReadSectionsRequest,
     ReadSectionsResponse,
@@ -32,32 +29,6 @@ router = APIRouter()
 AuthenticatedUser = Annotated[str, Depends(require_login)]
 Reader = Annotated[DocumentReader, Depends(Provide[Container.document_reader])]
 Outline = Annotated[OutlineBuilder, Depends(Provide[Container.outline_builder])]
-
-
-@router.post("/readPages", response_model=R[ReadPagesResponse], summary="按页读取")
-@inject
-async def read_pages(
-    request: ReadPagesRequest,
-    user_id: AuthenticatedUser,
-    reader: Reader,
-) -> R[ReadPagesResponse]:
-    """按调用方顺序返回真实页标对应的完整页面正文。"""
-    try:
-        pages = await reader.read_pages(
-            request.resource_id,
-            request.page_labels,
-            scope=permission_scope(user_id),
-        )
-    except DocumentReadError as error:
-        raise ServiceException(RagErrorCode.RESOURCE_NOT_VISIBLE) from error
-    except Exception as error:
-        raise ServiceException(RagErrorCode.QUERY_FAILED) from error
-    return R.success(
-        ReadPagesResponse(
-            resource_id=request.resource_id,
-            pages=[ReadPageResponse.model_validate(item) for item in pages],
-        )
-    )
 
 
 @router.post("/readSections", response_model=R[ReadSectionsResponse], summary="按章节读取")

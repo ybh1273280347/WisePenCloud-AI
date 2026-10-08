@@ -28,7 +28,6 @@ from chat.application.tools.core.mcp import (
 )
 from chat.application.tools.session_tools.cached_tool_output_tools import (
     CachedToolOutputInspectStructureTool,
-    CachedToolOutputReadByPageTool,
     CachedToolOutputReadByRangeTool,
     CachedToolOutputReadBySectionTool,
     CachedToolOutputSearchByRegexTool,
@@ -295,9 +294,6 @@ class Container(containers.DeclarativeContainer):
     inspect_cached_tool_output_structure_tool = providers.Singleton(
         CachedToolOutputInspectStructureTool,
     )
-    read_cached_tool_output_by_page_tool = providers.Singleton(
-        CachedToolOutputReadByPageTool,
-    )
     read_cached_tool_output_by_range_tool = providers.Singleton(
         CachedToolOutputReadByRangeTool,
     )
@@ -338,7 +334,6 @@ class Container(containers.DeclarativeContainer):
         load_skill_tool,
         load_skill_asset_tool,
         inspect_cached_tool_output_structure_tool,
-        read_cached_tool_output_by_page_tool,
         read_cached_tool_output_by_range_tool,
         read_cached_tool_output_by_section_tool,
         search_cached_tool_output_by_regex_tool,

@@ -61,9 +61,13 @@ def cacheable_tool_output(
 
             # 如果结果依然是纯文本，说明未被寄存，或缓存存储失败降级了，按原字符串返回
             if isinstance(result, str):
-                return result if tool_output is None else ToolOutput(
-                    content=result,
-                    images=raw.images,
+                return (
+                    result
+                    if tool_output is None
+                    else ToolOutput(
+                        content=result,
+                        images=raw.images,
+                    )
                 )
 
             # 结构化数据封装返回
@@ -110,11 +114,17 @@ async def process_cacheable_output(
 class _Target:
     __slots__ = ("parent", "prefix", "slot", "text")
 
-    def __init__(self, parent: dict[str, Any] | list[Any], slot: str | int, text: str, prefix: str) -> None:
-        self.parent = parent    # 父级容器（字典或列表）
-        self.slot = slot        # 在父容器中的键名或列表下标
-        self.text = text        # 需要缓存的长文本内容
-        self.prefix = prefix    # 字段前缀，用于后续生成key
+    def __init__(
+        self,
+        parent: dict[str, Any] | list[Any],
+        slot: str | int,
+        text: str,
+        prefix: str,
+    ) -> None:
+        self.parent = parent  # 父级容器（字典或列表）
+        self.slot = slot  # 在父容器中的键名或列表下标
+        self.text = text  # 需要缓存的长文本内容
+        self.prefix = prefix  # 字段前缀，用于后续生成key
 
 
 def _dump_json_tree(value: Any) -> Any:
@@ -168,7 +178,11 @@ def _collect_path(
                 if remaining:
                     _collect_path(item, remaining, targets, seen)
                 # 如果没有剩余路径，只需用当前列表中的str逐个生成Target
-                elif isinstance(item, str) and item.strip() and (id(node), index) not in seen:
+                elif (
+                    isinstance(item, str)
+                    and item.strip()
+                    and (id(node), index) not in seen
+                ):
                     seen.add((id(node), index))
                     targets.append(_Target(node, index, item, ""))
             # 隐式下钻，允许省略*，对列表中的每个容器递归
@@ -223,9 +237,7 @@ async def _claim_targets(
     """将目标入库，并按是否截断选择模型可见的输出形状。"""
     for target, budget in zip(targets, budgets, strict=True):
         prefix = (
-            f"{target.prefix}_"
-            if target.prefix and target.prefix != "content"
-            else ""
+            f"{target.prefix}_" if target.prefix and target.prefix != "content" else ""
         )
         claim_keys = (
             f"{prefix}preview",
@@ -263,7 +275,9 @@ async def _claim_targets(
             target.parent[target.slot] = replacement
 
 
-def _preview_budgets(texts: list[str], *, per_budget: int, total_budget: int) -> tuple[int, ...]:
+def _preview_budgets(
+    texts: list[str], *, per_budget: int, total_budget: int
+) -> tuple[int, ...]:
     # 计算每段文本理想所需的字数
     desired = [min(len(text), per_budget) for text in texts]
     # 不超过预算则全额放行
@@ -276,8 +290,8 @@ def _preview_budgets(texts: list[str], *, per_budget: int, total_budget: int) ->
     ordered = sorted(range(len(desired)), key=desired.__getitem__)
 
     for position, index in enumerate(ordered):
-        pending = len(ordered) - position   # 剩余待分配的名额
-        fair_share = remaining // pending   # 当前平均份额
+        pending = len(ordered) - position  # 剩余待分配的名额
+        fair_share = remaining // pending  # 当前平均份额
         if desired[index] <= fair_share:
             budgets[index] = desired[index]
             # 满足小需求，节省额度回流预算
@@ -305,4 +319,6 @@ def _build_preview(text: str, budget: int) -> tuple[str, bool]:
     # 对称切除中间，保留首尾
     available = budget - len(_TRUNCATION_MARKER)
     tail_budget = available // 2
-    return text[: available - tail_budget] + _TRUNCATION_MARKER + text[-tail_budget:], True
+    return text[: available - tail_budget] + _TRUNCATION_MARKER + text[
+        -tail_budget:
+    ], True

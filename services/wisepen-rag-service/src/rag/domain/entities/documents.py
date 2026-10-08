@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from beanie import Document
-from common.utils.document import Anchor, Page, Section
+from common.utils.markdown import Anchor, Section
 from pydantic import Field
 from pymongo import ASCENDING, IndexModel
 
@@ -39,7 +39,6 @@ class DocumentRevisionEntity(Document):
     raw_content: str
     total_length: int
     sections: list[Section] = Field(default_factory=list)
-    pages: list[Page] = Field(default_factory=list)
     anchors: list[Anchor] = Field(default_factory=list)
     # metadata 由已注册的 Pydantic 类型解码，Mongo 只保存其原始结构。
     metadata: dict[str, Any] = Field(default_factory=dict)

@@ -1,13 +1,10 @@
 """为 staged DocChunk 生成增强产物、写入检索投影并发布。"""
 
 import asyncio
-import json
 from collections.abc import Sequence
-from dataclasses import replace
+from typing import NoReturn
 
-from pydantic import BaseModel, field_validator
-
-from rag.application.document.context import build_inline_document_context
+from rag.application.document.context import ContextMigrationRequired
 from rag.application.document.models import ContentRevision, DocChunk, Document
 from rag.application.plugins.core.registry import RagPluginRegistry
 from rag.application.publication import DocumentPublication
@@ -21,37 +18,8 @@ from rag.utils import ChatClient, EmbeddingClient
 # --- 常量配置 ---
 
 _EMBEDDING_BATCH_SIZE = 32
-_CONTEXTUALIZATION_MAX_TOKENS = 128
-
-_SYSTEM_PROMPT = """Generate a brief context that situates the target chunk within its document for better search retrieval.
-
-Use the surrounding document context to understand what the target refers to and where it belongs.
-Add only information that helps retrieve or understand the target and is not already obvious from the target itself.
-
-Use the same language as the target and keep established technical names unchanged.
-Keep the context to one short sentence.
-
-Return JSON only:
-{"retrieval_context": "short context"}"""
-
-
-# --- 增强响应模型 ---
-
-class _RetrievalContextResponse(BaseModel):
-    """OpenAI JSON 响应的外部边界；只接收检索上下文。"""
-
-    retrieval_context: str
-
-    @field_validator("retrieval_context")
-    @classmethod
-    def _require_retrieval_context(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("retrieval_context must not be empty")
-        return value
-
-
 # --- 文档索引构建器 ---
+
 
 class DocumentIndexBuilder:
     """完成一版 staged 文档的增强、双向量投影和最终发布。"""
@@ -73,7 +41,7 @@ class DocumentIndexBuilder:
         llm_semaphore: asyncio.Semaphore,
         embedding_semaphore: asyncio.Semaphore,
         plugin_registry: RagPluginRegistry | None = None,
-        enhancement_enabled: bool = True,
+        enhancement_enabled: bool = False,
     ) -> None:
         if embedding_dimensions <= 0:
             raise ValueError("embedding_dimensions must be positive")
@@ -165,53 +133,17 @@ class DocumentIndexBuilder:
         document: Document,
         chunks: Sequence[DocChunk],
     ) -> list[DocChunk]:
-        """对尚未增强的 chunk 调用 LLM，返回增强后的完整列表。"""
-        if not self._enhancement_enabled:
-            return list(chunks)
-
-        # 只处理缺失增强的 chunk
-        pending = [chunk for chunk in chunks if not chunk.retrieval_context.strip()]
-        if not pending:
-            return list(chunks)
-
-        by_chunk_id = {chunk.chunk_id: chunk for chunk in chunks}
-        # 并发调用 LLM，允许部分失败
-        results = await asyncio.gather(
-            *(
-                _generate_retrieval_context(
-                    self._chat_client,
-                    model=self._query_model,
-                    document=document,
-                    chunks=chunks,
-                    chunk=chunk,
-                    semaphore=self._llm_semaphore,
-                )
-                for chunk in pending
-            ),
-            return_exceptions=True,
-        )
-
-        # 收集结果，保留第一个异常
-        failure: Exception | None = None
-        for chunk, result in zip(pending, results, strict=True):
-            if isinstance(result, Exception):
-                failure = failure or result
-                continue
-            by_chunk_id[chunk.chunk_id] = replace(
-                chunk,
-                retrieval_context=result.retrieval_context,
+        """关闭增强时只消费正文；打开增强必须等结构化上下文迁移。"""
+        if self._enhancement_enabled:
+            raise ContextMigrationRequired(
+                "retrieval context enhancement requires the structural context "
+                "migration; set enhancement_enabled=False until it is implemented"
             )
-
-        enhanced = [by_chunk_id[chunk.chunk_id] for chunk in chunks]
-        # 部分成功也要写回，避免重复消耗已成功的调用
-        if enhanced != list(chunks):
-            await self._doc_chunks.save_revision(enhanced)
-        if failure is not None:
-            raise failure
-        return enhanced
+        return list(chunks)
 
 
 # --- 模块级辅助函数 ---
+
 
 async def _generate_retrieval_context(
     chat_client: ChatClient,
@@ -221,20 +153,12 @@ async def _generate_retrieval_context(
     chunks: Sequence[DocChunk],
     chunk: DocChunk,
     semaphore: asyncio.Semaphore,
-) -> _RetrievalContextResponse:
-    """使用 target 原位标记的文档上下文生成 chunk-specific 检索上下文。"""
-    document_context = build_inline_document_context(document, chunks, chunk)
-    async with semaphore:
-        content = await chat_client.complete(
-            model=model,
-            max_tokens=_CONTEXTUALIZATION_MAX_TOKENS,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": document_context},
-            ],
-        )
-    return _RetrievalContextResponse.model_validate(json.loads(content))
+) -> NoReturn:
+    """阻止旧的 Markdown span 增强路径，直到结构化上下文项目接入。"""
+    raise ContextMigrationRequired(
+        "retrieval context enhancement requires the structural context migration; "
+        "run with enhancement_enabled=False until that follow-up is implemented"
+    )
 
 
 async def _embed_chunks(

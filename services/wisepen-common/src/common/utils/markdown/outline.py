@@ -2,8 +2,21 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 
-from .models import Anchor, OutlineNode, Page, Section, SourceSpan
+from .chunking.chunker import Anchor, Section
+from .parsing.parser import SourceSpan
+
+
+@dataclass(slots=True)
+class OutlineNode:
+    """模型可见的精简目录节点，不暴露 offset 和内部节点树。"""
+
+    section_id: str
+    title: str
+    length: int
+    anchor_labels: list[str] = field(default_factory=list)
+    children: list[OutlineNode] = field(default_factory=list)
 
 
 class OutlineAssembler:
@@ -13,7 +26,6 @@ class OutlineAssembler:
     def assemble(
         *,
         sections: Sequence[Section],
-        pages: Sequence[Page],
         anchors: Sequence[Anchor],
     ) -> list[OutlineNode]:
         if not sections:
@@ -42,7 +54,6 @@ class OutlineAssembler:
                 _to_outline_node(
                     section=section,
                     children_by_parent=children_by_parent,
-                    pages=pages,
                     anchors=anchors,
                 )
                 for section in children_by_parent[None]
@@ -56,7 +67,6 @@ class OutlineAssembler:
                 _to_outline_node(
                     section=root_section,
                     children_by_parent=children_by_parent,
-                    pages=pages,
                     anchors=anchors,
                     expand_children=False,
                 )
@@ -65,7 +75,6 @@ class OutlineAssembler:
             _to_outline_node(
                 section=section,
                 children_by_parent=children_by_parent,
-                pages=pages,
                 anchors=anchors,
             )
             for section in children_by_parent[root_section.section_id]
@@ -77,17 +86,11 @@ def _to_outline_node(
     *,
     section: Section,
     children_by_parent: dict[str | None, list[Section]],
-    pages: Sequence[Page],
     anchors: Sequence[Anchor],
     expand_children: bool = True,
 ) -> OutlineNode:
-    # 节点长度与页范围共用可见范围：真实章节覆盖子树，前言 root 只覆盖直属正文。
+    # 真实章节覆盖子树，前言 root 只覆盖直属正文。
     span = section.subtree_span if section.level > 0 else section.own_span
-    page_labels = [
-        page.page_label
-        for page in pages
-        if _overlaps(span, page.source_span)
-    ]
     anchor_labels = [
         anchor.label
         for anchor in anchors
@@ -98,13 +101,11 @@ def _to_outline_node(
         section_id=section.section_id,
         title=section.title,
         length=span.end_offset - span.start_offset,
-        page_range=_format_page_range(page_labels),
         anchor_labels=anchor_labels,
         children=[
             _to_outline_node(
                 section=child,
                 children_by_parent=children_by_parent,
-                pages=pages,
                 anchors=anchors,
             )
             for child in (
@@ -116,18 +117,5 @@ def _to_outline_node(
     )
 
 
-def _format_page_range(page_labels: Sequence[str]) -> str | None:
-    # 去重后保留原文顺序，只暴露首尾页标签；内部 page span 不出现在 outline 契约中。
-    labels = list(dict.fromkeys(page_labels))
-    if not labels:
-        return None
-    if len(labels) == 1:
-        return labels[0]
-    return f"{labels[0]} - {labels[-1]}"
-
-
 def _overlaps(span: SourceSpan, other: SourceSpan) -> bool:
-    return (
-        span.start_offset < other.end_offset
-        and span.end_offset > other.start_offset
-    )
+    return span.start_offset < other.end_offset and span.end_offset > other.start_offset

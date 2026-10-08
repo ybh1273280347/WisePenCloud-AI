@@ -3,7 +3,6 @@
 from typing import Any, ClassVar
 
 from beanie import Document
-from common.utils.document import SourceSpan
 from pydantic import Field
 from pymongo import ASCENDING, IndexModel
 
@@ -18,8 +17,8 @@ class DocChunkEntity(Document):
     section_id: str | None = None
     section_path: list[str] = Field(default_factory=list)
     raw_text: str
-    source_spans: list[SourceSpan]
-    page_labels: list[str] = Field(default_factory=list)
+    node_ids: list[str] = Field(default_factory=list)
+    content_token_count: int = 0
     anchor_labels: list[str] = Field(default_factory=list)
     retrieval_context: str = ""
     extracted_node_ids: list[str] = Field(default_factory=list)

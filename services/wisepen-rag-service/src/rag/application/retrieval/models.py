@@ -3,7 +3,6 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from common.utils.document import SourceSpan
 from common.utils.ranking import RankDecision
 from pydantic import BaseModel
 
@@ -81,7 +80,7 @@ class ChunkHit:
 
 @dataclass(frozen=True, slots=True)
 class DynamicParent:
-    """查询时由权威 Markdown 重建的单一 Section 连续阅读区间。"""
+    """查询时由结构 Chunk 组合的阅读上下文。"""
 
     parent_id: str
     resource_id: str
@@ -90,7 +89,6 @@ class DynamicParent:
     section_id: str | None
     section_path: list[str]
     text: str
-    source_spans: list[SourceSpan]  # Python 字符半开区间。
     matched_chunk_ids: list[str]
     score: float
     seed_nodes: list["GraphNodeReference"] = field(default_factory=list)

@@ -55,7 +55,6 @@ class CachedToolOutputReadByRangeResult:
 
 
 class CachedToolOutputReadByRangeTool:
-
     def __init__(self) -> None:
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
@@ -67,7 +66,7 @@ class CachedToolOutputReadByRangeTool:
                     "or the end of cached tool output.\n"
                     "  - SHOULD trigger after structure/search results expose useful offsets.\n"
                     "DO NOT TRIGGER when:\n"
-                    "  - You need pages or sections; use read_cached_tool_output_by_page or "
+                    "  - You need sections; use read_cached_tool_output_by_section or "
                     "read_cached_tool_output_by_section.\n"
                     "  - You need discovery; use search_cached_tool_output_by_relevance or "
                     "search_cached_tool_output_by_regex.\n\n"

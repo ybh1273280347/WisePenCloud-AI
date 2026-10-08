@@ -14,6 +14,7 @@ from rag.api.schemas.retrieval import (
     RetrieveHybridRequest,
     RetrieveHybridResponse,
 )
+from rag.application.document.context import ContextMigrationRequired
 from rag.application.retrieval.hybrid_retriever import HybridRetriever
 from rag.container import Container
 from rag.domain.error_codes import RagErrorCode
@@ -46,6 +47,9 @@ async def retrieve_hybrid(
             request.top_k,
             scope=permission_scope(user_id),
         )
+    except ContextMigrationRequired as error:
+        # 过渡能力尚未接入，保留明确原因，不能返回成功空 parents。
+        raise ServiceException(RagErrorCode.QUERY_FAILED, str(error)) from error
     except ValueError as error:
         # API schema 无法表达的执行参数错误仍是调用方参数错误。
         raise ServiceException(ResultCode.PARAM_ERROR, str(error)) from error

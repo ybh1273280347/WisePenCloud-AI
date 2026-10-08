@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from common.utils.document import SourceSpan
+from common.utils.markdown import SourceSpan
 
 from chat.application.tools.core.output_cache.cache_store import (
     StoredToolContent as StoredCachedToolOutput,
@@ -98,9 +98,7 @@ class CachedToolOutputWindowBuilder:
                 truncated = True
                 break
 
-            if span_index < len(source_spans) - 1 and (
-                output_length >= budget
-            ):
+            if span_index < len(source_spans) - 1 and (output_length >= budget):
                 truncated = True
                 break
 
@@ -132,5 +130,3 @@ def _normalize_offset(value: int | None, text_length: int, *, default: int) -> i
     if offset < 0:
         offset += text_length
     return min(max(offset, 0), text_length)
-
-

@@ -10,19 +10,20 @@ import uuid
 from dataclasses import dataclass
 from functools import lru_cache
 
-from common.utils.document import (
+from common.utils.markdown import (
     Anchor,
     DocumentChunker,
     DocumentChunkerConfig,
-    Page,
     Section,
     SourceSpan,
+    TokenCounter,
+    default_token_counter,
 )
 
 _DEFAULT_MAX_CHARS = 20_000_000
 _CACHE_CHUNKER_CONFIG = DocumentChunkerConfig(
-    max_characters=800,
-    chunk_overlap=100,
+    target_chunk_tokens=800,
+    split_threshold_tokens=1600,
 )
 
 
@@ -48,7 +49,6 @@ class ToolContentChunk:
     source_spans: tuple[SourceSpan, ...]
     # 有真实 Section 时，一个 chunk 只对应一个 Section；flat 文本保持为空。
     section_id: str | None = None
-    page_labels: tuple[str, ...] = ()
     anchor_labels: tuple[str, ...] = ()
 
 
@@ -61,7 +61,6 @@ class StoredToolContent:
     text: str
     chunks: tuple[ToolContentChunk, ...] = ()
     sections: tuple[Section, ...] = ()
-    pages: tuple[Page, ...] = ()
     anchors: tuple[Anchor, ...] = ()
 
 
@@ -85,27 +84,19 @@ async def put_tool_content(
     if not text or text.isspace() or len(text) > max_chars:
         return None
 
-    # 缓存索引使用小子块提升命中精度；oversized block 的 overlap 只在递归切分内部生效。
-    result = DocumentChunker(_CACHE_CHUNKER_CONFIG).chunk(text)
+    # 缓存索引使用小子块提升命中精度；Chat 的原文 offset 在 adapter 层单独投影。
+    token_counter = default_token_counter()
+    result = DocumentChunker(_CACHE_CHUNKER_CONFIG, token_counter=token_counter).chunk(
+        text
+    )
     stored = StoredToolContent(
         content_id=f"cnt_{uuid.uuid4().hex[:16]}",
         session_id=session_id,
         text=text,
-        chunks=tuple(
-            ToolContentChunk(
-                text=chunk.text,
-                chunk_index=chunk.chunk_index,
-                start_offset=chunk.start_offset,
-                end_offset=chunk.end_offset,
-                source_spans=chunk.source_spans,
-                section_id=chunk.section_id,
-                page_labels=chunk.page_labels,
-                anchor_labels=chunk.anchor_labels,
-            )
-            for chunk in result.chunks
+        chunks=_build_cache_chunks(
+            text, result.sections, result.anchors, token_counter
         ),
         sections=result.sections,
-        pages=result.pages,
         anchors=result.anchors,
     )
     await _repository().put(stored)
@@ -114,6 +105,57 @@ async def put_tool_content(
         chunk_count=len(stored.chunks),
         total_length=len(text),
     )
+
+
+def _build_cache_chunks(
+    text: str,
+    sections: tuple[Section, ...],
+    anchors: tuple[Anchor, ...],
+    counter: TokenCounter,
+) -> tuple[ToolContentChunk, ...]:
+    """Chat 独立构建原文范围索引，范围和检索正文始终指向同一文本。
+
+    Common 的结构片段可能经过 normalization 或重复 header。它们不能
+    反推字符位置，因此 Chat 在真实 section 原文上做保留所有字符的切分。
+    """
+    ranges = (
+        [(section.own_span, section.section_id) for section in sections]
+        if sections
+        else [(SourceSpan(0, len(text)), None)]
+    )
+    # Parser 可以忽略前置 HTML/comment；缓存公开的是完整正文，不能丢掉它。
+    if ranges and ranges[0][0].start_offset > 0:
+        ranges.insert(0, (SourceSpan(0, ranges[0][0].start_offset), None))
+    chunks: list[ToolContentChunk] = []
+    for source_span, section_id in ranges:
+        source_text = text[source_span.start_offset : source_span.end_offset]
+        parts = (
+            counter.split(source_text, _CACHE_CHUNKER_CONFIG.target_chunk_tokens)
+            if counter.count(source_text) > _CACHE_CHUNKER_CONFIG.split_threshold_tokens
+            else (source_text,)
+        )
+        cursor = source_span.start_offset
+        for part in parts:
+            span = SourceSpan(cursor, cursor + len(part))
+            if part:
+                chunks.append(
+                    ToolContentChunk(
+                        text=part,
+                        chunk_index=len(chunks),
+                        start_offset=span.start_offset,
+                        end_offset=span.end_offset,
+                        source_spans=(span,),
+                        section_id=section_id,
+                        anchor_labels=tuple(
+                            anchor.label
+                            for anchor in anchors
+                            if anchor.source_span.start_offset < span.end_offset
+                            and anchor.source_span.end_offset > span.start_offset
+                        ),
+                    )
+                )
+            cursor = span.end_offset
+    return tuple(chunks)
 
 
 async def get_tool_content(

@@ -1,0 +1,266 @@
+from __future__ import annotations
+
+import hashlib
+from dataclasses import dataclass, replace
+
+from ..parsing.parser import DocumentNode, DocumentParser, NodeKind, SourceSpan
+from .packer import ChunkPacker, DocumentChunk
+from .splitter import StructuralNodeSplitter
+from .tokenizer import TokenCounter, default_token_counter
+
+
+@dataclass(frozen=True, slots=True)
+class Anchor:
+    """表格、图片或公式锚点及其精确原文范围。"""
+
+    label: str
+    source_span: SourceSpan
+
+
+@dataclass(frozen=True, slots=True)
+class Section:
+    """标题树中的 Section 及其直属正文和子树范围。"""
+
+    section_id: str
+    title: str
+    level: int
+    parent_section_id: str | None
+    ordinal: int
+    section_path: tuple[str, ...]
+    own_span: SourceSpan
+    subtree_span: SourceSpan
+    content_spans: tuple[SourceSpan, ...] = ()
+    summary: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentChunkingResult:
+    """一次文档解析和分块产生的结构事实。"""
+
+    chunks: tuple[DocumentChunk, ...]
+    nodes: tuple[DocumentNode, ...]
+    sections: tuple[Section, ...]
+    anchors: tuple[Anchor, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentChunkerConfig:
+    """Chunking 目标尺寸与结构拆分触发阈值。"""
+
+    target_chunk_tokens: int = 800
+    split_threshold_tokens: int = 1600
+
+    def __post_init__(self) -> None:
+        if self.target_chunk_tokens <= 0:
+            raise ValueError("target_chunk_tokens must be positive")
+        if self.split_threshold_tokens < self.target_chunk_tokens:
+            raise ValueError("split_threshold_tokens must be >= target_chunk_tokens")
+
+
+@dataclass(frozen=True, slots=True)
+class ChunkingPolicy:
+    """Splitter 和 Packer 共用的预算取舍，不承诺结构单元必须小于阈值。"""
+
+    target_chunk_tokens: int
+    split_threshold_tokens: int
+    token_counter: TokenCounter
+
+    def should_append(self, *, current_tokens: int, candidate_tokens: int) -> bool:
+        """实际输出不超拆分阈值，且距目标不变或更近时允许组合。"""
+        return candidate_tokens <= self.split_threshold_tokens and abs(
+            candidate_tokens - self.target_chunk_tokens
+        ) <= abs(current_tokens - self.target_chunk_tokens)
+
+
+class DocumentChunker:
+    """编排解析、章节组织、结构拆分和 Chunk 装箱，不参与预算取舍。"""
+
+    __slots__ = ("_packer", "_parser", "_splitter", "config")
+
+    def __init__(
+        self,
+        config: DocumentChunkerConfig | None = None,
+        *,
+        token_counter: TokenCounter | None = None,
+    ) -> None:
+        self.config = config or DocumentChunkerConfig()
+        self._parser = DocumentParser()
+        policy = ChunkingPolicy(
+            target_chunk_tokens=self.config.target_chunk_tokens,
+            split_threshold_tokens=self.config.split_threshold_tokens,
+            token_counter=token_counter or default_token_counter(),
+        )
+        self._splitter = StructuralNodeSplitter(policy)
+        self._packer = ChunkPacker(policy)
+
+    def chunk(self, text: str) -> DocumentChunkingResult:
+        nodes = self._parser.parse(text)
+        anchors = _build_anchors(nodes)
+        sections = (
+            _build_heading_sections(text=text, nodes=nodes)
+            if any(node.kind is NodeKind.SECTION for node in nodes)
+            else ()
+        )
+        return DocumentChunkingResult(
+            chunks=self._chunk_by_sections(nodes, sections),
+            nodes=nodes,
+            sections=sections,
+            anchors=anchors,
+        )
+
+    def _chunk_by_sections(
+        self,
+        nodes: tuple[DocumentNode, ...],
+        sections: tuple[Section, ...],
+    ) -> tuple[DocumentChunk, ...]:
+        """标题只切换章节；正文依次经过 Splitter 与 Packer。"""
+        chunks: list[DocumentChunk] = []
+        section_nodes: list[DocumentNode] = []
+        section_index = 0
+        current_section = None
+        if sections and sections[0].level == 0:
+            current_section = sections[0]
+            section_index = 1
+
+        def flush() -> None:
+            if section_nodes:
+                units = (
+                    part
+                    for node in section_nodes
+                    for part in self._splitter.split(node)
+                )
+                chunks.extend(
+                    self._packer.pack(
+                        units, section=current_section, start_index=len(chunks)
+                    )
+                )
+                section_nodes.clear()
+
+        for node in nodes:
+            if node.kind is NodeKind.SECTION:
+                flush()
+                current_section = sections[section_index]
+                section_index += 1
+                continue
+            section_nodes.append(node)
+        flush()
+        return tuple(chunks)
+
+
+def _build_anchors(nodes: tuple[DocumentNode, ...]) -> tuple[Anchor, ...]:
+    """从带 anchor_label 的节点提取锚点，跨度取源文最小起点/最大终点。"""
+    anchors: list[Anchor] = []
+    for node in nodes:
+        label = node.metadata.get("anchor_label")
+        if label is None or not node.source_spans:
+            continue
+        anchors.append(
+            Anchor(
+                label=str(label),
+                source_span=SourceSpan(
+                    min(span.start_offset for span in node.source_spans),
+                    max(span.end_offset for span in node.source_spans),
+                ),
+            )
+        )
+    return tuple(anchors)
+
+
+def _build_heading_sections(
+    *,
+    text: str,
+    nodes: tuple[DocumentNode, ...],
+) -> tuple[Section, ...]:
+    """根据标题层级构建章节树，并计算各级 section 的 own_span / subtree_span。"""
+    headings = [node for node in nodes if node.kind is NodeKind.SECTION]
+    first_heading_start = headings[0].start
+
+    # 首个标题之前的内容归入"文档开头"根章节
+    root_content_spans = _content_spans(nodes, 0, first_heading_start)
+    root = (
+        Section(
+            section_id=_section_id("root", 0, first_heading_start),
+            title="文档开头",
+            level=0,
+            parent_section_id=None,
+            ordinal=0,
+            section_path=("文档开头",),
+            own_span=SourceSpan(0, first_heading_start),
+            subtree_span=SourceSpan(0, len(text)),
+            content_spans=root_content_spans,
+        )
+        if root_content_spans
+        else None
+    )
+    sections = [root] if root else []
+
+    open_indexes: list[int] = []  # 当前处于"打开"状态的祖先链
+    child_counts: dict[str | None, int] = {}  # 每个父章节已分配的 ordinal 数
+
+    for heading_index, heading in enumerate(headings):
+        level = int(heading.metadata["heading_level"])
+        heading_start = heading.start
+
+        # 遇到同级或更高级标题：关闭所有层级 >= 当前的章节
+        while open_indexes and sections[open_indexes[-1]].level >= level:
+            closed_index = open_indexes.pop()
+            closed = sections[closed_index]
+            sections[closed_index] = replace(
+                closed,
+                subtree_span=SourceSpan(
+                    closed.subtree_span.start_offset,
+                    heading_start,
+                ),
+            )
+
+        # 父章节为当前栈顶；栈空则挂在 root 下
+        parent = sections[open_indexes[-1]] if open_indexes else root
+        parent_id = parent.section_id if parent else None
+        ordinal = child_counts.get(parent_id, 0)
+        child_counts[parent_id] = ordinal + 1
+
+        # own_span 到下一个标题（或文末）为止
+        own_end = (
+            headings[heading_index + 1].start
+            if heading_index + 1 < len(headings)
+            else len(text)
+        )
+
+        section = Section(
+            section_id=_section_id("heading", heading_start, own_end),
+            title=str(heading.metadata["title"]),
+            level=level,
+            parent_section_id=parent_id,
+            ordinal=ordinal,
+            section_path=tuple(heading.metadata.get("section_path", ())),
+            own_span=SourceSpan(heading_start, own_end),
+            subtree_span=SourceSpan(heading_start, len(text)),  # 稍后回填
+            content_spans=_content_spans(nodes, heading.end, own_end),
+        )
+        sections.append(section)
+        open_indexes.append(len(sections) - 1)  # 压入祖先栈
+    return tuple(sections)
+
+
+def _content_spans(
+    nodes: tuple[DocumentNode, ...],
+    start_offset: int,
+    end_offset: int,
+) -> tuple[SourceSpan, ...]:
+    """收集落在 [start_offset, end_offset] 内、非 SECTION 且有内容的节点跨度。"""
+    return tuple(
+        SourceSpan(node.start, node.end)
+        for node in nodes
+        if node.kind is not NodeKind.SECTION
+        and node.text.strip()
+        and node.source_spans
+        and start_offset <= node.start
+        and node.end <= end_offset
+    )
+
+
+def _section_id(kind: str, start_offset: int, end_offset: int) -> str:
+    """基于类型与区间生成稳定 section ID。"""
+    identity = f"{kind}\0{start_offset}\0{end_offset}"
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    return f"sec_{digest[:16]}"

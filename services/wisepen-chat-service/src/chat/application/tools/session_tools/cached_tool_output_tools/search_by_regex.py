@@ -27,13 +27,13 @@ from chat.application.tools.session_tools.cached_tool_output_tools.window import
     CachedToolOutputWindow,
 )
 
-_MAX_REGEX_CHARS = 500    # 正则表达式的最大字符限制
-_DEFAULT_MAX_MATCHES = 10    # 默认最大匹配数(正则匹配数，非窗口数)
-_MAX_MATCHES = 100    # 最大匹配数上限
-_REGEX_CONTEXT_CHARS = 200    # 单边拓展上下文上限
-_REGEX_CLUSTER_GAP_CHARS = _REGEX_CONTEXT_CHARS * 2    # 窗口融合的gap上限
-_REGEX_SENTENCE_BOUNDARIES = frozenset(".。!?！？;；\n")    # sentence分隔符集合
-_SEARCH_TIMEOUT_SECONDS = 5    # regex最大搜索时间，避免复杂正则搜索超时
+_MAX_REGEX_CHARS = 500  # 正则表达式的最大字符限制
+_DEFAULT_MAX_MATCHES = 10  # 默认最大匹配数(正则匹配数，非窗口数)
+_MAX_MATCHES = 100  # 最大匹配数上限
+_REGEX_CONTEXT_CHARS = 200  # 单边拓展上下文上限
+_REGEX_CLUSTER_GAP_CHARS = _REGEX_CONTEXT_CHARS * 2  # 窗口融合的gap上限
+_REGEX_SENTENCE_BOUNDARIES = frozenset(".。!?！？;；\n")  # sentence分隔符集合
+_SEARCH_TIMEOUT_SECONDS = 5  # regex最大搜索时间，避免复杂正则搜索超时
 _TIMEOUT_SECONDS = 300.0
 
 _PARAMETERS_SCHEMA: dict[str, Any] = {
@@ -92,13 +92,13 @@ class CachedToolOutputSearchByRegexResult:
     window_count: int  # 按位置聚类并合并后的最终窗口数。
     windows: list[CachedToolOutputRegexWindow] = field(default_factory=list)
 
-class CachedToolOutputSearchByRegexTool:
 
+class CachedToolOutputSearchByRegexTool:
     def __init__(self) -> None:
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
                 name="search_cached_tool_output_by_regex",
-                description = (
+                description=(
                     "Search complete cached source texts with a Python regular expression. "
                     "Best for exact literal names, codes, identifiers, citations, URLs, or patterns that may span chunk boundaries.\n\n"
                     "Key Behaviors:\n"
@@ -178,7 +178,9 @@ async def _search_by_regex(
     def scan_loaded() -> CachedToolOutputSearchByRegexResult:
         # regex 搜索放到工作线程里执行，避免复杂表达式阻塞事件循环。
         compiled = regex.compile(pattern)
-        matched_ranges: list[tuple[StoredCachedToolOutput, int, int]] = []    # (stored, matched.start, matched.end)
+        matched_ranges: list[
+            tuple[StoredCachedToolOutput, int, int]
+        ] = []  # (stored, matched.start, matched.end)
         for stored in stored_items:
             try:
                 # timeout 由 regex 库在单次扫描中控制，复杂表达式会转成工具错误返回。

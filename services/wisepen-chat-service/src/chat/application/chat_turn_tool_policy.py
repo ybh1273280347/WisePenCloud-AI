@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from typing import Any, Optional, Set
 
@@ -18,7 +17,6 @@ _IMAGE_ATTACHMENT_TOOL_NAMES = frozenset({"load_image_attachment"})
 _CURRENT_NOTE_EDIT_TOOL_NAMES = frozenset({"read_current_note_for_edit", "apply_current_note_edits"})
 _CACHED_TOOL_OUTPUT_TOOL_NAMES = frozenset({
     "inspect_cached_tool_output_structure",
-    "read_cached_tool_output_by_page",
     "read_cached_tool_output_by_range",
     "read_cached_tool_output_by_section",
     "search_cached_tool_output_by_regex",

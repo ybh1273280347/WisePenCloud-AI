@@ -3,7 +3,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
 
-from common.utils.document import Page, Section, SourceSpan
+from common.utils.markdown import Section, SourceSpan
 
 from rag.application.reading import DocumentReadError
 from rag.application.snapshot import ActiveDocumentSnapshotLoader
@@ -211,7 +211,7 @@ def _node_line(
 ) -> str:
     """生成大纲中的单行 Markdown 条目。
 
-    格式：缩进 + "- title [标记] [+子节点数] (字符数, 页码) [锚点]"
+    格式：缩进 + "- title [标记] [+子节点数] (字符数) [锚点]"
     """
     children = (children_by_parent or {}).get(section.section_id, [])
     suffix = f" [+{len(children)}]" if children else ""
@@ -221,12 +221,9 @@ def _node_line(
         else f" {{#{section.section_id}}}"
     )
 
-    page_range = _page_range(structure.pages, section.subtree_span)
-    # 字符数对应默认 DIRECT 读取的直属正文；页码则表示包含子章节的整体覆盖范围。
+    # 字符数对应默认 DIRECT 读取的直属正文。
     char_count = sum(span.length for span in section.content_spans)
     metadata = f" ({char_count} chars"
-    if page_range:
-        metadata += f", p.{page_range}"
     metadata += ")"
 
     anchors = [
@@ -238,20 +235,6 @@ def _node_line(
         metadata += " [" + ", ".join(anchors) + "]"
 
     return "  " * indent + f"- {section.title.strip()}{marker}{suffix}{metadata}"
-
-
-def _page_range(pages: list[Page], span: SourceSpan) -> str | None:
-    """计算 span 覆盖的页码范围，若有跨页则返回 "first-last"。"""
-    labels = list(
-        dict.fromkeys(
-            page.page_label
-            for page in pages
-            if _overlaps(page.source_span, span)
-        )
-    )
-    if not labels:
-        return None
-    return labels[0] if len(labels) == 1 else f"{labels[0]}-{labels[-1]}"
 
 
 def _overlaps(left: SourceSpan, right: SourceSpan) -> bool:

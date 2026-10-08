@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
-from common.utils.document import Section, SourceSpan
+from common.utils.markdown import Section, SourceSpan
 from common.utils.ranking import RankCandidate, RankingPipeline, RankQuery, RankRequest
 from common.utils.ranking.fusion import WeightedRrfFusion
 from common.utils.ranking.rank_gates import (
@@ -67,7 +67,6 @@ _PARAMETERS_SCHEMA: dict[str, Any] = {
             "maxItems": 16,
             "description": "One or more cached tool output content_id values returned in previous tool results.",
         },
-
         "query": {
             "type": "string",
             "minLength": 1,
@@ -141,9 +140,8 @@ class CachedToolOutputSearchByRelevanceResult:
     range_recommendations: list[CachedToolOutputRangeReadRecommendation] = field(
         default_factory=list
     )
-    results: list[CachedToolOutputSearchByRelevanceItem] = field(
-        default_factory=list
-    )
+    results: list[CachedToolOutputSearchByRelevanceItem] = field(default_factory=list)
+
 
 # 由于含有大量空白可选分支，此处进行紧凑序列化处理
 _RESULT_ADAPTER = TypeAdapter(CachedToolOutputSearchByRelevanceResult)
@@ -187,30 +185,24 @@ def build_cached_tool_output_search_by_relevance_pipeline() -> RankingPipeline:
                 tokenizer=tokenizer,
                 # 额外奖励章节命中和明确的锚点命中
                 config=FieldedBM25ScorerConfig(
-                    field_weights={
-                        "section": 2.0,
-                        "anchor": 1.5
-                    },
+                    field_weights={"section": 2.0, "anchor": 1.5},
                 ),
             ),
         ),
         fusion=WeightedRrfFusion(),
         reranker=ZeroEntropyReranker(
-            client=AsyncZeroEntropy(
-                api_key=settings.ZERO_ENTROPY_API_KEY
-            ),
+            client=AsyncZeroEntropy(api_key=settings.ZERO_ENTROPY_API_KEY),
             config=ZeroEntropyRerankerConfig(
                 model=settings.RERANKER_MODEL,
             ),
         ),
         gate=HighLowRelevanceGate(
-            HighLowRelevanceGateConfig(),   # rank门控可确保大量命中均具有强相关性
+            HighLowRelevanceGateConfig(),  # rank门控可确保大量命中均具有强相关性
         ),
     )
 
 
 class CachedToolOutputSearchByRelevanceTool:
-
     def __init__(
         self,
     ) -> None:
@@ -234,7 +226,7 @@ class CachedToolOutputSearchByRelevanceTool:
             policy=_policy(),
             ui_spec=ToolUISpec(
                 display_name="相关性搜索缓存的工具输出",
-                description="按当前信息需求检索缓存工具输出中的相关片段，并返回可继续按页、章节或范围读取的上下文。",
+                description="按当前信息需求检索缓存工具输出中的相关片段，并返回可继续按章节或范围读取的上下文。",
             ),
         )
 
@@ -319,14 +311,10 @@ async def _search_by_relevance(
             # 这样低相关 chunk 不会消耗父块预算或 top_k 名额。
             sources[candidate_id] = (stored, chunk, section, section_path)
             candidates.append(
-                    RankCandidate(
-                        candidate_id=candidate_id,
-                        # section_path已经是过滤后的结果，此处直接信任并插入开头，有利于提高重排的准确性
-                        text=(
-                            f"{section_path}\n{text}"
-                            if section_path
-                            else text
-                        ),
+                RankCandidate(
+                    candidate_id=candidate_id,
+                    # section_path已经是过滤后的结果，此处直接信任并插入开头，有利于提高重排的准确性
+                    text=(f"{section_path}\n{text}" if section_path else text),
                     fields={
                         "section": section_path or "",
                         "anchor": "\n".join(chunk.anchor_labels),
@@ -433,10 +421,13 @@ def _build_parent_candidates(
         and len(expanded_groups) == 1
     ):
         expanded_spans = [span for span, _ in expanded_groups]
-        coverage_ratio = _covered_length(
-            spans=expanded_spans,
-            scope=scope,
-        ) / scope.length
+        coverage_ratio = (
+            _covered_length(
+                spans=expanded_spans,
+                scope=scope,
+            )
+            / scope.length
+        )
         if coverage_ratio >= _SECTION_RECOMMENDATION_COVERAGE:
             return [
                 _ParentCandidate(
@@ -471,9 +462,7 @@ def _build_local_parent_candidates(
     section: Section | None,
     section_path: str | None,
     scope: SourceSpan,
-    expanded_groups: Sequence[
-        tuple[SourceSpan, list[_RankedMatchedChunk]]
-    ],
+    expanded_groups: Sequence[tuple[SourceSpan, list[_RankedMatchedChunk]]],
 ) -> list[_ParentCandidate]:
     """将重叠的 chunk 上下文贪婪合并为局部父块或大范围读取建议。
 
@@ -510,17 +499,13 @@ def _build_expanded_chunk_groups(
         key=lambda item: (item.chunk.start_offset, item.chunk.end_offset),
     )
     current_items = [sorted_chunks[0]]
-    expanded_groups: list[
-        tuple[SourceSpan, list[_RankedMatchedChunk]]
-    ] = []
+    expanded_groups: list[tuple[SourceSpan, list[_RankedMatchedChunk]]] = []
 
     def append_current_group() -> None:
         first_item = current_items[0]
         last_item = current_items[-1]
         section_id = (
-            first_item.section.section_id
-            if first_item.section is not None
-            else None
+            first_item.section.section_id if first_item.section is not None else None
         )
         previous_chunk = _neighbor_chunk(
             stored=first_item.stored,
@@ -738,9 +723,7 @@ def _build_search_result(
                 section_path=candidate.section_path,
                 rank=rank,
                 score=candidate.score,
-                range=_format_range(
-                    SourceSpan(window.start_offset, window.end_offset)
-                ),
+                range=_format_range(SourceSpan(window.start_offset, window.end_offset)),
                 matched_chunk_count=candidate.matched_chunk_count,
             )
         )

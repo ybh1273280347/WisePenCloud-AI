@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from common.utils.document import OutlineAssembler, OutlineNode
+from common.utils.markdown import OutlineAssembler, OutlineNode
 from pydantic import TypeAdapter
 
 from chat.application.tools.core import (
@@ -49,7 +49,6 @@ _RESULT_ADAPTER = TypeAdapter(CachedToolOutputStructureResult)
 
 
 class CachedToolOutputInspectStructureTool:
-
     def __init__(self) -> None:
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
@@ -59,7 +58,7 @@ class CachedToolOutputInspectStructureTool:
                     "without reading body text.\n\n"
                     "The outline is a heuristic navigation preview, not an authoritative "
                     "table of contents. It may be incomplete, noisy, or have incorrect "
-                    "hierarchy or labels. Page ranges and anchor labels are approximate "
+                    "hierarchy or labels. Anchor labels are approximate "
                     "navigation hints, not verified facts.\n\n"
                     "Use outline[].section_id with read_cached_tool_output_by_section to "
                     "read the actual content. Treat the outline as a soft prior for "
@@ -111,7 +110,6 @@ class CachedToolOutputInspectStructureTool:
                 total_length=len(stored.text),
                 outline=OutlineAssembler.assemble(
                     sections=stored.sections,
-                    pages=stored.pages,
                     anchors=stored.anchors,
                 ),
             )

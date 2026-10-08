@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from common.utils.document import Section
+from common.utils.markdown import Section
 
 from rag.application.document.models import Document
 from rag.domain.acl import PermissionScope

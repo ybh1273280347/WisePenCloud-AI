@@ -1,4 +1,4 @@
-"""Page、Section 和标题树 HTTP 输入与输出。"""
+"""Section 和标题树 HTTP 输入与输出。"""
 
 from typing import Annotated
 
@@ -7,27 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from rag.application.reading import SectionReadMode
 
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-
-
-class ReadPagesRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    resource_id: NonEmptyText = Field(description="要读取的资源标识。")
-    page_labels: list[NonEmptyText] = Field(
-        min_length=1, max_length=20, description="按请求顺序读取的页标签，最多 20 项。"
-    )
-
-
-class ReadPageResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    page_label: str = Field(description="页的稳定标签。")
-    content: str = Field(description="该页的 Markdown 正文。")
-
-
-class ReadPagesResponse(BaseModel):
-    resource_id: str = Field(description="资源标识。")
-    pages: list[ReadPageResponse] = Field(description="按请求顺序返回的页面。")
 
 
 class ReadSectionsRequest(BaseModel):

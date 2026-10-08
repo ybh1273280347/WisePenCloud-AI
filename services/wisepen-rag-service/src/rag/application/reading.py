@@ -1,9 +1,9 @@
-"""从 active Document 提供 Page 与 Section 的确定性读取。"""
+"""从 active Document 提供 Section 的确定性读取。"""
 
 from dataclasses import dataclass
 from enum import StrEnum
 
-from common.utils.document import Section
+from common.utils.markdown import Section
 
 from rag.application.snapshot import ActiveDocumentSnapshotLoader
 from rag.domain.acl import PermissionScope
@@ -12,12 +12,6 @@ from rag.domain.acl import PermissionScope
 class SectionReadMode(StrEnum):
     DIRECT = "direct"
     RECURSIVE = "recursive"
-
-
-@dataclass(frozen=True, slots=True)
-class ReadPageItem:
-    page_label: str
-    content: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,35 +27,10 @@ class DocumentReadError(LookupError):
 
 
 class DocumentReader:
-    """通过一次 active+ACL 快照完成 Page/Section 读取。"""
+    """通过一次 active+ACL 快照完成 Section 读取。"""
 
     def __init__(self, *, snapshots: ActiveDocumentSnapshotLoader) -> None:
         self._snapshots = snapshots
-
-    async def read_pages(
-        self,
-        resource_id: str,
-        page_labels: list[str],
-        *,
-        scope: PermissionScope,
-    ) -> list[ReadPageItem]:
-        """读取指定资源的指定页面内容。"""
-        documents = await self._snapshots.load_documents([resource_id], scope=scope)
-        document = documents.get(resource_id)
-        if document is None:
-            raise DocumentReadError("document is not visible")
-
-        pages_by_label = {page.page_label: page for page in document.structure.pages}
-        pages: list[ReadPageItem] = []
-        for label in page_labels:
-            page = pages_by_label.get(label)
-            if page is None:
-                raise DocumentReadError("page is not visible")
-            content = document.raw_content[
-                page.source_span.start_offset : page.source_span.end_offset
-            ]
-            pages.append(ReadPageItem(label, content))
-        return pages
 
     async def read_sections(
         self,

@@ -1,12 +1,9 @@
 """两路文档召回、请求级 ACL 快照、精排和三路动态父块构建。"""
 
 import asyncio
-from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from hashlib import sha256
 
-from common.utils.document import SourceSpan
 from common.utils.ranking import (
     RankCandidate,
     RankDecision,
@@ -15,13 +12,13 @@ from common.utils.ranking import (
     RankRequest,
 )
 
+from rag.application.document.context import ContextMigrationRequired
 from rag.application.document.models import DocChunk, Document
 from rag.application.plugins.core import RagPluginRegistry
 from rag.application.retrieval.models import (
     ChunkHit,
-    DynamicParent,
-    HybridRetrieveResult,
     GraphNodeReference,
+    HybridRetrieveResult,
 )
 from rag.domain.acl import PermissionScope
 from rag.domain.repositories.acl import ResourceAclRepository
@@ -39,9 +36,6 @@ from rag.utils import EmbeddingClient
 # --- 常量配置 ---
 
 _CANDIDATE_LIMIT = 30
-_SHORT_SECTION_MAX_CHARS = 4_000
-_SECTION_RETURN_MAX_CHARS = 8_000
-_SECTION_RETURN_COVERAGE = 0.8
 
 
 # --- 内部辅助数据类 ---
@@ -143,7 +137,7 @@ class HybridRetriever:
         chunks = await self._doc_chunks.get_chunks_by_ids(
             [candidate.chunk_id for candidate in candidates]
         )
-        visible_chunks, documents = await self._load_visible_chunks(chunks, scope=scope)
+        visible_chunks, _documents = await self._load_visible_chunks(chunks, scope=scope)
         if not visible_chunks:
             return _empty_result()
 
@@ -185,13 +179,8 @@ class HybridRetriever:
         ]
         hits = [_to_hit(item) for item in ranked_chunks]
 
-        # 7. 构建动态父块
-        revision_chunks = await self._doc_chunks.get_revisions_chunks(list(documents))
-        parents = _build_dynamic_parents(
-            ranked_chunks,
-            documents=documents,
-            revision_chunks=revision_chunks,
-        )
+        # HTTP 只返回 parents，不能把有命中的检索伪装成成功空结果。
+        parents = self._build_dynamic_parents()
 
         result = HybridRetrieveResult(
             hits=hits,
@@ -199,6 +188,13 @@ class HybridRetriever:
             relevance_decision=decision,
         )
         return await self._attach_seed_nodes(result, ranked_chunks)
+
+    @staticmethod
+    def _build_dynamic_parents():
+        raise ContextMigrationRequired(
+            "dynamic parent construction requires structural ContextExpander integration; "
+            "see docs/research/wisepen-rag-chunking-migration-blockers.md"
+        )
 
     async def _attach_seed_nodes(self, result: HybridRetrieveResult, ranked_chunks: list[_RankedChunk]) -> HybridRetrieveResult:
         refs = [
@@ -339,177 +335,6 @@ def _to_hit(item: _RankedChunk) -> ChunkHit:
         rerank_score=item.score,
         node_ids=list(dict.fromkeys(item.chunk.extracted_node_ids)),
     )
-
-
-# --- 辅助函数：动态父块构建 ---
-
-def _build_dynamic_parents(
-    ranked_chunks: Sequence[_RankedChunk],
-    *,
-    documents: Mapping[tuple[str, str], Document],
-    revision_chunks: Sequence[DocChunk],
-) -> list[DynamicParent]:
-    """保留 Chat 的三路选择，但每条路径都返回完整 Markdown 区间。"""
-    # 按 revision 分组全部 chunk
-    chunks_by_revision: dict[tuple[str, str], list[DocChunk]] = defaultdict(list)
-    for chunk in revision_chunks:
-        chunks_by_revision[(chunk.resource_id, chunk.content_revision)].append(chunk)
-
-    # 按 (resource_id, content_revision, section_id) 分组候选
-    grouped: dict[tuple[str, str, str | None], list[_RankedChunk]] = defaultdict(list)
-    for item in ranked_chunks:
-        grouped[
-            (item.chunk.resource_id, item.chunk.content_revision, item.chunk.section_id)
-        ].append(item)
-
-    parents: list[DynamicParent] = []
-    for (resource_id, content_revision, section_id), items in grouped.items():
-        document = documents[(resource_id, content_revision)]
-        section = next(
-            (
-                item
-                for item in document.structure.sections
-                if item.section_id == section_id
-            ),
-            None,
-        )
-        # 作用范围：section 自身 span 或全文档
-        scope = (
-            section.own_span
-            if section is not None
-            else SourceSpan(0, len(document.raw_content))
-        )
-        score = max(item.score for item in items)
-        matched_chunk_ids = [
-            item.chunk.chunk_id for item in sorted(items, key=lambda item: item.rank)
-        ]
-
-        # 情况1：section 短，直接返回整个 section
-        if section is not None and scope.length <= _SHORT_SECTION_MAX_CHARS:
-            parents.append(
-                _parent_from_span(document, scope, section_id, list(section.section_path) if section else [], matched_chunk_ids, score)
-            )
-            continue
-
-        # 情况2：扩展各组，若覆盖率高且长度允许则返回整个 section
-        expanded_groups = _expanded_groups(
-            items,
-            scope=scope,
-            chunks=chunks_by_revision[(resource_id, content_revision)],
-        )
-        if (
-            section is not None
-            and scope.length <= _SECTION_RETURN_MAX_CHARS
-            and len(expanded_groups) == 1
-            and _covered_length([span for span, _ in expanded_groups], scope)
-            / scope.length
-            >= _SECTION_RETURN_COVERAGE
-        ):
-            parents.append(
-                _parent_from_span(document, scope, section_id, list(section.section_path) if section else [], matched_chunk_ids, score)
-            )
-            continue
-
-        # 情况3：返回多个扩展组
-        for span, group in expanded_groups:
-            parents.append(
-                _parent_from_span(
-                    document,
-                    span,
-                    section_id,
-                    list(section.section_path) if section else [],
-                    [item.chunk.chunk_id for item in group],
-                    max(item.score for item in group),
-                )
-            )
-    return sorted(parents, key=lambda item: (-item.score, item.parent_id))
-
-
-def _expanded_groups(
-    items: Sequence[_RankedChunk],
-    *,
-    scope: SourceSpan,
-    chunks: Sequence[DocChunk],
-) -> list[tuple[SourceSpan, list[_RankedChunk]]]:
-    """将相邻 chunk 聚合并向外扩展一个相邻 chunk。"""
-    by_index = {chunk.chunk_index: chunk for chunk in chunks}
-    ordered = sorted(items, key=lambda item: item.chunk.chunk_index)
-    groups: list[list[_RankedChunk]] = [[ordered[0]]]
-    for item in ordered[1:]:
-        if _can_join_chunk_group(groups[-1][-1], item):
-            groups[-1].append(item)
-        else:
-            groups.append([item])
-
-    expanded: list[tuple[SourceSpan, list[_RankedChunk]]] = []
-    for group in groups:
-        first, last = group[0].chunk, group[-1].chunk
-        before = _neighbor_chunk(by_index, first, offset=-1)
-        after = _neighbor_chunk(by_index, last, offset=1)
-        start = (before or first).chunk_span.start_offset
-        end = (after or last).chunk_span.end_offset
-        expanded.append(
-            (
-                SourceSpan(max(start, scope.start_offset), min(end, scope.end_offset)),
-                group,
-            )
-        )
-    return expanded
-
-
-def _can_join_chunk_group(previous: _RankedChunk, current: _RankedChunk) -> bool:
-    return (
-        previous.chunk.section_id == current.chunk.section_id
-        and 1 <= current.chunk.chunk_index - previous.chunk.chunk_index <= 2
-    )
-
-
-def _neighbor_chunk(
-    chunks_by_index: Mapping[int, DocChunk],
-    chunk: DocChunk,
-    *,
-    offset: int,
-) -> DocChunk | None:
-    neighbor = chunks_by_index.get(chunk.chunk_index + offset)
-    if neighbor is None or neighbor.section_id != chunk.section_id:
-        return None
-    return neighbor
-
-
-def _parent_from_span(
-    document: Document,
-    span: SourceSpan,
-    section_id: str | None,
-    section_path: list[str],
-    matched_chunk_ids: list[str],
-    score: float,
-) -> DynamicParent:
-    identity = f"{document.resource_id}\0{document.revision.content_revision}\0{span.start_offset}\0{span.end_offset}"
-    return DynamicParent(
-        parent_id="rpar_" + sha256(identity.encode("utf-8")).hexdigest()[:24],
-        resource_id=document.resource_id,
-        content_revision=document.revision.content_revision,
-        section_id=section_id,
-        section_path=section_path,
-        text=document.raw_content[span.start_offset : span.end_offset],
-        source_spans=[span],
-        matched_chunk_ids=matched_chunk_ids,
-        score=score,
-    )
-
-
-def _covered_length(spans: Sequence[SourceSpan], scope: SourceSpan) -> int:
-    """合并 spans 并计算在 scope 内的覆盖总长度。"""
-    merged: list[SourceSpan] = []
-    for span in sorted(spans, key=lambda item: item.start_offset):
-        if not merged or span.start_offset > merged[-1].end_offset:
-            merged.append(span)
-            continue
-        previous = merged[-1]
-        merged[-1] = SourceSpan(
-            previous.start_offset, max(previous.end_offset, span.end_offset)
-        )
-    return sum(span.length for span in merged)
 
 
 # --- 辅助函数：空结果 ---

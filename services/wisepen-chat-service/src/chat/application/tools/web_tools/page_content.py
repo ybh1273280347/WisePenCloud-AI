@@ -7,8 +7,8 @@ import pdf_inspector
 import trafilatura
 from common.logger import warn
 
-from .fetchers.base import RawFetchOutput
 from .fetchers import UrlFetchError
+from .fetchers.base import RawFetchOutput
 
 # 移除不可读页面或噪声页面
 PRUNE_XPATH = (
@@ -96,11 +96,7 @@ async def extract_pdf_markdown(content: bytes, *, url: str) -> str:
     except Exception as exc:
         raise UrlFetchError(url=url, reason=f"PDF extraction failed: {exc}") from exc
 
-    pages = [
-        f"<!-- page {page.page + 1} -->\n\n{page.markdown.strip()}"
-        for page in result.pages
-        if page.markdown.strip()
-    ]
+    pages = [page.markdown.strip() for page in result.pages if page.markdown.strip()]
     if not pages:
         raise UrlFetchError(url=url, reason="PDF contains no extractable markdown")
     return "\n\n".join(pages)

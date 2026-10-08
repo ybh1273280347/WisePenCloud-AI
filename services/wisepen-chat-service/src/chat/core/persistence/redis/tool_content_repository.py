@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import redis.asyncio as redis
-from pydantic import TypeAdapter
-
 from chat.application.tools.core.output_cache.cache_store import StoredToolContent
 from chat.core.config.app_settings import settings
 from chat.domain.repositories import ToolContentRepository
+from pydantic import TypeAdapter
 
-# 文档标题清洗会改变 section 边界和 chunk 归属，旧缓存不能与新搜索混用。
-_CONTENT_KEY_PREFIX = "wisepen:tool_content:v8:item:"
-_SESSION_KEY_PREFIX = "wisepen:tool_content:v8:session:"
+# Token 切分与 Chat 私有 offset 索引改变了缓存合同；旧 key 自然过期。
+_CONTENT_KEY_PREFIX = "wisepen:tool_content:v10:item:"
+_SESSION_KEY_PREFIX = "wisepen:tool_content:v10:session:"
 _STORED_CONTENT_ADAPTER = TypeAdapter(StoredToolContent)
 
 

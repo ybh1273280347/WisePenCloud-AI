@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 
-from common.utils.document import (
+from common.utils.markdown import (
     DocumentChunk,
     DocumentChunker,
     DocumentChunkerConfig,
@@ -41,7 +41,8 @@ class DocumentPreparer:
         self._publication = publication
         self._doc_chunks = doc_chunks
         self._chunker_config = chunker_config or DocumentChunkerConfig(
-            max_characters=800, chunk_overlap=100
+            target_chunk_tokens=800,
+            split_threshold_tokens=1600,
         )
         self._chunk_metadata_builder = chunk_metadata_builder
 
@@ -89,7 +90,6 @@ class DocumentPreparer:
             structure=DocumentStructure(
                 total_length=len(markdown),
                 sections=sections,
-                pages=chunking.pages,
                 anchors=chunking.anchors,
             ),
             metadata=metadata or GeneralDocumentMetadata(),
@@ -101,7 +101,6 @@ class DocumentPreparer:
                 content_revision=revision.content_revision,
                 section_ids=section_ids,
                 sections_by_id=sections_by_id,
-                raw_content=markdown,
             )
             for chunk in chunking.chunks
         ]
@@ -132,12 +131,7 @@ def _to_doc_chunk(
     content_revision: str,
     section_ids: dict[str, str],
     sections_by_id: dict[str, Section],
-    raw_content: str,
 ) -> DocChunk:
-    for span in chunk.source_spans:
-        if span.end_offset > len(raw_content):
-            raise ValueError("Common chunk span is outside markdown")
-
     section_id = None if chunk.section_id is None else section_ids[chunk.section_id]
     section_path = (
         [] if section_id is None else list(sections_by_id[section_id].section_path)
@@ -154,7 +148,7 @@ def _to_doc_chunk(
         section_id=section_id,
         section_path=section_path,
         raw_text=chunk.text,
-        source_spans=chunk.source_spans,
-        page_labels=chunk.page_labels,
+        node_ids=list(chunk.node_ids),
+        content_token_count=chunk.content_token_count,
         anchor_labels=chunk.anchor_labels,
     )

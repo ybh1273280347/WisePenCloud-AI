@@ -41,7 +41,6 @@ from common.logger import warn
 
 _CACHED_TOOL_OUTPUT_TOOL_NAMES = frozenset({
     "inspect_cached_tool_output_structure",
-    "read_cached_tool_output_by_page",
     "read_cached_tool_output_by_range",
     "read_cached_tool_output_by_section",
     "search_cached_tool_output_by_regex",
