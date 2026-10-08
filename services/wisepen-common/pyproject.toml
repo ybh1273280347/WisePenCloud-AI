@@ -33,6 +33,10 @@ dependencies = [
     "numpy>=2.4.6",
     "thulac>=0.2.2",
     "zeroentropy",
+    "openai>=2,<3",
+    "instructor>=1,<2",
+    "dashscope>=1.25,<2",
+    "typesafe-sdk>=0.7,<1",
 ]
 
 [build-system]
