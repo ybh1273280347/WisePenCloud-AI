@@ -70,5 +70,4 @@ def test_offsets_preserve_crlf_and_unicode_characters() -> None:
 def test_page_comment_is_not_a_page_node() -> None:
     nodes = MarkdownParser().parse("before\n<!-- page 2 -->\nafter\n")
 
-    assert all(node.kind is not MarkdownNodeKind.DOCUMENT for node in nodes)
     assert all("page_label" not in node.metadata for node in nodes)

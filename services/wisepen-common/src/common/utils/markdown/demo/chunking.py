@@ -37,7 +37,7 @@ def main() -> None:
         "输入：[sample.md](../sample.md)。完整结构字段见 [chunking.json](chunking.json)。",
         "",
         f"目标：{config.target_chunk_tokens} tokens；拆分阈值：{config.split_threshold_tokens} tokens。",
-        "计数器：离线 cl100k_base。不可安全拆分的结构可以超过阈值，以 overflow 标识。",
+        "计数器：离线 o200k_base。不可安全拆分的结构可以超过阈值，以 overflow 标识。",
         "",
         f"共 {len(result.chunks)} 个 chunk，{len(result.sections)} 个 section，{len(result.anchors)} 个 anchor。",
     ]

@@ -24,4 +24,4 @@ Chunking 示例采用目标 `80 tokens`、拆分阈值 `160 tokens`。输入中�
 
 Parser 的 `source_spans` 是 Python 字符半开区间；没有范围的嵌套节点不会伪造精确位置。Outline 每行统计章节直属正文的 Python 字符数，不包含标题和子章节；它不表示 token 数。全局目录和邻域目录由同一个 `OutlineFormatter` 输出，邻域行会给当前章节附加 `[current]`。
 
-样例中的图片路径仅用于演示图片语法和 Figure 锚点，运行不需要读取图片，也不需要联网。默认 tokenizer 使用包内的 cl100k_base 数据。
+样例中的图片路径仅用于演示图片语法和 Figure 锚点，运行不需要读取图片，也不需要联网。默认 tokenizer 使用包内的 o200k_base 数据。

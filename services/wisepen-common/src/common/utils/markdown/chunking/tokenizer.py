@@ -26,14 +26,14 @@ class TokenCounter(Protocol):
 
 @lru_cache(maxsize=1)
 def _local_encoding() -> tiktoken.Encoding:
-    """加载随包分发的 cl100k_base BPE 表，构建离线 Encoding。
+    """加载随包分发的 o200k_base BPE 表，构建离线 Encoding。
 
     避免 get_encoding() 在冷启动或离线环境下尝试下载或访问用户缓存。
     """
     # 读取打包的 BPE 表文件，解析为 {token_bytes: rank} 映射。
     data = (
         files("common.utils.markdown")
-        .joinpath("chunking/data/cl100k_base.tiktoken")
+        .joinpath("chunking/data/o200k_base.tiktoken")
         .read_bytes()
     )
     ranks = {
@@ -43,26 +43,30 @@ def _local_encoding() -> tiktoken.Encoding:
 
     # 直接构造 Encoding，确保完全离线可用。
     return tiktoken.Encoding(
-        name="cl100k_base",
-        pat_str=r"'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}++|\p{N}{1,3}+| ?[^\s\p{L}\p{N}]++[\r\n]*+|\s++$|\s*[\r\n]|\s+(?!\S)|\s",
+        name="o200k_base",
+        pat_str=(
+            r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*"
+            r"[\p{Ll}\p{Lm}\p{Lo}\p{M}]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+            r"[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]+"
+            r"[\p{Ll}\p{Lm}\p{Lo}\p{M}]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+            r"\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n/]*|\s*[\r\n]+|"
+            r"\s+(?!\S)|\s+"
+        ),
         mergeable_ranks=ranks,
         special_tokens={
-            "<|endoftext|>": 100257,
-            "<|fim_prefix|>": 100258,
-            "<|fim_middle|>": 100259,
-            "<|fim_suffix|>": 100260,
-            "<|endofprompt|>": 100276,
+            "<|endoftext|>": 199999,
+            "<|endofprompt|>": 200018,
         },
     )
 
 
 class TiktokenTokenCounter:
-    """使用固定 cl100k_base 表计数，缓存属于调用实例。"""
+    """使用固定 o200k_base 表计数，缓存属于调用实例。"""
 
-    def __init__(self, encoding_name: str = "cl100k_base") -> None:
-        """初始化计数器；仅支持内置的 cl100k_base 编码。"""
-        if encoding_name != "cl100k_base":
-            raise ValueError("only the bundled cl100k_base encoding is supported")
+    def __init__(self, encoding_name: str = "o200k_base") -> None:
+        """初始化计数器；仅支持内置的 o200k_base 编码。"""
+        if encoding_name != "o200k_base":
+            raise ValueError("only the bundled o200k_base encoding is supported")
 
         self.name = f"tiktoken:{encoding_name}"
         self._encoding = _local_encoding()

@@ -16,15 +16,15 @@ def test_cold_initialization_never_downloads(monkeypatch, tmp_path) -> None:
     )
     _local_encoding.cache_clear()
     counter = TiktokenTokenCounter()
-    assert counter.count("中文 emoji 🙂") == 4
+    assert counter.count("中文 emoji 🙂") == 3
     data = (
         files("common.utils.markdown")
-        .joinpath("chunking/data/cl100k_base.tiktoken")
+        .joinpath("chunking/data/o200k_base.tiktoken")
         .read_bytes()
     )
     assert (
         sha256(data).hexdigest()
-        == "223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7"
+        == "446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d"
     )
     assert not list(tmp_path.iterdir())
 
