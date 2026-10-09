@@ -59,7 +59,21 @@ _DOH_SERVERS: tuple[str, ...] = (
 )
 
 
-def validate_public_http_url(
+async def validate_public_http_url(
+    url: str,
+    *,
+    doh_servers: Sequence[str] = _DOH_SERVERS,
+) -> str:
+    """把包含同步 DNS 查询的安全校验移出事件循环。"""
+    
+    return await asyncio.to_thread(
+        _validate_public_http_url,
+        url,
+        doh_servers=doh_servers,
+    )
+
+
+def _validate_public_http_url(
     url: str,
     *,
     doh_servers: Sequence[str] = _DOH_SERVERS,
@@ -90,19 +104,6 @@ def validate_public_http_url(
 
     _resolve_public_host_ips(hostname, doh_servers=doh_servers)
     return url
-
-
-async def validate_public_http_url_async(
-    url: str,
-    *,
-    doh_servers: Sequence[str] = _DOH_SERVERS,
-) -> str:
-    """把包含同步 DNS 查询的安全校验移出事件循环。"""
-    return await asyncio.to_thread(
-        validate_public_http_url,
-        url,
-        doh_servers=doh_servers,
-    )
 
 
 def _resolve_public_host_ips(

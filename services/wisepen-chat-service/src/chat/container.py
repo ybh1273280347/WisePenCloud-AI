@@ -26,17 +26,17 @@ from chat.application.tools.core.mcp import (
     McpToolCatalog,
     SystemMcpToolCatalog,
 )
-from chat.application.tools.session_tools.cached_tool_output_tools import (
-    CachedToolOutputInspectStructureTool,
-    CachedToolOutputReadByRangeTool,
-    CachedToolOutputReadBySectionTool,
-    CachedToolOutputSearchByRegexTool,
-)
 from chat.application.tools.session_tools.get_historical_chat_messages_tool import (
     GetHistoricalChatMessagesTool,
 )
 from chat.application.tools.session_tools.load_image_attachment_tool import (
     LoadImageAttachmentTool,
+)
+from chat.application.tools.session_tools.tool_output import (
+    InspectToolOutputStructureTool,
+    ReadToolOutputRangeTool,
+    ReadToolOutputSectionTool,
+    SearchToolOutputRegexTool,
 )
 from chat.application.tools.skill_tools import LoadSkillAssetTool, LoadSkillTool
 from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillMatcher
@@ -290,17 +290,17 @@ class Container(containers.DeclarativeContainer):
         resource_client=resource_client,
         file_loader=oss_file_loader,
     )
-    inspect_cached_tool_output_structure_tool = providers.Singleton(
-        CachedToolOutputInspectStructureTool,
+    inspect_tool_output_structure_tool = providers.Singleton(
+        InspectToolOutputStructureTool,
     )
-    read_cached_tool_output_by_range_tool = providers.Singleton(
-        CachedToolOutputReadByRangeTool,
+    read_tool_output_range_tool = providers.Singleton(
+        ReadToolOutputRangeTool,
     )
-    read_cached_tool_output_by_section_tool = providers.Singleton(
-        CachedToolOutputReadBySectionTool,
+    read_tool_output_section_tool = providers.Singleton(
+        ReadToolOutputSectionTool,
     )
-    search_cached_tool_output_by_regex_tool = providers.Singleton(
-        CachedToolOutputSearchByRegexTool,
+    search_tool_output_regex_tool = providers.Singleton(
+        SearchToolOutputRegexTool,
     )
     web_fetch_static_session = providers.Resource(_provide_web_fetch_static_session)
     web_fetch_browser_session = providers.Resource(_provide_web_fetch_browser_session)
@@ -329,10 +329,10 @@ class Container(containers.DeclarativeContainer):
         load_image_attachment_tool,
         load_skill_tool,
         load_skill_asset_tool,
-        inspect_cached_tool_output_structure_tool,
-        read_cached_tool_output_by_range_tool,
-        read_cached_tool_output_by_section_tool,
-        search_cached_tool_output_by_regex_tool,
+        inspect_tool_output_structure_tool,
+        read_tool_output_range_tool,
+        read_tool_output_section_tool,
+        search_tool_output_regex_tool,
         web_fetch_tool,
         web_crawl_tool,
     )

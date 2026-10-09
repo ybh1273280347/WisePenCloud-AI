@@ -36,19 +36,19 @@ _PARAMETERS_SCHEMA: dict[str, Any] = {
 
 
 @dataclass(slots=True)
-class CachedToolOutputStructureResult:
-    """缓存正文的模型可见目录；内部 offset/path 不跨越工具边界。"""
+class ToolOutputStructureResult:
+    """结构目录及其原文定位信息。"""
 
     content_id: str
-    total_length: int | None = None
-    outline: str = ""
+    total_length: int
+    outline: str
 
 
-class CachedToolOutputInspectStructureTool:
+class InspectToolOutputStructureTool:
     def __init__(self) -> None:
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
-                name="inspect_cached_tool_output_structure",
+                name="inspect_tool_output_structure",
                 description=(
                     "Get a compact section outline for one cached tool output "
                     "without reading body text.\n\n"
@@ -57,7 +57,7 @@ class CachedToolOutputInspectStructureTool:
                     "hierarchy or labels. Anchor labels are approximate "
                     "navigation hints, not verified facts.\n\n"
                     "Use the id=section_id value shown in an outline row with "
-                    "read_cached_tool_output_by_section to read the actual content. "
+                    "read_tool_output_section to read the actual content. "
                     "Treat the outline as a soft prior for navigation only. Do not infer "
                     "that a section is absent solely from this outline. If the outline "
                     "conflicts with the retrieved body text, trust the body text."
@@ -87,7 +87,7 @@ class CachedToolOutputInspectStructureTool:
         context: dict[str, Any],
         config: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> CachedToolOutputStructureResult:
+    ) -> ToolOutputStructureResult:
         del config
         try:
             content_id = kwargs["content_id"]
@@ -101,7 +101,7 @@ class CachedToolOutputInspectStructureTool:
                     retryable=False,
                 )
 
-            result = CachedToolOutputStructureResult(
+            result = ToolOutputStructureResult(
                 content_id=content_id,
                 total_length=len(stored.text),
                 outline=OutlineFormatter(

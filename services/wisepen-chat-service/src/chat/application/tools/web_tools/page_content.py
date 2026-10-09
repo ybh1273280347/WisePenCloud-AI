@@ -46,11 +46,13 @@ _HTML_FINGERPRINT_RE = re.compile(
 )
 
 
-def clean_html(raw_html: str, *, url: str | None = None) -> str | None:
+async def clean_html(raw_html: str, *, url: str | None = None) -> str | None:
+    """清洗 HTML 为 markdown；第三方提取在独立线程执行，避免阻塞事件循环。"""
     if not raw_html or not raw_html.strip():
         return None
     try:
-        markdown = trafilatura.extract(
+        markdown = await asyncio.to_thread(
+            trafilatura.extract,
             raw_html.strip(),
             url=url,
             output_format="markdown",
@@ -87,16 +89,13 @@ def should_fallback(
 
 
 async def extract_pdf_markdown(content: bytes, *, url: str) -> str:
-    """使用 PDF 原生文本层提取，document extract 不在本次迁移范围内。"""
+    """使用 PDF 原生文本层一次性提取整档 markdown，document extract 不在本次迁移范围内。"""
     try:
-        result = await asyncio.to_thread(
-            pdf_inspector.extract_pages_markdown_bytes,
-            content,
-        )
+        result = await asyncio.to_thread(pdf_inspector.process_pdf_bytes, content)
     except Exception as exc:
         raise UrlFetchError(url=url, reason=f"PDF extraction failed: {exc}") from exc
 
-    pages = [page.markdown.strip() for page in result.pages if page.markdown.strip()]
-    if not pages:
+    markdown = (result.markdown or "").strip()
+    if not markdown:
         raise UrlFetchError(url=url, reason="PDF contains no extractable markdown")
-    return "\n\n".join(pages)
+    return markdown

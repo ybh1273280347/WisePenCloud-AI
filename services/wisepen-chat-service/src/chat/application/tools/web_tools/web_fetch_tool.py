@@ -17,7 +17,7 @@ from chat.application.tools.core import (
 )
 from chat.application.tools.core.output_cache import cacheable_tool_output
 
-from .common import UrlSecurityError, WebContentCache, validate_public_http_url_async
+from .common import UrlSecurityError, WebContentCache, validate_public_http_url
 from .fetchers import (
     RawFetchOutput,
     UrlFetchError,
@@ -125,7 +125,7 @@ class WebFetchTool:
             url = raw_url.strip()
             try:
                 # 工具入口完成一次安全校验；后续 fetch/cache 只接收已校验 URL。
-                validated_url = await validate_public_http_url_async(url)
+                validated_url = await validate_public_http_url(url)
             except UrlSecurityError as exc:
                 warn("web_fetch URL 被安全策略跳过", url=url, reason=str(exc))
                 continue
@@ -263,11 +263,7 @@ class WebFetchTool:
                 ),
                 False,
             )
-        markdown = await asyncio.to_thread(
-            clean_html,
-            raw.raw_html or "",
-            url=raw.source_url,
-        )
+        markdown = await clean_html(raw.raw_html or "", url=raw.source_url)
         return (
             _FetchPage(
                 source_url=raw.source_url,

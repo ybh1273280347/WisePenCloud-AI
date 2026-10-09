@@ -73,7 +73,7 @@ def test_between_target_and_threshold_is_atomic_and_sections_do_not_mix():
     result = _chunker().chunk("# A\n\n123456789012345\n\n# B\n\nshort\n")
     assert len(result.chunks) == 2
     assert result.chunks[0].text == "123456789012345\n"
-    assert [chunk.section_path for chunk in result.chunks] == [("A",), ("B",)]
+    assert [chunk.section_path for chunk in result.chunks] == [["A"], ["B"]]
     assert len({chunk.section_id for chunk in result.chunks}) == 2
 
 
@@ -81,9 +81,12 @@ def test_document_title_names_preface_root_section():
     result = _chunker().chunk(
         MarkdownDocument("前言内容\n\n# 正文\n\nbody\n", title="我的文档")
     )
-    assert [section.title for section in result.sections] == ["我的文档", "正文"]
-    assert result.sections[0].section_path == ("我的文档",)
-    assert result.chunks[0].section_path == ("我的文档",)
+    assert [section.title for section in result.sections] == [
+        "我的文档<文档开头>",
+        "正文",
+    ]
+    assert result.sections[0].section_path == ["我的文档<文档开头>"]
+    assert result.chunks[0].section_path == ["我的文档<文档开头>"]
 
 
 def test_string_input_keeps_default_preface_root_name():
@@ -95,8 +98,8 @@ def test_empty_sections_have_no_chunks_and_global_order_is_stable():
     result = _chunker().chunk("# Empty\n\n## Child\n\nbody\n\n# Last\n\nlast\n")
     assert len(result.sections) == 3
     assert [chunk.section_path for chunk in result.chunks] == [
-        ("Empty", "Child"),
-        ("Last",),
+        ["Empty", "Child"],
+        ["Last"],
     ]
     assert [chunk.chunk_index for chunk in result.chunks] == [0, 1]
     assert (
@@ -110,7 +113,7 @@ def test_heading_does_not_compete_with_large_table():
     result = _chunker(80, 160).chunk(source)
     assert len(result.chunks) == 1
     assert result.chunks[0].text.startswith("| a |")
-    assert result.chunks[0].section_path == ("Heading",)
+    assert result.chunks[0].section_path == ["Heading"]
 
 
 def test_original_ids_are_resolvable_and_repeated_across_text_parts():
@@ -136,12 +139,12 @@ def test_packing_works_without_provenance_and_ignores_node_section_metadata():
     nodes = MarkdownParser().parse("paragraph one\n\nparagraph two\n")
     packer = ChunkPacker(ChunkingPolicy(12, 24, CharacterCounter()))
     chunks = packer.pack(
-        replace(node, source_spans=(), metadata={"section_path": ("ignored",)})
+        replace(node, source_spans=[], metadata={"section_path": ["ignored"]})
         for node in nodes
     )
     assert len(chunks) == 2
     assert all(
-        chunk.source_spans == () and chunk.section_path == () for chunk in chunks
+        chunk.source_spans == [] and chunk.section_path == [] for chunk in chunks
     )
 
 

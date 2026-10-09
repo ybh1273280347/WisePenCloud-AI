@@ -39,7 +39,7 @@ def test_code_preserves_indentation_and_rebuilds_fences(fence, newline, final_ne
     assert all(part.metadata["info"] == "python extra" for part in parts)
     assert all(policy.token_counter.count(part.text) <= 64 for part in parts)
     assert all(
-        part.source_spans == () and part.source_node_ids == (node.node_id,)
+        part.source_spans == [] and part.source_node_ids == [node.node_id]
         for part in parts
     )
 
@@ -58,7 +58,7 @@ def test_unclosed_code_gets_synthetic_closing_only_when_split():
     assert "".join(part.text[len(opening) : -4] for part in parts) == body + "\n"
 
     small = MarkdownParser().parse(opening + "    x = 1")[0]
-    assert StructuralNodeSplitter(_policy()).split(small) == (small,)
+    assert StructuralNodeSplitter(_policy()).split(small) == [small]
 
 
 def test_code_long_line_is_preserved_and_becomes_overflow():
@@ -88,7 +88,7 @@ def test_indented_code_preserves_exact_lines():
 def test_formula_and_figure_are_atomic_and_overflow_is_final(kind):
     node = MarkdownNode("atomic", kind, "x=y\n" * 50)
     policy = ChunkingPolicy(10, 24, CharacterCounter())
-    assert StructuralNodeSplitter(policy).split(node) == (node,)
+    assert StructuralNodeSplitter(policy).split(node) == [node]
     chunks = ChunkPacker(policy).pack([node])
     assert chunks[0].text == node.text
     assert chunks[0].overflow is True
@@ -156,7 +156,7 @@ def test_html_table_without_row_structure_is_atomic():
     source = "<table><tr><td>" + "value " * 100 + "</td></tr></table>\n"
     node = MarkdownParser().parse(source)[0]
     assert node.kind is MarkdownNodeKind.TABLE and not node.children
-    assert StructuralNodeSplitter(_policy()).split(node) == (node,)
+    assert StructuralNodeSplitter(_policy()).split(node) == [node]
 
 
 def test_nested_ordered_list_preserves_oversized_item():

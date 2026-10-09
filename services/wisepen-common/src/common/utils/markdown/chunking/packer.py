@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ..parsing.parser import MarkdownNode, SourceSpan
@@ -22,13 +22,13 @@ class MarkdownChunk:
     chunk_id: str
     text: str
     chunk_index: int
-    node_ids: tuple[str, ...] = ()
-    section_path: tuple[str, ...] = ()
+    node_ids: list[str] = field(default_factory=list)
+    section_path: list[str] = field(default_factory=list)
     content_token_count: int = 0
     overflow: bool = False
-    source_spans: tuple[SourceSpan, ...] = ()
+    source_spans: list[SourceSpan] = field(default_factory=list)
     section_id: str | None = None
-    anchor_labels: tuple[str, ...] = ()
+    anchor_labels: list[str] = field(default_factory=list)
     content_hash: str = ""
 
 
@@ -45,7 +45,7 @@ class ChunkPacker:
         *,
         section: Section | None = None,
         start_index: int = 0,
-    ) -> tuple[MarkdownChunk, ...]:
+    ) -> list[MarkdownChunk]:
         """将正文节点按顺序打包为 Chunk；start_index 延续全局 Chunk 顺序。
 
         仅接收正文单元；若节点自身超过拆分阈值，则强制独立成块，
@@ -101,7 +101,7 @@ class ChunkPacker:
 
         # 处理末尾未封存的节点。
         flush()
-        return tuple(chunks)
+        return chunks
 
     def _build_chunk(
         self,
@@ -123,24 +123,24 @@ class ChunkPacker:
             chunk_index=chunk_index,
             text=text,
             # 去重并保留节点来源 ID 顺序。
-            node_ids=tuple(
+            node_ids=list(
                 dict.fromkeys(
                     identity for node in nodes for identity in node.source_node_ids
                 )
             ),
             section_id=section.section_id if section else None,
-            section_path=section.section_path if section else (),
+            section_path=section.section_path if section else [],
             content_token_count=content_token_count,
             # 仅当实际 token 数超过阈值时标记溢出。
             overflow=content_token_count > self._policy.split_threshold_tokens,
             # 只保留有效 span，并去重。
-            source_spans=tuple(
+            source_spans=list(
                 dict.fromkeys(
                     span for node in nodes for span in node.source_spans if span.length
                 )
             ),
             # 收集所有非空 anchor_label，并去重为字符串。
-            anchor_labels=tuple(
+            anchor_labels=list(
                 dict.fromkeys(
                     str(label)
                     for node in nodes

@@ -121,8 +121,6 @@ class OutlineFormatter:
             markers.extend(f"[{anchor}]" for anchor in anchors)
 
         title = section.title.strip()
-        if section.level == 0 and title != "文档开头":
-            title += "<文档开头>"
         heading_level = (
             0
             if section.level == 0

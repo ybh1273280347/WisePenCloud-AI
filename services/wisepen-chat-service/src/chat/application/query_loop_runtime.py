@@ -39,11 +39,11 @@ from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
 from common.logger import warn
 
-_CACHED_TOOL_OUTPUT_TOOL_NAMES = frozenset({
-    "inspect_cached_tool_output_structure",
-    "read_cached_tool_output_by_range",
-    "read_cached_tool_output_by_section",
-    "search_cached_tool_output_by_regex",
+_TOOL_OUTPUT_TOOL_NAMES = frozenset({
+    "inspect_tool_output_structure",
+    "read_tool_output_range",
+    "read_tool_output_section",
+    "search_tool_output_regex",
 })
 
 
@@ -193,7 +193,7 @@ class QueryLoopRuntime:
                 return
 
             tool_scope.suppress_schemas(
-                _CACHED_TOOL_OUTPUT_TOOL_NAMES,
+                _TOOL_OUTPUT_TOOL_NAMES,
                 suppressed=not _has_cached_tool_output(messages),
             )
 

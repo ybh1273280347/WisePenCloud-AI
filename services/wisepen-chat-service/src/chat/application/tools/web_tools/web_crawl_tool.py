@@ -23,7 +23,7 @@ from chat.application.tools.core.output_cache import cacheable_tool_output
 from .common import (
     UrlSecurityError,
     WebContentCache,
-    validate_public_http_url_async,
+    validate_public_http_url,
 )
 from .fetchers import (
     RawFetchOutput,
@@ -134,7 +134,7 @@ class WebCrawlTool:
         del context, config
         seed_url = kwargs["seed_url"].strip()
         try:
-            seed_url = await validate_public_http_url_async(seed_url)
+            seed_url = await validate_public_http_url(seed_url)
         except UrlSecurityError as exc:
             raise ToolExecutionError(
                 reason="web_crawl_invalid_seed",
@@ -211,7 +211,7 @@ class WebCrawlTool:
                         continue
                     try:
                         # child URL 是新的不可信输入，在进入队列前完成唯一一次校验。
-                        validated_child = await validate_public_http_url_async(child_url)
+                        validated_child = await validate_public_http_url(child_url)
                     except UrlSecurityError:
                         continue
                     discovered.add(validated_child)
@@ -286,11 +286,7 @@ class WebCrawlTool:
         self,
         raw: RawFetchOutput,
     ) -> tuple[_CrawlPage, bool]:
-        markdown = await asyncio.to_thread(
-            clean_html,
-            raw.raw_html or "",
-            url=raw.source_url,
-        )
+        markdown = await clean_html(raw.raw_html or "", url=raw.source_url)
         return (
             _CrawlPage(
                 source_url=raw.source_url,

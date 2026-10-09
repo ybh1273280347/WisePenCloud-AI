@@ -1,13 +1,15 @@
 import json
 
+import pytest
 from common.utils.markdown import MarkdownChunker
 from pydantic import TypeAdapter
 
+from chat.application.tools.core.output_cache import cache_store
 from chat.application.tools.core.output_cache.cache_store import StoredToolContent
-from chat.application.tools.session_tools.cached_tool_output_tools.read_by_range import (
+from chat.application.tools.session_tools.tool_output.read_by_range import (
     _normalize_offset,
 )
-from chat.application.tools.session_tools.cached_tool_output_tools.read_by_section import (
+from chat.application.tools.session_tools.tool_output.read_by_section import (
     _read_by_section,
 )
 
@@ -19,8 +21,8 @@ def test_stored_content_round_trips_and_ignores_old_chunk_index_field():
         content_id="c",
         session_id="s",
         text=text,
-        sections=result.sections,
-        anchors=result.anchors,
+        sections=tuple(result.sections),
+        anchors=tuple(result.anchors),
     )
     adapter = TypeAdapter(StoredToolContent)
     decoded = json.loads(adapter.dump_json(stored))
@@ -30,58 +32,69 @@ def test_stored_content_round_trips_and_ignores_old_chunk_index_field():
     assert not hasattr(stored, "chunks")
 
 
-def test_section_reader_uses_own_and_subtree_source_spans_and_pages():
+@pytest.mark.asyncio
+async def test_put_tool_content_returns_content_id_and_source_length(monkeypatch):
+    class Repository:
+        stored = None
+
+        async def put(self, stored):
+            self.stored = stored
+
+    repository = Repository()
+    monkeypatch.setattr(cache_store, "_repository", lambda: repository)
+
+    receipt = await cache_store.put_tool_content(
+        session_id="s",
+        text="# Heading\n\nbody\n",
+    )
+
+    assert receipt == (repository.stored.content_id, len(repository.stored.text))
+
+
+def test_section_reader_uses_own_and_subtree_source_spans_and_offsets():
     text = "# Heading\n\nbody12345\n\n## Nested\n\nchild body\n"
     result = MarkdownChunker().chunk(text)
     stored = StoredToolContent("c", "s", text, sections=result.sections)
     section = result.sections[0]
 
-    first_page = _read_by_section(
-        content_id="c",
+    first_window = _read_by_section(
+        stored=stored,
         section_id=section.section_id,
         scope="own",
-        offset=0,
-        sections=result.sections,
-        stored=stored,
+        start_offset=0,
         char_budget=8,
     )
-    last_offset = (section.own_span.length - 1) // 8
-    last_page = _read_by_section(
-        content_id="c",
+    second_window = _read_by_section(
+        stored=stored,
         section_id=section.section_id,
         scope="own",
-        offset=last_offset,
-        sections=result.sections,
-        stored=stored,
+        start_offset=first_window.next_offset,
         char_budget=8,
     )
-    beyond_page = _read_by_section(
-        content_id="c",
+    last_window = _read_by_section(
+        stored=stored,
         section_id=section.section_id,
         scope="own",
-        offset=999,
-        sections=result.sections,
-        stored=stored,
+        start_offset=section.own_span.end_offset - 1,
         char_budget=8,
     )
     subtree = _read_by_section(
-        content_id="c",
+        stored=stored,
         section_id=section.section_id,
         scope="subtree",
-        offset=0,
-        sections=result.sections,
-        stored=stored,
+        start_offset=0,
         char_budget=len(text),
     )
 
-    assert first_page.text == text[section.own_span.start_offset : 8]
-    assert first_page.has_more is True
-    last_start = section.own_span.start_offset + last_offset * 8
-    assert last_page.text == text[last_start : section.own_span.end_offset]
-    assert last_page.has_more is False
-    assert beyond_page.text == ""
-    assert beyond_page.has_more is False
-    assert "child body" in subtree.text
+    assert first_window.content_id == "c"
+    assert first_window.section_id == section.section_id
+    assert first_window.window.text == text[section.own_span.start_offset : 8]
+    assert first_window.has_more is True
+    assert second_window.window.start_offset == first_window.next_offset
+    assert second_window.window.end_offset == first_window.next_offset + 8
+    assert last_window.window.text == text[section.own_span.end_offset - 1 : section.own_span.end_offset]
+    assert last_window.has_more is False
+    assert "child body" in subtree.window.text
 
 
 def test_range_offset_normalization_keeps_python_negative_index_semantics():

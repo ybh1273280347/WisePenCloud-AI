@@ -19,7 +19,7 @@ class TokenCounter(Protocol):
         """返回文本的 token 数量。"""
         ...
 
-    def split(self, text: str, max_tokens: int) -> tuple[str, ...]:
+    def split(self, text: str, max_tokens: int) -> list[str]:
         """将文本按 token 上限切分为多个片段。"""
         ...
 
@@ -92,7 +92,7 @@ class TiktokenTokenCounter:
         """返回文本的 token 数量（带缓存）。"""
         return self._count_cached(text)
 
-    def split(self, text: str, max_tokens: int) -> tuple[str, ...]:
+    def split(self, text: str, max_tokens: int) -> list[str]:
         """按 Unicode 字符边界拆分文本，不通过 token decode 破坏汉字/emoji。
 
         采用二分逼近的方式，保证每个片段不超过 max_tokens。
@@ -116,7 +116,7 @@ class TiktokenTokenCounter:
             parts.append(text[start:end])
             start = end
 
-        return tuple(parts)
+        return parts
 
 
 def default_token_counter() -> TokenCounter:

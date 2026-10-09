@@ -53,21 +53,21 @@ class MarkdownNode:
     node_id: str
     kind: MarkdownNodeKind
     text: str
-    source_spans: tuple[SourceSpan, ...] = ()
-    children: tuple[MarkdownNode, ...] = ()
+    source_spans: list[SourceSpan] = field(default_factory=list)
+    children: list[MarkdownNode] = field(default_factory=list)
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     @property
-    def source_node_ids(self) -> tuple[str, ...]:
+    def source_node_ids(self) -> list[str]:
         """结构来源归属，不保证与派生片段的文本范围精确对应。"""
 
         identities = self.metadata.get("source_node_ids")
         if identities is not None:
-            return tuple(identities)
-        return (
+            return list(identities)
+        return [
             self.node_id,
             *(identity for child in self.children for identity in child.source_node_ids),
-        )
+        ]
 
     @property
     def start(self) -> int | None:
@@ -120,9 +120,9 @@ class MarkdownParser:
             .use(dollarmath_plugin)
         )
 
-    def parse(self, text: str) -> tuple[MarkdownNode, ...]:
+    def parse(self, text: str) -> list[MarkdownNode]:
         if not text:
-            return ()
+            return []
 
         nodes = _MarkdownTokenTreeBuilder(
             tokens=self._parser.parse(text),
@@ -132,22 +132,22 @@ class MarkdownParser:
         normalized = _normalize_markdown_nodes(nodes, text)
         if normalized:
             # 在所有结构变换结束后统一分配路径 ID。
-            return tuple(
+            return [
                 _reassign_node_ids(node, f"node-{index}")
                 for index, node in enumerate(normalized)
-            )
+            ]
 
         if text.strip():
-            return (
+            return [
                 MarkdownNode(
                     node_id="node-0",
                     kind=MarkdownNodeKind.PARAGRAPH,
                     text=text,
-                    source_spans=(SourceSpan(0, len(text)),),
+                    source_spans=[SourceSpan(0, len(text))],
                     metadata={"source_format": "raw"},
                 ),
-            )
-        return ()
+            ]
+        return []
 
 
 def _reassign_node_ids(node: MarkdownNode, node_id: str) -> MarkdownNode:
@@ -156,10 +156,10 @@ def _reassign_node_ids(node: MarkdownNode, node_id: str) -> MarkdownNode:
     return replace(
         node,
         node_id=node_id,
-        children=tuple(
+        children=[
             _reassign_node_ids(child, f"{node_id}:{index}")
             for index, child in enumerate(node.children)
-        ),
+        ],
     )
 
 
@@ -178,9 +178,9 @@ class _MarkdownTokenTreeBuilder:
         self._line_offsets = line_offsets
         self._next_id = 0
 
-    def build(self) -> tuple[MarkdownNode, ...]:
+    def build(self) -> list[MarkdownNode]:
         nodes, _ = self._parse_until_close(0, None)
-        return tuple(nodes)
+        return nodes
 
     def _parse_until_close(
         self,
@@ -218,7 +218,7 @@ class _MarkdownTokenTreeBuilder:
                         kind=kind,
                         text=node_text,
                         source_spans=spans,
-                        children=tuple(children),
+                        children=children,
                         metadata=metadata,
                     )
                 )
@@ -263,10 +263,10 @@ class _MarkdownTokenTreeBuilder:
         else:
             return None
 
-        spans = _resolve_token_source_spans(token, self._line_offsets, ())
+        spans = _resolve_token_source_spans(token, self._line_offsets, [])
         return self._new_node(
             kind=kind,
-            text=_resolve_node_text(self._text, spans, ()),
+            text=_resolve_node_text(self._text, spans, []),
             source_spans=spans,
             metadata=metadata,
         )
@@ -274,11 +274,11 @@ class _MarkdownTokenTreeBuilder:
     def _build_inline_node(self, token: Token) -> MarkdownNode:
         """父节点保留整段行内内容，子节点记录 inline token 类型。"""
 
-        children = tuple(
+        children = [
             self._new_node(
                 kind=MarkdownNodeKind.INLINE,
                 text=child.content,
-                source_spans=(),
+                source_spans=[],
                 metadata={
                     "token_type": child.type,
                     "attrs": child.attrs,
@@ -286,11 +286,11 @@ class _MarkdownTokenTreeBuilder:
                 },
             )
             for child in token.children or ()
-        )
+        ]
         return self._new_node(
             kind=MarkdownNodeKind.INLINE,
             text=token.content,
-            source_spans=_resolve_token_source_spans(token, self._line_offsets, ()),
+            source_spans=_resolve_token_source_spans(token, self._line_offsets, []),
             children=children,
             metadata={"token_type": "inline"},
         )
@@ -300,8 +300,8 @@ class _MarkdownTokenTreeBuilder:
         *,
         kind: MarkdownNodeKind,
         text: str,
-        source_spans: tuple[SourceSpan, ...],
-        children: tuple[MarkdownNode, ...] = (),
+        source_spans: list[SourceSpan],
+        children: list[MarkdownNode] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> MarkdownNode:
         node = MarkdownNode(
@@ -309,7 +309,7 @@ class _MarkdownTokenTreeBuilder:
             kind=kind,
             text=text,
             source_spans=source_spans,
-            children=children,
+            children=children if children is not None else [],
             metadata=metadata if metadata is not None else {},
         )
         self._next_id += 1
@@ -331,35 +331,35 @@ def _build_line_offsets(text: str) -> list[int]:
 def _resolve_token_source_spans(
     token: Token,
     line_offsets: list[int],
-    children: tuple[MarkdownNode, ...] | list[MarkdownNode],
-) -> tuple[SourceSpan, ...]:
+    children: list[MarkdownNode],
+) -> list[SourceSpan]:
     """优先使用 token 行映射，否则使用子节点范围包络。"""
 
     # 单元格的行映射可能覆盖整行，不能当作单元格的精确来源。
     if token.type in {"th_open", "td_open"}:
-        return ()
+        return []
 
     if token.map is not None:
         start_line, end_line = token.map
-        return (SourceSpan(line_offsets[start_line], line_offsets[end_line]),)
+        return [SourceSpan(line_offsets[start_line], line_offsets[end_line])]
 
-    child_spans = tuple(
+    child_spans = [
         span for child in children for span in child.source_spans if span.length
-    )
+    ]
     if not child_spans:
-        return ()
-    return (
+        return []
+    return [
         SourceSpan(
             min(span.start_offset for span in child_spans),
             max(span.end_offset for span in child_spans),
         ),
-    )
+    ]
 
 
 def _resolve_node_text(
     source: str,
-    spans: tuple[SourceSpan, ...],
-    children: tuple[MarkdownNode, ...] | list[MarkdownNode],
+    spans: list[SourceSpan],
+    children: list[MarkdownNode],
 ) -> str:
     """优先切取原文；无来源范围时拼接子节点文本。"""
 
@@ -384,14 +384,14 @@ def _extract_node_metadata(token: Token, kind: MarkdownNodeKind) -> dict[str, ob
 
 
 def _normalize_markdown_nodes(
-    nodes: tuple[MarkdownNode, ...],
+    nodes: list[MarkdownNode],
     source: str,
 ) -> list[MarkdownNode]:
     """处理章节路径、重复标题、编号题注和空标题。"""
 
     normalized: list[MarkdownNode] = []
     headings: list[tuple[int, str]] = []
-    previous_heading: tuple[int, tuple[str, ...], str] | None = None
+    previous_heading: tuple[int, list[str], str] | None = None
 
     for node in nodes:
         if node.kind is MarkdownNodeKind.SECTION:
@@ -412,7 +412,7 @@ def _normalize_markdown_nodes(
                 ),
                 len(headings),
             )
-            parent_path = tuple(title for _, title in headings[:parent_index])
+            parent_path = [title for _, title in headings[:parent_index]]
 
             # 只跳过真正相邻、同层且同父路径的重复标题。
             if previous_heading == (level, parent_path, title):
@@ -427,7 +427,7 @@ def _normalize_markdown_nodes(
                     metadata={
                         **node.metadata,
                         "title": title,
-                        "section_path": tuple(title for _, title in headings),
+                        "section_path": [title for _, title in headings],
                     },
                 )
             )
@@ -436,7 +436,7 @@ def _normalize_markdown_nodes(
         previous_heading = None
         metadata = {
             **node.metadata,
-            "section_path": tuple(title for _, title in headings),
+            "section_path": [title for _, title in headings],
         }
         if node.kind is MarkdownNodeKind.FORMULA:
             formula_match = FORMULA_LABEL_RE.search(node.text)
@@ -486,7 +486,7 @@ def _prune_empty_headings(nodes: list[MarkdownNode]) -> list[MarkdownNode]:
                 node,
                 metadata={
                     **node.metadata,
-                    "section_path": tuple(title for _, title in headings),
+                    "section_path": [title for _, title in headings],
                 },
             )
         )
@@ -533,8 +533,8 @@ def _attach_numbered_captions(
                     replace(
                         target,
                         text=source[start:end],
-                        source_spans=(SourceSpan(start, end),),
-                        children=(*target.children, caption),
+                        source_spans=[SourceSpan(start, end)],
+                        children=[*target.children, caption],
                         metadata={
                             **target.metadata,
                             "anchor_label": label[1],

@@ -89,9 +89,7 @@
       "metadata": {
         "heading_level": 1,
         "title": "Markdown 结构演示",
-        "section_path": [
-          "Markdown 结构演示"
-        ]
+        "section_path": ["Markdown 结构演示"]
       }
     },
     {
@@ -137,10 +135,7 @@
       "metadata": {
         "heading_level": 2,
         "title": "嵌套列表与引用",
-        "section_path": [
-          "Markdown 结构演示",
-          "嵌套列表与引用"
-        ]
+        "section_path": ["Markdown 结构演示", "嵌套列表与引用"]
       }
     },
     {
@@ -184,10 +179,7 @@
         }
       ],
       "metadata": {
-        "section_path": [
-          "Markdown 结构演示",
-          "嵌套列表与引用"
-        ]
+        "section_path": ["Markdown 结构演示", "嵌套列表与引用"]
       }
     },
     {
@@ -1229,10 +1221,7 @@
       "metadata": {
         "ordered": true,
         "start": 3,
-        "section_path": [
-          "Markdown 结构演示",
-          "嵌套列表与引用"
-        ]
+        "section_path": ["Markdown 结构演示", "嵌套列表与引用"]
       }
     },
     {
@@ -1516,10 +1505,7 @@
         }
       ],
       "metadata": {
-        "section_path": [
-          "Markdown 结构演示",
-          "嵌套列表与引用"
-        ]
+        "section_path": ["Markdown 结构演示", "嵌套列表与引用"]
       }
     },
     {
@@ -1565,10 +1551,7 @@
       "metadata": {
         "heading_level": 2,
         "title": "表格与图片",
-        "section_path": [
-          "Markdown 结构演示",
-          "表格与图片"
-        ]
+        "section_path": ["Markdown 结构演示", "表格与图片"]
       }
     },
     {
@@ -3995,19 +3978,13 @@
             }
           ],
           "metadata": {
-            "section_path": [
-              "Markdown 结构演示",
-              "表格与图片"
-            ]
+            "section_path": ["Markdown 结构演示", "表格与图片"]
           }
         }
       ],
       "metadata": {
         "table_header_text": "| 阶段 | 输入 | 观察 |\n| --- | --- | --- |",
-        "section_path": [
-          "Markdown 结构演示",
-          "表格与图片"
-        ],
+        "section_path": ["Markdown 结构演示", "表格与图片"],
         "anchor_label": "Table 1",
         "caption": "Table 1: 示例实验记录\n",
         "figure_text": "| 阶段 | 输入 | 观察 |\n| --- | --- | --- |\n| 解析 | 中文段落与标题 | 节点保存结构和字符范围 |\n| 解析 | 有序与嵌套列表 | 列表项保留层级关系 |\n| 解析 | 引用中的列表 | 引用和列表都保留为节点 |\n| 分块 | 连续短段落 | 依据目标预算尝试合并 |\n| 分块 | 长有序列表 | 以列表项作为拆分边界 |\n| 分块 | 多行 Markdown 表格 | 按行拆分并重复表头 |\n| 分块 | 一行很宽的表格 | 保留完整行并标记超限 |\n| 分块 | 多行代码块 | 以完整代码行为优先边界 |\n| 分块 | 超阈值长列表 | 按列表项分组并保留原节点身份 |\n| 分块 | 超阈值 fenced 代码块 | 按完整代码行分段并重建围栏 |\n| 分块 | 无法安全拆开的公式 | 保留公式并标记超限 |\n| 目录 | 多层 Markdown 标题 | 按父子关系组织章节 |\n| 目录 | 带编号的表格 | 锚点归入直属章节 |\n| 目录 | 带编号的图片 | 锚点归入直属章节 |\n| 目录 | 标题之前的正文 | 投影为文档开头 |\n| 范围 | 中文与 emoji 🙂 | 使用字符半开区间 |\n| 范围 | 源节点被拆分 | 片段仍引用原始节点身份 |\n"
@@ -4185,19 +4162,13 @@
             }
           ],
           "metadata": {
-            "section_path": [
-              "Markdown 结构演示",
-              "表格与图片"
-            ]
+            "section_path": ["Markdown 结构演示", "表格与图片"]
           }
         }
       ],
       "metadata": {
         "table_header_text": "| value |\n| --- |",
-        "section_path": [
-          "Markdown 结构演示",
-          "表格与图片"
-        ],
+        "section_path": ["Markdown 结构演示", "表格与图片"],
         "anchor_label": "Table 2",
         "caption": "Table 2: 单行超宽示例\n",
         "figure_text": "| value |\n| --- |\n| oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversized-cell oversizedcell oversizedcell oversizedcell oversizedcell oversizedcell oversizedcell oversizedcell oversizedcell oversizedcell oversizedcell |\n"
@@ -4286,18 +4257,12 @@
             }
           ],
           "metadata": {
-            "section_path": [
-              "Markdown 结构演示",
-              "表格与图片"
-            ]
+            "section_path": ["Markdown 结构演示", "表格与图片"]
           }
         }
       ],
       "metadata": {
-        "section_path": [
-          "Markdown 结构演示",
-          "表格与图片"
-        ],
+        "section_path": ["Markdown 结构演示", "表格与图片"],
         "anchor_label": "Figure 1",
         "caption": "Figure 1: 文档处理流程示意图\n",
         "figure_text": "![文档经过解析、分块和目录投影](./pipeline.png)\n"
@@ -4346,11 +4311,7 @@
       "metadata": {
         "heading_level": 3,
         "title": "公式原子性",
-        "section_path": [
-          "Markdown 结构演示",
-          "表格与图片",
-          "公式原子性"
-        ]
+        "section_path": ["Markdown 结构演示", "表格与图片", "公式原子性"]
       }
     },
     {
@@ -4394,11 +4355,7 @@
         }
       ],
       "metadata": {
-        "section_path": [
-          "Markdown 结构演示",
-          "表格与图片",
-          "公式原子性"
-        ]
+        "section_path": ["Markdown 结构演示", "表格与图片", "公式原子性"]
       }
     },
     {
@@ -4413,11 +4370,7 @@
       ],
       "children": [],
       "metadata": {
-        "section_path": [
-          "Markdown 结构演示",
-          "表格与图片",
-          "公式原子性"
-        ]
+        "section_path": ["Markdown 结构演示", "表格与图片", "公式原子性"]
       }
     },
     {
@@ -4463,10 +4416,7 @@
       "metadata": {
         "heading_level": 2,
         "title": "代码与长正文",
-        "section_path": [
-          "Markdown 结构演示",
-          "代码与长正文"
-        ]
+        "section_path": ["Markdown 结构演示", "代码与长正文"]
       }
     },
     {
@@ -4510,10 +4460,7 @@
         }
       ],
       "metadata": {
-        "section_path": [
-          "Markdown 结构演示",
-          "代码与长正文"
-        ]
+        "section_path": ["Markdown 结构演示", "代码与长正文"]
       }
     },
     {
@@ -4532,10 +4479,7 @@
         "info": "python",
         "markup": "```",
         "fenced": true,
-        "section_path": [
-          "Markdown 结构演示",
-          "代码与长正文"
-        ]
+        "section_path": ["Markdown 结构演示", "代码与长正文"]
       }
     },
     {
@@ -4579,10 +4523,7 @@
         }
       ],
       "metadata": {
-        "section_path": [
-          "Markdown 结构演示",
-          "代码与长正文"
-        ]
+        "section_path": ["Markdown 结构演示", "代码与长正文"]
       }
     },
     {
@@ -4628,9 +4569,7 @@
       "metadata": {
         "heading_level": 1,
         "title": "总结",
-        "section_path": [
-          "总结"
-        ]
+        "section_path": ["总结"]
       }
     },
     {
@@ -4674,9 +4613,7 @@
         }
       ],
       "metadata": {
-        "section_path": [
-          "总结"
-        ]
+        "section_path": ["总结"]
       }
     }
   ]

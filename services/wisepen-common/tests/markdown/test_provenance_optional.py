@@ -8,7 +8,7 @@ from common.utils.markdown import (
 
 def test_node_without_parser_provenance_has_no_character_position():
     node = MarkdownNode("n", MarkdownNodeKind.PARAGRAPH, "content")
-    assert node.source_spans == ()
+    assert node.source_spans == []
     assert node.start is None
     assert node.end is None
 

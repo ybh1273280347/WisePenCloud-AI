@@ -40,18 +40,12 @@ class StoredToolContent:
     anchors: tuple[Anchor, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
-class ToolContentReceipt:
-    content_id: str
-    total_length: int
-
-
 async def put_tool_content(
     *,
     session_id: str,
     text: str,
     max_chars: int = _DEFAULT_MAX_CHARS,
-) -> ToolContentReceipt | None:
+) -> tuple[str, int] | None:
     """解析并持久化正文和结构；空白或超限正文不进入 Redis。"""
 
     if max_chars < 1:
@@ -68,10 +62,7 @@ async def put_tool_content(
         anchors=result.anchors,
     )
     await _repository().put(stored)
-    return ToolContentReceipt(
-        content_id=stored.content_id,
-        total_length=len(text),
-    )
+    return stored.content_id, len(text)
 
 
 async def get_tool_content(

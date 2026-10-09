@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from ..parsing.parser import MarkdownNode, MarkdownNodeKind, MarkdownParser, SourceSpan
 from .packer import ChunkPacker, MarkdownChunk
@@ -26,10 +26,10 @@ class Section:
     level: int
     parent_section_id: str | None
     ordinal: int
-    section_path: tuple[str, ...]
+    section_path: list[str]
     own_span: SourceSpan
     subtree_span: SourceSpan
-    content_spans: tuple[SourceSpan, ...] = ()
+    content_spans: list[SourceSpan] = field(default_factory=list)
     summary: str = ""  # 可以接入llm summarize等
 
 
@@ -37,10 +37,10 @@ class Section:
 class MarkdownChunkingResult:
     """一次文档解析和分块产生的结构事实。"""
 
-    chunks: tuple[MarkdownChunk, ...]
-    nodes: tuple[MarkdownNode, ...]
-    sections: tuple[Section, ...]
-    anchors: tuple[Anchor, ...]
+    chunks: list[MarkdownChunk]
+    nodes: list[MarkdownNode]
+    sections: list[Section]
+    anchors: list[Anchor]
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +119,7 @@ class MarkdownChunker:
                 root_title=document.title,
             )
             if any(node.kind is MarkdownNodeKind.SECTION for node in nodes)
-            else ()
+            else []
         )
         return MarkdownChunkingResult(
             chunks=self._chunk_by_sections(nodes, sections),
@@ -130,9 +130,9 @@ class MarkdownChunker:
 
     def _chunk_by_sections(
         self,
-        nodes: tuple[MarkdownNode, ...],
-        sections: tuple[Section, ...],
-    ) -> tuple[MarkdownChunk, ...]:
+        nodes: list[MarkdownNode],
+        sections: list[Section],
+    ) -> list[MarkdownChunk]:
         """标题只切换章节；正文依次经过 Splitter 与 Packer。"""
         chunks: list[MarkdownChunk] = []
         section_nodes: list[MarkdownNode] = []
@@ -164,10 +164,10 @@ class MarkdownChunker:
                 continue
             section_nodes.append(node)
         flush()
-        return tuple(chunks)
+        return chunks
 
 
-def _build_anchors(nodes: tuple[MarkdownNode, ...]) -> tuple[Anchor, ...]:
+def _build_anchors(nodes: list[MarkdownNode]) -> list[Anchor]:
     """从带 anchor_label 的节点提取锚点，跨度取源文最小起点/最大终点。"""
     anchors: list[Anchor] = []
     for node in nodes:
@@ -183,22 +183,22 @@ def _build_anchors(nodes: tuple[MarkdownNode, ...]) -> tuple[Anchor, ...]:
                 ),
             )
         )
-    return tuple(anchors)
+    return anchors
 
 
 def _build_heading_sections(
     *,
     text: str,
-    nodes: tuple[MarkdownNode, ...],
+    nodes: list[MarkdownNode],
     root_title: str | None = None,
-) -> tuple[Section, ...]:
+) -> list[Section]:
     """根据标题层级构建章节树，并计算各级 section 的 own_span / subtree_span。"""
     headings = [node for node in nodes if node.kind is MarkdownNodeKind.SECTION]
     first_heading_start = headings[0].start
 
-    # 首个标题之前的内容归入文档标题根章节；没有外部标题时使用兼容名称。
+    # 首个标题之前的内容归入根章节；外部标题追加 <文档开头> 标记，与无标题时的兼容名称区分。
     root_content_spans = _content_spans(nodes, 0, first_heading_start)
-    root_name = root_title or "文档开头"
+    root_name = f"{root_title}<文档开头>" if root_title else "文档开头"
     root = (
         Section(
             section_id=_section_id("root", 0, first_heading_start),
@@ -206,7 +206,7 @@ def _build_heading_sections(
             level=0,
             parent_section_id=None,
             ordinal=0,
-            section_path=(root_name,),
+            section_path=[root_name],
             own_span=SourceSpan(0, first_heading_start),
             subtree_span=SourceSpan(0, len(text)),
             content_spans=root_content_spans,
@@ -254,23 +254,23 @@ def _build_heading_sections(
             level=level,
             parent_section_id=parent_id,
             ordinal=ordinal,
-            section_path=tuple(heading.metadata.get("section_path", ())),
+            section_path=list(heading.metadata.get("section_path", [])),
             own_span=SourceSpan(heading_start, own_end),
             subtree_span=SourceSpan(heading_start, len(text)),  # 稍后回填
             content_spans=_content_spans(nodes, heading.end, own_end),
         )
         sections.append(section)
         open_indexes.append(len(sections) - 1)  # 压入祖先栈
-    return tuple(sections)
+    return sections
 
 
 def _content_spans(
-    nodes: tuple[MarkdownNode, ...],
+    nodes: list[MarkdownNode],
     start_offset: int,
     end_offset: int,
-) -> tuple[SourceSpan, ...]:
+) -> list[SourceSpan]:
     """收集落在 [start_offset, end_offset] 内、非 SECTION 且有内容的节点跨度。"""
-    return tuple(
+    return [
         SourceSpan(node.start, node.end)
         for node in nodes
         if node.kind is not MarkdownNodeKind.SECTION
@@ -278,7 +278,7 @@ def _content_spans(
         and node.source_spans
         and start_offset <= node.start
         and node.end <= end_offset
-    )
+    ]
 
 
 def _section_id(kind: str, start_offset: int, end_offset: int) -> str:

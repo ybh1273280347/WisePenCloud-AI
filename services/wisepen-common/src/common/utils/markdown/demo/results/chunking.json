@@ -9,14 +9,8 @@
       "chunk_id": "chunk:0:98b9bb319695b231",
       "text": "这是一份演示用的研究笔记。标题前的正文会归入“文档开头”，不会重复展开后面的章节。\n",
       "chunk_index": 0,
-      "node_ids": [
-        "node-0",
-        "node-0:0",
-        "node-0:0:0"
-      ],
-      "section_path": [
-        "文档开头"
-      ],
+      "node_ids": ["node-0", "node-0:0", "node-0:0:0"],
+      "section_path": ["文档开头"],
       "content_token_count": 31,
       "overflow": false,
       "source_spans": [
@@ -33,15 +27,8 @@
       "chunk_id": "chunk:1:12a3be2e5fd6326b",
       "text": "解析器保留列表和引用的嵌套关系；分块器根据 token 预算选择保留完整结构或按结构边界拆分。\n",
       "chunk_index": 1,
-      "node_ids": [
-        "node-3",
-        "node-3:0",
-        "node-3:0:0"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "嵌套列表与引用"
-      ],
+      "node_ids": ["node-3", "node-3:0", "node-3:0:0"],
+      "section_path": ["Markdown 结构演示", "嵌套列表与引用"],
       "content_token_count": 34,
       "overflow": false,
       "source_spans": [
@@ -78,10 +65,7 @@
         "node-4:1:1:1:0:0",
         "node-4:1:1:1:0:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "嵌套列表与引用"
-      ],
+      "section_path": ["Markdown 结构演示", "嵌套列表与引用"],
       "content_token_count": 114,
       "overflow": false,
       "source_spans": [
@@ -117,10 +101,7 @@
         "node-4:4:0:0",
         "node-4:4:0:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "嵌套列表与引用"
-      ],
+      "section_path": ["Markdown 结构演示", "嵌套列表与引用"],
       "content_token_count": 83,
       "overflow": false,
       "source_spans": [
@@ -160,10 +141,7 @@
         "node-4:7:0:0",
         "node-4:7:0:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "嵌套列表与引用"
-      ],
+      "section_path": ["Markdown 结构演示", "嵌套列表与引用"],
       "content_token_count": 81,
       "overflow": false,
       "source_spans": [
@@ -203,10 +181,7 @@
         "node-4:10:0:0",
         "node-4:10:0:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "嵌套列表与引用"
-      ],
+      "section_path": ["Markdown 结构演示", "嵌套列表与引用"],
       "content_token_count": 81,
       "overflow": false,
       "source_spans": [
@@ -246,10 +221,7 @@
         "node-4:13:0:0",
         "node-4:13:0:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "嵌套列表与引用"
-      ],
+      "section_path": ["Markdown 结构演示", "嵌套列表与引用"],
       "content_token_count": 68,
       "overflow": false,
       "source_spans": [
@@ -306,10 +278,7 @@
         "node-5:1:1:0:0:7",
         "node-5:1:1:0:0:8"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "嵌套列表与引用"
-      ],
+      "section_path": ["Markdown 结构演示", "嵌套列表与引用"],
       "content_token_count": 89,
       "overflow": false,
       "source_spans": [
@@ -381,10 +350,7 @@
         "node-7:3:2:0",
         "node-7:3:2:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片"],
       "content_token_count": 86,
       "overflow": false,
       "source_spans": [
@@ -410,9 +376,7 @@
         }
       ],
       "section_id": "sec_08181aa4f8584d5d",
-      "anchor_labels": [
-        "Table 1"
-      ],
+      "anchor_labels": ["Table 1"],
       "content_hash": "d1762549eb1e9d70b5465ca06acd4861c19d30bfd1113be3cefe6dd7b1a7e1d8"
     },
     {
@@ -463,10 +427,7 @@
         "node-7:6:2:0",
         "node-7:6:2:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片"],
       "content_token_count": 75,
       "overflow": false,
       "source_spans": [
@@ -488,9 +449,7 @@
         }
       ],
       "section_id": "sec_08181aa4f8584d5d",
-      "anchor_labels": [
-        "Table 1"
-      ],
+      "anchor_labels": ["Table 1"],
       "content_hash": "f67474c88919b0ae513f6e2ab193f97564e5277c55005b7b4417ce3564be6d33"
     },
     {
@@ -541,10 +500,7 @@
         "node-7:9:2:0",
         "node-7:9:2:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片"],
       "content_token_count": 82,
       "overflow": false,
       "source_spans": [
@@ -566,9 +522,7 @@
         }
       ],
       "section_id": "sec_08181aa4f8584d5d",
-      "anchor_labels": [
-        "Table 1"
-      ],
+      "anchor_labels": ["Table 1"],
       "content_hash": "95dfa071507bcfcdad9d4b7a04c68e97225f4a4197e341b3d511f96b0af326e7"
     },
     {
@@ -619,10 +573,7 @@
         "node-7:12:2:0",
         "node-7:12:2:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片"],
       "content_token_count": 81,
       "overflow": false,
       "source_spans": [
@@ -644,9 +595,7 @@
         }
       ],
       "section_id": "sec_08181aa4f8584d5d",
-      "anchor_labels": [
-        "Table 1"
-      ],
+      "anchor_labels": ["Table 1"],
       "content_hash": "092d9993c3c29dad7d06010e9f720780b091fe0a914e74dfab481cb55e966129"
     },
     {
@@ -697,10 +646,7 @@
         "node-7:15:2:0",
         "node-7:15:2:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片"],
       "content_token_count": 72,
       "overflow": false,
       "source_spans": [
@@ -722,9 +668,7 @@
         }
       ],
       "section_id": "sec_08181aa4f8584d5d",
-      "anchor_labels": [
-        "Table 1"
-      ],
+      "anchor_labels": ["Table 1"],
       "content_hash": "38a2dd188d667be5833d25ad9ed34870c34ba1ffb984a30adfe6a7585a6e8f8c"
     },
     {
@@ -765,10 +709,7 @@
         "node-7:17:2:0",
         "node-7:17:2:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片"],
       "content_token_count": 56,
       "overflow": false,
       "source_spans": [
@@ -786,9 +727,7 @@
         }
       ],
       "section_id": "sec_08181aa4f8584d5d",
-      "anchor_labels": [
-        "Table 1"
-      ],
+      "anchor_labels": ["Table 1"],
       "content_hash": "b6ee4109744a4b8abcbef94c3f8f589cc18c57cbc366ab4c9a6e4c904d17a22f"
     },
     {
@@ -810,10 +749,7 @@
         "node-8:1:0:0",
         "node-8:1:0:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片"],
       "content_token_count": 425,
       "overflow": true,
       "source_spans": [
@@ -831,9 +767,7 @@
         }
       ],
       "section_id": "sec_08181aa4f8584d5d",
-      "anchor_labels": [
-        "Table 2"
-      ],
+      "anchor_labels": ["Table 2"],
       "content_hash": "18595e267efea370c3e4121647d304783cc185065f250354bcd980a1a20fa878"
     },
     {
@@ -848,10 +782,7 @@
         "node-9:1:0",
         "node-9:1:0:0"
       ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片"],
       "content_token_count": 29,
       "overflow": false,
       "source_spans": [
@@ -861,25 +792,15 @@
         }
       ],
       "section_id": "sec_08181aa4f8584d5d",
-      "anchor_labels": [
-        "Figure 1"
-      ],
+      "anchor_labels": ["Figure 1"],
       "content_hash": "c77348b7279b5761222db6be0ff5179afac05fe001107cdc313f8d8f5b61b98c"
     },
     {
       "chunk_id": "chunk:16:ee8ba104a1f2d658",
       "text": "下面的长公式用于观察不可拆单元的 overflow。演示公式只表达一组项的求和。\n",
       "chunk_index": 16,
-      "node_ids": [
-        "node-11",
-        "node-11:0",
-        "node-11:0:0"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片",
-        "公式原子性"
-      ],
+      "node_ids": ["node-11", "node-11:0", "node-11:0:0"],
+      "section_path": ["Markdown 结构演示", "表格与图片", "公式原子性"],
       "content_token_count": 25,
       "overflow": false,
       "source_spans": [
@@ -896,14 +817,8 @@
       "chunk_id": "chunk:17:fe6f068748c41819",
       "text": "$$\nS = x_{1} + x_{2} + x_{3} + x_{4} + x_{5} + x_{6} + x_{7} + x_{8} + x_{9} + x_{10} + x_{11} + x_{12} + x_{13} + x_{14} + x_{15} + x_{16} + x_{17} + x_{18} + x_{19} + x_{20} + x_{21} + x_{22} + x_{23} + x_{24} + x_{25} + x_{26} + x_{27} + x_{28} + x_{29} + x_{30} + x_{31} + x_{32} + x_{33} + x_{34} + x_{35} + x_{36} + x_{37} + x_{38} + x_{39} + x_{40}\n$$\n",
       "chunk_index": 17,
-      "node_ids": [
-        "node-12"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片",
-        "公式原子性"
-      ],
+      "node_ids": ["node-12"],
+      "section_path": ["Markdown 结构演示", "表格与图片", "公式原子性"],
       "content_token_count": 205,
       "overflow": true,
       "source_spans": [
@@ -920,16 +835,8 @@
       "chunk_id": "chunk:18:3980bf4a5546db6d",
       "text": "代码片段可以观察围栏在拆分后的输出中如何保留。\n\n```python\ndef prepare_document(text):\n    lines = text.splitlines()\n    cleaned = []\n    for line in lines:\n        if line.strip():\n            cleaned.append(line)\n    return \"\\n\".join(cleaned)\n\n\ndef describe_chunks(chunks):\n    records = []\n    for chunk in chunks:\n        records.append(\n            {\n                \"index\": chunk.chunk_index,\n```\n",
       "chunk_index": 18,
-      "node_ids": [
-        "node-14",
-        "node-14:0",
-        "node-14:0:0",
-        "node-15"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "代码与长正文"
-      ],
+      "node_ids": ["node-14", "node-14:0", "node-14:0:0", "node-15"],
+      "section_path": ["Markdown 结构演示", "代码与长正文"],
       "content_token_count": 93,
       "overflow": false,
       "source_spans": [
@@ -946,13 +853,8 @@
       "chunk_id": "chunk:19:584230ac6eba8f84",
       "text": "```python\n                \"tokens\": chunk.content_token_count,\n                \"overflow\": chunk.overflow,\n                \"section\": chunk.section_path,\n            }\n        )\n    return records\n\n\ndef display_records(records):\n    for record in records:\n        print(record[\"index\"], record[\"tokens\"])\n        print(record[\"section\"], record[\"overflow\"])\n    print(\"inspection complete\")\n    print(\"all source records retained\")\n```\n",
       "chunk_index": 19,
-      "node_ids": [
-        "node-15"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "代码与长正文"
-      ],
+      "node_ids": ["node-15"],
+      "section_path": ["Markdown 结构演示", "代码与长正文"],
       "content_token_count": 83,
       "overflow": false,
       "source_spans": [],
@@ -964,13 +866,8 @@
       "chunk_id": "chunk:20:68002eb6e4e37f67",
       "text": "```python\n    print(\"section grouping verified\")\n    print(\"chunk order verified\")\n    print(\"token counts recorded\")\n    print(\"anchor labels recorded\")\n    print(\"source spans recorded\")\n    print(\"overflow flags recorded\")\n    print(\"fenced blocks reconstructed\")\n    print(\"list items retain structure\")\n    print(\"table rows retain structure\")\n    print(\"this block is deliberately long\")\n```\n",
       "chunk_index": 20,
-      "node_ids": [
-        "node-15"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "代码与长正文"
-      ],
+      "node_ids": ["node-15"],
+      "section_path": ["Markdown 结构演示", "代码与长正文"],
       "content_token_count": 80,
       "overflow": false,
       "source_spans": [],
@@ -982,13 +879,8 @@
       "chunk_id": "chunk:21:88a4477fb09aec3c",
       "text": "```python\n    print(\"so the code splitter divides it\")\n    print(\"between complete physical lines\")\n    print(\"and preserves every code line\")\n    print(\"inside a reconstructed fence\")\n    print(\"with language metadata retained\")\n    print(\"for downstream readers and tools\")\n    print(\"all resulting chunks stay visible\")\n    print(\"in the generated Markdown report\")\n```\n",
       "chunk_index": 21,
-      "node_ids": [
-        "node-15"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "代码与长正文"
-      ],
+      "node_ids": ["node-15"],
+      "section_path": ["Markdown 结构演示", "代码与长正文"],
       "content_token_count": 75,
       "overflow": false,
       "source_spans": [],
@@ -1000,15 +892,8 @@
       "chunk_id": "chunk:22:05abd1cb53046469",
       "text": "代码样例包含多行代码，长度超过拆分阈值；结果会按完整代码行分段，并为每段重建完整围栏。长正文用于观察普通段落超过拆分阈值后的处理。分块器依据文本内容和结构进行拆分，目标 token",
       "chunk_index": 22,
-      "node_ids": [
-        "node-16",
-        "node-16:0",
-        "node-16:0:0"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "代码与长正文"
-      ],
+      "node_ids": ["node-16", "node-16:0", "node-16:0:0"],
+      "section_path": ["Markdown 结构演示", "代码与长正文"],
       "content_token_count": 64,
       "overflow": false,
       "source_spans": [],
@@ -1020,15 +905,8 @@
       "chunk_id": "chunk:23:2a62c00b1f1472b6",
       "text": "数是组合时的理想尺寸，拆分阈值决定什么时候需要进一步处理较大的节点。结果中每个 chunk 都有自己的索引、文本、token 数和章节归属。读取这些结果时，需要区分原始节点身份与精确字符覆盖：同一个原始节点可以被拆成多个片段，因此多个 chunk 可以引用相同的",
       "chunk_index": 23,
-      "node_ids": [
-        "node-16",
-        "node-16:0",
-        "node-16:0:0"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "代码与长正文"
-      ],
+      "node_ids": ["node-16", "node-16:0", "node-16:0:0"],
+      "section_path": ["Markdown 结构演示", "代码与长正文"],
       "content_token_count": 80,
       "overflow": false,
       "source_spans": [],
@@ -1040,15 +918,8 @@
       "chunk_id": "chunk:24:a99e67379c4ae0b0",
       "text": "node_id，这并不意味着它们含有相同文本。字符范围只是来源信息，不作为分块尺寸的计量单位。与此同时，表格、公式和图片等结构需要保留自身的语义边界；超宽表格行、无法安全拆分的公式等结构会完整保留，并用 overflow\n告诉消费方该片段超过阈值。",
       "chunk_index": 24,
-      "node_ids": [
-        "node-16",
-        "node-16:0",
-        "node-16:0:0"
-      ],
-      "section_path": [
-        "Markdown 结构演示",
-        "代码与长正文"
-      ],
+      "node_ids": ["node-16", "node-16:0", "node-16:0:0"],
+      "section_path": ["Markdown 结构演示", "代码与长正文"],
       "content_token_count": 82,
       "overflow": false,
       "source_spans": [],
@@ -1060,14 +931,8 @@
       "chunk_id": "chunk:25:f259f673d523dc0a",
       "text": "Parser 输出结构事实，Chunking 组织章节并产生检索片段，Outline 把章节和锚点投影成简洁目录。三个 demo 使用同一份输入，便于对照不同阶段的结果。\n",
       "chunk_index": 25,
-      "node_ids": [
-        "node-18",
-        "node-18:0",
-        "node-18:0:0"
-      ],
-      "section_path": [
-        "总结"
-      ],
+      "node_ids": ["node-18", "node-18:0", "node-18:0:0"],
+      "section_path": ["总结"],
       "content_token_count": 49,
       "overflow": false,
       "source_spans": [
@@ -1088,9 +953,7 @@
       "level": 0,
       "parent_section_id": null,
       "ordinal": 0,
-      "section_path": [
-        "文档开头"
-      ],
+      "section_path": ["文档开头"],
       "own_span": {
         "start_offset": 0,
         "end_offset": 43
@@ -1113,9 +976,7 @@
       "level": 1,
       "parent_section_id": "sec_fb80a8bbf30eeae0",
       "ordinal": 0,
-      "section_path": [
-        "Markdown 结构演示"
-      ],
+      "section_path": ["Markdown 结构演示"],
       "own_span": {
         "start_offset": 43,
         "end_offset": 60
@@ -1133,10 +994,7 @@
       "level": 2,
       "parent_section_id": "sec_6299c4c41cf5afaa",
       "ordinal": 0,
-      "section_path": [
-        "Markdown 结构演示",
-        "嵌套列表与引用"
-      ],
+      "section_path": ["Markdown 结构演示", "嵌套列表与引用"],
       "own_span": {
         "start_offset": 60,
         "end_offset": 969
@@ -1167,10 +1025,7 @@
       "level": 2,
       "parent_section_id": "sec_6299c4c41cf5afaa",
       "ordinal": 1,
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片"],
       "own_span": {
         "start_offset": 969,
         "end_offset": 4689
@@ -1201,11 +1056,7 @@
       "level": 3,
       "parent_section_id": "sec_08181aa4f8584d5d",
       "ordinal": 0,
-      "section_path": [
-        "Markdown 结构演示",
-        "表格与图片",
-        "公式原子性"
-      ],
+      "section_path": ["Markdown 结构演示", "表格与图片", "公式原子性"],
       "own_span": {
         "start_offset": 4689,
         "end_offset": 5102
@@ -1232,10 +1083,7 @@
       "level": 2,
       "parent_section_id": "sec_6299c4c41cf5afaa",
       "ordinal": 2,
-      "section_path": [
-        "Markdown 结构演示",
-        "代码与长正文"
-      ],
+      "section_path": ["Markdown 结构演示", "代码与长正文"],
       "own_span": {
         "start_offset": 5102,
         "end_offset": 7008
@@ -1266,9 +1114,7 @@
       "level": 1,
       "parent_section_id": "sec_fb80a8bbf30eeae0",
       "ordinal": 1,
-      "section_path": [
-        "总结"
-      ],
+      "section_path": ["总结"],
       "own_span": {
         "start_offset": 7008,
         "end_offset": 7100

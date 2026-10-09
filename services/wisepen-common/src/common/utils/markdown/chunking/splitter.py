@@ -20,11 +20,11 @@ class StructuralNodeSplitter:
         self._policy = policy
         self._counter = policy.token_counter
 
-    def split(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
+    def split(self, node: MarkdownNode) -> list[MarkdownNode]:
         """按节点结构选择拆分策略；无需拆分或不安全时原样返回。"""
         # 硬阈值以内优先保留完整节点；只有超过硬阈值才按软目标尝试拆分。
         if self._counter.count(node.text) <= self._policy.split_threshold_tokens:
-            return (node,)
+            return [node]
 
         # 段落和引用按语义文本拆分。
         if node.kind in {MarkdownNodeKind.PARAGRAPH, MarkdownNodeKind.QUOTE}:
@@ -39,23 +39,23 @@ class StructuralNodeSplitter:
             return self._split_code(node)
 
         # Formula、Figure 及未定义安全边界的结构保持原子性；最终由 Packer 判断 Overflow。
-        return (node,)
+        return [node]
 
-    def _split_text(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
+    def _split_text(self, node: MarkdownNode) -> list[MarkdownNode]:
         """将文本节点按语义片段切分为多个 part 节点。"""
-        return tuple(
+        return [
             replace(
                 node,
                 node_id=f"{node.node_id}:part:{index}",
                 text=text,
-                children=(),
-                source_spans=(),
+                children=[],
+                source_spans=[],
                 metadata={**node.metadata, "source_node_ids": node.source_node_ids},
             )
             for index, text in enumerate(self._semantic_parts(node.text))
-        )
+        ]
 
-    def _semantic_parts(self, text: str) -> tuple[str, ...]:
+    def _semantic_parts(self, text: str) -> list[str]:
         """用 semchunk 做语义切分；残余超限片段交给 tokenizer 兜底。"""
         parts = semchunk.chunk(
             text,
@@ -78,15 +78,15 @@ class StructuralNodeSplitter:
             else:
                 result.append(part)
 
-        return tuple(result)
+        return result
 
-    def _split_list(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
+    def _split_list(self, node: MarkdownNode) -> list[MarkdownNode]:
         """按列表项聚合分组，尽量保留列表结构；超阈值单项单独成组。"""
         items = [
             child for child in node.children if child.kind is MarkdownNodeKind.LIST_ITEM
         ]
         if not items:
-            return (node,)
+            return [node]
 
         groups: list[list[MarkdownNode]] = []
         current: list[MarkdownNode] = []
@@ -116,31 +116,31 @@ class StructuralNodeSplitter:
         if current:
             groups.append(current)
 
-        return tuple(
+        return [
             replace(
                 node,
                 node_id=f"{node.node_id}:part:{index}",
                 text="\n".join(item.text for item in group),
-                children=tuple(group),
-                source_spans=tuple(
+                children=group,
+                source_spans=list(
                     dict.fromkeys(span for item in group for span in item.source_spans)
                 ),
                 metadata={
                     **node.metadata,
-                    "source_node_ids": (
+                    "source_node_ids": [
                         node.node_id,
                         *(
                             identity
                             for item in group
                             for identity in item.source_node_ids
                         ),
-                    ),
+                    ],
                 },
             )
             for index, group in enumerate(groups)
-        )
+        ]
 
-    def _split_table(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
+    def _split_table(self, node: MarkdownNode) -> list[MarkdownNode]:
         """按表格行分组，保留表头和 caption；缺少可靠行边界时原样返回。"""
         header = next(
             (
@@ -157,7 +157,7 @@ class StructuralNodeSplitter:
 
         # HTML table 等没有可靠行边界的结构不能退回纯文本拆分。
         if header is None or not rows or not header_text:
-            return (node,)
+            return [node]
 
         caption = next(
             (
@@ -190,22 +190,22 @@ class StructuralNodeSplitter:
                 node,
                 node_id=f"{node.node_id}:part:{index}",
                 text="\n".join(texts),
-                children=tuple(children),
-                source_spans=tuple(
+                children=children,
+                source_spans=list(
                     dict.fromkeys(
                         span for child in children for span in child.source_spans
                     )
                 ),
                 metadata={
                     **node.metadata,
-                    "source_node_ids": (
+                    "source_node_ids": [
                         node.node_id,
                         *(
                             identity
                             for child in children
                             for identity in child.source_node_ids
                         ),
-                    ),
+                    ],
                 },
             )
 
@@ -241,9 +241,9 @@ class StructuralNodeSplitter:
         if current:
             parts.append(build_group(current, len(parts)))
 
-        return tuple(parts)
+        return parts
 
-    def _split_code(self, node: MarkdownNode) -> tuple[MarkdownNode, ...]:
+    def _split_code(self, node: MarkdownNode) -> list[MarkdownNode]:
         """按完整原文代码行分组，并为每个 fenced 片段重建完整围栏。"""
         # 只按 LF 分行，避免把 U+2028 或其他代码字符误认为 Markdown 换行。
         lines = node.text.split("\n")
@@ -265,7 +265,7 @@ class StructuralNodeSplitter:
                     lines[0],
                 )
             ):
-                return (node,)
+                return [node]
 
             opening = lines.pop(0)
             newline = "\r\n" if opening.endswith("\r\n") else "\n"
@@ -284,7 +284,7 @@ class StructuralNodeSplitter:
                 closing = markup + newline
 
         if not lines:
-            return (node,)
+            return [node]
 
         def render(body: list[str]) -> str:
             """把代码体重新包进围栏，返回分片文本。"""
@@ -323,15 +323,15 @@ class StructuralNodeSplitter:
         if current:
             bodies.append(current)
 
-        return tuple(
+        return [
             replace(
                 node,
                 node_id=f"{node.node_id}:part:{index}",
                 text=render(body),
-                children=(),
+                children=[],
                 # 不把重复围栏伪装成原文位置，也不通过 find() 反推 body offset。
-                source_spans=(),
+                source_spans=[],
                 metadata={**node.metadata, "source_node_ids": node.source_node_ids},
             )
             for index, body in enumerate(bodies)
-        )
+        ]
