@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from common.utils.markdown import Section
 
@@ -20,56 +19,51 @@ from chat.application.tools.core.output_cache.cache_store import (
     StoredToolContent as StoredCachedToolOutput,
 )
 from chat.application.tools.core.output_cache.cache_store import get_tool_content
-from chat.application.tools.session_tools.cached_tool_output_tools.window import (
-    CachedToolOutputWindow,
-    CachedToolOutputWindowBuilder,
-)
 from chat.core.config.app_settings import settings
 
 _TIMEOUT_SECONDS = 300.0
 _PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "content_id": {
+        "content_id": {"type": "string", "minLength": 1},
+        "section_id": {
             "type": "string",
             "minLength": 1,
-            "description": (
-                "Required. One cached tool output content_id returned in a "
-                "previous tool result."
-            ),
+            "description": "Exact section ID from the cached structure outline.",
         },
-        "section_ids": {
-            "type": "array",
-            "items": {"type": "string", "minLength": 1},
-            "minItems": 1,
-            "maxItems": 20,
-            "description": (
-                "Exact section_id values returned by "
-                "inspect_cached_tool_output_structure."
-            ),
+        "scope": {
+            "type": "string",
+            "enum": ["own", "subtree"],
+            "default": "own",
+            "description": "Read this section's own span or its complete subtree span.",
+        },
+        "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Zero-based page number.",
         },
     },
-    "required": ["content_id", "section_ids"],
+    "required": ["content_id", "section_id"],
     "additionalProperties": False,
 }
 
 
 @dataclass(slots=True)
-class SectionContent:
-    """单个 section 的模型可见内容；结构字段与续读窗口分开表达。"""
+class CachedToolOutputReadBySectionResult:
+    """一个 Section 原文页；source offsets 是原文字符半开区间。"""
 
+    content_id: str
     section_id: str
     title: str
     section_path: str
-    window: CachedToolOutputWindow
-
-
-@dataclass(slots=True)
-class CachedToolOutputReadBySectionResult:
-    """按 section 读取结果；只返回实际成功定位到的 section。"""
-
-    content_id: str
-    section_contents: list[SectionContent] = field(default_factory=list)
+    scope: str
+    offset: int
+    text: str
+    start_offset: int
+    end_offset: int
+    has_more: bool
+    reason: str | None = None
 
 
 class CachedToolOutputReadBySectionTool:
@@ -78,21 +72,18 @@ class CachedToolOutputReadBySectionTool:
             llm_spec=ToolLLMSpec(
                 name="read_cached_tool_output_by_section",
                 description=(
-                    "Read one or more sections from one cached tool output by "
-                    "section_id.\n\n"
-                    "Use exact section_id values returned by "
-                    "inspect_cached_tool_output_structure. Each section returns "
-                    "only its direct body; child sections remain separate entries. "
-                    "Each entry in section_contents includes section_id, title, "
-                    "section_path, and one window. Continue a truncated window "
-                    "from its end_offset."
+                    "Read one cached section from its original source span. "
+                    "scope=own reads through the next heading at the same or "
+                    "higher tree level; scope=subtree includes all descendants. "
+                    "Long sections use zero-based page numbers in offset. "
+                    "Continue with offset + 1 while has_more is true."
                 ),
                 parameters_schema=ToolParametersSchema(_PARAMETERS_SCHEMA),
             ),
             policy=_policy(),
             ui_spec=ToolUISpec(
                 display_name="按章节读取缓存的工具输出",
-                description="根据目录中的章节 ID 读取指定章节直属正文。",
+                description="按原始章节范围分页读取一个章节。",
             ),
         )
 
@@ -109,21 +100,28 @@ class CachedToolOutputReadBySectionTool:
         del config
         try:
             content_id = kwargs["content_id"]
-            section_ids = kwargs["section_ids"]
+            section_id = kwargs["section_id"]
+            scope = kwargs.get("scope", "own")
+            offset = kwargs.get("offset", 0)
+            if scope not in ("own", "subtree"):
+                raise ValueError("scope must be 'own' or 'subtree'")
+            if offset < 0:
+                raise ValueError("offset must be a non-negative page number")
+
             stored = await get_tool_content(
                 content_id=content_id,
                 session_id=context["session_id"],
             )
             if stored is None:
-                return CachedToolOutputReadBySectionResult(content_id=content_id)
+                return _missing_result(content_id, section_id, scope, offset)
             return _read_by_section(
                 content_id=content_id,
-                section_ids=section_ids,
+                section_id=section_id,
+                scope=scope,
+                offset=offset,
                 sections=stored.sections,
-                builder=CachedToolOutputWindowBuilder(
-                    char_budget=settings.TOOL_CONTENT_READ_WINDOW_CHAR_BUDGET
-                ),
                 stored=stored,
+                char_budget=settings.TOOL_CONTENT_READ_WINDOW_CHAR_BUDGET,
             )
         except Exception as exc:
             raise ToolExecutionError(
@@ -136,42 +134,55 @@ class CachedToolOutputReadBySectionTool:
 def _read_by_section(
     *,
     content_id: str,
-    section_ids: Sequence[str],
-    sections: Sequence[Section],
-    builder: CachedToolOutputWindowBuilder,
+    section_id: str,
+    scope: Literal["own", "subtree"],
+    offset: int,
+    sections: tuple[Section, ...] | list[Section],
     stored: StoredCachedToolOutput,
+    char_budget: int,
 ) -> CachedToolOutputReadBySectionResult:
-    sections_by_id = {section.section_id: section for section in sections}
-    section_contents: list[SectionContent] = []
-    remaining = settings.TOOL_CONTENT_READ_TOTAL_CHAR_BUDGET
+    section = next(
+        (item for item in sections if item.section_id == section_id),
+        None,
+    )
+    if section is None:
+        return _missing_result(content_id, section_id, scope, offset)
 
-    for section_id in dict.fromkeys(section_ids):
-        if remaining <= 0:
-            break
-        section = sections_by_id.get(section_id)
-        if section is None:
-            continue
-
-        window = builder.build_spans_window(
-            stored,
-            source_spans=section.content_spans,
-            char_budget=remaining,
-        )
-        section_contents.append(
-            SectionContent(
-                section_id=section.section_id,
-                title=section.title,
-                section_path=" > ".join(section.section_path),
-                window=window,
-            )
-        )
-        remaining -= len(window.text)
-        if window.truncated:
-            break
-
+    span = section.own_span if scope == "own" else section.subtree_span
+    page_start = min(span.start_offset + offset * char_budget, span.end_offset)
+    page_end = min(page_start + char_budget, span.end_offset)
     return CachedToolOutputReadBySectionResult(
         content_id=content_id,
-        section_contents=section_contents,
+        section_id=section.section_id,
+        title=section.title,
+        section_path=" > ".join(section.section_path),
+        scope=scope,
+        offset=offset,
+        text=stored.text[page_start:page_end],
+        start_offset=page_start,
+        end_offset=page_end,
+        has_more=page_end < span.end_offset,
+    )
+
+
+def _missing_result(
+    content_id: str,
+    section_id: str,
+    scope: str,
+    offset: int,
+) -> CachedToolOutputReadBySectionResult:
+    return CachedToolOutputReadBySectionResult(
+        content_id=content_id,
+        section_id=section_id,
+        title="",
+        section_path="",
+        scope=scope,
+        offset=offset,
+        text="",
+        start_offset=0,
+        end_offset=0,
+        has_more=False,
+        reason="section_not_found",
     )
 
 

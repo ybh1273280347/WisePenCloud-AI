@@ -14,10 +14,6 @@ from chat.application.tools.core import (
     ToolUISpec,
 )
 from chat.application.tools.core.output_cache.cache_store import get_tool_content
-from chat.application.tools.session_tools.cached_tool_output_tools.window import (
-    CachedToolOutputWindow,
-    CachedToolOutputWindowBuilder,
-)
 from chat.core.config.app_settings import settings
 
 _TIMEOUT_SECONDS = 300.0
@@ -48,6 +44,16 @@ _PARAMETERS_SCHEMA: dict[str, Any] = {
 
 
 @dataclass(slots=True)
+class CachedToolOutputWindow:
+    """受单页字符预算限制的原文区间；偏移是半开字符坐标。"""
+
+    text: str
+    start_offset: int
+    end_offset: int
+    truncated: bool = False
+
+
+@dataclass(slots=True)
 class CachedToolOutputReadByRangeResult:
     content_id: str
     window: CachedToolOutputWindow | None = None
@@ -66,15 +72,14 @@ class CachedToolOutputReadByRangeTool:
                     "or the end of cached tool output.\n"
                     "  - SHOULD trigger after structure/search results expose useful offsets.\n"
                     "DO NOT TRIGGER when:\n"
-                    "  - You need sections; use read_cached_tool_output_by_section or "
-                    "read_cached_tool_output_by_section.\n"
-                    "  - You need discovery; use search_cached_tool_output_by_relevance or "
-                    "search_cached_tool_output_by_regex.\n\n"
+                    "  - You need sections; use read_cached_tool_output_by_section.\n"
+                    "  - You need exact pattern matches; use search_cached_tool_output_by_regex.\n\n"
                     "INPUT RULES:\n"
                     "  - Ranges use Python slice semantics: start is inclusive and end is exclusive.\n"
                     "  - Negative offsets count from the end; start=-1000 reads the final 1000 characters.\n"
-                    "  - Omitting both offsets reads a token-budgeted window from the beginning.\n"
-                    "  - If a requested range is truncated, continue from the returned end_offset."
+                    "  - Omitting both offsets reads from the beginning.\n"
+                    "  - A single read is limited to the configured character budget; if truncated, "
+                    "continue from the returned end_offset."
                 ),
                 parameters_schema=ToolParametersSchema(_PARAMETERS_SCHEMA),
             ),
@@ -109,16 +114,13 @@ class CachedToolOutputReadByRangeTool:
                     content_id=content_id,
                     reason="cached_tool_output_not_found",
                 )
-            # range 读取只受单窗口预算限制，多段读取由调用方根据 end_offset 继续发起。
-            builder = CachedToolOutputWindowBuilder(
-                char_budget=settings.TOOL_CONTENT_READ_WINDOW_CHAR_BUDGET
-            )
             return CachedToolOutputReadByRangeResult(
                 content_id=content_id,
-                window=builder.build_range_window(
-                    stored,
-                    start=kwargs["start"] if "start" in kwargs else None,  # noqa: SIM401
-                    end=kwargs["end"] if "end" in kwargs else None,  # noqa: SIM401
+                window=_read_range(
+                    stored.text,
+                    start=kwargs.get("start"),
+                    end=kwargs.get("end"),
+                    char_budget=settings.TOOL_CONTENT_READ_WINDOW_CHAR_BUDGET,
                 ),
             )
         except Exception as exc:
@@ -137,4 +139,34 @@ def _policy() -> ToolPolicy:
         risk_level=ToolRiskLevel.LOW,
         required_context_keys=("session_id",),
         timeout_seconds=_TIMEOUT_SECONDS,
+    )
+
+
+def _normalize_offset(value: int | None, text_length: int, *, default: int) -> int:
+    """把 Python 切片偏移规范到原文范围内。"""
+    offset = default if value is None else value
+    if offset < 0:
+        offset += text_length
+    return min(max(offset, 0), text_length)
+
+
+def _read_range(
+    text: str,
+    *,
+    start: int | None,
+    end: int | None,
+    char_budget: int,
+) -> CachedToolOutputWindow:
+    """按原文坐标读取请求区间，并限制单次返回字符数。"""
+    normalized_start = _normalize_offset(start, len(text), default=0)
+    requested_end = _normalize_offset(end, len(text), default=len(text))
+    normalized_end = min(
+        max(requested_end, normalized_start),
+        normalized_start + char_budget,
+    )
+    return CachedToolOutputWindow(
+        text=text[normalized_start:normalized_end],
+        start_offset=normalized_start,
+        end_offset=normalized_end,
+        truncated=requested_end > normalized_end,
     )

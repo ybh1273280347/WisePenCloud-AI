@@ -1,6 +1,8 @@
 
 """DashScope text rerank 的异步公共客户端。"""
 
+from __future__ import annotations
+
 from http import HTTPStatus
 
 from dashscope import AioTextReRank
@@ -9,10 +11,17 @@ from dashscope import AioTextReRank
 class RerankClient:
     """封装 DashScope 异步重排，返回文档索引与相关性分数。"""
 
+    def __init__(self, api_key: str, model: str) -> None:
+        if not api_key.strip():
+            raise ValueError("rerank api key must not be empty")
+        if not model.strip():
+            raise ValueError("rerank model must not be empty")
+        self.api_key = api_key
+        self.model = model
+
     async def rerank(
         self,
         *,
-        model: str,
         query: str,
         documents: list[str],
         instruct: str | None = None,
@@ -22,7 +31,6 @@ class RerankClient:
 
         示例：
             results = await rerank_client.rerank(
-                model="qwen3-rerank",
                 query="什么是 RAG？",
                 documents=[
                     "RAG 是检索增强生成技术。",
@@ -35,11 +43,12 @@ class RerankClient:
                 print(result["index"], result["relevance_score"])
         """
         response = await AioTextReRank.call(
-            model=model,
+            model=self.model,
             query=query,
             documents=documents,
             instruct=instruct,
             top_n=top_n,
+            api_key=self.api_key,
         )
 
         if response.status_code != HTTPStatus.OK:

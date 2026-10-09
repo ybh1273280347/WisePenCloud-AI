@@ -6,7 +6,6 @@ from chat.core.config.app_settings import settings
 from chat.domain.repositories import ToolContentRepository
 from pydantic import TypeAdapter
 
-# Token 切分与 Chat 私有 offset 索引改变了缓存合同；旧 key 自然过期。
 _CONTENT_KEY_PREFIX = "wisepen:tool_content:v10:item:"
 _SESSION_KEY_PREFIX = "wisepen:tool_content:v10:session:"
 _STORED_CONTENT_ADAPTER = TypeAdapter(StoredToolContent)

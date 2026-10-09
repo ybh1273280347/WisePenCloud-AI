@@ -31,8 +31,6 @@ dependencies = [
     "bm25s>=0.3.9",
     "jieba>=0.42.1",
     "numpy>=2.4.6",
-    "thulac>=0.2.2",
-    "zeroentropy",
     "openai>=2,<3",
     "instructor>=1,<2",
     "dashscope>=1.25,<2",

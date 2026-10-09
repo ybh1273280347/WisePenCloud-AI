@@ -56,7 +56,7 @@ class CachedToolOutputInspectStructureTool:
                     "table of contents. It may be incomplete, noisy, or have incorrect "
                     "hierarchy or labels. Anchor labels are approximate "
                     "navigation hints, not verified facts.\n\n"
-                    "Use a section ID from a {#section_id} marker with "
+                    "Use the id=section_id value shown in an outline row with "
                     "read_cached_tool_output_by_section to read the actual content. "
                     "Treat the outline as a soft prior for navigation only. Do not infer "
                     "that a section is absent solely from this outline. If the outline "

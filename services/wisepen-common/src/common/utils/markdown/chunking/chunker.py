@@ -211,7 +211,7 @@ def _build_heading_sections(
             subtree_span=SourceSpan(0, len(text)),
             content_spans=root_content_spans,
         )
-        if root_content_spans
+        if root_content_spans or root_title
         else None
     )
     sections = [root] if root else []

@@ -13,7 +13,6 @@ def pytest_configure():
     module = ModuleType(_settings_module)
     module.settings = SimpleNamespace(
         TOOL_CONTENT_READ_WINDOW_CHAR_BUDGET=4000,
-        TOOL_CONTENT_READ_TOTAL_CHAR_BUDGET=8000,
     )
     sys.modules[_settings_module] = module
 

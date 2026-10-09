@@ -11,9 +11,6 @@ from chat.application.tools.session_tools.cached_tool_output_tools.search_by_reg
     CachedToolOutputSearchByRegexResult,
     CachedToolOutputSearchByRegexTool,
 )
-from chat.application.tools.session_tools.cached_tool_output_tools.search_by_relevance import (
-    CachedToolOutputSearchByRelevanceTool,
-)
 
 __all__ = [
     "CachedToolOutputInspectStructureTool",
@@ -21,5 +18,4 @@ __all__ = [
     "CachedToolOutputReadBySectionTool",
     "CachedToolOutputSearchByRegexResult",
     "CachedToolOutputSearchByRegexTool",
-    "CachedToolOutputSearchByRelevanceTool",
 ]

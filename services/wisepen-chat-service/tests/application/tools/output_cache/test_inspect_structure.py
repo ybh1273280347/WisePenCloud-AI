@@ -35,7 +35,9 @@ async def test_inspect_structure_returns_common_markdown_outline(monkeypatch) ->
     )
 
     assert isinstance(response, inspect_structure.CachedToolOutputStructureResult)
-    assert response.outline.startswith("- Heading {#")
+    assert response.outline.startswith("# Heading")
+    assert "id=sec_" in response.outline
+    assert "@0" in response.outline
     assert "[Table 1]" in response.outline
     assert response.total_length == len(stored.text)
 

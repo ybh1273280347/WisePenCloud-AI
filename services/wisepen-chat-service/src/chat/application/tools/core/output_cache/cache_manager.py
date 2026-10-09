@@ -243,7 +243,6 @@ async def _claim_targets(
             f"{prefix}preview",
             f"{prefix}content_id",
             f"{prefix}total_length",
-            f"{prefix}chunk_count",
         )
         if isinstance(target.parent, dict) and any(
             key in target.parent for key in claim_keys
@@ -266,7 +265,6 @@ async def _claim_targets(
             f"{prefix}preview": preview,
             f"{prefix}content_id": receipt.content_id,
             f"{prefix}total_length": receipt.total_length,
-            f"{prefix}chunk_count": receipt.chunk_count,
         }
         if isinstance(target.parent, dict):
             target.parent.pop(target.slot)

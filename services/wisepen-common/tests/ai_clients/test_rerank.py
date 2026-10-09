@@ -3,12 +3,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from common.utils.ai_clients import RerankClient
 
 
 @pytest.mark.asyncio
-async def test_rerank_forwards_instruction_and_projects_sdk_results():
+async def test_rerank_forwards_constructor_model_and_api_key() -> None:
     call = AsyncMock(
         return_value=SimpleNamespace(
             status_code=HTTPStatus.OK,
@@ -22,8 +21,10 @@ async def test_rerank_forwards_instruction_and_projects_sdk_results():
     )
 
     with patch("common.utils.ai_clients.rerank.AioTextReRank.call", call):
-        result = await RerankClient().rerank(
+        result = await RerankClient(
+            api_key="secret",
             model="rerank-model",
+        ).rerank(
             query="query",
             documents=["first", "second"],
             instruct="prefer exact product matches",
@@ -40,11 +41,12 @@ async def test_rerank_forwards_instruction_and_projects_sdk_results():
         documents=["first", "second"],
         instruct="prefer exact product matches",
         top_n=2,
+        api_key="secret",
     )
 
 
 @pytest.mark.asyncio
-async def test_rerank_passes_optional_arguments_as_none():
+async def test_rerank_passes_optional_arguments_as_none() -> None:
     call = AsyncMock(
         return_value=SimpleNamespace(
             status_code=HTTPStatus.OK,
@@ -52,8 +54,9 @@ async def test_rerank_passes_optional_arguments_as_none():
         )
     )
     with patch("common.utils.ai_clients.rerank.AioTextReRank.call", call):
-        result = await RerankClient().rerank(
-            model="rerank-model", query="query", documents=["document"]
+        result = await RerankClient(api_key="secret", model="rerank-model").rerank(
+            query="query",
+            documents=["document"],
         )
 
     assert result == []
@@ -63,11 +66,12 @@ async def test_rerank_passes_optional_arguments_as_none():
         documents=["document"],
         instruct=None,
         top_n=None,
+        api_key="secret",
     )
 
 
 @pytest.mark.asyncio
-async def test_rerank_raises_for_non_success_status():
+async def test_rerank_raises_for_non_success_status() -> None:
     response = SimpleNamespace(
         status_code=HTTPStatus.BAD_REQUEST,
         code="BadRequest",
@@ -78,4 +82,7 @@ async def test_rerank_raises_for_non_success_status():
         patch("common.utils.ai_clients.rerank.AioTextReRank.call", call),
         pytest.raises(RuntimeError, match="BadRequest: invalid request"),
     ):
-        await RerankClient().rerank(model="m", query="q", documents=["d"])
+        await RerankClient(api_key="secret", model="rerank-model").rerank(
+            query="q",
+            documents=["d"],
+        )

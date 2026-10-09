@@ -4,6 +4,12 @@
 
 架构分层、能力编排和开发优先级见 [架构与开发顺序.md](架构与开发顺序.md)。
 
+## 当前迁移状态：RAG 检索迁移延期
+
+本轮已将 RAG 半成品的 Retrieval Pipeline 改动回退到当前分支基线，RAG 暂时继续保留旧的检索契约；新的 `common.utils.retrieval` 尚未接入 RAG。因此，RAG 在 Common 删除旧 ranking 包后可能暂时无法运行或导入，这属于本轮明确接受的中间状态，不作为本轮验收失败条件。
+
+后续 RAG 迁移必须由 RAG 自己实现 Qdrant Dense、Sparse/BM25 和必要的 Hybrid Retriever，负责 embedding、scope、ACL、metadata filter、批量 Mongo 回查及领域候选转换。跨后端组合应使用 Common 的 `FusionRetriever` 以及独立的 Union/RRF Fusion 算法；Qdrant 类型、查询参数和资源生命周期不得下沉到 Common。完成这些适配后，Hybrid 和 Graph 才能重新接入新的 Pipeline。
+
 ## 1. 目标和边界
 
 RAG 服务是一次全量重写。Common 只提供无业务含义的文档结构事实，RAG 在此基础上定义自己的 `Document`、`DocChunk`、图谱事实和检索结果契约。Common 的 `Section`、`Page`、`Anchor`、`SourceSpan` 可以有限复用，但不作为 RAG 的整体服务契约。Common 的局部 Section ID 会被重写为包含资源和 content revision 的 RAG 全局 ID。
@@ -93,7 +99,7 @@ Ontology 是垂类图谱的核心：插件声明合法实体、关系端点、me
 
 完整设计见 [标题树.md](标题树.md)。标题树只保留两个动作：批量 `neighborhood` 直接接收一批全局 Section ID，可以跨资源返回各自的局部视图；`global_outline` 按资源返回有限深度大纲。
 
-结果使用 JSON 字段描述 current，用一个 Markdown `outline` 字符串表达目录。current 标记 `[C]` 且不在目录中重复自身 ID；父、兄弟和孩子保留 `{#section_id}`。`[+N]` 只表示节点还有 N 个直属孩子未展开，不再有投影森林、`matched` 或横向 gap。
+结果使用一个 Markdown `outline` 字符串表达目录。行首 `#` 数量按 Section 树深度生成，当前章节标记为 `[C]`，锚点标签紧随其后，行尾包含原始 `id=<section_id>` 和 `@<原文起始字符偏移>`。有外部文档标题时，文档开头行会追加 `<文档开头>`，以区分标题和前置正文范围。
 
 ## 8. 读取
 

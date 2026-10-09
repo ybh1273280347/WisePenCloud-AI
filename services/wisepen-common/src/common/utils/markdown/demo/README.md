@@ -22,6 +22,6 @@ uv run python -m common.utils.markdown.demo.outline
 
 Chunking 示例采用目标 `80 tokens`、拆分阈值 `160 tokens`。输入中包含超过阈值的长列表和多行 fenced 代码块，用来观察列表项分组及代码围栏重建；单行超宽表格则保留完整行并标记 `overflow`。公式同样保持原子性，超限时保留完整内容并标记 `overflow`。JSON 保留原始字段，可读 Markdown 则逐块列出文本和关键属性。
 
-Parser 的 `source_spans` 是 Python 字符半开区间；没有范围的嵌套节点不会伪造精确位置。Outline 每行统计章节直属正文的 Python 字符数，不包含标题和子章节；它不表示 token 数。全局目录和邻域目录由同一个 `OutlineFormatter` 输出，邻域行会给当前章节附加 `[current]`。
+Parser 的 `source_spans` 是 Python 字符半开区间；没有范围的嵌套节点不会伪造精确位置。Outline 按标题树深度输出 `#`，并在行尾提供 `[C]`、锚点、原始 section ID 和原文起始字符偏移；有外部文档标题时会追加 `<文档开头>` 标明该标题对应的前置正文范围。
 
 样例中的图片路径仅用于演示图片语法和 Figure 锚点，运行不需要读取图片，也不需要联网。默认 tokenizer 使用包内的 o200k_base 数据。

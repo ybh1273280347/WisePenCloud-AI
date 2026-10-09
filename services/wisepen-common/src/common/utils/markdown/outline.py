@@ -10,9 +10,13 @@ class OutlineFormatter:
     """共享目录格式和树遍历；索引属于当前文档，不负责可见性检查。"""
 
     def __init__(
-        self, *, sections: Sequence[Section], anchors: Sequence[Anchor]
+        self,
+        *,
+        sections: Sequence[Section],
+        anchors: Sequence[Anchor],
     ) -> None:
         self._sections_by_id = {section.section_id: section for section in sections}
+        self._has_document_root = any(section.level == 0 for section in sections)
 
         # 按父节点分组，并按 ordinal 稳定排序，保证目录顺序一致
         self._children_by_parent: dict[str | None, list[Section]] = defaultdict(list)
@@ -102,19 +106,9 @@ class OutlineFormatter:
         indent: int,
         current: bool = False,
     ) -> str:
-        """生成含 section ID、直属正文字符数、子节点数及锚点的条目。"""
+        """按标题树层级输出标题、状态、锚点、原始 ID 和原文起点。"""
 
-        children = self._children_by_parent.get(section.section_id, [])
-        suffix = f" [+{len(children)}]" if children else ""
-
-        # 标记当前章节 ID；current 表示邻域视角下的焦点章节
-        marker = f" {{#{section.section_id}}}"
-        if current:
-            marker += " [current]"
-
-        # 与 DIRECT 读取一致，只统计直属正文，不包含标题或子章节正文
-        char_count = sum(span.length for span in section.content_spans)
-        metadata = f" ({char_count} chars)"
+        markers = ["[C]"] if current else []
 
         # 只收集与本章节 own_span 相交的锚点，避免归入祖先子树
         anchors = [
@@ -124,6 +118,19 @@ class OutlineFormatter:
             and section.own_span.start_offset < anchor.source_span.end_offset
         ]
         if anchors:
-            metadata += " [" + ", ".join(anchors) + "]"
+            markers.extend(f"[{anchor}]" for anchor in anchors)
 
-        return "  " * indent + f"- {section.title.strip()}{marker}{suffix}{metadata}"
+        title = section.title.strip()
+        if section.level == 0 and title != "文档开头":
+            title += "<文档开头>"
+        heading_level = (
+            0
+            if section.level == 0
+            else indent + 1 - int(self._has_document_root)
+        )
+        heading = "#" * heading_level
+        suffix = " ".join(
+            [*markers, f"id={section.section_id}", f"@{section.own_span.start_offset}"]
+        )
+        prefix = f"{heading} " if heading else ""
+        return f"{prefix}{title} {suffix}"

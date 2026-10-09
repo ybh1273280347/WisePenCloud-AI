@@ -53,9 +53,9 @@ async def test_rag_outline_builder_uses_shared_global_and_neighborhood_format() 
         scope=object(),
     )
 
-    assert "- Parent {" in global_outline
-    assert "  - Current {" not in global_outline
-    assert "[current]" in neighborhood[0].outline
+    assert "# Parent id=" in global_outline
+    assert "## Current" not in global_outline
+    assert "## Current [C] id=" in neighborhood[0].outline
     assert "[Table 1]" in neighborhood[0].outline
     assert "Child" in neighborhood[0].outline
 

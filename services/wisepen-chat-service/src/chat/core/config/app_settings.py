@@ -39,6 +39,7 @@ class AppSettings(BaseModel):
     ZERO_ENTROPY_API_KEY: str
 
     RERANKER_MODEL: str  # 重排模型
+    RERANKER_API_KEY: str = ""  # 显式启用模型重排时使用，不复用 LLM_API_KEY
 
     # 摘要模型
     SUMMARY_MODEL: str
@@ -110,7 +111,6 @@ class AppSettings(BaseModel):
     TOOL_CONTENT_PREVIEW_PER_CHAR_BUDGET: int = 4_000
     TOOL_CONTENT_PREVIEW_TOTAL_CHAR_BUDGET: int = 12_000
     TOOL_CONTENT_READ_WINDOW_CHAR_BUDGET: int = 24_000
-    TOOL_CONTENT_READ_TOTAL_CHAR_BUDGET: int = 48_000
     TOOL_CONTENT_DEFAULT_TTL_SECONDS: int = 3600
     TOOL_CONTENT_MAX_CHARS: int = 20_000_000
 
