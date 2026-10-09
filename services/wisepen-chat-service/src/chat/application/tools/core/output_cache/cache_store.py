@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 from common.utils.markdown import (
@@ -29,15 +29,23 @@ def _repository():
     return RedisToolContentRepository()
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class StoredToolContent:
     """一个会话内的原始工具正文及其可重建结构。"""
 
     content_id: str
     session_id: str
     text: str
-    sections: tuple[Section, ...] = ()
-    anchors: tuple[Anchor, ...] = ()
+    sections: list[Section] = field(default_factory=list)
+    anchors: list[Anchor] = field(default_factory=list)
+    sections_by_id: dict[str, Section] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """建立按 ID 的索引；旧缓存缺少索引时也能在读取后补齐。"""
+        # section_id 是章节的稳定身份，读取章节时应直接定位而不是重复扫描列表。
+        self.sections_by_id = {
+            section.section_id: section for section in self.sections
+        }
 
 
 async def put_tool_content(

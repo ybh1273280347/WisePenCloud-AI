@@ -158,10 +158,7 @@ def _read_by_section(
     char_budget: int,
 ) -> ToolOutputSectionResult:
     """在章节范围内按原文绝对坐标续读；默认零起点收敛到章节起点。"""
-    section = next(
-        (item for item in stored.sections if item.section_id == section_id),
-        None,
-    )
+    section = stored.sections_by_id.get(section_id)
     if section is None:
         return ToolOutputSectionResult.missing(stored.content_id, section_id, start_offset)
 

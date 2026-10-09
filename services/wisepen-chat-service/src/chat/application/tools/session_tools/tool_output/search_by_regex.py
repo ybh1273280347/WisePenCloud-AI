@@ -22,51 +22,42 @@ from chat.application.tools.core.output_cache.cache_store import (
     get_tool_content,
 )
 
-_MAX_REGEX_CHARS = 500
-_MAX_MATCHES = 100
-_DEFAULT_MAX_MATCHES = 10
-_REGEX_CONTEXT_CHARS = 200
-_REGEX_SENTENCE_BOUNDARIES = frozenset(".。!?！？;；\n")
-_SEARCH_TIMEOUT_SECONDS = 5
-_TIMEOUT_SECONDS = 300.0
+_MAX_REGEX_CHARS = 500            # 正则最大字符数
+_MAX_MATCHES = 100                # 最多返回的命中数
+_REGEX_CONTEXT_CHARS = 200        # 命中两侧上下文扩展字符数
+_MAX_MATCH_DISPLAY_CHARS = 240    # 单个命中展示的最大字符数
+_MAX_WINDOW_CHARS = 640           # 单个窗口最大字符数
+_REGEX_SENTENCE_BOUNDARIES = frozenset(".。!?！？;；\n")  # 句子边界字符
+_SEARCH_TIMEOUT_SECONDS = 5       # 正则扫描超时
+_TIMEOUT_SECONDS = 300.0          # 工具整体超时
 
 _PARAMETERS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "content_id": {
-            "type": "string",
-            "minLength": 1,
-            "description": "One cached tool output content ID.",
+        "content_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "minItems": 1,
+            "maxItems": 16,
+            "description": "按给定顺序搜索的缓存工具输出内容 ID。",
         },
         "pattern": {
             "type": "string",
             "minLength": 1,
             "maxLength": _MAX_REGEX_CHARS,
-            "description": "Python regular expression matched against the complete stored source text.",
-        },
-        "start_offset": {
-            "type": "integer",
-            "minimum": 0,
-            "default": 0,
-            "description": "Absolute source character offset from which to continue searching.",
-        },
-        "max_matches": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": _MAX_MATCHES,
-            "default": _DEFAULT_MAX_MATCHES,
-            "description": "Maximum number of regex matches to consume in this call.",
+            "description": "对每份完整源文本进行匹配的 Python 正则表达式。",
         },
     },
-    "required": ["content_id", "pattern"],
+    "required": ["content_ids", "pattern"],
     "additionalProperties": False,
 }
 
 
 @dataclass(slots=True)
 class ToolOutputRegexWindow:
-    """正则命中上下文窗口；相交命中合并后只保留命中次数。"""
+    """一个正文上下文窗口及其中实际包含的正则命中次数。"""
 
+    content_id: str
     text: str
     start_offset: int
     end_offset: int
@@ -75,12 +66,10 @@ class ToolOutputRegexWindow:
 
 @dataclass(slots=True)
 class ToolOutputRegexSearchResult:
-    """一次正则搜索的窗口及正文续读位置。"""
+    """一次正则搜索的窗口及是否因命中上限截断。"""
 
-    content_id: str
-    next_offset: int  # 下一次扫描的原文字符起点，不是上下文窗口的结束位置。
-    has_more: bool  # 达到命中上限且仍有可扫描位置，不保证后续存在命中。
     windows: list[ToolOutputRegexWindow]
+    truncated: bool
 
 
 class SearchToolOutputRegexTool:
@@ -89,15 +78,14 @@ class SearchToolOutputRegexTool:
             llm_spec=ToolLLMSpec(
                 name="search_tool_output_regex",
                 description=(
-                    "Search one complete cached source text with a Python regular expression. "
-                    "Start at start_offset and continue from next_offset. Each call consumes "
-                    "up to max_matches exact matches (default 10, maximum 100), without "
-                    "rescanning the preceding source text. Each "
-                    "match gets up to 200 characters of nearby context, expanded toward sentence "
-                    "boundaries. Overlapping contexts are merged. Window start_offset and "
-                    "end_offset are absolute source offsets; inspect the text to identify matches."
-                    " has_more means scanning stopped at the match limit; a follow-up call may "
-                    "return no matches. Reuse content_id and pattern with start_offset=next_offset."
+                    "Search cached tool output texts with a Python regular expression. "
+                    "Search content_ids in the supplied order and return at most the first "
+                    "100 matches. If truncated is true, narrow the pattern or reduce the "
+                    "search scope. Each window includes up to 200 characters of nearby "
+                    "context, expanded toward sentence boundaries. Overlapping windows from "
+                    "the same content are merged; each window is at most 640 characters and "
+                    "shows at most 240 characters of a single match. Window offsets are "
+                    "absolute source offsets."
                 ),
                 parameters_schema=ToolParametersSchema(_PARAMETERS_SCHEMA),
             ),
@@ -111,7 +99,7 @@ class SearchToolOutputRegexTool:
             ),
             ui_spec=ToolUISpec(
                 display_name="正则搜索缓存的工具输出",
-                description="在一份缓存工具输出中按正则查找文本并按字符偏移续读上下文。",
+                description="在多份缓存工具输出中按正则查找文本并返回上下文窗口。",
             ),
         )
 
@@ -125,33 +113,35 @@ class SearchToolOutputRegexTool:
         config: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ToolOutputRegexSearchResult:
-        del config
+        del config  # 未使用
         try:
+            stored_items = []
             session_id = context["session_id"]
-            content_id = kwargs["content_id"]
-            stored = await get_tool_content(
-                content_id=content_id,
-                session_id=session_id,
-            )
-            if stored is None:
-                raise ToolExecutionError(
-                    reason="cached_tool_output_not_found",
-                    retryable=False,
+            # 按顺序去重加载缓存内容
+            for content_id in dict.fromkeys(kwargs["content_ids"]):
+                stored = await get_tool_content(
+                    content_id=content_id,
+                    session_id=session_id,
                 )
+                if stored is not None:
+                    stored_items.append(stored)
+
             return await _search_by_regex(
-                stored=stored,
+                stored_items=stored_items,
                 pattern=kwargs["pattern"],
-                start_offset=kwargs["start_offset"],
-                max_matches=kwargs["max_matches"],
             )
-        except ToolExecutionError:
-            raise
-        except regex.error as exc:
+        except regex.error as exc:  # 正则非法
             raise ToolExecutionError(
                 reason="invalid_regex_pattern",
                 detail_reason=str(exc),
             ) from exc
-        except Exception as exc:
+        except TimeoutError as exc:  # 搜索超时
+            raise ToolExecutionError(
+                reason="regex_search_timeout",
+                detail_reason=str(exc),
+                retryable=False,
+            ) from exc
+        except Exception as exc:  # 其他异常
             raise ToolExecutionError(
                 reason="search_cached_tool_output_by_regex_failed",
                 detail_reason=str(exc),
@@ -161,83 +151,77 @@ class SearchToolOutputRegexTool:
 
 async def _search_by_regex(
     *,
-    stored: StoredToolContent,
+    stored_items: Sequence[StoredToolContent],
     pattern: str,
-    start_offset: int,
-    max_matches: int = _DEFAULT_MAX_MATCHES,
 ) -> ToolOutputRegexSearchResult:
-    """从原文绝对偏移续扫；消费指定数量命中即停止，不探测余下全文。"""
+    """按正文顺序扫描；确认第 101 个命中后停止并标记结果已截断。"""
+
     def scan_loaded() -> ToolOutputRegexSearchResult:
         compiled = regex.compile(pattern)
-        matches: list[tuple[int, int]] = []
-        next_offset = start_offset
-        if start_offset > len(stored.text):
-            return ToolOutputRegexSearchResult(
-                content_id=stored.content_id,
-                next_offset=start_offset,
-                has_more=False,
-                windows=[],
-            )
+        matches: list[tuple[StoredToolContent, int, int]] = []
         try:
-            for matched in compiled.finditer(
-                stored.text,
-                pos=start_offset,
-                timeout=_SEARCH_TIMEOUT_SECONDS,
-            ):
-                matches.append((matched.start(), matched.end()))
-                # 零宽命中至少推进一个字符；EOF 的零宽命中推进到 len + 1，避免续扫重复。
-                next_offset = max(matched.end(), matched.start() + 1)
-                if len(matches) >= max_matches:
-                    break
-            else:
-                # 迭代耗尽说明后缀已扫完，即使没有命中也应报告扫描到正文结尾。
-                next_offset = max(next_offset, len(stored.text))
+            for stored in stored_items:
+                for matched in compiled.finditer(
+                    stored.text,
+                    timeout=_SEARCH_TIMEOUT_SECONDS,
+                ):
+                    matches.append((stored, matched.start(), matched.end()))
+                    if len(matches) > _MAX_MATCHES:  # 超出上限，截断
+                        return ToolOutputRegexSearchResult(
+                            windows=_build_regex_windows(matches[:_MAX_MATCHES]),
+                            truncated=True,
+                        )
         except TimeoutError as exc:
             raise TimeoutError(
-                f"regex search exceeded {_SEARCH_TIMEOUT_SECONDS}s"
+                f"regex search exceeded {_SEARCH_TIMEOUT_SECONDS}s; results are incomplete"
             ) from exc
 
         return ToolOutputRegexSearchResult(
-            content_id=stored.content_id,
-            next_offset=next_offset,
-            has_more=(
-                len(matches) >= max_matches
-                and next_offset <= len(stored.text)
-            ),
-            windows=_build_regex_windows(stored, matches),
+            windows=_build_regex_windows(matches),
+            truncated=False,
         )
 
+    # 放到线程中执行，避免阻塞事件循环
     return await asyncio.to_thread(scan_loaded)
 
 
 def _build_regex_windows(
-    stored: StoredToolContent,
-    matches: Sequence[tuple[int, int]],
+    matches: Sequence[tuple[StoredToolContent, int, int]],
 ) -> list[ToolOutputRegexWindow]:
-    """先扩展每个命中上下文，再合并相交的原文区间。"""
-    windows: list[ToolOutputRegexWindow] = []
-    active: ToolOutputRegexWindow | None = None
+    """先限制单个窗口长度，再合并同一正文中的相交窗口。"""
 
-    for match_start, match_end in matches:
+    windows: list[ToolOutputRegexWindow] = []
+    active: ToolOutputRegexWindow | None = None  # 当前可合并的窗口
+
+    for stored, match_start, match_end in matches:
         start, end = _regex_window_range(
             stored.text,
             match_start=match_start,
             match_end=match_end,
         )
-        if active is not None and start < active.end_offset:
+        # 同一正文、与当前窗口相交且合并后不超长则合并
+        if (
+            active is not None
+            and active.content_id == stored.content_id
+            and start < active.end_offset
+            and max(active.end_offset, end) - active.start_offset <= _MAX_WINDOW_CHARS
+        ):
             old_start = active.start_offset
             active.end_offset = max(active.end_offset, end)
             active.text = stored.text[old_start:active.end_offset]
             active.matched_count += 1
             continue
 
+        # 开启新窗口
         active = ToolOutputRegexWindow(
+            content_id=stored.content_id,
             text=stored.text[start:end],
             start_offset=start,
             end_offset=end,
             matched_count=1,
         )
         windows.append(active)
+
     return windows
 
 
@@ -247,9 +231,13 @@ def _regex_window_range(
     match_start: int,
     match_end: int,
 ) -> tuple[int, int]:
-    """每侧最多扩展 200 字符，优先包含范围内最近的句子边界。"""
+    """每侧最多扩展 200 字符，并将单个窗口限制在 640 字符内。"""
+
+    display_match_end = min(match_end, match_start + _MAX_MATCH_DISPLAY_CHARS)  # 命中展示上限
     candidate_start = max(match_start - _REGEX_CONTEXT_CHARS, 0)
-    candidate_end = min(match_end + _REGEX_CONTEXT_CHARS, len(text))
+    candidate_end = min(display_match_end + _REGEX_CONTEXT_CHARS, len(text))
+
+    # 向左对齐到最近的句界
     left_boundary = max(
         (
             index + 1
@@ -258,12 +246,22 @@ def _regex_window_range(
         ),
         default=candidate_start,
     )
+    # 向右对齐到最近的句界
     right_boundary = next(
         (
             index + 1
-            for index in range(match_end, candidate_end)
+            for index in range(display_match_end, candidate_end)
             if text[index] in _REGEX_SENTENCE_BOUNDARIES
         ),
         candidate_end,
     )
-    return left_boundary, right_boundary
+
+    if right_boundary - left_boundary <= _MAX_WINDOW_CHARS:  # 未超长直接返回
+        return left_boundary, right_boundary
+
+    # 超长则裁剪右边界，必要时同步左移左边界
+    bounded_end = min(right_boundary, left_boundary + _MAX_WINDOW_CHARS)
+    if bounded_end < display_match_end:  # 保证命中完整
+        bounded_end = display_match_end
+        left_boundary = max(0, bounded_end - _MAX_WINDOW_CHARS)
+    return left_boundary, bounded_end

@@ -21,8 +21,8 @@ def test_stored_content_round_trips_and_ignores_old_chunk_index_field():
         content_id="c",
         session_id="s",
         text=text,
-        sections=tuple(result.sections),
-        anchors=tuple(result.anchors),
+        sections=list(result.sections),
+        anchors=list(result.anchors),
     )
     adapter = TypeAdapter(StoredToolContent)
     decoded = json.loads(adapter.dump_json(stored))
