@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 class Reranker:
     """精排基类；默认保留候选顺序和分数。"""
 
-    name = "default"
+    name = "base"
 
     async def rerank(
         self,

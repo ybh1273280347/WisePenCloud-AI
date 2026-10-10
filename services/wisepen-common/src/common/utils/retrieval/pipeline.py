@@ -29,12 +29,12 @@ class RetrievalPipeline:
         self,
         *,
         retriever: Retriever,
-        reranker: Reranker = Reranker(),  # noqa: B008 - 默认基类是无状态 identity
-        diversity: Diversity = Diversity(),  # noqa: B008 - 默认基类是无状态 identity
+        reranker: Reranker | None = None, 
+        diversity: Diversity | None = None, 
     ) -> None:
         self.retriever = retriever
-        self.reranker = reranker
-        self.diversity = diversity
+        self.reranker = reranker if reranker is not None else Reranker()
+        self.diversity = diversity if diversity is not None else Diversity()
 
     async def retrieve(
         self,

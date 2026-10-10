@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 class RrfFusion(Fusion):
-    """使用标准倒数排名分数，不读取候选的供应商原始分数。"""
+    """使用标准倒数排名分数"""
 
     name = "rrf"
 
@@ -25,27 +25,30 @@ class RrfFusion(Fusion):
     ) -> list[Candidate]:
         candidates: dict[str, Candidate] = {}      # 候选 ID -> 候选对象
         scores: dict[str, float] = {}              # 候选 ID -> RRF 累加分数
-        first_position: dict[str, int] = {}        # 候选 ID -> 首次出现顺序
 
         for result_set in result_sets:
             seen: set[str] = set()                 # 当前结果集内已处理的候选 ID
             for position, candidate in enumerate(result_set, start=1):
                 cid = candidate.candidate_id
-                candidates.setdefault(cid, candidate)  # 记录候选对象
                 if cid in seen:                    # 同一结果集内去重
                     continue
                 seen.add(cid)
 
                 rank = candidate.rank or position  # 优先使用候选自身排名
                 # 累加 RRF 分数：1 / (k + rank)
-                scores[cid] = scores.get(cid, 0.0) + 1.0 / (self.k + rank)
-                # 记录首次出现顺序（用于同分排序）
-                first_position.setdefault(cid, len(first_position))
+                rrf_score = 1.0 / (self.k + rank)
+
+                if cid not in candidates:
+                    candidates[cid] = candidate    # 记录候选对象
+                    scores[cid] = rrf_score
+                else:
+                    scores[cid] += rrf_score
 
         # 按分数降序、首次出现顺序升序排序
         ordered = sorted(
             candidates.values(),
-            key=lambda c: (-scores[c.candidate_id], first_position[c.candidate_id]),
+            key=lambda c: scores[c.candidate_id],
+            reverse=True,
         )
 
         # 重写 rank 和 score 并返回

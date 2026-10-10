@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from common.utils.retrieval import (
     BM25Retriever,
     Candidate,
@@ -10,8 +11,8 @@ from common.utils.retrieval import (
     Reranker,
     RetrievalPipeline,
     Retriever,
+    RoundRobinFusion,
     RrfFusion,
-    UnionFusion,
 )
 from common.utils.retrieval.reranker import ModelReranker
 from common.utils.retrieval.retrievers import tokenize
@@ -76,12 +77,18 @@ async def test_pipeline_falls_back_to_query_and_default_stages_are_identity() ->
     assert (result[0].candidate_id, result[0].rank, result[0].score) == ("a", 1, 0.8)
 
 
-def test_fusion_is_an_interface_without_a_default_algorithm() -> None:
-    with pytest.raises(TypeError):
-        Fusion()
+def test_fusion_base_flattens_and_deduplicates_in_input_order() -> None:
+    left = [Candidate("a", "a", rank=1, score=10), Candidate("b", "b", rank=2)]
+    right = [Candidate("a", "duplicate", rank=1), Candidate("c", "c", rank=2)]
+
+    fused = Fusion().fuse([left, right])
+
+    assert [candidate.candidate_id for candidate in fused] == ["a", "b", "c"]
+    assert [candidate.rank for candidate in fused] == [1, 2, 3]
+    assert [candidate.score for candidate in fused] == [0.0, 0.0, 0.0]
 
 
-def test_union_interleaves_by_rank_and_deduplicates_ids() -> None:
+def test_round_robin_interleaves_by_rank_and_deduplicates_ids() -> None:
     left = [
         Candidate("a", "a", rank=1, score=10),
         Candidate("b", "b", rank=2, score=9),
@@ -92,12 +99,12 @@ def test_union_interleaves_by_rank_and_deduplicates_ids() -> None:
         Candidate("d", "d", rank=3, score=0.01),
     ]
 
-    fused = UnionFusion().fuse([left, right])
+    fused = RoundRobinFusion().fuse([left, right])
 
     assert [candidate.candidate_id for candidate in fused] == ["a", "c", "b", "d"]
     assert [candidate.rank for candidate in fused] == [1, 2, 3, 4]
     assert [candidate.score for candidate in fused] == [0.0, 0.0, 0.0, 0.0]
-    assert UnionFusion().fuse([]) == []
+    assert RoundRobinFusion().fuse([]) == []
 
 
 def test_rrf_uses_rank_and_writes_fusion_score_to_candidate() -> None:
@@ -124,7 +131,7 @@ async def test_fusion_retriever_composes_retrievers_and_owns_budget() -> None:
 
     retriever = FusionRetriever(
         retrievers=[first, second],
-        fusion=UnionFusion(),
+        fusion=RoundRobinFusion(),
         top_k=3,
     )
     result = await RetrievalPipeline(retriever=retriever).retrieve(
@@ -138,11 +145,30 @@ async def test_fusion_retriever_composes_retrievers_and_owns_budget() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fusion_retriever_defaults_to_base_fusion() -> None:
+    first = RecordingRetriever([Candidate("a", "a", rank=1)], top_k=1)
+    second = RecordingRetriever(
+        [
+            Candidate("a", "duplicate", rank=1),
+            Candidate("b", "b", rank=2),
+        ],
+        top_k=2,
+    )
+
+    result = await FusionRetriever(
+        retrievers=[first, second],
+        top_k=3,
+    ).retrieve(query="query")
+
+    assert [item.candidate_id for item in result] == ["a", "b"]
+
+
+@pytest.mark.asyncio
 async def test_fusion_retriever_can_be_nested() -> None:
     first = RecordingRetriever([Candidate("a", "alpha", rank=1)], top_k=1)
     inner = FusionRetriever(
         retrievers=[first],
-        fusion=UnionFusion(),
+        fusion=RoundRobinFusion(),
         top_k=1,
     )
     outer = FusionRetriever(

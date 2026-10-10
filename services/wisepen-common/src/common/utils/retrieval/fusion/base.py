@@ -1,20 +1,28 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..retrievers.base import Candidate
 
 
-class Fusion(ABC):
-    """多路候选融合算法接口，不提供默认融合策略。"""
+class Fusion:
+    """多路候选融合基类，按输入顺序展平并稳定去重。"""
 
-    name = "default"
+    name = "base"
 
-    @abstractmethod
     def fuse(
         self,
         result_sets: list[list[Candidate]],
     ) -> list[Candidate]:
-        raise NotImplementedError
+        """保留各路首次出现的候选，并重写为连续 rank。"""
+        merged: dict[str, Candidate] = {}
+        for result_set in result_sets:
+            for candidate in result_set:
+                merged.setdefault(candidate.candidate_id, candidate)
+
+        return [
+            replace(candidate, rank=rank, score=0.0)
+            for rank, candidate in enumerate(merged.values(), start=1)
+        ]

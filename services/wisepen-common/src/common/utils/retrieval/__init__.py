@@ -1,5 +1,5 @@
 from .diversity import Diversity, MmrDiversity
-from .fusion import Fusion, RrfFusion, UnionFusion
+from .fusion import Fusion, RoundRobinFusion, RrfFusion
 from .pipeline import RankedCandidate, RetrievalPipeline
 from .reranker import ModelReranker, Reranker
 from .retrievers import BM25Retriever, Candidate, FusionRetriever, Retriever
@@ -16,6 +16,6 @@ __all__ = [
     "Reranker",
     "RetrievalPipeline",
     "Retriever",
+    "RoundRobinFusion",
     "RrfFusion",
-    "UnionFusion",
 ]

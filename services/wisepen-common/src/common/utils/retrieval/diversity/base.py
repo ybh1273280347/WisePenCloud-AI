@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 class Diversity:
     """多样化基类；默认对所有模式原样传递候选。"""
 
-    name = "default"
+    name = "base"
 
     def diversify(
         self,

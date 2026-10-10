@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from ..fusion.base import Fusion
+from ..fusion.base import Fusion
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,12 +41,12 @@ class FusionRetriever(Retriever):
         self,
         *,
         retrievers: list[Retriever],
-        fusion: Fusion,
+        fusion: Fusion | None = None,
         top_k: int = 60,
     ) -> None:
         super().__init__(top_k=top_k)
         self.retrievers = retrievers
-        self.fusion = fusion
+        self.fusion = fusion if fusion is not None else Fusion()
 
     async def retrieve(self, query: str) -> list[Candidate]:
         result_sets = await asyncio.gather(
